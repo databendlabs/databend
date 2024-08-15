@@ -19,7 +19,6 @@ use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::UDFDefinition;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -81,21 +80,7 @@ impl Binder {
                 handler,
                 language,
             } => {
-                if !GlobalConfig::instance().query.enable_udf_server {
-                    return Err(ErrorCode::Unimplemented(
-                        "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
-                    ));
-                }
-
-                let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-                if udf_server_allow_list
-                    .iter()
-                    .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
-                {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-                    )));
-                }
+                UDFValidator::is_udf_server_allowed(address.as_str())?;
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {

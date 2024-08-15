@@ -21,6 +21,7 @@ use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -35,6 +36,52 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use stringslice::StringSlice;
+
+pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
+    "upper",
+    "lower",
+    "bit_length",
+    "octet_length",
+    "length",
+    "lpad",
+    "rpad",
+    "insert",
+    "replace",
+    "translate",
+    "to_uuid",
+    "strcmp",
+    "instr",
+    "position",
+    "locate",
+    "quote",
+    "reverse",
+    "ascii",
+    "ltrim",
+    "rtrim",
+    "trim",
+    "trim_leading",
+    "trim_trailing",
+    "trim_both",
+    "to_hex",
+    "bin",
+    "oct",
+    "to_hex",
+    "repeat",
+    "ord",
+    "soundex",
+    "space",
+    "left",
+    "right",
+    "substr",
+    "split",
+    "split_part",
+    "concat",
+    "concat_ws",
+    "regexp_instr",
+    "regexp_like",
+    "regexp_replace",
+    "regexp_substr",
+];
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
@@ -631,7 +678,25 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "left",
-        |_, _, _| FunctionDomain::Full,
+        |_, lhs, rhs| {
+            let rm = rhs.min as usize;
+            let min = if rm < lhs.min.chars().count() {
+                lhs.min.slice(0..rm).to_string()
+            } else {
+                lhs.min.clone()
+            };
+
+            let rn = rhs.max as usize;
+            let max = lhs.max.as_ref().map(|ln| {
+                if rn < ln.chars().count() {
+                    ln.slice(0..rn).to_string()
+                } else {
+                    ln.clone()
+                }
+            });
+
+            FunctionDomain::Domain(StringDomain { min, max })
+        },
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
             |s, n, output, _| {
                 let n = n as usize;
@@ -665,7 +730,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
         "substr",
-        |_, _, _| FunctionDomain::Full,
+        |_, lhs, rhs| {
+            if rhs.min == rhs.max && rhs.min == 1 {
+                FunctionDomain::Domain(lhs.clone())
+            } else {
+                FunctionDomain::Full
+            }
+        },
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
             |s, pos, output, _ctx| {
                 substr(output, s, pos, s.len() as u64);
@@ -675,7 +746,29 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
         "substr",
-             |_, _, _, _| FunctionDomain::Full,
+             |_, arg1, arg2, arg3| {
+                if arg2.min == arg2.max && arg2.min == 1 {
+                    let rm = arg3.min as usize;
+                    let min = if rm < arg1.min.chars().count() {
+                        arg1.min.slice(0..rm).to_string()
+                    } else {
+                        arg1.min.clone()
+                    };
+
+                    let rn = arg3.max as usize;
+                    let max = arg1.max.as_ref().map(|ln| {
+                        if rn < ln.chars().count() {
+                            ln.slice(0..rn).to_string()
+                        } else {
+                            ln.clone()
+                        }
+                    });
+
+                    FunctionDomain::Domain(StringDomain { min, max })
+                } else {
+                    FunctionDomain::Full
+                }
+            },
              vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _ctx| {
                 substr(output, s, pos, len);
              }),

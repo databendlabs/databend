@@ -27,8 +27,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 
-use super::processor_merge_into_matched_and_split::SourceFullMatched;
-use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
+use crate::operations::merge_into::mutator::MutationSplitMutator;
 use crate::operations::BlockMetaIndex;
 
 // There are two kinds of usage for this processor:
@@ -36,7 +35,7 @@ use crate::operations::BlockMetaIndex;
 // 2. we will receive a unmatched datablock, but this is an optimization for target table as build side. The unmatched
 // datablock is a physical block's partial unmodified block. And its meta is a prefix(segment_id_block_id).
 // we use the meta to distinct 1 and 2.
-pub struct MergeIntoSplitProcessor {
+pub struct MutationSplitProcessor {
     input_port: Arc<InputPort>,
     output_port_matched: Arc<OutputPort>,
     output_port_not_matched: Arc<OutputPort>,
@@ -44,12 +43,12 @@ pub struct MergeIntoSplitProcessor {
     input_data: Option<DataBlock>,
     output_data_matched_data: Option<DataBlock>,
     output_data_not_matched_data: Option<DataBlock>,
-    merge_into_split_mutator: MergeIntoSplitMutator,
+    merge_into_split_mutator: MutationSplitMutator,
 }
 
-impl MergeIntoSplitProcessor {
+impl MutationSplitProcessor {
     pub fn create(split_idx: u32) -> Result<Self> {
-        let merge_into_split_mutator = MergeIntoSplitMutator::try_create(split_idx);
+        let merge_into_split_mutator = MutationSplitMutator::try_create(split_idx);
         let input_port = InputPort::create();
         let output_port_matched = OutputPort::create();
         let output_port_not_matched = OutputPort::create();
@@ -76,9 +75,9 @@ impl MergeIntoSplitProcessor {
     }
 }
 
-impl Processor for MergeIntoSplitProcessor {
+impl Processor for MutationSplitProcessor {
     fn name(&self) -> String {
-        "MergeIntoSplit".to_owned()
+        "MutationSplit".to_owned()
     }
 
     #[doc = " Reference used for downcast."]
@@ -146,7 +145,7 @@ impl Processor for MergeIntoSplitProcessor {
             if data_block.get_meta().is_some() {
                 let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
                 if meta_index.is_some() {
-                    // we reserve the meta in data_block to avoid adding insert `merge_status` in `merge_into_not_matched` by mistake.
+                    // we reserve the meta in data_block to avoid adding insert `mutation_status` in `merge_into_not_matched` by mistake.
                     // if `is_empty`, it's a whole block matched, we need to delete.
                     if !data_block.is_empty() {
                         self.output_data_not_matched_data = Some(data_block.clone());
@@ -157,18 +156,6 @@ impl Processor for MergeIntoSplitProcessor {
                     )));
                     return Ok(());
                 }
-            }
-            //  for distributed execution, if one node matched all source data.
-            //  if we use right join, we will receive a empty block, but we must
-            //  give it to downstream.
-            if data_block.is_empty() {
-                self.output_data_matched_data = Some(data_block.clone());
-                // if a probe block can't match any data of hashtable, it will
-                // give an empty block here? The answer is no. so for right join,
-                // when we get an empty block, it says all source data has been matched
-                let block = data_block.add_meta(Some(Box::new(SourceFullMatched)))?;
-                self.output_data_not_matched_data = Some(block);
-                return Ok(());
             }
 
             let start = Instant::now();

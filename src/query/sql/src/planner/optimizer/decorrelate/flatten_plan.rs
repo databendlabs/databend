@@ -35,6 +35,7 @@ use crate::plans::EvalScalar;
 use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
@@ -104,7 +105,7 @@ impl SubqueryRewriter {
                     scan_columns.insert(derived_col);
                 }
             }
-            let mut logical_get = SExpr::create_leaf(Arc::new(
+            let mut scan = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: scan_columns,
@@ -113,15 +114,15 @@ impl SubqueryRewriter {
                 .into(),
             ));
             if !scalar_items.is_empty() {
-                // Wrap `EvalScalar` to `logical_get`.
-                logical_get = SExpr::create_unary(
+                // Wrap `EvalScalar` to `scan`.
+                scan = SExpr::create_unary(
                     Arc::new(
                         EvalScalar {
                             items: scalar_items,
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
             if self.ctx.get_cluster().is_empty() {
@@ -143,7 +144,7 @@ impl SubqueryRewriter {
                         index: column_index,
                     });
                 }
-                logical_get = SExpr::create_unary(
+                scan = SExpr::create_unary(
                     Arc::new(
                         Aggregate {
                             mode: AggregateMode::Initial,
@@ -155,13 +156,12 @@ impl SubqueryRewriter {
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
 
             let cross_join = Join {
-                left_conditions: vec![],
-                right_conditions: vec![],
+                equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
                 non_equi_conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
@@ -175,7 +175,7 @@ impl SubqueryRewriter {
 
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(logical_get),
+                Arc::new(scan),
                 Arc::new(plan.clone()),
             ));
         }
@@ -404,10 +404,16 @@ impl SubqueryRewriter {
     ) -> Result<SExpr> {
         // Helper function to check if conditions need a cross join
         fn needs_cross_join(
-            conditions: &[ScalarExpr],
+            conditions: &[JoinEquiCondition],
             correlated_columns: &HashSet<IndexType>,
+            left_side: bool,
         ) -> bool {
             conditions.iter().any(|condition| {
+                let condition = if left_side {
+                    &condition.left
+                } else {
+                    &condition.right
+                };
                 condition
                     .used_columns()
                     .iter()
@@ -443,9 +449,10 @@ impl SubqueryRewriter {
             }
         }
 
-        let mut left_need_cross_join = needs_cross_join(&join.left_conditions, correlated_columns);
+        let mut left_need_cross_join =
+            needs_cross_join(&join.equi_conditions, correlated_columns, true);
         let mut right_need_cross_join =
-            needs_cross_join(&join.right_conditions, correlated_columns);
+            needs_cross_join(&join.equi_conditions, correlated_columns, false);
 
         let join_rel_expr = RelExpr::with_s_expr(plan);
         let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
@@ -476,14 +483,24 @@ impl SubqueryRewriter {
             right_need_cross_join,
         )?;
 
+        let left_conditions = join
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.left.clone())
+            .collect::<Vec<_>>();
         let left_conditions = process_conditions(
-            &join.left_conditions,
+            &left_conditions,
             correlated_columns,
             &self.derived_columns,
             left_need_cross_join,
         )?;
+        let right_conditions = join
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.right.clone())
+            .collect::<Vec<_>>();
         let right_conditions = process_conditions(
-            &join.right_conditions,
+            &right_conditions,
             correlated_columns,
             &self.derived_columns,
             right_need_cross_join,
@@ -498,8 +515,11 @@ impl SubqueryRewriter {
         Ok(SExpr::create_binary(
             Arc::new(
                 Join {
-                    left_conditions,
-                    right_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        left_conditions,
+                        right_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions,
                     join_type: join.join_type.clone(),
                     marker_index: join.marker_index,

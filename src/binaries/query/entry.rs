@@ -275,21 +275,32 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!();
     println!("Storage: {}", conf.storage.params);
     println!("Disk cache:");
-    println!("    storage: {}", conf.cache.data_cache_storage.to_string());
+    println!("    storage: {}", conf.cache.data_cache_storage);
     println!("    path: {:?}", conf.cache.disk_cache_config);
     println!(
         "    reload policy: {}",
-        conf.cache.data_cache_key_reload_policy.to_string()
+        conf.cache.data_cache_key_reload_policy
     );
 
     println!();
     println!(
         "Builtin users: {}",
         conf.query
-            .idm
+            .builtin
             .users
-            .keys()
-            .map(|name| name.to_string())
+            .iter()
+            .map(|config| config.name.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!();
+    println!(
+        "Builtin UDFs: {}",
+        conf.query
+            .builtin
+            .udfs
+            .iter()
+            .map(|config| config.name.clone())
             .collect::<Vec<_>>()
             .join(", ")
     );

@@ -1,12 +1,12 @@
 query T
 show views from information_schema like 'tables'
 ----
-tables SELECT database AS table_catalog, database AS table_schema, name AS table_name, 'BASE TABLE' AS table_type, engine AS engine, created_on AS create_time, dropped_on AS drop_time, data_size AS data_length, index_size AS index_length, num_rows AS table_rows, NULL AS auto_increment, NULL AS table_collation, NULL AS data_free, comment AS table_comment FROM system.tables;
+tables
 
 query T
 show views from INFORMATION_SCHEMA like 'tables'
 ----
-tables SELECT database AS table_catalog, database AS table_schema, name AS table_name, 'BASE TABLE' AS table_type, engine AS engine, created_on AS create_time, dropped_on AS drop_time, data_size AS data_length, index_size AS index_length, num_rows AS table_rows, NULL AS auto_increment, NULL AS table_collation, NULL AS data_free, comment AS table_comment FROM system.tables;
+tables
 
 query TTTTT
 DESC INFORMATION_SCHEMA.KEY_COLUMN_USAGE
@@ -56,7 +56,7 @@ select count(1) > 1 from information_Schema.Columns
 1
 
 query T
-SELECT t.table_catalog FROM information_schema.VIEWS t WHERE t.TABLE_SCHEMA = 'information_schema'
+SELECT t.table_catalog FROM information_schema.VIEWS t WHERE t.TABLE_SCHEMA = 'information_schema' and view_definition is not null;
 ----
 default
 default
@@ -70,7 +70,13 @@ statement ok
 drop table if exists t
 
 statement ok
+drop view if exists v_t
+
+statement ok
 create table t(id int comment 'tes\t', c1 string comment 'sss') comment='table comm\ent'
+
+statement ok
+create view v_t as select * from t;
 
 query T
 select table_comment from information_schema.TABLES where table_schema='default' and table_name='t'
@@ -83,5 +89,14 @@ select column_comment from information_schema.COLUMNS where table_schema='defaul
 'tes	'
 'sss'
 
+query T
+select table_type from information_schema.TABLES where table_schema='default' and table_name='v_t'
+----
+VIEW
+
 statement ok
 drop table if exists t
+
+statement ok
+drop view if exists v_t
+

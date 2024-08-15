@@ -146,7 +146,7 @@ impl BloomIndexBuilder {
         let maybe_bloom_index = BloomIndex::try_create(
             self.table_ctx.get_function_context()?,
             bloom_location.1,
-            &[block],
+            block,
             self.bloom_columns_map.clone(),
         )?;
 
@@ -225,7 +225,7 @@ impl BloomIndexState {
         let maybe_bloom_index = BloomIndex::try_create(
             ctx.get_function_context()?,
             location.1,
-            &[block],
+            block,
             bloom_columns_map,
         )?;
         if let Some(bloom_index) = maybe_bloom_index {
@@ -443,7 +443,6 @@ impl BlockWriter {
         metrics_inc_block_write_nums(size as u64);
         metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
 
-        info!("wrote down block: {}", block_location);
         Ok(())
     }
 
@@ -461,7 +460,11 @@ impl BlockWriter {
             metrics_inc_block_index_write_nums(index_state.size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
 
-            info!("wrote down bloom index: {}", location);
+            info!(
+                "wrote down bloom index: {}, use {} secs",
+                location,
+                start.elapsed().as_secs_f32()
+            );
         }
         Ok(())
     }

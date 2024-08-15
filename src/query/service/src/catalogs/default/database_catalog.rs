@@ -95,8 +95,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -120,9 +118,9 @@ use crate::table_functions::TableFunctionFactory;
 #[derive(Clone)]
 pub struct DatabaseCatalog {
     /// the upper layer, read only
-    immutable_catalog: Arc<dyn Catalog>,
+    immutable_catalog: Arc<ImmutableCatalog>,
     /// bottom layer, writing goes here
-    mutable_catalog: Arc<dyn Catalog>,
+    mutable_catalog: Arc<MutableCatalog>,
     /// table function engine factories
     table_function_factory: Arc<TableFunctionFactory>,
 }
@@ -134,28 +132,16 @@ impl Debug for DatabaseCatalog {
 }
 
 impl DatabaseCatalog {
-    pub fn create(
-        immutable_catalog: Arc<dyn Catalog>,
-        mutable_catalog: Arc<dyn Catalog>,
-        table_function_factory: Arc<TableFunctionFactory>,
-    ) -> Self {
-        Self {
-            immutable_catalog,
-            mutable_catalog,
-            table_function_factory,
-        }
-    }
-
     #[async_backtrace::framed]
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let table_function_factory = TableFunctionFactory::create();
-        let res = DatabaseCatalog::create(
-            Arc::new(immutable_catalog),
-            Arc::new(mutable_catalog),
-            Arc::new(table_function_factory),
-        );
+        let res = DatabaseCatalog {
+            immutable_catalog: Arc::new(immutable_catalog),
+            mutable_catalog: Arc::new(mutable_catalog),
+            table_function_factory: Arc::new(table_function_factory),
+        };
         Ok(res)
     }
 }
@@ -170,8 +156,16 @@ impl Catalog for DatabaseCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        Arc::default()
+    }
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        let mut me = self.as_ref().clone();
+        let mut mutable_catalog = me.mutable_catalog.as_ref().clone();
+        mutable_catalog.disable_table_info_refresh();
+        me.mutable_catalog = Arc::new(mutable_catalog);
+        Ok(Arc::new(me))
     }
 
     #[async_backtrace::framed]
@@ -318,6 +312,16 @@ impl Catalog for DatabaseCatalog {
         tables.extend(other);
 
         Ok(tables)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
+
+        match res {
+            Ok(Some(x)) => Ok(Some(x)),
+            Ok(None) | Err(_) => self.mutable_catalog.get_table_name_by_id(table_id).await,
+        }
     }
 
     #[async_backtrace::framed]
@@ -563,22 +567,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        self.mutable_catalog
-            .update_table_meta(table_info, req)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.mutable_catalog.update_multi_table_meta(reqs).await
+        self.mutable_catalog
+            .retryable_update_multi_table_meta(reqs)
+            .await
     }
 
     #[async_backtrace::framed]

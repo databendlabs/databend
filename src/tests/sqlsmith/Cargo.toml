@@ -9,20 +9,19 @@ edition = { workspace = true }
 [dependencies]
 chrono-tz = { workspace = true }
 clap = { workspace = true }
-databend-client = "0.18.1"
+databend-client = { git = "https://github.com/datafuselabs/bendsql/", rev = "7658a5" }
 databend-common-ast = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-formats = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-sql = { workspace = true }
-databend-driver = "0.18.1"
-databend-sql = "0.18.1"
+databend-driver = { git = "https://github.com/datafuselabs/bendsql/", rev = "7658a5" }
+databend-sql = { git = "https://github.com/datafuselabs/bendsql/", rev = "7658a5" }
 ethnum = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
 rand = { workspace = true }
-roaring = { version = "0.10.1", features = ["serde"] }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = "0.1.37"

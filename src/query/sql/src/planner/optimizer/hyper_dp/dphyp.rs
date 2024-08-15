@@ -142,6 +142,9 @@ impl DPhpy {
                 Ok((Arc::new(s_expr.clone()), true))
             }
             RelOperator::Join(op) => {
+                if op.build_side_cache_info.is_some() {
+                    return Ok((Arc::new(s_expr.clone()), true));
+                }
                 let mut is_inner_join = true;
                 if !matches!(op.join_type, JoinType::Inner)
                     && !matches!(op.join_type, JoinType::Cross)
@@ -177,14 +180,14 @@ impl DPhpy {
                     right_is_subquery = true;
                 }
                 // Add join conditions
-                for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
-                    let left_used_tables = condition_pair.0.used_tables()?;
-                    let right_used_tables = condition_pair.1.used_tables()?;
+                for condition in op.equi_conditions.iter() {
+                    let left_used_tables = condition.left.used_tables()?;
+                    let right_used_tables = condition.right.used_tables()?;
                     if left_used_tables.is_empty() || right_used_tables.is_empty() {
                         is_inner_join = false;
                         break;
                     }
-                    join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
+                    join_conditions.push((condition.left.clone(), condition.right.clone()));
                 }
                 if !op.non_equi_conditions.is_empty() {
                     let filter = Filter {
@@ -192,7 +195,7 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if !is_inner_join || op.build_side_cache_info.is_some() {
+                if !is_inner_join {
                     let new_s_expr = self.new_children(s_expr)?;
                     self.join_relations.push(JoinRelation::new(&new_s_expr));
                     Ok((Arc::new(new_s_expr), true))
@@ -255,7 +258,7 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((Arc::new(new_s_expr), true))
             }
-            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) => {
+            RelOperator::Exchange(_) => {
                 unreachable!()
             }
             RelOperator::DummyTableScan(_)
@@ -264,7 +267,12 @@ impl DPhpy {
             | RelOperator::CacheScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::MaterializedCte(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 
@@ -712,6 +720,7 @@ impl DPhpy {
     }
 
     #[allow(clippy::only_used_in_recursion)]
+    #[recursive::recursive]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         let mut new_s_expr = s_expr.clone();
         match s_expr.plan.as_ref() {

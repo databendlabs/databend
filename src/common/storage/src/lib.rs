@@ -1,4 +1,4 @@
-#![feature(lazy_cell)]
+#![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 //! `common_storage` will provide storage related types and functions.
 //!
 //! Databend Query will have three kinds of storage operators, visit
-//! [RFC: Cache](https://databend.rs/doc/contributing/rfcs/cache) for
+//! [RFC: Cache](https://docs.databend.com/guides/community/rfcs/cache) for
 //! more detailed information.
 //!
 //! - data operator: All data will be persisted until users delete them.
@@ -66,6 +66,7 @@ pub use stage::StageFilesInfo;
 pub use stage::STDIN_FD;
 
 mod copy;
+mod histogram;
 mod merge;
 mod metrics_layer;
 mod multi_table_insert;
@@ -74,7 +75,10 @@ mod statistics;
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
 pub use copy::FileStatus;
-pub use merge::MergeStatus;
+pub use histogram::Histogram;
+pub use histogram::HistogramBucket;
+pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
+pub use merge::MutationStatus;
 pub use multi_table_insert::MultiTableInsertStatus;
 pub use statistics::Datum;
 pub use statistics::F64;

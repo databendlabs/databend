@@ -30,6 +30,7 @@ message AuthInfo {
     }
     bytes hash_value = 1;
     PasswordHashMethod hash_method = 2;
+    optional bool need_change = 3;
   }
   message JWT {}
 
@@ -121,6 +122,7 @@ message UserOption {
   optional string network_policy = 3;
   optional string password_policy = 4;
   optional bool disabled = 5;
+  optional bool must_change_password = 6;
 }
 
 message UserInfo {

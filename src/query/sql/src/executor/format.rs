@@ -18,23 +18,22 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
-use super::physical_plans::CacheScan;
-use super::physical_plans::ExpressionScan;
-use super::physical_plans::MergeInto;
-use super::physical_plans::MergeIntoAddRowNumber;
-use super::physical_plans::MergeIntoAppendNotMatched;
+use super::physical_plans::AddStreamColumn;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CacheScan;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
@@ -45,15 +44,20 @@ use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
+use crate::executor::physical_plans::Mutation;
+use crate::executor::physical_plans::MutationManipulate;
+use crate::executor::physical_plans::MutationOrganize;
+use crate::executor::physical_plans::MutationSource;
+use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
-use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -61,6 +65,7 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowFunction;
+use crate::executor::physical_plans::WindowPartition;
 use crate::executor::PhysicalPlan;
 use crate::planner::Metadata;
 use crate::planner::MetadataRef;
@@ -91,7 +96,7 @@ impl PhysicalPlan {
                     None => Ok(FormatTreeNode::with_children(
                         format!(
                             "Scan: {}.{} (read rows: {})",
-                            plan.source.catalog_info.name_ident.catalog_name,
+                            plan.source.source_info.catalog_name(),
                             plan.source.source_info.desc(),
                             plan.source.statistics.read_rows
                         ),
@@ -198,6 +203,137 @@ impl PhysicalPlan {
     }
 }
 
+// The method will only collect scan,filter and join nodes
+// It's only used to debug cardinality estimator.
+#[recursive::recursive]
+pub fn format_partial_tree(
+    plan: &PhysicalPlan,
+    metadata: &MetadataRef,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    match plan {
+        PhysicalPlan::TableScan(plan) => {
+            if plan.table_index == Some(DUMMY_TABLE_INDEX) {
+                return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+            }
+            let table_name = match plan.table_index {
+                None => format!(
+                    "{}.{}",
+                    plan.source.source_info.catalog_name(),
+                    plan.source.source_info.desc()
+                ),
+                Some(table_index) => {
+                    let metadata = metadata.read().clone();
+                    let table = metadata.table(table_index).clone();
+                    format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+                }
+            };
+            let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+
+            Ok(FormatTreeNode::with_children(
+                "TableScan".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::Filter(plan) => {
+            let filter = plan
+                .predicates
+                .iter()
+                .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ");
+            let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+            children.push(format_partial_tree(&plan.input, metadata, profs)?);
+            Ok(FormatTreeNode::with_children(
+                "Filter".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::HashJoin(plan) => {
+            let build_child = format_partial_tree(&plan.build, metadata, profs)?;
+            let probe_child = format_partial_tree(&plan.probe, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+            children.push(build_child);
+            children.push(probe_child);
+
+            Ok(FormatTreeNode::with_children(
+                "HashJoin".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::RangeJoin(plan) => {
+            let left_child = format_partial_tree(&plan.left, metadata, profs)?;
+            let right_child = format_partial_tree(&plan.right, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+
+            let children = vec![
+                FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+            ];
+
+            Ok(FormatTreeNode::with_children(
+                format!("RangeJoin: {}", plan.join_type),
+                children,
+            ))
+        }
+        PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
+        PhysicalPlan::UnionAll(union_all) => {
+            let left_child = format_partial_tree(&union_all.left, metadata, profs)?;
+            let right_child = format_partial_tree(&union_all.right, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &union_all.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, union_all.plan_id);
+            let children = vec![
+                FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+            ];
+
+            Ok(FormatTreeNode::with_children(
+                "UnionAll".to_string(),
+                children,
+            ))
+        }
+        other => {
+            let children = other
+                .children()
+                .map(|child| format_partial_tree(child, metadata, profs))
+                .collect::<Result<Vec<FormatTreeNode<String>>>>()?;
+
+            if children.len() == 1 {
+                Ok(children[0].clone())
+            } else {
+                Ok(FormatTreeNode::with_children(
+                    format!("{:?}", other),
+                    children,
+                ))
+            }
+        }
+    }
+}
+
+#[recursive::recursive]
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &Metadata,
@@ -215,6 +351,9 @@ fn to_format_tree(
         }
         PhysicalPlan::AggregateFinal(plan) => aggregate_final_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::WindowPartition(plan) => {
+            window_partition_to_format_tree(plan, metadata, profs)
+        }
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, profs),
@@ -226,10 +365,7 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
-        PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
-        PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::UpdateSource(_) => Ok(FormatTreeNode::new("UpdateSource".to_string())),
+        PhysicalPlan::Recluster(_) => Ok(FormatTreeNode::new("Recluster".to_string())),
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
@@ -244,14 +380,19 @@ fn to_format_tree(
             Ok(FormatTreeNode::new("ReplaceDeduplicate".to_string()))
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
-        PhysicalPlan::MergeInto(plan) => format_merge_into(plan, metadata, profs),
-        PhysicalPlan::MergeIntoAddRowNumber(plan) => {
-            format_merge_into_add_row_number(plan, metadata, profs)
+        PhysicalPlan::MutationSource(plan) => format_mutation_source(plan, metadata, profs),
+        PhysicalPlan::ColumnMutation(plan) => format_column_mutation(plan, metadata, profs),
+        PhysicalPlan::Mutation(plan) => format_merge_into(plan, metadata, profs),
+        PhysicalPlan::MutationSplit(plan) => format_merge_into_split(plan, metadata, profs),
+        PhysicalPlan::MutationManipulate(plan) => {
+            format_merge_into_manipulate(plan, metadata, profs)
         }
-        PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-            format_merge_into_append_not_matched(plan, metadata, profs)
-        }
+        PhysicalPlan::MutationOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
+        PhysicalPlan::AddStreamColumn(plan) => format_add_stream_column(plan, metadata, profs),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
+        PhysicalPlan::RecursiveCteScan(_) => {
+            Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
+        }
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
@@ -366,40 +507,187 @@ fn append_profile_info(
     }
 }
 
+fn append_output_rows_info(
+    children: &mut Vec<FormatTreeNode<String>>,
+    profs: &HashMap<u32, PlanProfile>,
+    plan_id: u32,
+) {
+    if let Some(prof) = profs.get(&plan_id) {
+        for (_, desc) in get_statistics_desc().iter() {
+            if desc.display_name != "output rows" {
+                continue;
+            }
+            if prof.statistics[desc.index] != 0 {
+                children.push(FormatTreeNode::new(format!(
+                    "{}: {}",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(prof.statistics[desc.index])
+                )));
+            }
+            break;
+        }
+    }
+}
+
+fn format_mutation_source(
+    _plan: &MutationSource,
+    _metadata: &Metadata,
+    _profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::with_children(
+        format!("Mutation Source"),
+        vec![],
+    ))
+}
+
+fn format_column_mutation(
+    plan: &ColumnMutation,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    to_format_tree(&plan.input, metadata, profs)
+}
+
 fn format_merge_into(
-    plan: &MergeInto,
+    merge_into: &Mutation,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
+    let table_entry = metadata.table(merge_into.target_table_index).clone();
+    let target_table = vec![FormatTreeNode::new(format!(
+        "target table: [catalog: {}] [database: {}] [table: {}]",
+        table_entry.catalog(),
+        table_entry.database(),
+        table_entry.name()
+    ))];
+    let target_schema = table_entry.table().schema_with_stream();
+
+    let merge_into_organize: &PhysicalPlan = &merge_into.input;
+    let merge_into_manipulate: &PhysicalPlan =
+        if let PhysicalPlan::MutationOrganize(plan) = merge_into_organize {
+            &plan.input
+        } else {
+            return Err(ErrorCode::Internal(
+                "Expect MutationOrganize after MergeIntoSerialize ".to_string(),
+            ));
+        };
+
+    let children = if let PhysicalPlan::MutationManipulate(plan) = merge_into_manipulate {
+        // Matched clauses.
+        let mut matched_children = Vec::with_capacity(plan.matched.len());
+        for evaluator in &plan.matched {
+            let condition_format = evaluator.0.as_ref().map_or_else(
+                || "condition: None".to_string(),
+                |predicate| {
+                    format!(
+                        "condition: {}",
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                    )
+                },
+            );
+            if evaluator.1.is_none() {
+                matched_children.push(FormatTreeNode::new(format!(
+                    "matched delete: [{}]",
+                    condition_format
+                )));
+            } else {
+                let mut update_list = evaluator.1.as_ref().unwrap().clone();
+                update_list.sort_by(|a, b| a.0.cmp(&b.0));
+                let update_format = update_list
+                    .iter()
+                    .map(|(field_idx, expr)| {
+                        format!(
+                            "{} = {}",
+                            target_schema.field(*field_idx).name(),
+                            expr.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        )
+                    })
+                    .join(",");
+                matched_children.push(FormatTreeNode::new(format!(
+                    "matched update: [{}, update set {}]",
+                    condition_format, update_format
+                )));
+            }
+        }
+
+        // UnMatched clauses.
+        let mut unmatched_children = Vec::with_capacity(plan.unmatched.len());
+        for evaluator in &plan.unmatched {
+            let condition_format = evaluator.1.as_ref().map_or_else(
+                || "condition: None".to_string(),
+                |predicate| {
+                    format!(
+                        "condition: {}",
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                    )
+                },
+            );
+            let insert_schema_format = evaluator
+                .0
+                .fields
+                .iter()
+                .map(|field| field.name())
+                .join(",");
+            let values_format = evaluator
+                .2
+                .iter()
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(",");
+            let unmatched_format = format!(
+                "insert into ({}) values({})",
+                insert_schema_format, values_format
+            );
+            unmatched_children.push(FormatTreeNode::new(format!(
+                "unmatched insert: [{}, {}]",
+                condition_format, unmatched_format
+            )));
+        }
+
+        [target_table, matched_children, unmatched_children, vec![
+            to_format_tree(&plan.input, metadata, profs)?,
+        ]]
+        .concat()
+    } else {
+        return Err(ErrorCode::Internal(
+            "Expect MutationManipulate after MutationOrganize ".to_string(),
+        ));
+    };
     Ok(FormatTreeNode::with_children(
-        "MergeInto".to_string(),
-        vec![child],
+        "DataMutation".to_string(),
+        children,
     ))
 }
 
-fn format_merge_into_add_row_number(
-    plan: &MergeIntoAddRowNumber,
+fn format_merge_into_split(
+    plan: &MutationSplit,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoAddRowNumber".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
-fn format_merge_into_append_not_matched(
-    plan: &MergeIntoAppendNotMatched,
+fn format_merge_into_manipulate(
+    plan: &MutationManipulate,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoAppendNotMatched".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
+}
+
+fn format_merge_into_organize(
+    plan: &MutationOrganize,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    to_format_tree(&plan.input, metadata, profs)
+}
+
+fn format_add_stream_column(
+    plan: &AddStreamColumn,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
@@ -425,7 +713,7 @@ fn table_scan_to_format_tree(
     let table_name = match plan.table_index {
         None => format!(
             "{}.{}",
-            plan.source.catalog_info.name_ident.catalog_name,
+            plan.source.source_info.catalog_name(),
             plan.source.source_info.desc()
         ),
         Some(table_index) => {
@@ -955,6 +1243,44 @@ fn sort_to_format_tree(
     Ok(FormatTreeNode::with_children("Sort".to_string(), children))
 }
 
+fn window_partition_to_format_tree(
+    plan: &WindowPartition,
+    metadata: &Metadata,
+    prof_span_set: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let partition_by = plan
+        .partition_by
+        .iter()
+        .map(|&index| {
+            let name = metadata.column(index).name();
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!("hash keys: [{partition_by}]")),
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "WindowPartition".to_string(),
+        children,
+    ))
+}
+
 fn limit_to_format_tree(
     plan: &Limit,
     metadata: &Metadata,
@@ -1199,10 +1525,13 @@ fn union_all_to_format_tree(
         to_format_tree(&plan.right, metadata, profs)?,
     ]);
 
-    Ok(FormatTreeNode::with_children(
-        "UnionAll".to_string(),
-        children,
-    ))
+    let root = if !plan.cte_scan_names.is_empty() {
+        "UnionAll(recursive cte)".to_string()
+    } else {
+        "UnionAll".to_string()
+    };
+
+    Ok(FormatTreeNode::with_children(root, children))
 }
 
 fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
@@ -1339,18 +1668,6 @@ fn distributed_insert_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
-        children,
-    ))
-}
-
-fn recluster_sink_to_format_tree(
-    plan: &ReclusterSink,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
-    Ok(FormatTreeNode::with_children(
-        "ReclusterSink".to_string(),
         children,
     ))
 }

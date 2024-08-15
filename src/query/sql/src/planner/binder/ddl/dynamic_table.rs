@@ -142,7 +142,7 @@ impl Binder {
         }
 
         let mut init_bind_context = BindContext::new();
-        let (_, bind_context) = self.bind_query(&mut init_bind_context, as_query).await?;
+        let (_, bind_context) = self.bind_query(&mut init_bind_context, as_query)?;
         let query_fields = bind_context
             .columns
             .iter()
@@ -193,7 +193,7 @@ impl Binder {
             field_comments,
             cluster_key,
             as_query: as_query.to_string(),
-            traget_lag: target_lag.clone(),
+            target_lag: target_lag.clone(),
             warehouse_opts: warehouse_opts.clone(),
             refresh_mode: refresh_mode.clone(),
             initialize: initialize.clone(),

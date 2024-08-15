@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Identifier;
@@ -23,16 +22,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_meta_app::principal::FileFormatOptionsReader;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::OnErrorMode;
 
+use super::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
+use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::BindContext;
 
@@ -89,48 +86,22 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let (catalog_name, database_name, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None);
+        let (catalog_name, database_name, table_name) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+        );
+
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
+            .await
+            .map_err(|err| table_identifier.not_found_suggest_error(err))?;
+
         let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
-            InsertSource::Streaming {
-                format,
-                rest_str,
-                start,
-            } => {
-                if format.to_uppercase() == "VALUES" {
-                    let data = rest_str.trim_end_matches(';').trim_start().to_owned();
-                    Ok(InsertInputSource::Values(InsertValue::RawValues {
-                        data,
-                        start,
-                    }))
-                } else {
-                    Ok(InsertInputSource::StreamingWithFormat(format, start, None))
-                }
-            }
-            InsertSource::StreamingV2 {
-                settings,
-                on_error_mode,
-                start,
-            } => {
-                let params = FileFormatParams::try_from_reader(
-                    FileFormatOptionsReader::from_ast(&settings),
-                    false,
-                )?;
-                Ok(InsertInputSource::StreamingWithFileFormat {
-                    format: params,
-                    start,
-                    on_error_mode: OnErrorMode::from_str(
-                        &on_error_mode.unwrap_or("abort".to_string()),
-                    )?,
-                    input_context_option: None,
-                })
-            }
             InsertSource::Values { rows } => {
                 let mut new_rows = Vec::with_capacity(rows.len());
                 for row in rows {

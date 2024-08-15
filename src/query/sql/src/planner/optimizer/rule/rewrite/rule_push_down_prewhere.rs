@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -86,6 +87,12 @@ impl RulePushDownPrewhere {
                                 "Prewhere don't support search functions".to_string(),
                             ));
                         }
+                        if is_internal_column(&column.column.column_name) {
+                            return Err(ErrorCode::StorageUnsupported(format!(
+                                "Prewhere don't support internal column {}",
+                                column.column.column_name
+                            )));
+                        }
                         self.columns.insert(column.column.index);
                         return Ok(());
                     }
@@ -123,10 +130,13 @@ impl RulePushDownPrewhere {
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut scan: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        if scan.update_stream_columns {
+            return Ok(s_expr.clone());
+        }
         let metadata = self.metadata.read().clone();
 
-        let table = metadata.table(get.table_index).table();
+        let table = metadata.table(scan.table_index).table();
         if !table.support_prewhere() {
             // cannot optimize
             return Ok(s_expr.clone());
@@ -138,7 +148,7 @@ impl RulePushDownPrewhere {
 
         // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
-            match Self::collect_columns(get.table_index, &table.schema(), pred) {
+            match Self::collect_columns(scan.table_index, &table.schema(), pred) {
                 Some(columns) => {
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);
@@ -148,18 +158,18 @@ impl RulePushDownPrewhere {
         }
 
         if !prewhere_pred.is_empty() {
-            if let Some(prewhere) = get.prewhere.as_ref() {
+            if let Some(prewhere) = scan.prewhere.as_ref() {
                 prewhere_pred.extend(prewhere.predicates.clone());
                 prewhere_columns.extend(&prewhere.prewhere_columns);
             }
 
-            get.prewhere = Some(Prewhere {
-                output_columns: get.columns.clone(),
+            scan.prewhere = Some(Prewhere {
+                output_columns: scan.columns.clone(),
                 prewhere_columns,
                 predicates: prewhere_pred,
             });
         }
-        Ok(SExpr::create_leaf(Arc::new(get.into())))
+        Ok(SExpr::create_leaf(Arc::new(scan.into())))
     }
 }
 

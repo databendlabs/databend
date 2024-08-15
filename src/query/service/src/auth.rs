@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -25,8 +26,9 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
-use minitrace::func_name;
+use fastrace::func_name;
 
+use crate::servers::http::v1::TokenManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
@@ -34,6 +36,11 @@ pub struct AuthMgr {
 }
 
 pub enum Credential {
+    DatabendToken {
+        token: String,
+        token_type: TokenType,
+        set_user: bool,
+    },
     Jwt {
         token: String,
         client_ip: Option<String>,
@@ -68,6 +75,22 @@ impl AuthMgr {
     pub async fn auth(&self, session: &mut Session, credential: &Credential) -> Result<()> {
         let user_api = UserApiProvider::instance();
         match credential {
+            Credential::DatabendToken {
+                token,
+                set_user,
+                token_type,
+            } => {
+                let claim = TokenManager::instance()
+                    .verify_token(token, token_type.clone())
+                    .await?;
+                let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
+                if *set_user {
+                    let identity = UserIdentity::new(claim.user, "%");
+                    session.set_current_tenant(tenant.clone());
+                    let user_info = user_api.get_user(&tenant, identity.clone()).await?;
+                    session.set_authed_user(user_info, claim.auth_role).await?;
+                }
+            }
             Credential::Jwt {
                 token: t,
                 client_ip,
@@ -136,19 +159,23 @@ impl AuthMgr {
             } => {
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(n, "%");
-                let user = user_api
+                let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
                 // Check password policy for login
-                UserApiProvider::instance()
+                let need_change = UserApiProvider::instance()
                     .check_login_password(&tenant, identity.clone(), &user)
                     .await?;
+                if need_change {
+                    user.update_auth_need_change_password();
+                }
 
                 let authed = match &user.auth_info {
                     AuthInfo::None => Ok(()),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
+                        ..
                     } => match p {
                         None => Err(ErrorCode::AuthenticateFailure("password required")),
                         Some(p) => {

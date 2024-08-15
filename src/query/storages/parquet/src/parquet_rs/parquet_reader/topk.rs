@@ -77,9 +77,17 @@ pub struct BuiltTopK {
 }
 
 /// Build [`TopK`] into [`ParquetTopK`] and get its [`TableField`].
-pub fn build_topk(topk: &TopK, schema_desc: &SchemaDescriptor) -> Result<BuiltTopK> {
+pub fn build_topk(
+    topk: &TopK,
+    schema_desc: &SchemaDescriptor,
+    arrow_schema: Option<&arrow_schema::Schema>,
+) -> Result<BuiltTopK> {
     let projection = ProjectionMask::leaves(schema_desc, vec![topk.leaf_id]);
-    let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
+    let field_levels = parquet_to_arrow_field_levels(
+        schema_desc,
+        projection.clone(),
+        arrow_schema.map(|s| &s.fields),
+    )?;
     let field_paths = if topk.field.name.contains(':') {
         // It's a inner column
         compute_output_field_paths(

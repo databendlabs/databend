@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -20,6 +21,7 @@ use std::sync::Weak;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -51,11 +53,11 @@ pub struct SessionContext {
     /// The user can switch to another available role by `SET ROLE`. If the current_role is not set,
     /// it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    /// When an user comes from an external authenticator, the session is usually mapped to a single role.
+    /// When a user comes from an external authenticator, the session is usually mapped to a single role.
     auth_role: RwLock<Option<String>>,
     /// To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
-    /// SET SEONCDARY ROLES NONE will disable all the roles except the current role.
-    /// By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
+    /// SET SECONDARY ROLES NONE will disable all the roles except the current role.
+    /// By default, the SECONDARY ROLES is ALL, which is None here. There are a few cases that the SECONDARY
     /// ROLES is preferred to be empty, which is Some([]) here:
     /// 1. The user comes from an external authenticator, which maps to a single role.
     /// 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
@@ -67,6 +69,8 @@ pub struct SessionContext {
     /// We store `query_id -> query_result_cache_key` to session context, so that we can fetch
     /// query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
+    // Used in set variables inside session
+    variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
 }
@@ -87,6 +91,7 @@ impl SessionContext {
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
+            variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
         })
@@ -298,5 +303,23 @@ impl SessionContext {
 
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         *self.txn_mgr.lock() = txn_mgr;
+    }
+
+    pub fn set_variable(&self, key: String, value: Scalar) {
+        self.variables.write().insert(key, value);
+    }
+
+    pub fn unset_variable(&self, key: &str) {
+        self.variables.write().remove(key);
+    }
+
+    pub fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.variables.read().get(key).cloned()
+    }
+    pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.variables.read().clone()
+    }
+    pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
+        *self.variables.write() = variables
     }
 }

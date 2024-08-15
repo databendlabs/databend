@@ -23,9 +23,9 @@ Sort
     ├── partition by: [depname]
     ├── order by: [empno]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── WindowPartition
         ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
-        ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
+        ├── hash keys: [depname]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_explain_window.empsalary
@@ -53,12 +53,13 @@ CompoundBlockOperator(Project) × 1
       SortPartialTransform × 4
         Merge to Resize × 4
           Transform Window × 1
-            Merge to MultiSortMerge × 1
-              TransformSortMerge × 4
-                SortPartialTransform × 4
-                  Merge to Resize × 4
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+            TransformWindowPartitionSort × 1
+              TransformWindowPartitionSpillReader × 1
+                TransformWindowPartitionBucket × 1
+                  TransformWindowPartitionSpillWriter × 1
+                    TransformWindowPartitionScatter × 1
+                      DeserializeDataTransform × 1
+                        SyncReadParquetDataSource × 1
 
 
 # Enable sort spilling
@@ -75,11 +76,11 @@ CompoundBlockOperator(Project) × 1
         SortPartialTransform × 4
           Merge to Resize × 4
             Transform Window × 1
-              Merge to MultiSortMerge × 1
-                TransformSortSpill × 4
-                  TransformSortMerge × 4
-                    SortPartialTransform × 4
-                      Merge to Resize × 4
+              TransformWindowPartitionSort × 1
+                TransformWindowPartitionSpillReader × 1
+                  TransformWindowPartitionBucket × 1
+                    TransformWindowPartitionSpillWriter × 1
+                      TransformWindowPartitionScatter × 1
                         DeserializeDataTransform × 1
                           SyncReadParquetDataSource × 1
 
@@ -104,9 +105,9 @@ Filter
     ├── partition by: [k]
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── WindowPartition
         ├── output columns: [test.k (#0), test.v (#1)]
-        ├── sort keys: [k ASC NULLS LAST, v DESC NULLS LAST]
+        ├── hash keys: [k]
         ├── estimated rows: 0.00
         └── UnionAll
             ├── output columns: [test.k (#0), test.v (#1)]
@@ -152,9 +153,9 @@ Filter
     ├── partition by: [v]
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── WindowPartition
         ├── output columns: [test.k (#0), test.v (#1)]
-        ├── sort keys: [v ASC NULLS LAST, v DESC NULLS LAST]
+        ├── hash keys: [v]
         ├── estimated rows: 0.00
         └── UnionAll
             ├── output columns: [test.k (#0), test.v (#1)]
@@ -237,9 +238,9 @@ Filter
     ├── partition by: [a]
     ├── order by: []
     ├── frame: [Range: Preceding(None) ~ Following(None)]
-    └── Sort
+    └── WindowPartition
         ├── output columns: [t.a (#0)]
-        ├── sort keys: [a ASC NULLS LAST]
+        ├── hash keys: [a]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_explain_window.t
@@ -364,12 +365,13 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      Merge to MultiSortMerge × 1
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+      TransformWindowPartitionSort × 1
+        TransformWindowPartitionSpillReader × 1
+          TransformWindowPartitionBucket × 1
+            TransformWindowPartitionSpillWriter × 1
+              TransformWindowPartitionScatter × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 # Enable sort spilling
 statement ok
@@ -382,11 +384,11 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      Merge to MultiSortMerge × 1
-        TransformSortSpill × 4
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
+      TransformWindowPartitionSort × 1
+        TransformWindowPartitionSpillReader × 1
+          TransformWindowPartitionBucket × 1
+            TransformWindowPartitionSpillWriter × 1
+              TransformWindowPartitionScatter × 1
                 DeserializeDataTransform × 1
                   SyncReadParquetDataSource × 1
 
@@ -402,12 +404,13 @@ explain pipeline select a, dense_rank() over (partition by a order by a desc) fr
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      Merge to MultiSortMerge × 1
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+      TransformWindowPartitionSort × 1
+        TransformWindowPartitionSpillReader × 1
+          TransformWindowPartitionBucket × 1
+            TransformWindowPartitionSpillWriter × 1
+              TransformWindowPartitionScatter × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 # rows frame single window (can push down limit)
 query T
@@ -416,12 +419,13 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      Merge to MultiSortMerge × 1
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+      TransformWindowPartitionSort × 1
+        TransformWindowPartitionSpillReader × 1
+          TransformWindowPartitionBucket × 1
+            TransformWindowPartitionSpillWriter × 1
+              TransformWindowPartitionScatter × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 # rows frame single window (can not push down limit)
 query T
@@ -430,12 +434,13 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      Merge to MultiSortMerge × 1
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+      TransformWindowPartitionSort × 1
+        TransformWindowPartitionSpillReader × 1
+          TransformWindowPartitionBucket × 1
+            TransformWindowPartitionSpillWriter × 1
+              TransformWindowPartitionScatter × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 # rows frame multi window (can not push down limit)
 query T
@@ -450,12 +455,13 @@ CompoundBlockOperator(Project) × 1
           SortPartialTransform × 4
             Merge to Resize × 4
               Transform Window × 1
-                Merge to MultiSortMerge × 1
-                  TransformSortMerge × 4
-                    SortPartialTransform × 4
-                      Merge to Resize × 4
-                        DeserializeDataTransform × 1
-                          SyncReadParquetDataSource × 1
+                TransformWindowPartitionSort × 1
+                  TransformWindowPartitionSpillReader × 1
+                    TransformWindowPartitionBucket × 1
+                      TransformWindowPartitionSpillWriter × 1
+                        TransformWindowPartitionScatter × 1
+                          DeserializeDataTransform × 1
+                            SyncReadParquetDataSource × 1
 
 # row fetch with window function(pipeline explain)
 query T
@@ -469,14 +475,15 @@ CompoundBlockOperator(Project) × 1
           SortPartialTransform × 4
             Merge to Resize × 4
               Transform Window × 1
-                Merge to MultiSortMerge × 1
-                  TransformSortMerge × 4
-                    SortPartialTransform × 4
-                      Merge to Resize × 4
-                        TransformFilter × 1
-                          AddInternalColumnsTransform × 1
-                            DeserializeDataTransform × 1
-                              SyncReadParquetDataSource × 1
+                TransformWindowPartitionSort × 1
+                  TransformWindowPartitionSpillReader × 1
+                    TransformWindowPartitionBucket × 1
+                      TransformWindowPartitionSpillWriter × 1
+                        TransformWindowPartitionScatter × 1
+                          TransformFilter × 1
+                            AddInternalColumnsTransform × 1
+                              DeserializeDataTransform × 1
+                                SyncReadParquetDataSource × 1
 
 # row fetch with window function(plan explain)
 query T
@@ -501,9 +508,9 @@ RowFetch
             ├── partition by: [a]
             ├── order by: [a]
             ├── frame: [Rows: Preceding(None) ~ CurrentRow]
-            └── Sort
+            └── WindowPartition
                 ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
-                ├── sort keys: [a ASC NULLS LAST, a DESC NULLS LAST]
+                ├── hash keys: [a]
                 ├── estimated rows: 0.00
                 └── Filter
                     ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
@@ -533,12 +540,13 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     TransformFilter × 1
       Transform Window × 1
-        Merge to MultiSortMerge × 1
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                DeserializeDataTransform × 1
-                  SyncReadParquetDataSource × 1
+        TransformWindowPartitionSort × 1
+          TransformWindowPartitionSpillReader × 1
+            TransformWindowPartitionBucket × 1
+              TransformWindowPartitionSpillWriter × 1
+                TransformWindowPartitionScatter × 1
+                  DeserializeDataTransform × 1
+                    SyncReadParquetDataSource × 1
 
 # same order multi window
 query T
@@ -565,12 +573,13 @@ CompoundBlockOperator(Project) × 1
   Transform Window × 1
     CompoundBlockOperator(Map) × 1
       Transform Window × 1
-        Merge to MultiSortMerge × 1
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                CompoundBlockOperator(Map) × 1
-                  NumbersSourceTransform × 1
+        TransformWindowPartitionSort × 1
+          TransformWindowPartitionSpillReader × 1
+            TransformWindowPartitionBucket × 1
+              TransformWindowPartitionSpillWriter × 1
+                TransformWindowPartitionScatter × 1
+                  CompoundBlockOperator(Map) × 1
+                    NumbersSourceTransform × 1
 
 
 statement ok

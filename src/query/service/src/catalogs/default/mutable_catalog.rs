@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
@@ -101,8 +102,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -113,8 +112,8 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use fastrace::func_name;
 use log::info;
-use minitrace::func_name;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -133,6 +132,7 @@ use crate::storages::Table;
 pub struct MutableCatalog {
     ctx: CatalogContext,
     tenant: Tenant,
+    disable_table_info_refresh: bool,
 }
 
 impl Debug for MutableCatalog {
@@ -187,7 +187,11 @@ impl MutableCatalog {
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
         };
-        Ok(MutableCatalog { ctx, tenant })
+        Ok(MutableCatalog {
+            ctx,
+            tenant,
+            disable_table_info_refresh: false,
+        })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -195,10 +199,15 @@ impl MutableCatalog {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
+            disable_table_info_refresh: self.disable_table_info_refresh,
         };
         self.ctx
             .database_factory
             .build_database_by_engine(ctx, db_info)
+    }
+
+    pub(crate) fn disable_table_info_refresh(&mut self) {
+        self.disable_table_info_refresh = true;
     }
 }
 
@@ -212,8 +221,8 @@ impl Catalog for MutableCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        CatalogInfo::default().into()
     }
 
     #[async_backtrace::framed]
@@ -268,7 +277,7 @@ impl Catalog for MutableCatalog {
         database.init_database(req.name_ident.tenant_name()).await?;
         Ok(CreateDatabaseReply {
             db_id: res.db_id,
-            spec_vec: None,
+            share_specs: None,
         })
     }
 
@@ -367,10 +376,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> databend_common_exception::Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let res = self.ctx.meta.get_table_by_id(table_id).await?;
         Ok(res)
     }
@@ -379,13 +385,13 @@ impl Catalog for MutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>> {
+    ) -> Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
         Ok(res)
     }
@@ -396,6 +402,12 @@ impl Catalog for MutableCatalog {
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_database_names_by_ids(db_ids).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let res = self.ctx.meta.get_table_name_by_id(table_id).await?;
         Ok(res)
     }
 
@@ -434,6 +446,7 @@ impl Catalog for MutableCatalog {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
+            disable_table_info_refresh: true,
         };
 
         let resp = ctx.meta.get_drop_table_infos(req).await?;
@@ -441,7 +454,7 @@ impl Catalog for MutableCatalog {
         let drop_ids = resp.drop_ids.clone();
         let drop_table_infos = resp.drop_table_infos;
 
-        let storage = ctx.storage_factory.clone();
+        let storage = ctx.storage_factory;
 
         let mut tables = vec![];
         for table_info in drop_table_infos {
@@ -510,46 +523,40 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
-                info!(
-                    "updating table meta. table desc: [{}], has copied files: [{}]?",
-                    table_info.desc,
-                    req.copied_files.is_some()
-                );
-                let begin = Instant::now();
-                let res = self.ctx.meta.update_table_meta(req).await;
-                info!(
-                    "update table meta done. table id: {:?}, time used {:?}",
-                    table_info.ident,
-                    begin.elapsed()
-                );
-                Ok(res?)
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        // deal with share table
+        {
+            if req.update_table_metas.len() == 1 {
+                match req.update_table_metas[0].1.db_type.clone() {
+                    DatabaseType::NormalDB => {}
+                    DatabaseType::ShareDB(share_params) => {
+                        let share_ident = share_params.share_ident;
+                        let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                        let db = self.get_database(&tenant, share_ident.share_name()).await?;
+                        return db.retryable_update_multi_table_meta(req).await;
+                    }
+                }
             }
-            DatabaseType::ShareDB(share_ident) => {
-                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
-                let db = self.get_database(&tenant, share_ident.share_name()).await?;
-                db.update_table_meta(req).await
+            if req
+                .update_table_metas
+                .iter()
+                .any(|(_, info)| matches!(info.db_type, DatabaseType::ShareDB(_)))
+            {
+                return Err(ErrorCode::StorageOther(
+                    "update table meta from multi share db, or update table meta from share db and normal db in one request, is not supported",
+                ));
             }
         }
-    }
 
-    #[async_backtrace::framed]
-    async fn update_multi_table_meta(
-        &self,
-        reqs: UpdateMultiTableMetaReq,
-    ) -> Result<UpdateMultiTableMetaResult> {
         info!(
             "updating multi table meta. number of tables: {}",
-            reqs.update_table_metas.len()
+            req.update_table_metas.len()
         );
         let begin = Instant::now();
-        let res = self.ctx.meta.update_multi_table_meta(reqs).await;
+        let res = self.ctx.meta.update_multi_table_meta(req).await;
         info!(
             "update multi table meta done. time used {:?}",
             begin.elapsed()
@@ -583,7 +590,8 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
-            DatabaseType::ShareDB(share_ident) => {
+            DatabaseType::ShareDB(share_params) => {
+                let share_ident = share_params.share_ident;
                 let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
                 let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.truncate_table(req).await

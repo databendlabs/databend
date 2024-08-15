@@ -10,91 +10,37 @@ edition = { workspace = true }
 [features]
 default = ["simd", "jemalloc"]
 memory-profiling = [
-    "databend-meta/memory-profiling",
     "databend-query/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
 python-udf = ["databend-query/python-udf"]
-simd = ["databend-meta/simd", "databend-query/simd"]
+simd = ["databend-query/simd"]
 jemalloc = ["databend-common-base/jemalloc"]
 io-uring = [
-    "databend-meta/io-uring",
     "databend-query/io-uring",
-    "databend-common-meta-store/io-uring",
-    "databend-common-meta-sled-store/io-uring",
-    "databend-common-meta-raft-store/io-uring",
 ]
 
 [dependencies]
-anyerror = { workspace = true }
-anyhow = { workspace = true }
-chrono = { workspace = true }
 clap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
-databend-common-grpc = { workspace = true }
 databend-common-license = { workspace = true }
-databend-common-meta-api = { workspace = true }
-databend-common-meta-app = { workspace = true }
 databend-common-meta-client = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-raft-store = { workspace = true }
-databend-common-meta-sled-store = { workspace = true }
-databend-common-meta-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-query = { workspace = true }
-databend-meta = { workspace = true }
 databend-query = { workspace = true }
-databend-sharing-endpoint = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-futures = { workspace = true }
 limits-rs = "0.2.0"
 log = { workspace = true }
-minitrace = { workspace = true }
 opendal = { workspace = true }
-poem = { workspace = true }
-rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
 tokio = { workspace = true }
-tokio-stream = { workspace = true }
-url = "2.3.1"
-
-[[bin]]
-name = "databend-meta"
-path = "meta/ee_main.rs"
-doctest = false
-test = false
-
-[[bin]]
-name = "databend-meta-oss"
-path = "meta/oss_main.rs"
-doctest = false
-test = false
-
-[[bin]]
-name = "databend-metabench"
-path = "metabench/main.rs"
-doctest = false
-test = false
-
-[[bin]]
-name = "databend-metactl"
-path = "metactl/main.rs"
-doctest = false
-test = false
-
-[[bin]]
-name = "databend-metaverifier"
-path = "metaverifier/main.rs"
-doctest = false
-test = false
 
 [[bin]]
 name = "databend-query"
@@ -105,12 +51,6 @@ test = false
 [[bin]]
 name = "databend-query-oss"
 path = "query/oss_main.rs"
-doctest = false
-test = false
-
-[[bin]]
-name = "open-sharing"
-path = "opensharing/main.rs"
 doctest = false
 test = false
 

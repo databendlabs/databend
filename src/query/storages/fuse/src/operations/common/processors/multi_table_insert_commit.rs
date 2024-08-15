@@ -34,6 +34,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::error;
 use log::info;
@@ -82,140 +83,124 @@ impl AsyncSink for CommitMultiTableInsert {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        let mut update_table_meta_reqs = Vec::with_capacity(self.commit_metas.len());
-        let mut table_infos = Vec::with_capacity(self.commit_metas.len());
+        let mut update_table_metas = Vec::with_capacity(self.commit_metas.len());
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
-            update_table_meta_reqs
-                .push(build_update_table_meta_req(table.as_ref(), &snapshot_generator).await?);
+            update_table_metas.push((
+                build_update_table_meta_req(
+                    table.as_ref(),
+                    &snapshot_generator,
+                    self.ctx.txn_mgr(),
+                )
+                .await?,
+                table.get_table_info().clone(),
+            ));
             snapshot_generators.insert(table_id, snapshot_generator);
-            table_infos.push(table.get_table_info());
         }
-        let is_active = self.ctx.txn_mgr().lock().is_active();
-        match is_active {
-            true => {
-                // inside explicit transaction
-                if update_table_meta_reqs.is_empty() {
-                    return Err(ErrorCode::Internal(
-                        "No table meta to update in multi table insert commit. It's a bug",
-                    ));
+
+        let mut backoff = set_backoff(None, None, None);
+        let mut retries = 0;
+
+        loop {
+            let update_multi_table_meta_req = UpdateMultiTableMetaReq {
+                update_table_metas: update_table_metas.clone(),
+                copied_files: vec![],
+                update_stream_metas: self.update_stream_meta.clone(),
+                deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
+            };
+
+            let update_meta_result = match self
+                .catalog
+                .retryable_update_multi_table_meta(update_multi_table_meta_req)
+                .await
+            {
+                Ok(ret) => ret,
+                Err(e) => {
+                    // other errors may occur, especially the version mismatch of streams,
+                    // let's log it here for the convenience of diagnostics
+                    error!(
+                        "Non-recoverable fault occurred during updating tables. {}",
+                        e
+                    );
+                    return Err(e);
                 }
-                // any one of the reqs may carry the update_stream_meta, we arbitrarily choose the first one... ".
-                // It is safe to index the first element because there is at least a into clause in the multi table insert,
-                // which will generate a req(by design, no matter whether the table is actually updated or not, it will generate a new snapshot).
-                update_table_meta_reqs[0].update_stream_meta =
-                    std::mem::take(&mut self.update_stream_meta);
-                update_table_meta_reqs[0].deduplicated_label = self.deduplicated_label.clone();
-                for (req, info) in update_table_meta_reqs.into_iter().zip(table_infos.iter()) {
-                    self.catalog.update_table_meta(info, req).await?;
-                }
-            }
-            false => {
-                // auto commit
-                let mut backoff = set_backoff(None, None, None);
-                let mut retries = 0;
+            };
 
-                loop {
-                    let update_multi_table_meta_req = UpdateMultiTableMetaReq {
-                        update_table_metas: update_table_meta_reqs.clone(),
-                        copied_files: vec![],
-                        update_stream_metas: self.update_stream_meta.clone(),
-                        deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
-                    };
+            let Err(update_failed_tbls) = update_meta_result else {
+                let table_descriptions = self
+                    .tables
+                    .values()
+                    .map(|tbl| {
+                        let table_info = tbl.get_table_info();
+                        (&table_info.desc, &table_info.ident, &table_info.meta.engine)
+                    })
+                    .collect::<Vec<_>>();
+                let stream_descriptions = self
+                    .update_stream_meta
+                    .iter()
+                    .map(|s| (s.stream_id, s.seq, "stream"))
+                    .collect::<Vec<_>>();
+                info!(
+                    "update tables success (auto commit), tables updated {:?}, streams updated {:?}",
+                    table_descriptions, stream_descriptions
+                );
 
-                    let update_meta_result = {
-                        let ret = self
-                            .catalog
-                            .update_multi_table_meta(update_multi_table_meta_req)
-                            .await;
-                        if let Err(ref e) = ret {
-                            // other errors may occur, especially the version mismatch of streams,
-                            // let's log it here for the convenience of diagnostics
-                            error!(
-                                "Non-recoverable fault occurred during updating tables. {}",
-                                e
-                            );
-                        }
-                        ret?
-                    };
+                return Ok(());
+            };
+            let update_failed_tbl_descriptions: Vec<_> = update_failed_tbls
+                .iter()
+                .map(|(tid, seq, meta)| {
+                    let tbl_info = self.tables.get(tid).unwrap().get_table_info();
+                    (&tbl_info.desc, (tid, seq), &meta.engine)
+                })
+                .collect();
+            match backoff.next_backoff() {
+                Some(duration) => {
+                    retries += 1;
 
-                    let Err(update_failed_tbls) = update_meta_result else {
-                        let table_descriptions = self
-                            .tables
-                            .values()
-                            .map(|tbl| {
-                                let table_info = tbl.get_table_info();
-                                (&table_info.desc, &table_info.ident, &table_info.meta.engine)
-                            })
-                            .collect::<Vec<_>>();
-                        let stream_descriptions = self
-                            .update_stream_meta
-                            .iter()
-                            .map(|s| (s.stream_id, s.seq, "stream"))
-                            .collect::<Vec<_>>();
-                        info!(
-                            "update tables success (auto commit), tables updated {:?}, streams updated {:?}",
-                            table_descriptions, stream_descriptions
-                        );
-
-                        return Ok(());
-                    };
-                    let update_failed_tbl_descriptions: Vec<_> = update_failed_tbls
-                        .iter()
-                        .map(|(tid, seq, meta)| {
-                            let tbl_info = self.tables.get(tid).unwrap().get_table_info();
-                            (&tbl_info.desc, (tid, seq), &meta.engine)
-                        })
-                        .collect();
-                    match backoff.next_backoff() {
-                        Some(duration) => {
-                            retries += 1;
-
-                            debug!(
-                                "Failed(temporarily) to update tables: {:?}, the commit process of multi-table insert will be retried after {} ms, retrying {} times",
-                                update_failed_tbl_descriptions,
-                                duration.as_millis(),
-                                retries,
-                            );
-                            databend_common_base::base::tokio::time::sleep(duration).await;
-                            for (tid, seq, meta) in update_failed_tbls {
-                                let table = self.tables.get_mut(&tid).unwrap();
-                                *table = table
-                                    .refresh_with_seq_meta(self.ctx.as_ref(), seq, meta)
-                                    .await?;
-                                for req in update_table_meta_reqs.iter_mut() {
-                                    if req.table_id == tid {
-                                        *req = build_update_table_meta_req(
-                                            table.as_ref(),
-                                            snapshot_generators.get(&tid).unwrap(),
-                                        )
-                                        .await?;
-                                        break;
-                                    }
-                                }
+                    debug!(
+                        "Failed(temporarily) to update tables: {:?}, the commit process of multi-table insert will be retried after {} ms, retrying {} times",
+                        update_failed_tbl_descriptions,
+                        duration.as_millis(),
+                        retries,
+                    );
+                    databend_common_base::base::tokio::time::sleep(duration).await;
+                    for (tid, seq, meta) in update_failed_tbls {
+                        let table = self.tables.get_mut(&tid).unwrap();
+                        *table = table
+                            .refresh_with_seq_meta(self.ctx.as_ref(), seq, meta)
+                            .await?;
+                        for (req, _) in update_table_metas.iter_mut() {
+                            if req.table_id == tid {
+                                *req = build_update_table_meta_req(
+                                    table.as_ref(),
+                                    snapshot_generators.get(&tid).unwrap(),
+                                    self.ctx.txn_mgr(),
+                                )
+                                .await?;
+                                break;
                             }
-                        }
-                        None => {
-                            let err_msg = format!(
-                                "Can not fulfill the tx after retries({} times, {} ms), aborted. updated tables {:?}",
-                                retries,
-                                Instant::now()
-                                    .duration_since(backoff.start_time)
-                                    .as_millis(),
-                                update_failed_tbl_descriptions,
-                            );
-                            error!("{}", err_msg);
-                            return Err(ErrorCode::OCCRetryFailure(err_msg));
                         }
                     }
                 }
+                None => {
+                    let err_msg = format!(
+                        "Can not fulfill the tx after retries({} times, {} ms), aborted. updated tables {:?}",
+                        retries,
+                        Instant::now()
+                            .duration_since(backoff.start_time)
+                            .as_millis(),
+                        update_failed_tbl_descriptions,
+                    );
+                    error!("{}", err_msg);
+                    return Err(ErrorCode::OCCRetryFailure(err_msg));
+                }
             }
         }
-        Ok(())
     }
 
     #[unboxed_simple]
@@ -249,6 +234,7 @@ impl AsyncSink for CommitMultiTableInsert {
 async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
+    txn_mgr: TxnManagerRef,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
@@ -257,6 +243,8 @@ async fn build_update_table_meta_req(
         fuse_table.cluster_key_meta.clone(),
         previous,
         Some(fuse_table.table_info.ident.seq),
+        txn_mgr,
+        table.get_id(),
     )?;
 
     // write snapshot
@@ -276,9 +264,6 @@ async fn build_update_table_meta_req(
         table_id,
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
-        copied_files: None,
-        deduplicated_label: None,
-        update_stream_meta: vec![],
     };
     Ok(req)
 }

@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
-use databend_common_auth::RefreshableToken;
-use databend_common_exception::ErrorCode;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use databend_common_meta_app::schema::ShareDBParams;
 use http::header::RANGE;
 use http::Request;
 use http::Response;
 use http::StatusCode;
+use opendal::layers::FastraceLayer;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::raw::new_request_build_error;
 use opendal::raw::parse_content_length;
@@ -53,46 +51,33 @@ use opendal::Scheme;
 use crate::SharedSigner;
 
 pub fn create_share_table_operator(
-    share_endpoint_address: Option<String>,
-    share_endpoint_token: RefreshableToken,
-    share_ident_raw: &ShareNameIdentRaw,
-    table_name: &str,
+    share_params: &ShareDBParams,
+    table_id: u64,
 ) -> databend_common_exception::Result<Operator> {
-    let op = match share_endpoint_address {
-        Some(share_endpoint_address) => {
-            let signer = SharedSigner::new(
-                &format!(
-                    "http://{}/tenant/{}/{}/table/{}/presign",
-                    share_endpoint_address,
-                    share_ident_raw.tenant_name(),
-                    share_ident_raw.share_name(),
-                    table_name
-                ),
-                share_endpoint_token,
-                HttpClient::new()?,
-            );
-            let client = HttpClient::new()?;
-            Operator::new(SharedBuilder {
-                signer: Some(signer),
-                client: Some(client),
-            })?
-            // Add retry
-            .layer(RetryLayer::new().with_jitter())
-            // Add logging
-            .layer(LoggingLayer::default())
-            // Add tracing
-            .layer(MinitraceLayer)
-            // TODO(liyz): add PrometheusClientLayer
-            .finish()
-        }
-        None => {
-            return Err(ErrorCode::EmptyShareEndpointConfig(format!(
-                "Empty share config for creating operator of shared table {}.{}",
-                share_ident_raw.share_name(),
-                table_name,
-            )));
-        }
-    };
+    let share_ident_raw = &share_params.share_ident;
+    let signer = SharedSigner::new(
+        &share_params.share_endpoint_url,
+        &format!(
+            "/{}/{}/{}/v2/presign_files",
+            share_ident_raw.tenant_name(),
+            share_ident_raw.share_name(),
+            table_id
+        ),
+        share_params.share_endpoint_credential.clone(),
+    );
+    let client = HttpClient::new()?;
+    let op = Operator::new(SharedBuilder {
+        signer: Some(signer),
+        client: Some(client),
+    })?
+    // Add retry
+    .layer(RetryLayer::new().with_jitter())
+    // Add logging
+    .layer(LoggingLayer::default())
+    // Add tracing
+    .layer(FastraceLayer)
+    // TODO(liyz): add PrometheusClientLayer
+    .finish();
 
     Ok(op)
 }
@@ -105,14 +90,9 @@ struct SharedBuilder {
 
 impl Builder for SharedBuilder {
     const SCHEME: Scheme = Scheme::Custom("shared");
+    type Config = ();
 
-    type Accessor = SharedAccessor;
-
-    fn from_map(_: HashMap<String, String>) -> Self {
-        unreachable!("shared accessor doesn't build from map")
-    }
-
-    fn build(&mut self) -> Result<Self::Accessor> {
+    fn build(mut self) -> Result<impl Access> {
         Ok(SharedAccessor {
             signer: self.signer.take().expect("must be valid"),
             client: self.client.take().expect("must be valid"),
@@ -134,7 +114,7 @@ impl Access for SharedAccessor {
     type Lister = ();
     type BlockingLister = ();
 
-    fn info(&self) -> AccessorInfo {
+    fn info(&self) -> Arc<AccessorInfo> {
         let mut meta = AccessorInfo::default();
         meta.set_scheme(Scheme::Custom("shared"))
             .set_native_capability(Capability {
@@ -144,7 +124,7 @@ impl Access for SharedAccessor {
                 ..Default::default()
             });
 
-        meta
+        meta.into()
     }
 
     #[async_backtrace::framed]
@@ -239,7 +219,7 @@ pub async fn parse_error(er: Response<Buffer>) -> Error {
         _ => (ErrorKind::Unexpected, false),
     };
 
-    let mut err = Error::new(kind, &String::from_utf8_lossy(&message));
+    let mut err = Error::new(kind, String::from_utf8_lossy(&message));
 
     if retryable {
         err = err.set_temporary();

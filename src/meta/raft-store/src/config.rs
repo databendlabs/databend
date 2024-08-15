@@ -28,12 +28,7 @@ pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
     match (build_semver, git_sha, rustc_semver, timestamp) {
-        #[cfg(not(feature = "simd"))]
         (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-        #[cfg(feature = "simd")]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
-        }
         _ => String::new(),
     }
 });
@@ -81,6 +76,23 @@ pub struct RaftConfig {
 
     /// The size of chunk for transmitting snapshot. The default is 64MB
     pub snapshot_chunk_size: u64,
+
+    /// Whether to check keys fed to snapshot are sorted.
+    pub snapshot_db_debug_check: bool,
+
+    /// The maximum number of keys allowed in a block within a snapshot db.
+    ///
+    /// A block serves as the caching unit in a snapshot database.
+    /// Smaller blocks enable more granular cache control but may increase the index size.
+    pub snapshot_db_block_keys: u64,
+
+    /// The total block to cache.
+    pub snapshot_db_block_cache_item: u64,
+
+    /// The total cache size for snapshot blocks.
+    ///
+    /// By default it is 1GB.
+    pub snapshot_db_block_cache_size: u64,
 
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
@@ -145,6 +157,12 @@ impl Default for RaftConfig {
             install_snapshot_timeout: 4000,
             max_applied_log_to_keep: 1000,
             snapshot_chunk_size: 4194304, // 4MB
+
+            snapshot_db_debug_check: true,
+            snapshot_db_block_keys: 8000,
+            snapshot_db_block_cache_item: 1024,
+            snapshot_db_block_cache_size: 1073741824,
+
             single: false,
             join: vec![],
             leave_via: vec![],
@@ -159,6 +177,20 @@ impl Default for RaftConfig {
 }
 
 impl RaftConfig {
+    pub fn to_rotbl_config(&self) -> rotbl::v001::Config {
+        rotbl::v001::Config::default()
+            .with_debug_check(self.snapshot_db_debug_check)
+            .with_block_config(
+                rotbl::v001::BlockConfig::default()
+                    .with_max_items(self.snapshot_db_block_keys as usize),
+            )
+            .with_block_cache_config(
+                rotbl::v001::BlockCacheConfig::default()
+                    .with_max_items(self.snapshot_db_block_cache_item as usize)
+                    .with_capacity(self.snapshot_db_block_cache_size as usize),
+            )
+    }
+
     pub fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
     }

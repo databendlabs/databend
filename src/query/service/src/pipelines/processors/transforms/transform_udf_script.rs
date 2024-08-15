@@ -14,6 +14,8 @@
 
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
@@ -30,14 +32,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFType;
 use parking_lot::RwLock;
-
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 
 /// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
 #[cfg(feature = "python-udf")]
@@ -45,25 +42,42 @@ static GLOBAL_PYTHON_RUNTIME: std::sync::LazyLock<Arc<RwLock<arrow_udf_python::R
     std::sync::LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
 
 pub enum ScriptRuntime {
-    JavaScript(Arc<RwLock<arrow_udf_js::Runtime>>),
+    JavaScript(Vec<Arc<RwLock<arrow_udf_js::Runtime>>>),
     WebAssembly(Arc<RwLock<arrow_udf_wasm::Runtime>>),
     Python,
 }
 
 impl ScriptRuntime {
-    pub fn try_create(lang: &str, code: Option<Vec<u8>>) -> Result<Self, ErrorCode> {
+    pub fn try_create(
+        lang: &str,
+        code: Option<&[u8]>,
+        runtime_num: usize,
+    ) -> Result<Self, ErrorCode> {
         match lang {
-            "javascript" => arrow_udf_js::Runtime::new()
-                .map(|mut runtime| {
-                    runtime.converter.set_arrow_extension_key(EXTENSION_KEY);
-                    runtime
-                        .converter
-                        .set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
-                    ScriptRuntime::JavaScript(Arc::new(RwLock::new(runtime)))
-                })
-                .map_err(|err| {
-                    ErrorCode::UDFDataError(format!("Cannot create js runtime: {}", err))
-                }),
+            "javascript" => {
+                // Create multiple runtimes to execute in parallel to avoid blocking caused by js udf runtime locks.
+                let runtimes = (0..runtime_num)
+                    .map(|_| {
+                        arrow_udf_js::Runtime::new()
+                            .map(|mut runtime| {
+                                runtime
+                                    .converter_mut()
+                                    .set_arrow_extension_key(EXTENSION_KEY);
+                                runtime
+                                    .converter_mut()
+                                    .set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
+                                Arc::new(RwLock::new(runtime))
+                            })
+                            .map_err(|err| {
+                                ErrorCode::UDFDataError(format!(
+                                    "Cannot create js runtime: {}",
+                                    err
+                                ))
+                            })
+                    })
+                    .collect::<Result<Vec<Arc<RwLock<arrow_udf_js::Runtime>>>>>()?;
+                Ok(Self::JavaScript(runtimes))
+            }
             "wasm" => Self::create_wasm_runtime(code),
             "python" => Ok(Self::Python),
             _ => Err(ErrorCode::from_string(format!(
@@ -73,11 +87,11 @@ impl ScriptRuntime {
         }
     }
 
-    fn create_wasm_runtime(code_blob: Option<Vec<u8>>) -> Result<Self, ErrorCode> {
+    fn create_wasm_runtime(code_blob: Option<&[u8]>) -> Result<Self, ErrorCode> {
         let decoded_code_blob = code_blob
             .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
 
-        let runtime = arrow_udf_wasm::Runtime::new(&decoded_code_blob).map_err(|err| {
+        let runtime = arrow_udf_wasm::Runtime::new(decoded_code_blob).map_err(|err| {
             ErrorCode::UDFDataError(format!("Failed to create WASM runtime for module: {}", err))
         })?;
 
@@ -94,19 +108,21 @@ impl ScriptRuntime {
         let arrow_schema = Schema::from(&tmp_schema);
 
         match self {
-            ScriptRuntime::JavaScript(runtime) => {
+            ScriptRuntime::JavaScript(runtimes) => {
                 let code = std::str::from_utf8(code)?;
-                let mut runtime = runtime.write();
-                runtime.add_function_with_handler(
-                    &func.name,
-                    // we pass the field instead of the data type because arrow-udf-js
-                    // now takes the field as an argument here so that it can get any
-                    // metadata associated with the field
-                    arrow_schema.field(0).clone(),
-                    arrow_udf_js::CallMode::ReturnNullOnNullInput,
-                    code,
-                    &func.func_name,
-                )
+                for runtime in runtimes {
+                    let mut runtime = runtime.write();
+                    runtime.add_function_with_handler(
+                        &func.name,
+                        // we pass the field instead of the data type because arrow-udf-js
+                        // now takes the field as an argument here so that it can get any
+                        // metadata associated with the field
+                        arrow_schema.field(0).clone(),
+                        arrow_udf_js::CallMode::ReturnNullOnNullInput,
+                        code,
+                        &func.func_name,
+                    )?;
+                }
             }
             #[cfg(feature = "python-udf")]
             ScriptRuntime::Python => {
@@ -118,7 +134,7 @@ impl ScriptRuntime {
                     arrow_udf_python::CallMode::ReturnNullOnNullInput,
                     code,
                     &func.func_name,
-                )
+                )?;
             }
             #[cfg(not(feature = "python-udf"))]
             ScriptRuntime::Python => {
@@ -127,8 +143,8 @@ impl ScriptRuntime {
                 ));
             }
             // Ignore the execution for WASM context
-            ScriptRuntime::WebAssembly(_) => Ok(()),
-        }?;
+            ScriptRuntime::WebAssembly(_) => {}
+        }
 
         Ok(())
     }
@@ -137,9 +153,13 @@ impl ScriptRuntime {
         &self,
         func: &UdfFunctionDesc,
         input_batch: &RecordBatch,
+        index: usize,
     ) -> Result<RecordBatch> {
         let result_batch = match self {
-            ScriptRuntime::JavaScript(runtime) => {
+            ScriptRuntime::JavaScript(runtimes) => {
+                // Choose a js runtime in order to avoid blocking
+                let idx = index % runtimes.len();
+                let runtime = &runtimes[idx];
                 let runtime = runtime.read();
                 runtime.call(&func.name, input_batch).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
@@ -181,29 +201,37 @@ impl ScriptRuntime {
 pub struct TransformUdfScript {
     funcs: Vec<UdfFunctionDesc>,
     script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
+    index_seq: Arc<AtomicUsize>,
 }
 
 unsafe impl Send for TransformUdfScript {}
 
 impl TransformUdfScript {
-    pub fn try_create(
+    pub fn new(
         _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
         script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(Transformer::create(input, output, Self {
+        index_seq: Arc<AtomicUsize>,
+    ) -> Self {
+        Self {
             funcs,
             script_runtimes,
-        }))
+            index_seq,
+        }
     }
 }
 
 impl Transform for TransformUdfScript {
     const NAME: &'static str = "UDFScriptTransform";
 
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
     fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if data_block.is_empty() {
+            return Ok(data_block);
+        }
+
+        let index = self.index_seq.fetch_add(1, Ordering::SeqCst);
         for func in &self.funcs {
             let num_rows = data_block.num_rows();
             let block_entries = self.prepare_block_entries(func, &data_block)?;
@@ -211,7 +239,7 @@ impl Transform for TransformUdfScript {
             let runtime_key = Self::get_runtime_key(func)?;
 
             if let Some(runtime) = self.script_runtimes.get(&runtime_key) {
-                let result_batch = runtime.handle_execution(func, &input_batch)?;
+                let result_batch = runtime.handle_execution(func, &input_batch, index)?;
                 self.update_datablock(func, result_batch, &mut data_block)?;
             } else {
                 return Err(ErrorCode::UDFDataError(format!(
@@ -242,13 +270,14 @@ impl TransformUdfScript {
 
     pub fn init_runtime(
         funcs: &[UdfFunctionDesc],
+        runtime_num: usize,
     ) -> Result<BTreeMap<String, Arc<ScriptRuntime>>, ErrorCode> {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
 
         let start = std::time::Instant::now();
         for func in funcs {
             let (lang, code_opt) = match &func.udf_type {
-                UDFType::Script((lang, _, _code)) => (lang, None),
+                UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref())),
                 _ => continue,
             };
 
@@ -256,7 +285,7 @@ impl TransformUdfScript {
             let runtime = match script_runtimes.entry(runtime_key.clone()) {
                 Entry::Occupied(entry) => entry.into_mut().clone(),
                 Entry::Vacant(entry) => {
-                    let new_runtime = ScriptRuntime::try_create(lang.trim(), code_opt)
+                    let new_runtime = ScriptRuntime::try_create(lang.trim(), code_opt, runtime_num)
                         .map(Arc::new)
                         .map_err(|err| {
                             ErrorCode::UDFDataError(format!(

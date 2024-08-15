@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -88,6 +89,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -96,6 +98,8 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use dyn_clone::DynClone;
@@ -113,7 +117,12 @@ pub struct StorageDescription {
 }
 
 pub trait CatalogCreator: Send + Sync + Debug {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        conf: InnerConfig,
+        meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]
@@ -123,7 +132,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the name of the catalog.
     fn name(&self) -> String;
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo;
+    fn info(&self) -> Arc<CatalogInfo>;
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "{} not implemented",
+            func_name!()
+        )))
+    }
 
     /// Database.
 
@@ -206,17 +222,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>>;
+    ) -> Result<Vec<Option<String>>>;
 
-    // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_ids: MetaId) -> Result<String>;
 
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
         tenant: &Tenant,
         db_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>>;
+    ) -> Result<Vec<Option<String>>>;
+
+    // Get the table name by meta id.
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>>;
 
     // Get one table by db and table name.
     async fn get_table(
@@ -284,19 +303,54 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply>;
-
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         Err(ErrorCode::Unimplemented(
             "'update_multi_table_meta' not implemented",
         ))
+    }
+
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
+        self.retryable_update_multi_table_meta(req)
+            .await?
+            .map_err(|e| {
+                ErrorCode::TableVersionMismatched(format!(
+                    "Fail to update table metas, conflict tables: {:?}",
+                    e.iter()
+                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
+                        .collect::<Vec<_>>()
+                ))
+            })
+    }
+
+    // update stream metas, currently used by "copy into location form stream"
+    async fn update_stream_metas(
+        &self,
+        update_stream_metas: Vec<UpdateStreamMetaReq>,
+    ) -> Result<()> {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_stream_metas,
+            ..Default::default()
+        })
+        .await
+        .map(|_| ())
+    }
+
+    async fn update_single_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+        table_info: &TableInfo,
+    ) -> Result<UpdateTableMetaReply> {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_table_metas: vec![(req, table_info.clone())],
+            ..Default::default()
+        })
+        .await
     }
 
     async fn set_table_column_mask_policy(

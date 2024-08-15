@@ -196,6 +196,10 @@ impl<Num: Number> ValueType for NumberType<Num> {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.resize(builder.len() + n, item);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(Num::default());
     }
@@ -558,6 +562,14 @@ impl NumberScalar {
             _ => None,
         }
     }
+
+    pub fn to_f64(&self) -> F64 {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => (*num as f64).into(),
+            NumberScalar::Float32(num) => (num.into_inner() as f64).into(),
+            NumberScalar::Float64(num) => *num,
+        })
+    }
 }
 
 impl<T> From<T> for NumberScalar
@@ -646,10 +658,27 @@ impl NumberColumnBuilder {
         })
     }
 
+    pub fn repeat_default(ty: &NumberDataType, len: usize) -> Self {
+        crate::with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                let s = NumberScalar::from(NUM_TYPE::default());
+                Self::repeat(s, len)
+            }
+        })
+    }
+
     pub fn push(&mut self, item: NumberScalar) {
+        self.push_repeat(item, 1)
+    }
+
+    pub fn push_repeat(&mut self, item: NumberScalar, n: usize) {
         crate::with_number_type!(|NUM_TYPE| match (self, item) {
             (NumberColumnBuilder::NUM_TYPE(builder), NumberScalar::NUM_TYPE(value)) => {
-                builder.push(value)
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         })

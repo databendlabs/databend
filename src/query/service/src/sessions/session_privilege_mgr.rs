@@ -46,6 +46,8 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
+    fn get_auth_role(&self) -> Option<String>;
+
     fn get_secondary_roles(&self) -> Option<Vec<String>>;
 
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
@@ -62,9 +64,14 @@ pub trait SessionPrivilegeManager {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()>;
 
-    async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool>;
+    async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
@@ -129,7 +136,7 @@ impl<'a> SessionPrivilegeManagerImpl<'a> {
 impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
-    // granted by external authenticator, it will over write the current user's granted roles, and
+    // granted by external authenticator, it will overwrite the current user's granted roles, and
     // becomes the CURRENT ROLE if not set session.role in the HTTP query.
     #[async_backtrace::framed]
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()> {
@@ -180,6 +187,9 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
 
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.session_ctx.get_current_role()
+    }
+    fn get_auth_role(&self) -> Option<String> {
+        self.session_ctx.get_auth_role()
     }
 
     #[async_backtrace::framed]
@@ -242,6 +252,7 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
@@ -252,7 +263,19 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
 
         // 2. check the user's roles' privilege set
         self.ensure_current_role().await?;
-        let effective_roles = self.get_all_effective_roles().await?;
+        let effective_roles = if check_current_role_only {
+            if let Some(role) = self.get_current_role() {
+                vec![role]
+            } else {
+                return Err(ErrorCode::InvalidRole(format!(
+                    "Validate object {} privilege {} failed. Current role is None for current session.",
+                    object, privilege
+                )));
+            }
+        } else {
+            self.get_all_effective_roles().await?
+        };
+
         let role_verified = &effective_roles
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege));
@@ -264,7 +287,11 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
+    async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
         let owner_role_name = role_mgr
@@ -272,7 +299,18 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
             .await?
             .unwrap_or_else(|| BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
 
-        let effective_roles = self.get_all_effective_roles().await?;
+        let effective_roles = if check_current_role_only {
+            if let Some(role) = self.get_current_role() {
+                vec![role]
+            } else {
+                return Err(ErrorCode::InvalidRole(format!(
+                    "Validate object {} ownership. Current role is None for current session.",
+                    object
+                )));
+            }
+        } else {
+            self.get_all_effective_roles().await?
+        };
         let exists = effective_roles.iter().any(|r| r.name == owner_role_name);
         return Ok(exists);
     }

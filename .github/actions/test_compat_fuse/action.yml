@@ -1,0 +1,38 @@
+name: "Test fuse-table format in an old query is compatible with new query"
+description: "Download old binaries and current binaries, write data with old query, read data with new query"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_bendsql
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        path: ./bins/current
+        artifacts: sqllogictests,meta,query
+
+    - name: Test compatibility
+      shell: bash
+      # test-*.sh <old-query-ver> <meta-ver> <test-suite>
+      # The `meta-ver` must be compatible with `<old-query-ver>` and the latest version.
+      #
+      # `meta-ver` is not the target to test, just choose one that is compatible with `<old-query-ver>` and the latest query.
+      run: |
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.46  1.2.527 base
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.241 1.2.527 revoke
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.306 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.307 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.318 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.307 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.318 1.2.527 rbac
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: compat_fuse

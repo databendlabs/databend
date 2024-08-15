@@ -139,6 +139,14 @@ impl ValueType for BooleanType {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        if n == 1 {
+            builder.push(item)
+        } else {
+            builder.extend_constant(n, item)
+        }
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(false);
     }

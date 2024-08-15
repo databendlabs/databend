@@ -20,15 +20,16 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
+use fastrace::prelude::*;
 use log::LevelFilter;
 use log::Log;
-use minitrace::prelude::*;
+use log::Metadata;
 use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
 use crate::loggers::formatter;
 use crate::loggers::new_file_log_writer;
-use crate::loggers::MinitraceLogger;
+use crate::loggers::FastraceLogger;
 use crate::loggers::OpenTelemetryLogger;
 use crate::structlog::StructLogReporter;
 use crate::Config;
@@ -138,16 +139,11 @@ pub fn init_logging(
                 .build()
                 .unwrap();
             let reporter = rt.block_on(async {
-                minitrace_opentelemetry::OpenTelemetryReporter::new(
+                fastrace_opentelemetry::OpenTelemetryReporter::new(
                     exporter,
                     opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
-                    opentelemetry::InstrumentationLibrary::new(
-                        trace_name,
-                        None::<&'static str>,
-                        None::<&'static str>,
-                        None,
-                    ),
+                    opentelemetry::InstrumentationLibrary::builder(trace_name).build(),
                 )
             });
             (rt, reporter)
@@ -157,12 +153,12 @@ pub fn init_logging(
 
         if cfg.structlog.on {
             let reporter = StructLogReporter::wrap(otlp_reporter);
-            minitrace::set_reporter(reporter, minitrace::collector::Config::default());
+            fastrace::set_reporter(reporter, fastrace::collector::Config::default());
         } else {
-            minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+            fastrace::set_reporter(otlp_reporter, fastrace::collector::Config::default());
         }
 
-        guards.push(Box::new(defer::defer(minitrace::flush)));
+        guards.push(Box::new(defer::defer(fastrace::flush)));
         guards.push(Box::new(defer::defer(|| {
             Thread::spawn(move || std::mem::drop(reporter_rt))
                 .join()
@@ -170,8 +166,8 @@ pub fn init_logging(
         })));
     } else if cfg.structlog.on {
         let reporter = StructLogReporter::new();
-        minitrace::set_reporter(reporter, minitrace::collector::Config::default());
-        guards.push(Box::new(defer::defer(minitrace::flush)));
+        fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+        guards.push(Box::new(defer::defer(fastrace::flush)));
     }
 
     // Initialize logging
@@ -211,7 +207,7 @@ pub fn init_logging(
         normal_logger = normal_logger.chain(dispatch);
     }
 
-    // Log to minitrace
+    // Log to fastrace
     if cfg.tracing.on || cfg.structlog.on {
         let level = cfg
             .tracing
@@ -222,7 +218,7 @@ pub fn init_logging(
         normal_logger = normal_logger.chain(
             fern::Dispatch::new()
                 .level(level)
-                .chain(Box::new(MinitraceLogger) as Box<dyn Log>),
+                .chain(Box::new(FastraceLogger) as Box<dyn Log>),
         );
     }
 
@@ -270,16 +266,7 @@ pub fn init_logging(
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
                 .level_for("databend::log::structlog", LevelFilter::Off)
-                .filter({
-                    let prefix_filter = cfg.file.prefix_filter.clone();
-                    move |meta| {
-                        if prefix_filter.is_empty() || meta.target().starts_with(&prefix_filter) {
-                            true
-                        } else {
-                            meta.level() <= LevelFilter::Error
-                        }
-                    }
-                })
+                .filter(make_log_filter(&cfg.file.prefix_filter))
                 .chain(normal_logger),
         )
         .chain(
@@ -308,4 +295,36 @@ pub fn init_logging(
     }
 
     guards
+}
+
+/// Creates a log filter that matches log entries based on specified target prefixes or severity.
+fn make_log_filter(prefix_filter: &str) -> impl Fn(&Metadata) -> bool {
+    let filters = prefix_filter
+        .split(',')
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+
+    move |meta| match_prefix_many(meta, &filters)
+}
+
+fn match_prefix_many(meta: &Metadata, prefixes: &[String]) -> bool {
+    if is_severe(meta) {
+        return true;
+    }
+
+    for p in prefixes {
+        if meta.target().starts_with(p) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Return true if the log level is considered severe.
+///
+/// Severe logs ignores the prefix filter.
+fn is_severe(meta: &Metadata) -> bool {
+    // For other component, output logs with level <= WARN
+    meta.level() <= LevelFilter::Warn
 }

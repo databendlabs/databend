@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(lazy_cell)]
 #![feature(impl_trait_in_assoc_type)]
 #![allow(clippy::diverging_sub_expression)]
 
-mod dal;
 mod partition;
 mod partition_columns;
 mod table;

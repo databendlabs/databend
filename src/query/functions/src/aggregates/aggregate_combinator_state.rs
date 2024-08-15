@@ -19,8 +19,8 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 
 use super::AggregateFunctionFactory;
@@ -85,7 +85,7 @@ impl AggregateFunction for AggregateStateCombinator {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -96,14 +96,14 @@ impl AggregateFunction for AggregateStateCombinator {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         self.nested
             .accumulate_keys(places, offset, columns, input_rows)
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         self.nested.accumulate_row(place, columns, row)
     }
 

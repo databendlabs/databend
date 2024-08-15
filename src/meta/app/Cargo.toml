@@ -31,7 +31,7 @@ maplit = "1.0.2"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 opendal = { workspace = true }
-paste = "1.0.9"
+paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = "0.10.5"

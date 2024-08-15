@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,11 +32,10 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
+use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 
-use crate::interpreters::util::format_name;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -86,7 +87,13 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .unwrap_or(false),
         };
 
-        let create_query = Self::show_create_query(&self.plan.database, table.as_ref(), &settings)?;
+        let create_query = Self::show_create_query(
+            catalog.as_ref(),
+            &self.plan.database,
+            table.as_ref(),
+            &settings,
+        )
+        .await?;
 
         let block = DataBlock::new(
             vec![
@@ -107,13 +114,14 @@ impl Interpreter for ShowCreateTableInterpreter {
 }
 
 impl ShowCreateTableInterpreter {
-    pub fn show_create_query(
+    pub async fn show_create_query(
+        catalog: &dyn Catalog,
         database: &str,
         table: &dyn Table,
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
         match table.engine() {
-            STREAM_ENGINE => Self::show_create_stream_query(table),
+            STREAM_ENGINE => Self::show_create_stream_query(catalog, table).await,
             VIEW_ENGINE => Self::show_create_view_query(table, database),
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
@@ -137,12 +145,12 @@ impl ShowCreateTableInterpreter {
 
         let mut table_create_sql = format!(
             "CREATE TABLE {} (\n",
-            format_name(name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(name, quoted_ident_case_sensitive, sql_dialect)
         );
         if table.options().contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
-                format_name(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
             )
         }
 
@@ -186,7 +194,7 @@ impl ShowCreateTableInterpreter {
                 };
                 let column_str = format!(
                     "  {} {}{}{}{}{}",
-                    format_name(field.name(), quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
                     field.data_type().remove_recursive_nullable().sql_name(),
                     nullable,
                     default_expr,
@@ -217,7 +225,7 @@ impl ShowCreateTableInterpreter {
                 let mut index_str = format!(
                     "  {} INVERTED INDEX {} ({})",
                     sync,
-                    format_name(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
                     column_names_str
                 );
                 if !options.is_empty() {
@@ -283,14 +291,22 @@ impl ShowCreateTableInterpreter {
         Ok(view_create_sql)
     }
 
-    fn show_create_stream_query(table: &dyn Table) -> Result<String> {
+    async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
+        let source_database_name = stream_table.source_database_name(catalog).await?;
+        let source_table_name = stream_table.source_table_name(catalog).await?;
+        let mode = stream_table.mode();
+
         let mut create_sql = format!(
             "CREATE STREAM `{}` ON TABLE `{}`.`{}`",
             stream_table.name(),
-            stream_table.source_table_database(),
-            stream_table.source_table_name()
+            source_database_name,
+            source_table_name
         );
+
+        if matches!(mode, StreamMode::Standard) {
+            create_sql.push_str(" APPEND_ONLY = false");
+        }
 
         let comment = stream_table.get_table_info().meta.comment.clone();
         if !comment.is_empty() {
@@ -307,19 +323,11 @@ impl ShowCreateTableInterpreter {
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
             .unwrap_or(&location_not_available);
 
-        let mut ddl = format!(
+        format!(
             "ATTACH TABLE `{}`.`{}` {}",
             database,
             table.name(),
             table_data_location,
-        );
-
-        if table
-            .options()
-            .contains_key(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
-        {
-            ddl.push_str(" READ_ONLY")
-        }
-        ddl
+        )
     }
 }

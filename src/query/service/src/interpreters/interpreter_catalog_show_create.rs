@@ -21,6 +21,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_sql::plans::ShowCreateCatalogPlan;
 use log::debug;
@@ -58,19 +59,32 @@ impl Interpreter for ShowCreateCatalogInterpreter {
         let name = catalog.name();
         let info = catalog.info();
 
-        let (catalog_type, option) = match info.meta.catalog_option {
+        let (catalog_type, option) = match &info.meta.catalog_option {
             CatalogOption::Default => (String::from("default"), String::new()),
             CatalogOption::Hive(op) => (
                 String::from("hive"),
                 format!(
                     "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
                     op.address,
-                    op.storage_params.unwrap_or(Box::new(StorageParams::None))
+                    op.storage_params
+                        .clone()
+                        .unwrap_or(Box::new(StorageParams::None))
                 ),
             ),
-            CatalogOption::Iceberg(op) => (
-                String::from("iceberg"),
-                format!("STORAGE PARAMS\n{}", op.storage_params),
+            CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
+                IcebergCatalogOption::Rest(cfg) => {
+                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.uri, cfg.warehouse)
+                }
+                IcebergCatalogOption::Hms(cfg) => {
+                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
+                }
+            }),
+            CatalogOption::Share(op) => (
+                String::from("share"),
+                format!(
+                    "SHARE\n{}.{}\nUSING\n{}",
+                    op.provider, op.share_name, op.share_endpoint,
+                ),
             ),
         };
 

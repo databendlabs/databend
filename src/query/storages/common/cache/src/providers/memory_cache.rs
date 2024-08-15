@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::BuildHasher;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -20,28 +19,22 @@ use databend_common_cache::BytesMeter;
 use databend_common_cache::Cache;
 use databend_common_cache::Count;
 use databend_common_cache::CountableMeter;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_cache::LruCache;
 use parking_lot::RwLock;
 
-pub type InMemoryCache<V, S, M> = LruCache<String, Arc<V>, S, M>;
-pub type BytesCache = LruCache<String, Arc<Bytes>, DefaultHashBuilder, BytesMeter>;
+pub type InMemoryCache<V, M> = LruCache<String, Arc<V>, M>;
+pub type BytesCache = LruCache<String, Arc<Bytes>, BytesMeter>;
 
-pub type InMemoryItemCacheHolder<T, S = DefaultHashBuilder, M = Count> =
-    Arc<RwLock<InMemoryCache<T, S, M>>>;
+pub type InMemoryItemCacheHolder<T, M = Count> = Arc<RwLock<InMemoryCache<T, M>>>;
 pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
 
 pub struct InMemoryCacheBuilder;
+
 impl InMemoryCacheBuilder {
     // new cache that cache `V`, and metered by the given `meter`
-    pub fn new_in_memory_cache<V, M>(
-        capacity: u64,
-        meter: M,
-    ) -> InMemoryItemCacheHolder<V, DefaultHashBuilder, M>
-    where
-        M: CountableMeter<String, Arc<V>>,
-    {
-        let cache = LruCache::with_meter_and_hasher(capacity, meter, DefaultHashBuilder::default());
+    pub fn new_in_memory_cache<V, M>(capacity: u64, meter: M) -> InMemoryItemCacheHolder<V, M>
+    where M: CountableMeter<String, Arc<V>> {
+        let cache = LruCache::with_meter(capacity, meter);
         Arc::new(RwLock::new(cache))
     }
 
@@ -53,8 +46,7 @@ impl InMemoryCacheBuilder {
 
     // new cache that cache `Vec<u8>`, and metered by byte size
     pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
-        let cache =
-            LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::default());
+        let cache = LruCache::with_meter(capacity, BytesMeter);
         Arc::new(RwLock::new(cache))
     }
 }
@@ -69,11 +61,10 @@ mod impls {
     use crate::cache::CacheAccessor;
 
     // Wrap a Cache with RwLock, and impl CacheAccessor for it
-    impl<V, C, S, M> CacheAccessor<String, V, S, M> for Arc<RwLock<C>>
+    impl<V, C, M> CacheAccessor<String, V, M> for Arc<RwLock<C>>
     where
-        C: Cache<String, Arc<V>, S, M>,
+        C: Cache<String, Arc<V>, M>,
         M: CountableMeter<String, Arc<V>>,
-        S: BuildHasher,
     {
         fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
             let mut guard = self.write();
@@ -100,6 +91,16 @@ mod impls {
             guard.size()
         }
 
+        fn capacity(&self) -> u64 {
+            let guard = self.read();
+            guard.capacity()
+        }
+
+        fn set_capacity(&self, capacity: u64) {
+            let mut guard = self.write();
+            guard.set_capacity(capacity)
+        }
+
         fn len(&self) -> usize {
             let guard = self.read();
             guard.len()
@@ -107,11 +108,10 @@ mod impls {
     }
 
     // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
-    impl<V, C, S, M> CacheAccessor<String, V, S, M> for Option<C>
+    impl<V, C, M> CacheAccessor<String, V, M> for Option<C>
     where
-        C: CacheAccessor<String, V, S, M>,
+        C: CacheAccessor<String, V, M>,
         M: CountableMeter<String, Arc<V>>,
-        S: BuildHasher,
     {
         fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
             self.as_ref().and_then(|cache| cache.get(k))
@@ -144,6 +144,20 @@ mod impls {
                 cache.size()
             } else {
                 0
+            }
+        }
+
+        fn capacity(&self) -> u64 {
+            if let Some(cache) = self {
+                cache.capacity()
+            } else {
+                0
+            }
+        }
+
+        fn set_capacity(&self, capacity: u64) {
+            if let Some(cache) = self {
+                cache.set_capacity(capacity)
             }
         }
 

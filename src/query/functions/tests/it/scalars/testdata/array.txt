@@ -11,7 +11,7 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')`
+  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `array(to_uint64('a'), to_uint64(1))`
 
 
 
@@ -19,9 +19,9 @@ error:
   --> SQL:1:1
   |
 1 | [-1, true]
-  | ^^^^^^^^^^ no overload satisfies `array(Int16, Boolean)`
+  | ^^^^^^^^^^ no function matches signature `array(Int16, Boolean)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int16` and `Boolean`
 
 
@@ -48,9 +48,9 @@ error:
   --> SQL:1:1
   |
 1 | ['a', 1, parse_json('{"foo":"bar"}')]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(String, UInt8, Variant)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array(String, UInt8, Variant)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `UInt64` and `Variant`
 
 
@@ -113,7 +113,7 @@ error:
   --> SQL:1:1
   |
 1 | range(10, 500000011)
-  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)`
+  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)` in expr `range(to_uint64(10), to_uint64(500000011))`
 
 
 
@@ -121,7 +121,7 @@ error:
   --> SQL:1:8
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')`
+  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), to_uint64('a'))`
 
 
 
@@ -572,9 +572,9 @@ error:
   --> SQL:1:14
   |
 1 | nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Int64` and `Boolean`
 
 
@@ -746,13 +746,13 @@ error:
   --> SQL:1:1
   |
 1 | array_concat([false, true], [1,2])
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_concat(Array(Boolean), Array(UInt8))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array_concat(Array(Boolean), Array(UInt8))`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)                 : unable to unify `Array(Boolean)` with `Array(Nothing)`
   array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL  : unable to unify `Array(Boolean)` with `Array(Nothing)`
   array_concat(Array(T0), Array(T0)) :: Array(T0)                                : unable to find a common super type for `Boolean` and `UInt8`
-  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL                 : unable to find a common super type for `Boolean` and `UInt8`
+... and 1 more
 
 
 
@@ -769,7 +769,7 @@ error:
   --> SQL:1:23
   |
 1 | array_concat([1,2,3], ['s', null])
-  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')`
+  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64()`, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Int64 NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Int64 NULL)))`
 
 
 
@@ -1008,9 +1008,9 @@ error:
   --> SQL:1:1
   |
 1 | array_indexof([false, true], 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_indexof(Array(Boolean), UInt8)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array_indexof(Array(Boolean), UInt8)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   array_indexof(NULL, NULL) :: NULL                      : unable to unify `Array(Boolean)` with `NULL`
   array_indexof(Array(T0), T0) :: UInt64                 : unable to find a common super type for `Boolean` and `UInt8`
   array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL  : unable to find a common super type for `Boolean` and `UInt8`
@@ -1021,7 +1021,7 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')`
+  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64('s')`, during run expr: `array_indexof(array(to_int64(1), to_int64(2), to_int64(3), to_int64('s')), to_int64('s'))`
 
 
 

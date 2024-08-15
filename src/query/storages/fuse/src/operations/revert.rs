@@ -52,28 +52,26 @@ impl FuseTable {
         // 3. prepare the request
         //  using the CURRENT version as the base table version
         let base_version = self.table_info.ident.seq;
-        let catalog = ctx.get_catalog(&table_info.meta.catalog).await?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(base_version),
             new_table_meta: table_meta_to_be_committed,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
         // 4. let's roll
-        let reply = catalog.update_table_meta(&self.table_info, req).await;
+        let reply = catalog.update_single_table_meta(req, table_info).await;
         if reply.is_ok() {
-            // try keep the snapshot hit
+            // try keeping the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
                     ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
                 })?;
             Self::write_last_snapshot_hint(
+                ctx.as_ref(),
                 &table_reverting_to.operator,
                 &table_reverting_to.meta_location_generator,
-                snapshot_location,
+                &snapshot_location,
             )
             .await;
         };

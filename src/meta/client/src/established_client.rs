@@ -32,6 +32,7 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use log::error;
 use log::info;
+use log::warn;
 use parking_lot::Mutex;
 use tonic::codec::Streaming;
 use tonic::codegen::InterceptedService;
@@ -53,13 +54,13 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
         // - Set the `current` node in endpoints to the leader if the request is forwarded by a follower to a leader.
         // - Store the error if received an error.
 
-        self.map(|response| {
-            let forwarded_leader = GrpcHelper::get_response_meta_leader(&response);
+        self.inspect(|response| {
+            let forwarded_leader = GrpcHelper::get_response_meta_leader(response);
 
             // `leader` is set iff the request is forwarded by a follower to a leader
             if let Some(leader) = forwarded_leader {
                 info!(
-                    "to switch to use leader({}) for further RPC, endpoints: {}",
+                    "EstablishedClient update_client: received forward_to_leader({}) for further RPC, endpoints: {}",
                     leader,
                     &*client.endpoints.lock(),
                 );
@@ -76,16 +77,14 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
                 };
 
                 info!(
-                    "switch to use leader({}) for further RPC, result: {:?}",
+                    "EstablishedClient update_client: switch to use leader({}) for further RPC, result: {:?}",
                     leader, update_leader_res,
                 );
             }
-
-            response
         })
-        .map_err(|status| {
+        .inspect_err(|status| {
+            warn!("EstablishedClient update_client: set received error: {:?}", status);
             client.set_error(status.clone());
-            status
         })
     }
 }

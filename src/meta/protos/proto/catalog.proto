@@ -33,6 +33,7 @@ message CatalogOption {
   oneof catalog_option {
     HiveCatalogOption hive = 2;
     IcebergCatalogOption iceberg = 3;
+    ShareCatalogOption share = 4;
   }
 }
 
@@ -49,5 +50,39 @@ message IcebergCatalogOption {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  StorageConfig storage_params = 1;
+  // We don't need to StorageConfig in iceberg catalog anymore.
+  // StorageConfig storage_params = 1;
+  reserved 1;
+  
+  oneof iceberg_catalog_option {
+    IcebergRestCatalogOption rest_catalog = 2;
+    IcebergHmsCatalogOption hms_catalog = 3;
+  }
+}
+
+message IcebergRestCatalogOption {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string uri = 1;
+  string warehouse = 2;
+  map<string, string> props = 3;
+}
+
+message IcebergHmsCatalogOption {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string address = 1;
+  string warehouse = 2;
+  map<string, string> props = 3;
+}
+
+message ShareCatalogOption {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string provider = 1;
+  string share_name = 2;
+  string share_endpoint = 3;
 }

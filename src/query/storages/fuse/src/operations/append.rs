@@ -27,10 +27,11 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::create_dummy_items;
+use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::BlockCompactorForCopy;
 use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -95,38 +96,29 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         block_thresholds: BlockThresholds,
-        specified_mid_len: usize,
-        specified_last_len: usize,
+        transform_len: usize,
+        need_match: bool,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
-        let output_lens = pipeline.output_len();
-        let items1 = create_dummy_items(
-            output_lens - specified_mid_len - specified_last_len,
-            output_lens,
-        );
-        let items2 = create_dummy_items(
-            output_lens - specified_mid_len - specified_last_len,
-            output_lens,
-        );
+
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-            let mut builder = pipeline.add_transform_with_specified_len(
-                move |input, output| {
-                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                        input,
-                        output,
-                        num_input_columns,
-                        func_ctx2.clone(),
+            let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
+                move || {
+                    Ok(CompoundBlockOperator::new(
                         operators.clone(),
-                    )))
+                        func_ctx2.clone(),
+                        num_input_columns,
+                    ))
                 },
-                specified_mid_len,
+                transform_len,
             )?;
-            builder.add_items_prepend(items1);
-            builder.add_items(create_dummy_items(specified_last_len, specified_last_len));
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
             pipeline.add_pipe(builder.finalize());
         }
 
@@ -143,19 +135,13 @@ impl FuseTable {
                 .collect();
             let sort_desc = Arc::new(sort_desc);
 
-            let mut builder = pipeline.add_transform_with_specified_len(
-                |transform_input_port, transform_output_port| {
-                    Ok(ProcessorPtr::create(TransformSortPartial::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        None,
-                        sort_desc.clone(),
-                    )?))
-                },
-                specified_mid_len,
+            let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
+                || Ok(TransformSortPartial::new(None, sort_desc.clone())),
+                transform_len,
             )?;
-            builder.add_items_prepend(items2);
-            builder.add_items(create_dummy_items(specified_last_len, specified_last_len));
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
             pipeline.add_pipe(builder.finalize());
         }
         Ok(cluster_stats_gen)
@@ -176,15 +162,9 @@ impl FuseTable {
             let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
-            pipeline.add_transform(move |input, output| {
-                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                    input,
-                    output,
-                    num_input_columns,
-                    func_ctx2.clone(),
-                    operators.clone(),
-                )))
-            })?;
+            pipeline.add_transformer(move || {
+                CompoundBlockOperator::new(operators.clone(), func_ctx2.clone(), num_input_columns)
+            });
         }
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
@@ -199,14 +179,7 @@ impl FuseTable {
                 })
                 .collect();
             let sort_desc = Arc::new(sort_desc);
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                Ok(ProcessorPtr::create(TransformSortPartial::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    None,
-                    sort_desc.clone(),
-                )?))
-            })?;
+            pipeline.add_transformer(|| TransformSortPartial::new(None, sort_desc.clone()));
         }
         Ok(cluster_stats_gen)
     }

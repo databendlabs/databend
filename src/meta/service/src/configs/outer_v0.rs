@@ -291,6 +291,12 @@ pub struct ConfigViaEnv {
     pub kvsrv_wait_leader_timeout: u64,
     pub raft_max_applied_log_to_keep: u64,
     pub raft_snapshot_chunk_size: u64,
+
+    pub raft_snapshot_db_debug_check: bool,
+    pub raft_snapshot_db_block_keys: u64,
+    pub raft_snapshot_db_block_cache_item: u64,
+    pub raft_snapshot_db_block_cache_size: u64,
+
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
     pub kvsrv_id: u64,
@@ -338,6 +344,12 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_wait_leader_timeout: cfg.raft_config.wait_leader_timeout,
             raft_max_applied_log_to_keep: cfg.raft_config.max_applied_log_to_keep,
             raft_snapshot_chunk_size: cfg.raft_config.snapshot_chunk_size,
+
+            raft_snapshot_db_debug_check: cfg.raft_config.snapshot_db_debug_check,
+            raft_snapshot_db_block_keys: cfg.raft_config.snapshot_db_block_keys,
+            raft_snapshot_db_block_cache_item: cfg.raft_config.snapshot_db_block_cache_item,
+            raft_snapshot_db_block_cache_size: cfg.raft_config.snapshot_db_block_cache_size,
+
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
             kvsrv_id: cfg.raft_config.id,
@@ -365,6 +377,12 @@ impl Into<Config> for ConfigViaEnv {
             wait_leader_timeout: self.kvsrv_wait_leader_timeout,
             max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
             snapshot_chunk_size: self.raft_snapshot_chunk_size,
+
+            snapshot_db_debug_check: self.raft_snapshot_db_debug_check,
+            snapshot_db_block_keys: self.raft_snapshot_db_block_keys,
+            snapshot_db_block_cache_item: self.raft_snapshot_db_block_cache_item,
+            snapshot_db_block_cache_size: self.raft_snapshot_db_block_cache_size,
+
             single: self.kvsrv_single,
             join: self.metasrv_join,
             // Do not allow to leave via environment variable
@@ -383,7 +401,7 @@ impl Into<Config> for ConfigViaEnv {
                 file_dir: self.metasrv_log_file_dir,
                 file_format: self.metasrv_log_file_format,
                 file_limit: self.metasrv_log_file_limit,
-                file_prefix_filter: "databend_".to_string(),
+                file_prefix_filter: "databend_,openraft".to_string(),
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
@@ -478,6 +496,27 @@ pub struct RaftConfig {
     #[clap(long, default_value = "4194304")]
     pub snapshot_chunk_size: u64,
 
+    /// Whether to check keys fed to snapshot are sorted.
+    #[clap(long, default_value = "true")]
+    pub snapshot_db_debug_check: bool,
+
+    /// The maximum number of keys allowed in a block within a snapshot db.
+    ///
+    /// A block serves as the caching unit in a snapshot database.
+    /// Smaller blocks enable more granular cache control but may increase the index size.
+    #[clap(long, default_value = "8000")]
+    pub snapshot_db_block_keys: u64,
+
+    /// The total block to cache.
+    #[clap(long, default_value = "1024")]
+    pub snapshot_db_block_cache_item: u64,
+
+    /// The total cache size for snapshot blocks.
+    ///
+    /// By default it is 1GB.
+    #[clap(long, default_value = "1073741824")]
+    pub snapshot_db_block_cache_size: u64,
+
     /// Start databend-meta in single node mode.
     /// It initialize a single node cluster, if meta data is not initialized.
     /// If on-disk data is already initialized, this argument has no effect.
@@ -527,6 +566,7 @@ pub struct RaftConfig {
     pub wait_leader_timeout: u64,
 }
 
+// TODO(rotbl): should not be used.
 impl Default for RaftConfig {
     fn default() -> Self {
         InnerRaftConfig::default().into()
@@ -547,6 +587,12 @@ impl From<RaftConfig> for InnerRaftConfig {
             install_snapshot_timeout: x.install_snapshot_timeout,
             max_applied_log_to_keep: x.max_applied_log_to_keep,
             snapshot_chunk_size: x.snapshot_chunk_size,
+
+            snapshot_db_debug_check: x.snapshot_db_debug_check,
+            snapshot_db_block_keys: x.snapshot_db_block_keys,
+            snapshot_db_block_cache_item: x.snapshot_db_block_cache_item,
+            snapshot_db_block_cache_size: x.snapshot_db_block_cache_size,
+
             single: x.single,
             join: x.join,
             leave_via: x.leave_via,
@@ -574,6 +620,12 @@ impl From<InnerRaftConfig> for RaftConfig {
             install_snapshot_timeout: inner.install_snapshot_timeout,
             max_applied_log_to_keep: inner.max_applied_log_to_keep,
             snapshot_chunk_size: inner.snapshot_chunk_size,
+
+            snapshot_db_debug_check: inner.snapshot_db_debug_check,
+            snapshot_db_block_keys: inner.snapshot_db_block_keys,
+            snapshot_db_block_cache_item: inner.snapshot_db_block_cache_item,
+            snapshot_db_block_cache_size: inner.snapshot_db_block_cache_size,
+
             single: inner.single,
             join: inner.join,
             leave_via: inner.leave_via,
@@ -654,8 +706,10 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter
-    #[clap(long = "log-file-prefix-filter", default_value = "databend_")]
+    /// Log prefix filter, separated by comma.
+    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
+    /// This filter does not affect `WARNING` and `ERROR` log.
+    #[clap(long = "log-file-prefix-filter", default_value = "databend_,openraft")]
     #[serde(rename = "prefix_filter")]
     pub file_prefix_filter: String,
 }

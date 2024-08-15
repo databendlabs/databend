@@ -37,7 +37,7 @@ use crate::optimizer::SExpr;
 use crate::IndexType;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
@@ -50,6 +50,66 @@ pub enum ScalarExpr {
     UDFCall(UDFCall),
     UDFLambdaCall(UDFLambdaCall),
     AsyncFunctionCall(AsyncFunctionCall),
+}
+
+impl Clone for ScalarExpr {
+    #[recursive::recursive]
+    fn clone(&self) -> Self {
+        match self {
+            ScalarExpr::BoundColumnRef(v) => ScalarExpr::BoundColumnRef(v.clone()),
+            ScalarExpr::ConstantExpr(v) => ScalarExpr::ConstantExpr(v.clone()),
+            ScalarExpr::WindowFunction(v) => ScalarExpr::WindowFunction(v.clone()),
+            ScalarExpr::AggregateFunction(v) => ScalarExpr::AggregateFunction(v.clone()),
+            ScalarExpr::LambdaFunction(v) => ScalarExpr::LambdaFunction(v.clone()),
+            ScalarExpr::FunctionCall(v) => ScalarExpr::FunctionCall(v.clone()),
+            ScalarExpr::CastExpr(v) => ScalarExpr::CastExpr(v.clone()),
+            ScalarExpr::SubqueryExpr(v) => ScalarExpr::SubqueryExpr(v.clone()),
+            ScalarExpr::UDFCall(v) => ScalarExpr::UDFCall(v.clone()),
+            ScalarExpr::UDFLambdaCall(v) => ScalarExpr::UDFLambdaCall(v.clone()),
+            ScalarExpr::AsyncFunctionCall(v) => ScalarExpr::AsyncFunctionCall(v.clone()),
+        }
+    }
+}
+
+impl Eq for ScalarExpr {}
+
+impl PartialEq for ScalarExpr {
+    #[recursive::recursive]
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => l.eq(r),
+            (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
+            (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
+            (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
+            (ScalarExpr::LambdaFunction(l), ScalarExpr::LambdaFunction(r)) => l.eq(r),
+            (ScalarExpr::FunctionCall(l), ScalarExpr::FunctionCall(r)) => l.eq(r),
+            (ScalarExpr::CastExpr(l), ScalarExpr::CastExpr(r)) => l.eq(r),
+            (ScalarExpr::SubqueryExpr(l), ScalarExpr::SubqueryExpr(r)) => l.eq(r),
+            (ScalarExpr::UDFCall(l), ScalarExpr::UDFCall(r)) => l.eq(r),
+            (ScalarExpr::UDFLambdaCall(l), ScalarExpr::UDFLambdaCall(r)) => l.eq(r),
+            (ScalarExpr::AsyncFunctionCall(l), ScalarExpr::AsyncFunctionCall(r)) => l.eq(r),
+            _ => false,
+        }
+    }
+}
+
+impl Hash for ScalarExpr {
+    #[recursive::recursive]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            ScalarExpr::BoundColumnRef(v) => v.hash(state),
+            ScalarExpr::ConstantExpr(v) => v.hash(state),
+            ScalarExpr::WindowFunction(v) => v.hash(state),
+            ScalarExpr::AggregateFunction(v) => v.hash(state),
+            ScalarExpr::LambdaFunction(v) => v.hash(state),
+            ScalarExpr::FunctionCall(v) => v.hash(state),
+            ScalarExpr::CastExpr(v) => v.hash(state),
+            ScalarExpr::SubqueryExpr(v) => v.hash(state),
+            ScalarExpr::UDFCall(v) => v.hash(state),
+            ScalarExpr::UDFLambdaCall(v) => v.hash(state),
+            ScalarExpr::AsyncFunctionCall(v) => v.hash(state),
+        }
+    }
 }
 
 impl ScalarExpr {
@@ -556,6 +616,7 @@ pub struct NthValueFunction {
     pub n: Option<u64>,
     pub arg: Box<ScalarExpr>,
     pub return_type: Box<DataType>,
+    pub ignore_null: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -755,184 +816,6 @@ pub trait Visitor<'a>: Sized {
 
     fn visit_udf_lambda_call(&mut self, udf: &'a UDFLambdaCall) -> Result<()> {
         self.visit(&udf.scalar)
-    }
-}
-
-// Any `Visitor` which needs to access parent `ScalarExpr` can implement `VisitorWithParent`
-pub trait VisitorWithParent<'a>: Sized {
-    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
-        walk_expr_with_parent(self, None, expr)
-    }
-
-    fn visit_with_parent(
-        &mut self,
-        parent: Option<&'a ScalarExpr>,
-        expr: &'a ScalarExpr,
-    ) -> Result<()> {
-        walk_expr_with_parent(self, parent, expr)
-    }
-
-    fn visit_bound_column_ref(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        _col: &'a BoundColumnRef,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_constant(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        _constant: &'a ConstantExpr,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_window_function(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        window: &'a WindowFunc,
-    ) -> Result<()> {
-        fn walk_window_with_parent<'a, V: VisitorWithParent<'a>>(
-            visitor: &mut V,
-            current: &'a ScalarExpr,
-            window: &'a WindowFunc,
-        ) -> Result<()> {
-            for expr in &window.partition_by {
-                visitor.visit_with_parent(Some(current), expr)?;
-            }
-            for expr in &window.order_by {
-                visitor.visit_with_parent(Some(current), &expr.expr)?;
-            }
-            match &window.func {
-                WindowFuncType::Aggregate(func) => {
-                    visitor.visit_aggregate_function(Some(current), current, func)?
-                }
-                WindowFuncType::NthValue(func) => {
-                    visitor.visit_with_parent(Some(current), &func.arg)?
-                }
-                WindowFuncType::LagLead(func) => {
-                    visitor.visit_with_parent(Some(current), &func.arg)?;
-                    if let Some(default) = func.default.as_ref() {
-                        visitor.visit_with_parent(Some(current), default)?
-                    }
-                }
-                WindowFuncType::RowNumber
-                | WindowFuncType::CumeDist
-                | WindowFuncType::Rank
-                | WindowFuncType::DenseRank
-                | WindowFuncType::PercentRank
-                | WindowFuncType::Ntile(_) => (),
-            }
-            Ok(())
-        }
-        walk_window_with_parent(self, current, window)
-    }
-
-    fn visit_aggregate_function(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        aggregate: &'a AggregateFunction,
-    ) -> Result<()> {
-        for expr in &aggregate.args {
-            self.visit_with_parent(Some(current), expr)?;
-        }
-        Ok(())
-    }
-
-    fn visit_lambda_function(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        lambda: &'a LambdaFunc,
-    ) -> Result<()> {
-        for expr in &lambda.args {
-            self.visit_with_parent(Some(current), expr)?;
-        }
-        Ok(())
-    }
-
-    fn visit_function_call(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        func: &'a FunctionCall,
-    ) -> Result<()> {
-        for expr in &func.arguments {
-            self.visit_with_parent(Some(current), expr)?;
-        }
-        Ok(())
-    }
-
-    fn visit_cast(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        cast: &'a CastExpr,
-    ) -> Result<()> {
-        self.visit_with_parent(Some(current), &cast.argument)?;
-        Ok(())
-    }
-
-    fn visit_subquery(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        subquery: &'a SubqueryExpr,
-    ) -> Result<()> {
-        if let Some(child_expr) = subquery.child_expr.as_ref() {
-            self.visit_with_parent(Some(current), child_expr)?;
-        }
-        Ok(())
-    }
-
-    fn visit_udf_call(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        udf: &'a UDFCall,
-    ) -> Result<()> {
-        for expr in &udf.arguments {
-            self.visit_with_parent(Some(current), expr)?;
-        }
-        Ok(())
-    }
-
-    fn visit_udf_lambda_call(
-        &mut self,
-        _parent: Option<&'a ScalarExpr>,
-        current: &'a ScalarExpr,
-        udf: &'a UDFLambdaCall,
-    ) -> Result<()> {
-        self.visit_with_parent(Some(current), &udf.scalar)
-    }
-}
-
-pub fn walk_expr_with_parent<'a, V: VisitorWithParent<'a>>(
-    visitor: &mut V,
-    parent: Option<&'a ScalarExpr>,
-    current: &'a ScalarExpr,
-) -> Result<()> {
-    match current {
-        ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(parent, expr),
-        ScalarExpr::ConstantExpr(expr) => visitor.visit_constant(parent, expr),
-        ScalarExpr::WindowFunction(win_func) => {
-            visitor.visit_window_function(parent, current, win_func)
-        }
-        ScalarExpr::AggregateFunction(aggregate) => {
-            visitor.visit_aggregate_function(parent, current, aggregate)
-        }
-        ScalarExpr::LambdaFunction(lambda) => {
-            visitor.visit_lambda_function(parent, current, lambda)
-        }
-        ScalarExpr::FunctionCall(func) => visitor.visit_function_call(parent, current, func),
-        ScalarExpr::CastExpr(cast_expr) => visitor.visit_cast(parent, current, cast_expr),
-        ScalarExpr::SubqueryExpr(subquery) => visitor.visit_subquery(parent, current, subquery),
-        ScalarExpr::UDFCall(udf) => visitor.visit_udf_call(parent, current, udf),
-        ScalarExpr::UDFLambdaCall(udf) => visitor.visit_udf_lambda_call(parent, current, udf),
-        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
     }
 }
 

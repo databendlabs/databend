@@ -21,8 +21,7 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_set_expr(
+    pub(crate) fn bind_set_expr(
         &mut self,
         bind_context: &mut BindContext,
         set_expr: &SetExpr,
@@ -30,23 +29,17 @@ impl Binder {
         limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
-            SetExpr::Select(stmt) => {
-                Box::pin(self.bind_select(bind_context, stmt, order_by, limit)).await
-            }
-            SetExpr::Query(stmt) => Box::pin(self.bind_query(bind_context, stmt)).await,
-            SetExpr::SetOperation(set_operation) => {
-                Box::pin(self.bind_set_operator(
-                    bind_context,
-                    &set_operation.left,
-                    &set_operation.right,
-                    &set_operation.op,
-                    &set_operation.all,
-                ))
-                .await
-            }
-            SetExpr::Values { span, values } => {
-                Box::pin(self.bind_values(bind_context, *span, values)).await
-            }
+            SetExpr::Select(stmt) => self.bind_select(bind_context, stmt, order_by, limit),
+            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt),
+            SetExpr::SetOperation(set_operation) => self.bind_set_operator(
+                bind_context,
+                &set_operation.left,
+                &set_operation.right,
+                &set_operation.op,
+                &set_operation.all,
+                None,
+            ),
+            SetExpr::Values { span, values } => self.bind_values(bind_context, *span, values),
         }
     }
 }

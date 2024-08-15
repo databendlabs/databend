@@ -16,7 +16,6 @@ use std::io::Read;
 use std::io::SeekFrom;
 
 use bytes::Buf;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
@@ -39,8 +38,8 @@ use futures::AsyncSeek;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;
-use parquet_rs::format::FileMetaData;
-use parquet_rs::thrift::TSerializable;
+use parquet::format::FileMetaData;
+use parquet::thrift::TSerializable;
 
 use self::thrift_file_meta_read::read_thrift_file_metadata;
 
@@ -51,7 +50,6 @@ pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrap
 pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     CompactSegmentInfo,
     LoaderWrapper<(Operator, TableSchemaRef)>,
-    DefaultHashBuilder,
     CompactSegmentInfoMeter,
 >;
 pub type InvertedIndexMetaReader =
@@ -67,11 +65,22 @@ impl MetaReaders {
         )
     }
 
+    pub fn segment_info_reader_without_cache(
+        dal: Operator,
+        schema: TableSchemaRef,
+    ) -> CompactSegmentInfoReader {
+        CompactSegmentInfoReader::new(None, LoaderWrapper((dal, schema)))
+    }
+
     pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
             LoaderWrapper(dal),
         )
+    }
+
+    pub fn table_snapshot_reader_without_cache(dal: Operator) -> TableSnapshotReader {
+        TableSnapshotReader::new(None, LoaderWrapper(dal))
     }
 
     pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {

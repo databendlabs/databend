@@ -32,8 +32,7 @@ use crate::plans::Sort;
 use crate::plans::SortItem;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_query(
+    pub(crate) fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
         query: &Query,
@@ -46,12 +45,10 @@ impl Binder {
 
         // Bind query body.
         let (mut s_expr, mut bind_context) =
-            Box::pin(self.bind_set_expr(bind_context, &query.body, &query.order_by, limit)).await?;
+            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit)?;
 
         // Bind order by for `SetOperation` and `Values`.
-        s_expr = self
-            .bind_query_order_by(&mut bind_context, query, s_expr)
-            .await?;
+        s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;
 
         // Bind limit.
         s_expr = self.bind_query_limit(query, s_expr, limit, offset);
@@ -88,6 +85,7 @@ impl Binder {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 materialized: cte.materialized,
+                recursive: with.recursive,
                 cte_idx: idx,
                 used_count: 0,
                 columns: vec![],
@@ -99,8 +97,7 @@ impl Binder {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_query_order_by(
+    pub(crate) fn bind_query_order_by(
         &mut self,
         bind_context: &mut BindContext,
         query: &Query,
@@ -127,7 +124,7 @@ impl Binder {
         for order in query.order_by.iter() {
             match order.expr {
                 Expr::ColumnRef { .. } => {
-                    let scalar = scalar_binder.bind(&order.expr).await?.0;
+                    let scalar = scalar_binder.bind(&order.expr)?.0;
                     match scalar {
                         ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) => {
                             let order_by_item = SortItem {

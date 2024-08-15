@@ -72,7 +72,7 @@ use crate::MetadataRef;
 ///
 /// In Databend, we do not really rewrite the plan to a `UNION` plan.
 /// We will add a new virtual column `_grouping_id` to the group by items,
-/// where `_grouping_id` is the result value of function [grouping](https://databend.rs/doc/sql-functions/other-functions/grouping).
+/// where `_grouping_id` is the result value of function [grouping](https://docs.databend.com/sql/sql-functions/other-functions/grouping).
 ///
 /// For example, we will rewrite the SQL above to:
 ///
@@ -362,11 +362,10 @@ impl Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
-    #[async_backtrace::framed]
-    pub async fn analyze_group_items<'a>(
+    pub fn analyze_group_items(
         &mut self,
         bind_context: &mut BindContext,
-        select_list: &SelectList<'a>,
+        select_list: &SelectList<'_>,
         group_by: &GroupBy,
     ) -> Result<()> {
         let mut available_aliases = vec![];
@@ -391,17 +390,14 @@ impl Binder {
 
         bind_context.set_expr_context(ExprContext::GroupClaue);
         match group_by {
-            GroupBy::Normal(exprs) => {
-                self.resolve_group_items(
-                    bind_context,
-                    select_list,
-                    exprs,
-                    &available_aliases,
-                    false,
-                    &mut vec![],
-                )
-                .await
-            }
+            GroupBy::Normal(exprs) => self.resolve_group_items(
+                bind_context,
+                select_list,
+                exprs,
+                &available_aliases,
+                false,
+                &mut vec![],
+            ),
             GroupBy::All => {
                 let groups = self.resolve_group_all(select_list)?;
                 self.resolve_group_items(
@@ -412,11 +408,9 @@ impl Binder {
                     false,
                     &mut vec![],
                 )
-                .await
             }
             GroupBy::GroupingSets(sets) => {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)
-                    .await
             }
             // TODO: avoid too many clones.
             GroupBy::Rollup(exprs) => {
@@ -426,7 +420,6 @@ impl Binder {
                     sets.push(exprs[0..i].to_vec());
                 }
                 self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
-                    .await
             }
             GroupBy::Cube(exprs) => {
                 // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
@@ -434,13 +427,11 @@ impl Binder {
                     .flat_map(|count| exprs.clone().into_iter().combinations(count))
                     .collect::<Vec<_>>();
                 self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
-                    .await
             }
         }
     }
 
-    #[async_backtrace::framed]
-    pub async fn bind_aggregate(
+    pub fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
         child: SExpr,
@@ -490,8 +481,7 @@ impl Binder {
         Ok(new_expr)
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_grouping_sets(
+    fn resolve_grouping_sets(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
@@ -507,8 +497,7 @@ impl Binder {
                 available_aliases,
                 true,
                 &mut grouping_sets,
-            )
-            .await?;
+            )?;
         }
         let agg_info = &mut bind_context.aggregate_info;
         // `grouping_sets` stores formatted `ScalarExpr` for each grouping set.
@@ -589,8 +578,7 @@ impl Binder {
         Ok(groups)
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_group_items(
+    fn resolve_group_items(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
@@ -652,7 +640,6 @@ impl Binder {
             );
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)
-                .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
@@ -662,8 +649,7 @@ impl Binder {
             if bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&scalar_expr)
-                .is_some()
+                .contains_key(&scalar_expr)
             {
                 // The group key is duplicated
                 continue;

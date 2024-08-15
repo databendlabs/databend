@@ -73,47 +73,6 @@ pub(crate) fn pretty_insert(insert_stmt: InsertStmt) -> RcDoc<'static> {
 
 fn pretty_source(source: InsertSource) -> RcDoc<'static> {
     RcDoc::line().append(match source {
-        InsertSource::Streaming {
-            format,
-            rest_str,
-            start,
-        } => RcDoc::text("FORMAT")
-            .append(RcDoc::space())
-            .append(RcDoc::text(format))
-            .append(
-                RcDoc::line()
-                    .nest(NEST_FACTOR)
-                    .append(RcDoc::text(rest_str))
-                    .append(RcDoc::text(start.to_string())),
-            ),
-        InsertSource::StreamingV2 {
-            settings,
-            on_error_mode,
-            start,
-        } => RcDoc::text("FILE_FORMAT").append(
-            RcDoc::line()
-                .append(RcDoc::text("FILE_FORMAT_SETTINGS = "))
-                .append(parenthesized(
-                    interweave_comma(settings.options.iter().map(|(k, v)| {
-                        RcDoc::text(k.to_string())
-                            .append(RcDoc::space())
-                            .append(RcDoc::text("="))
-                            .append(RcDoc::space())
-                            .append(RcDoc::text(format!("{}", v)))
-                    }))
-                    .group(),
-                ))
-                .append(
-                    RcDoc::text("start:")
-                        .append(RcDoc::space())
-                        .append(RcDoc::text(start.to_string())),
-                )
-                .append(
-                    RcDoc::text("on_error:")
-                        .append(RcDoc::space())
-                        .append(RcDoc::text(format!("{:?}", on_error_mode))),
-                ),
-        ),
         InsertSource::Values { rows } => RcDoc::text("VALUES").append(
             RcDoc::line().nest(NEST_FACTOR).append(
                 interweave_comma(rows.into_iter().map(|row| {

@@ -15,9 +15,9 @@
 use core::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
-use roaring::RoaringTreemap;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -149,8 +149,11 @@ impl ValueType for VariantType {
         builder.commit_row();
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.put_slice(b"");
         builder.commit_row();
     }
 
@@ -246,7 +249,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Bitmap(b) => {
             jsonb::Value::Array(
-                RoaringTreemap::deserialize_from(b)
+                deserialize_bitmap(b)
                     .unwrap()
                     .iter()
                     .map(|x| x.into())

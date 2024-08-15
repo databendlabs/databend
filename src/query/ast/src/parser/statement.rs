@@ -48,10 +48,12 @@ pub enum ShowGrantOption {
     ShareName(String),
 }
 
+// (tenant, share name, endpoint name)
+pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
+
 #[derive(Clone)]
 pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
-    FromShare(ShareNameIdent),
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -93,9 +95,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ #statement
+            EXPLAIN ~ ANALYZE ~ PARTIAL? ~ #statement
         },
-        |(_, _, statement)| Statement::ExplainAnalyze {
+        |(_, _, partial, statement)| Statement::ExplainAnalyze {
+            partial: partial.is_some(),
             query: Box::new(statement.stmt),
         },
     );
@@ -350,26 +353,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let set_variable = map(
+    let unset_stmt = map(
         rule! {
-            SET ~ GLOBAL? ~ #ident ~ "=" ~ #subexpr(0)
+            UNSET ~ #unset_type ~ #unset_source
         },
-        |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
-            is_global: opt_is_global.is_some(),
-            variable,
-            value: Box::new(value),
-        },
-    );
-
-    let unset_variable = map(
-        rule! {
-            UNSET ~ SESSION? ~ #unset_source
-        },
-        |(_, opt_session_level, unset_source)| {
-            Statement::UnSetVariable(UnSetStmt {
-                session_level: opt_session_level.is_some(),
-                source: unset_source,
-            })
+        |(_, unset_type, identifiers)| Statement::UnSetStmt {
+            unset_type,
+            identifiers,
         },
     );
 
@@ -396,6 +386,58 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Statement::SetSecondaryRoles { option }
         },
     );
+
+    let set_stmt = alt((
+        map(
+            rule! {
+                SET ~ #set_type ~ #ident ~ "=" ~ #subexpr(0)
+            },
+            |(_, set_type, var, _, value)| Statement::SetStmt {
+                set_type,
+                identifiers: vec![var],
+                values: SetValues::Expr(vec![Box::new(value)]),
+            },
+        ),
+        map_res(
+            rule! {
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
+                ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")"
+            },
+            |(_, set_type, _, ids, _, _, _, values, _)| {
+                if ids.len() == values.len() {
+                    Ok(Statement::SetStmt {
+                        set_type,
+                        identifiers: ids,
+                        values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                    })
+                } else {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "inconsistent number of variables and values",
+                    )))
+                }
+            },
+        ),
+        map(
+            rule! {
+                SET ~ #set_type ~ #ident ~ "=" ~ #query
+            },
+            |(_, set_type, var, _, query)| Statement::SetStmt {
+                set_type,
+                identifiers: vec![var],
+                values: SetValues::Query(Box::new(query)),
+            },
+        ),
+        map(
+            rule! {
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
+            },
+            |(_, set_type, _, vars, _, _, query)| Statement::SetStmt {
+                set_type,
+                identifiers: vars,
+                values: SetValues::Query(Box::new(query)),
+            },
+        ),
+    ));
 
     // catalogs
     let show_catalogs = map(
@@ -481,16 +523,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         database,
                         engine: Some(engine),
                         options: vec![],
-                        from_share: None,
-                    })
-                }
-                Some(CreateDatabaseOption::FromShare(share_name)) => {
-                    Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option,
-                        database,
-                        engine: None,
-                        options: vec![],
-                        from_share: Some(share_name),
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
@@ -498,7 +530,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     database,
                     engine: None,
                     options: vec![],
-                    from_share: None,
                 }),
             };
 
@@ -653,15 +684,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location ~ READ_ONLY?
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
         },
-        |(_, _, (catalog, database, table), uri_location, opt_read_only)| {
+        |(_, _, (catalog, database, table), uri_location)| {
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
                 uri_location,
-                read_only: opt_read_only.is_some(),
             })
         },
     );
@@ -857,6 +887,86 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 table,
+            })
+        },
+    );
+
+    // DICTIONARY
+    let create_dictionary = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ DICTIONARY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ "(" ~ ^#comma_separated_list1(column_def) ~ ^")"
+            ~ PRIMARY ~ ^KEY  ~ ^#comma_separated_list1(ident)
+            ~ ^SOURCE ~ ^"(" ~ ^#ident ~ ^"("
+            ~ ( #table_option )?
+            ~ ^")" ~ ^")"
+            ~ ( COMMENT ~ ^#literal_string )?
+        },
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            (catalog, database, dictionary_name),
+            _,
+            columns,
+            _,
+            _,
+            _,
+            primary_keys,
+            _,
+            _,
+            source_name,
+            _,
+            opt_source_options,
+            _,
+            _,
+            opt_comment,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateDictionary(CreateDictionaryStmt {
+                create_option,
+                catalog,
+                database,
+                dictionary_name,
+                columns,
+                primary_keys,
+                source_name,
+                source_options: opt_source_options.unwrap_or_default(),
+                comment: opt_comment.map(|(_, comment)| comment),
+            }))
+        },
+    );
+    let drop_dictionary = map(
+        rule! {
+            DROP ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, opt_if_exists, (catalog, database, dictionary_name))| {
+            Statement::DropDictionary(DropDictionaryStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                dictionary_name,
+            })
+        },
+    );
+    let show_dictionaries = map(
+        rule! {
+            SHOW ~ DICTIONARIES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowDictionaries { show_options },
+    );
+    let show_create_dictionary = map(
+        rule! {
+            SHOW ~ CREATE ~ DICTIONARY ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, dictionary_name))| {
+            Statement::ShowCreateDictionary(ShowCreateDictionaryStmt {
+                catalog,
+                database,
+                dictionary_name,
             })
         },
     );
@@ -1532,7 +1642,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
-             ~ TENANT ~ "=" ~ #ident
+             ~ ( CREDENTIAL ~ ^"=" ~ ^#options)?
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
@@ -1546,20 +1656,34 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             _,
             url,
-            _,
-            _,
-            tenant,
+            credential_opt,
             args_opt,
             comment_opt,
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
+            let credential_options = if let Some(opt) = credential_opt {
+                opt.2
+                    .iter()
+                    .map(|(k, v)| {
+                        let k = k.to_uppercase();
+                        if k == "TYPE" {
+                            (k, v.to_uppercase())
+                        } else {
+                            (k, v.clone())
+                        }
+                    })
+                    .collect()
+            } else {
+                BTreeMap::new()
+            };
+
             Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
                 create_option,
                 endpoint,
                 url,
-                tenant,
+                credential_options,
                 args: match args_opt {
                     Some(opt) => opt.2,
                     None => BTreeMap::new(),
@@ -2047,6 +2171,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
     );
 
+    let system_action = map(
+        rule! {
+            SYSTEM ~ #action
+        },
+        |(_, action)| Statement::System(SystemStmt { action }),
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2063,7 +2194,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #set_priority: "SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>"
+            | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
+            | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
         // database
         rule!(
@@ -2096,10 +2228,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
-        ),
-        rule!(
-            #set_variable : "`SET <variable> = <value>`"
-            | #unset_variable : "`UNSET <variable>`"
             | #begin
             | #commit
             | #abort
@@ -2126,6 +2254,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
+        ),
+        // dictionary
+        rule!(
+            #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
+            | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
+            | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
+            | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
         ),
         // view,index
         rule!(
@@ -2201,6 +2336,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
             | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
             | #show_shares: "`SHOW SHARES`"
+        ),
+        rule!(
+            #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
+            | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
         ),
         // catalog
         rule!(
@@ -2485,31 +2624,11 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
-// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// `INSERT INTO ... VALUES` statement will
 // stop the parser immediately and return the rest tokens in `InsertSource`.
 //
 // This is a hack to parse large insert statements.
 pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-            FORMAT ~ #ident ~ #rest_str
-        },
-        |(_, format, (rest_str, start))| InsertSource::Streaming {
-            format: format.name,
-            rest_str,
-            start,
-        },
-    );
-    let streaming_v2 = map(
-        rule! {
-           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
-        },
-        |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
-            settings: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            start,
-        },
-    );
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -2526,9 +2645,7 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     );
 
     rule!(
-        #streaming
-        | #streaming_v2
-        | #values
+        #values
         | #query
     )(i)
 }
@@ -2569,24 +2686,33 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     )(i)
 }
 
-pub fn unset_source(i: Input) -> IResult<UnSetSource> {
+pub fn unset_source(i: Input) -> IResult<Vec<Identifier>> {
     //#ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")?
     let var = map(
         rule! {
             #ident
         },
-        |variable| UnSetSource::Var { variable },
+        |variable| vec![variable],
     );
     let vars = map(
         rule! {
             "(" ~ ^#comma_separated_list1(ident) ~ ")"
         },
-        |(_, variables, _)| UnSetSource::Vars { variables },
+        |(_, variables, _)| variables,
     );
 
     rule!(
         #var
         | #vars
+    )(i)
+}
+
+pub fn set_stmt_args(i: Input) -> IResult<(Identifier, Box<Expr>)> {
+    map(
+        rule! {
+            #ident ~ "=" ~ #subexpr(0)
+        },
+        |(id, _, expr)| (id, Box::new(expr)),
     )(i)
 }
 
@@ -2910,9 +3036,18 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
     );
 
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let view = map(
+        rule! {
+            VIEW ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| ShareGrantObjectName::View(database, table),
+    );
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
+        | #view : "TABLE <database>.<view>"
     )(i)
 }
 
@@ -3744,6 +3879,26 @@ pub fn priority(i: Input) -> IResult<Priority> {
     ))(i)
 }
 
+pub fn action(i: Input) -> IResult<SystemAction> {
+    let mut backtrace = map(
+        rule! {
+             #switch ~ EXCEPTION_BACKTRACE
+        },
+        |(switch, _)| SystemAction::Backtrace(switch),
+    );
+    // add other system action type here
+    rule!(
+        #backtrace
+    )(i)
+}
+
+pub fn switch(i: Input) -> IResult<bool> {
+    alt((
+        value(true, rule! { ENABLE }),
+        value(false, rule! { DISABLE }),
+    ))(i)
+}
+
 pub fn limit_where(i: Input) -> IResult<ShowLimit> {
     map(
         rule! {
@@ -3844,25 +3999,15 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let create_db_engine = map(
+    let mut create_db_engine = map(
         rule! {
             ENGINE ~  ^"=" ~ ^#database_engine
         },
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
-        rule! {
-            FROM ~ SHARE ~ #ident ~ "." ~ #ident
-        },
-        |(_, _, tenant, _, share)| {
-            CreateDatabaseOption::FromShare(ShareNameIdent { tenant, share })
-        },
-    );
-
     rule!(
         #create_db_engine
-        | #share_from
     )(i)
 }
 
@@ -3871,6 +4016,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
+        value(CatalogType::Share, rule! { SHARE }),
     ))(i)
 }
 
@@ -3916,6 +4062,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetPasswordPolicy,
     );
+    let must_change_password = map(
+        rule! {
+            MUST_CHANGE_PASSWORD ~ ^"=" ~ ^#literal_bool
+        },
+        |(_, _, val)| UserOptionItem::MustChangePassword(val),
+    );
 
     rule!(
         #tenant_setting
@@ -3926,6 +4078,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #set_password_policy
         | #unset_password_policy
         | #set_disabled_option
+        | #must_change_password
     )(i)
 }
 
@@ -3996,6 +4149,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
     )(i)
 }
@@ -4015,6 +4169,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
     )(i)
 }

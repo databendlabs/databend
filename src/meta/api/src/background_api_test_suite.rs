@@ -104,7 +104,7 @@ impl BackgroundApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn update_background_tasks<MT: BackgroundApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -190,7 +190,7 @@ impl BackgroundApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn update_background_jobs<MT: BackgroundApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,

@@ -23,6 +23,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use goldenfile::Mint;
 
@@ -136,18 +137,33 @@ pub fn test_pass() {
             (2, 3, 1),
         ];
         for i in 0..3 {
-            let mut columns = Vec::with_capacity(3);
-            columns.push(BlockEntry::new(
-                DataType::Number(NumberDataType::UInt8),
-                Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
-            ));
-            columns.push(BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Value::Column(UInt8Type::from_data_with_validity(
-                    vec![(i + 10) as u8; 4],
-                    vec![true, true, false, false],
-                )),
-            ));
+            let columns = vec![
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt8),
+                    Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
+                ),
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                    Value::Column(UInt8Type::from_data_with_validity(
+                        vec![(i + 10) as u8; 4],
+                        vec![true, true, false, false],
+                    )),
+                ),
+                BlockEntry::new(
+                    DataType::Array(Box::new(DataType::String)),
+                    Value::Scalar(Scalar::Array(StringType::from_data(vec![
+                        (20 + i).to_string(),
+                        (30 + i).to_string(),
+                    ]))),
+                ),
+                BlockEntry::new(
+                    DataType::Tuple(vec![DataType::Boolean, DataType::Date]),
+                    Value::Scalar(Scalar::Tuple(vec![
+                        Scalar::Boolean(i % 2 == 0),
+                        Scalar::Date(9 + i),
+                    ])),
+                ),
+            ];
             blocks.push(DataBlock::new(columns, 4))
         }
 
@@ -334,6 +350,49 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         assert_eq!(columns_1[idx].value, columns_5[idx].value);
     }
 
+    Ok(())
+}
+
+#[test]
+pub fn test_concat_scalar() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::Value;
+
+    let ty = DataType::Number(NumberDataType::UInt8);
+    let scalar = Value::Scalar(Scalar::Number(NumberScalar::UInt8(1)));
+    let column = Value::Column(UInt8Type::from_data(vec![2, 3]));
+
+    let blocks = [
+        DataBlock::new(
+            vec![
+                BlockEntry::new(ty.clone(), scalar.clone()),
+                BlockEntry::new(ty.clone(), scalar.clone()),
+            ],
+            2,
+        ),
+        DataBlock::new(
+            vec![
+                BlockEntry::new(ty.clone(), scalar.clone()),
+                BlockEntry::new(ty.clone(), column),
+            ],
+            2,
+        ),
+    ];
+    let block = DataBlock::concat(&blocks)?;
+    let expect = DataBlock::new(
+        vec![
+            BlockEntry::new(ty.clone(), scalar.clone()),
+            BlockEntry::new(
+                ty.clone(),
+                Value::Column(UInt8Type::from_data(vec![1, 1, 2, 3])),
+            ),
+        ],
+        4,
+    );
+    assert_eq!(block.columns(), expect.columns());
+    assert_eq!(block.num_rows(), expect.num_rows());
     Ok(())
 }
 

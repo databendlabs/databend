@@ -12,93 +12,169 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::ReplyShareObject;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
 use databend_common_meta_app::share::ShareSpec;
-use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::share::ShareTableSpec;
+use log::error;
 use opendal::Operator;
 
+const SHARE_CONFIG_VERSION: u16 = 2;
 const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareSpecVec {
-    share_specs: BTreeMap<String, ext::ShareSpecExt>,
+fn share_dir_prefix() -> String {
+    format!("{}/V{}", SHARE_CONFIG_PREFIX, SHARE_CONFIG_VERSION)
 }
 
-pub fn get_share_spec_location(tenant: &str) -> String {
-    format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
+pub fn get_share_dir(tenant: &str, share_name: &str) -> String {
+    format!("{}/{}/{}", share_dir_prefix(), tenant, share_name)
 }
 
-pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
+pub fn get_share_database_dir(tenant: &str, share_name: &str, db_id: u64) -> String {
+    format!("{}/{}/{}/{}", share_dir_prefix(), tenant, share_name, db_id)
+}
+
+pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
     format!(
-        "{}/{}/{}_table_info.json",
-        SHARE_CONFIG_PREFIX, tenant, share_name
+        "{}/{}/{}/share_specs.json",
+        share_dir_prefix(),
+        tenant,
+        share_name
     )
 }
 
-#[async_backtrace::framed]
-pub async fn save_share_table_info(
+pub fn share_table_info_location(
     tenant: &str,
-    operator: Operator,
-    share_table_info: &[ShareTableInfoMap],
-) -> Result<()> {
-    for (share_name, share_table_info) in share_table_info {
-        let location = share_table_info_location(tenant, share_name);
-        match share_table_info {
-            Some(table_info_map) => {
-                operator
-                    .write(&location, serde_json::to_vec(table_info_map)?)
-                    .await?;
-            }
-            None => {
-                operator.delete(&location).await?;
-            }
-        }
-    }
-
-    Ok(())
+    share_name: &str,
+    db_id: u64,
+    table_id: u64,
+) -> String {
+    format!(
+        "{}/{}/{}/{}/{}_table_info.json",
+        share_dir_prefix(),
+        tenant,
+        share_name,
+        db_id,
+        table_id
+    )
 }
 
 #[async_backtrace::framed]
 pub async fn save_share_spec(
     tenant: &str,
     operator: Operator,
-    spec_vec: Option<Vec<ShareSpec>>,
-    share_table_info: Option<Vec<ShareTableInfoMap>>,
+    share_specs: &[ShareSpec],
 ) -> Result<()> {
-    if let Some(share_spec) = spec_vec {
-        let location = get_share_spec_location(tenant);
-        let mut share_spec_vec = ShareSpecVec::default();
-        for spec in share_spec {
-            let share_name = spec.name.clone();
-            let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-            share_spec_vec
-                .share_specs
-                .insert(share_name, share_spec_ext);
-        }
-        operator
-            .write(&location, serde_json::to_vec(&share_spec_vec)?)
-            .await?;
+    for share_spec in share_specs {
+        let share_name = &share_spec.name;
+        let location = get_share_spec_location(tenant, share_name);
+        let share_spec_ext = ext::ShareSpecExt::from_share_spec(share_spec.clone(), &operator);
+        let data = serde_json::to_string(&share_spec_ext)?;
+        operator.write(&location, data).await?;
     }
 
-    // save share table info
-    if let Some(share_table_info) = share_table_info {
-        save_share_table_info(tenant, operator, &share_table_info).await?
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_table_info(
+    tenant: &str,
+    operator: Operator,
+    share_name: &str,
+    db_id: u64,
+    share_table_id: u64,
+) -> Result<()> {
+    let location = share_table_info_location(tenant, share_name, db_id, share_table_id);
+
+    operator.delete(&location).await?;
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_table_object(
+    tenant: &str,
+    operator: Operator,
+    share_name: &str,
+    revoke_share_object: &[ReplyShareObject],
+) -> Result<()> {
+    for share_object in revoke_share_object {
+        match share_object {
+            ReplyShareObject::Table(db_id, table_id) => {
+                let location = share_table_info_location(tenant, share_name, *db_id, *table_id);
+
+                operator.delete(&location).await?;
+            }
+            ReplyShareObject::Database(db_id) => {
+                let dir = get_share_database_dir(tenant, share_name, *db_id);
+                operator.remove_all(&dir).await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn update_share_table_info(
+    tenant: &str,
+    operator: Operator,
+    share_name_vec: &[String],
+    db_id: u64,
+    share_table_info: &TableInfo,
+) -> Result<()> {
+    let data = serde_json::to_string(share_table_info)?;
+    for share_name in share_name_vec {
+        let location =
+            share_table_info_location(tenant, share_name, db_id, share_table_info.ident.table_id);
+
+        if let Err(e) = operator.write(&location, data.clone()).await {
+            error!(
+                "update_share_table_info of share {} table {} error: {:?}",
+                share_name, share_table_info.name, e
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_dir(
+    tenant: &str,
+    operator: Operator,
+    share_specs: &[ShareSpec],
+) -> Result<()> {
+    for share_spec in share_specs {
+        let dir = get_share_dir(tenant, &share_spec.name);
+        operator.remove_all(&dir).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_db_dir(
+    tenant: &str,
+    operator: Operator,
+    db_id: u64,
+    share_specs: &[ShareSpec],
+) -> Result<()> {
+    for share_spec in share_specs {
+        let dir = get_share_database_dir(tenant, &share_spec.name, db_id);
+        operator.remove_all(&dir).await?;
     }
 
     Ok(())
 }
 
 mod ext {
-    use databend_common_meta_app::share::ShareGrantObjectPrivilege;
     use databend_storages_common_table_meta::table::database_storage_prefix;
     use databend_storages_common_table_meta::table::table_storage_prefix;
-    use enumflags2::BitFlags;
 
     use super::*;
 
@@ -116,12 +192,13 @@ mod ext {
         name: String,
         share_id: u64,
         version: u64,
-        database: Option<WithLocation<ShareDatabaseSpec>>,
+        use_database: Option<WithLocation<ShareDatabaseSpec>>,
+        reference_database: Vec<WithLocation<ShareDatabaseSpec>>,
         tables: Vec<WithLocation<ShareTableSpec>>,
+        reference_tables: Vec<WithLocation<ShareTableSpec>>,
         tenants: Vec<String>,
-        db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
         comment: Option<String>,
-        share_on: Option<DateTime<Utc>>,
+        create_on: DateTime<Utc>,
     }
 
     impl ShareSpecExt {
@@ -130,10 +207,18 @@ mod ext {
                 name: spec.name,
                 share_id: spec.share_id,
                 version: spec.version,
-                database: spec.database.map(|db_spec| WithLocation {
+                use_database: spec.use_database.map(|db_spec| WithLocation {
                     location: shared_database_prefix(operator, db_spec.id),
                     t: db_spec,
                 }),
+                reference_database: spec
+                    .reference_database
+                    .into_iter()
+                    .map(|db_spec| WithLocation {
+                        location: shared_database_prefix(operator, db_spec.id),
+                        t: db_spec,
+                    })
+                    .collect(),
                 tables: spec
                     .tables
                     .into_iter()
@@ -146,10 +231,21 @@ mod ext {
                         t: tbl_spec,
                     })
                     .collect(),
+                reference_tables: spec
+                    .reference_tables
+                    .into_iter()
+                    .map(|tbl_spec| WithLocation {
+                        location: shared_table_prefix(
+                            operator,
+                            tbl_spec.database_id,
+                            tbl_spec.table_id,
+                        ),
+                        t: tbl_spec,
+                    })
+                    .collect(),
                 tenants: spec.tenants,
-                db_privileges: spec.db_privileges,
                 comment: spec.comment.clone(),
-                share_on: spec.share_on,
+                create_on: spec.create_on,
             }
         }
     }

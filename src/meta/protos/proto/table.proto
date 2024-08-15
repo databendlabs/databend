@@ -68,7 +68,9 @@ message TableMeta {
   DataSchema schema = 1;
 
   // Table catalog.
-  string catalog = 10;
+  //
+  // We don't need to store catalog in table meta anymore.
+  reserved 10;
 
   // Table engine.
   string engine = 6;
@@ -111,7 +113,7 @@ message TableMeta {
 
   optional string part_prefix = 27;
 
-  repeated uint64 shared_by = 28; 
+  repeated uint64 shared_by = 28;
 
   map<string, string> column_mask_policy = 29;
 

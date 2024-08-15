@@ -140,6 +140,10 @@ impl ValueType for BinaryType {
         builder.commit_row();
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.commit_row();
     }
@@ -332,16 +336,21 @@ impl BinaryColumnBuilder {
 
     pub fn repeat(scalar: &[u8], n: usize) -> Self {
         let len = scalar.len();
-        let mut data = Vec::with_capacity(len * n);
-        for _ in 0..n {
-            data.extend_from_slice(scalar);
-        }
+        let data = scalar.repeat(n);
         let offsets = once(0)
             .chain((0..n).map(|i| (len * (i + 1)) as u64))
             .collect();
         BinaryColumnBuilder {
             data,
             offsets,
+            need_estimated: false,
+        }
+    }
+
+    pub fn repeat_default(n: usize) -> Self {
+        BinaryColumnBuilder {
+            data: vec![],
+            offsets: vec![0; n + 1],
             need_estimated: false,
         }
     }
@@ -446,6 +455,24 @@ impl BinaryColumnBuilder {
         let start = *self.offsets.get_unchecked(row) as usize;
         let end = *self.offsets.get_unchecked(row + 1) as usize;
         self.data.get_unchecked(start..end)
+    }
+
+    pub fn push_repeat(&mut self, item: &[u8], n: usize) {
+        self.data.reserve(item.len() * n);
+        if self.need_estimated && self.offsets.len() - 1 < 64 {
+            for _ in 0..n {
+                self.data.extend_from_slice(item);
+                self.commit_row();
+            }
+        } else {
+            let start = self.data.len();
+            let len = item.len();
+            for _ in 0..n {
+                self.data.extend_from_slice(item)
+            }
+            self.offsets
+                .extend((1..=n).map(|i| (start + len * i) as u64));
+        }
     }
 
     pub fn pop(&mut self) -> Option<Vec<u8>> {

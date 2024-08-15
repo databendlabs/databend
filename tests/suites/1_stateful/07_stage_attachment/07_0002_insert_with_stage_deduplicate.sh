@@ -3,12 +3,12 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop table if exists sample" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists sample_table" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s1" | $BENDSQL_CLIENT_CONNECT
 
 ## Create table
 cat <<EOF | $BENDSQL_CLIENT_CONNECT
-CREATE TABLE sample
+CREATE TABLE sample_table
 (
     Id      INT NOT NULL,
     City    VARCHAR NOT NULL,
@@ -28,7 +28,7 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" \
   --header 'Content-Type: application/json' \
   --header 'X-DATABEND-DEDUPLICATE-LABEL: insert1' \
   -d '{
-    "sql": "insert into sample (Id, City, Score) values",
+    "sql": "insert into sample_table (Id, City, Score) values",
     "stage_attachment": {
       "location": "@s1/sample.csv"
     },
@@ -37,14 +37,14 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" \
     }
   }' | jq -r '.stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
 
-echo "select * from sample" | $BENDSQL_CLIENT_CONNECT
+echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT
 
 ## Insert again with the same deduplicate_label will have no effect
 curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" \
   --header 'Content-Type: application/json' \
   --header 'X-DATABEND-DEDUPLICATE-LABEL: insert1' \
   -d '{
-    "sql": "insert into sample (Id, City, Score) values",
+    "sql": "insert into sample_table (Id, City, Score) values",
     "stage_attachment": {
       "location": "@s1/sample.csv"
     },
@@ -54,8 +54,8 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" \
   }' | jq -r '.stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
 
 
-echo "select * from sample" | $BENDSQL_CLIENT_CONNECT
+echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT
 
 ### Drop table.
-echo "drop table sample" | $BENDSQL_CLIENT_CONNECT
+echo "drop table sample_table" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s1" | $BENDSQL_CLIENT_CONNECT

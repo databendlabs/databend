@@ -27,8 +27,6 @@ pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
-// Read only attached table options.
-pub const OPT_KEY_TABLE_ATTACHED_READ_ONLY: &str = "read_only_attached";
 
 // the following are used in for delta and iceberg engine
 pub const OPT_KEY_LOCATION: &str = "location";

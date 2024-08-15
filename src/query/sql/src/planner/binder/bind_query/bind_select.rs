@@ -42,7 +42,6 @@ use crate::binder::project_set::SrfCollector;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::plans::ScalarExpr;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 use crate::UdfRewriter;
@@ -50,20 +49,11 @@ use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
-pub struct SelectList<'a> {
-    pub items: Vec<SelectItem<'a>>,
-}
-
-#[derive(Debug)]
-pub struct SelectItem<'a> {
-    pub select_target: &'a SelectTarget,
-    pub scalar: ScalarExpr,
-    pub alias: String,
-}
+pub struct SelectList {}
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(crate) async fn bind_select(
+    pub(crate) fn bind_select(
         &mut self,
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
@@ -71,7 +61,7 @@ impl Binder {
         limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(hints) = &stmt.hints {
-            if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+            if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                 warn!(
                     "In SELECT resolve optimize hints {:?} failed, err: {:?}",
                     hints, e
@@ -80,7 +70,7 @@ impl Binder {
         }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;
-            self.bind_dummy_table(bind_context, select_list).await?
+            self.bind_dummy_table(bind_context, select_list)?
         } else {
             let mut max_column_position = MaxColumnPosition::new();
             stmt.drive(&mut max_column_position);
@@ -102,8 +92,7 @@ impl Binder {
                     },
                 })
                 .unwrap();
-            self.bind_table_reference(bind_context, &cross_joins)
-                .await?
+            self.bind_table_reference(bind_context, &cross_joins)?
         };
 
         let mut rewriter = SelectRewriter::new(
@@ -125,23 +114,18 @@ impl Binder {
         };
 
         // Bind set returning functions
-        s_expr = self
-            .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
-            .await?;
+        s_expr = self.bind_project_set(&mut from_context, &set_returning_functions, s_expr)?;
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
         // Generate a analyzed select list with from context
-        let mut select_list = self
-            .normalize_select_list(&mut from_context, &stmt.select_list)
-            .await?;
+        let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
-            self.analyze_group_items(&mut from_context, &select_list, group_by)
-                .await?;
+            self.analyze_group_items(&mut from_context, &select_list, group_by)?;
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
@@ -159,9 +143,7 @@ impl Binder {
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self
-                .bind_where(&mut from_context, &aliases, expr, s_expr)
-                .await?;
+            let (new_expr, scalar) = self.bind_where(&mut from_context, &aliases, expr, s_expr)?;
             s_expr = new_expr;
             Some(scalar)
         } else {
@@ -176,33 +158,25 @@ impl Binder {
         )?;
 
         let having = if let Some(having) = &stmt.having {
-            Some(
-                self.analyze_aggregate_having(&mut from_context, &aliases, having)
-                    .await?,
-            )
+            Some(self.analyze_aggregate_having(&mut from_context, &aliases, having)?)
         } else {
             None
         };
 
         let qualify = if let Some(qualify) = &stmt.qualify {
-            Some(
-                self.analyze_window_qualify(&mut from_context, &aliases, qualify)
-                    .await?,
-            )
+            Some(self.analyze_window_qualify(&mut from_context, &aliases, qualify)?)
         } else {
             None
         };
 
-        let order_items = self
-            .analyze_order_items(
-                &mut from_context,
-                &mut scalar_items,
-                &aliases,
-                &projections,
-                order_by,
-                stmt.distinct,
-            )
-            .await?;
+        let order_items = self.analyze_order_items(
+            &mut from_context,
+            &mut scalar_items,
+            &aliases,
+            &projections,
+            order_by,
+            stmt.distinct,
+        )?;
 
         // After all analysis is done.
         if set_returning_functions.is_empty() {
@@ -221,23 +195,21 @@ impl Binder {
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
-            s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
+            s_expr = self.bind_aggregate(&mut from_context, s_expr)?;
         }
 
         if let Some(having) = having {
-            s_expr = self.bind_having(&mut from_context, having, s_expr).await?;
+            s_expr = self.bind_having(&mut from_context, having, s_expr)?;
         }
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
         for window_info in &from_context.windows.window_functions {
-            s_expr = self.bind_window_function(window_info, s_expr).await?;
+            s_expr = self.bind_window_function(window_info, s_expr)?;
         }
 
         if let Some(qualify) = qualify {
-            s_expr = self
-                .bind_qualify(&mut from_context, qualify, s_expr)
-                .await?;
+            s_expr = self.bind_qualify(&mut from_context, qualify, s_expr)?;
         }
 
         if stmt.distinct {
@@ -251,15 +223,13 @@ impl Binder {
         }
 
         if !order_by.is_empty() {
-            s_expr = self
-                .bind_order_by(
-                    &from_context,
-                    order_items,
-                    &select_list,
-                    &mut scalar_items,
-                    s_expr,
-                )
-                .await?;
+            s_expr = self.bind_order_by(
+                &from_context,
+                order_items,
+                &select_list,
+                &mut scalar_items,
+                s_expr,
+            )?;
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
@@ -279,7 +249,7 @@ impl Binder {
         // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
-        s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
+        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
 
         // check inverted index license
         if !from_context.inverted_index_map.is_empty() {

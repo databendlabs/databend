@@ -11,11 +11,11 @@
 </h4>
 
 <div>
-<a href="https://link.databend.rs/join-slack">
+<a href="https://link.databend.com/join-slack">
 <img src="https://img.shields.io/badge/slack-databend-0abd59?logo=slack" alt="slack" />
 </a>
 
-<a href="https://link.databend.rs/join-feishu">
+<a href="https://link.databend.com/join-feishu">
 <img src="https://img.shields.io/badge/feishu-databend-0abd59" alt="feishu" />
 </a>
 
@@ -39,7 +39,7 @@
 ## ⚡ Performance
 
 <div align="center">
-  
+
 [TPC-H Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch)
 
 </div>
@@ -47,13 +47,12 @@
 ![Databend vs. Snowflake](https://github.com/datafuselabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
 
 <div align="center">
-  
+
 [Data Ingestion Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/data-ingest)
 
 </div>
 
 ![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
-
 
 ## 🚀 Why Databend
 
@@ -73,9 +72,9 @@
 
 - **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
 
-- **Schemaless**:  [VARIANT data type](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) enabling schemaless data storage and flexible data modeling.
+- **Schemaless**: [VARIANT data type](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) enabling schemaless data storage and flexible data modeling.
 
--  **Flexible Indexing**: [Virtual Column](https://docs.databend.com/guides/performance/virtual-column), [Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index), and [Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index), for faster data retrieval.
+- **Flexible Indexing**: [Virtual Column](https://docs.databend.com/guides/performance/virtual-column), [Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index), and [Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index), for faster data retrieval.
 
 - **Community-Driven**: Join a welcoming community for a user-friendly cloud analytics experience.
 
@@ -98,6 +97,7 @@ docker pull datafuselabs/databend
 ```
 
 To run Databend quickly:
+
 ```shell
 docker run --net=host  datafuselabs/databend
 ```
@@ -123,6 +123,7 @@ docker run --net=host  datafuselabs/databend
 - [How to export a table to TSV file](https://docs.databend.com/guides/unload-data/unload-tsv)
 - [How to load NDJSON file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-ndjson)
 - [How to export a table to NDJSON file](https://docs.databend.com/guides/unload-data/unload-ndjson)
+- [How to load ORC file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-orc)
 
 </details>
 
@@ -132,7 +133,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Sync Full and Incremental MySQL Changes into Databend](https://docs.databend.com/guides/load-data/load-db/debezium)
 - [How to Sync Full and Incremental PostgreSQL Changes into Databend](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
 - [How to Sync Full and Incremental Oracle Changes into Databend](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
- 
+
 </details>
 
 <details>
@@ -142,6 +143,7 @@ docker run --net=host  datafuselabs/databend
 - [How to query directly on CSV file](https://docs.databend.com/guides/load-data/transform/querying-csv)
 - [How to query directly on TSV file](https://docs.databend.com/guides/load-data/transform/querying-tsv)
 - [How to query directly on NDJSON file](https://docs.databend.com/guides/load-data/transform/querying-ndjson)
+- [How to query directly on ORC file](https://docs.databend.com/guides/load-data/transform/querying-orc)
 </details>
 
 <details>
@@ -222,6 +224,7 @@ docker run --net=host  datafuselabs/databend
 - [Data Lifecycle in Databend](https://docs.databend.com/guides/data-management/data-lifecycle)
 - [Data Recovery in Databend](https://docs.databend.com/guides/data-management/data-recovery)
 - [Data Protection in Databend](https://docs.databend.com/guides/data-management/data-protection)
+- [Data Purge in Databend](https://docs.databend.com/guides/data-management/data-recycle)
 
 </details>
 
@@ -246,11 +249,11 @@ docker run --net=host  datafuselabs/databend
 
 <details>
 <summary>Performance</summary>
-  
+
 - [Review Clickbench](https://databend.com/blog/clickbench-databend-top)
 - [TPC-H Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch)
 - [Databend vs. Snowflake: Data Ingestion Benchmark](https://docs.databend.com/guides/benchmark/data-ingest)
-  
+
 </details>
 
 ## 🤝 Contributing
@@ -262,16 +265,14 @@ Here are some resources to help you get started:
 - [Building Databend From Source](https://docs.databend.com/guides/community/contributor/building-from-source)
 - [The First Good Pull Request](https://docs.databend.com/guides/community/contributor/good-pr)
 
-
 ## 👥 Community
 
 For guidance on using Databend, we recommend starting with the official documentation. If you need further assistance, explore the following community channels:
 
-- [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
+- [Slack](https://link.databend.com/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/DatabendLabs/) (Get the news fast)
-- [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
-
+- [I'm feeling lucky](https://link.databend.com/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## 🛣️ Roadmap
 
@@ -285,7 +286,6 @@ Stay updated with Databend's development journey. Here are our roadmap milestone
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 
-
 ## 📜 License
 
 Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt).
@@ -293,7 +293,6 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 When contributing to Databend, you can find the relevant license header in each file.
 
 For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/overview/editions/dee/license).
-
 
 ## 🙏 Acknowledgement
 

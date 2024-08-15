@@ -17,6 +17,9 @@
 mod share;
 
 pub use share::get_share_spec_location;
+pub use share::remove_share_db_dir;
+pub use share::remove_share_dir;
+pub use share::remove_share_table_info;
+pub use share::remove_share_table_object;
 pub use share::save_share_spec;
-pub use share::save_share_table_info;
-pub use share::share_table_info_location;
+pub use share::update_share_table_info;

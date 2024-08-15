@@ -43,12 +43,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -153,9 +151,15 @@ impl<'a> Binder {
         );
 
         let stage_schema = infer_table_schema(&required_values_schema)?;
-        let default_values = self
-            .prepare_default_values(bind_context, &required_values_schema)
-            .await?;
+
+        let default_values = if stage_info.file_format_params.need_field_default() {
+            Some(
+                self.prepare_default_values(bind_context, &required_values_schema)
+                    .await?,
+            )
+        } else {
+            None
+        };
 
         Ok(CopyIntoTablePlan {
             catalog_info,
@@ -173,7 +177,7 @@ impl<'a> Binder {
                 files_to_copy: None,
                 duplicated_files_detected: vec![],
                 is_select: false,
-                default_values: Some(default_values),
+                default_values,
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -192,11 +196,8 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        let use_query = match &plan.stage_table_info.stage_info.file_format_params {
-            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error => true,
-            FileFormatParams::Orc(_) => true,
-            _ => false,
-        };
+        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
 
         if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
@@ -376,9 +377,7 @@ impl<'a> Binder {
             .await?;
 
         // Generate an analyzed select list with from context
-        let select_list = self
-            .normalize_select_list(&mut from_context, select_list)
-            .await?;
+        let select_list = self.normalize_select_list(&mut from_context, select_list)?;
 
         for item in select_list.items.iter() {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
@@ -433,11 +432,7 @@ impl<'a> Binder {
                     },
                 }],
             };
-            if let Some(e) = self
-                .opt_hints_set_var(&mut output_context, &hints)
-                .await
-                .err()
-            {
+            if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
                 warn!(
                     "In COPY resolve optimize hints {:?} failed, err: {:?}",
                     hints, e
@@ -546,7 +541,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         data_schema: &DataSchemaRef,
-    ) -> Result<Vec<Scalar>> {
+    ) -> Result<Vec<RemoteExpr>> {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -556,14 +551,10 @@ impl<'a> Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        let func_ctx = self.ctx.get_function_context()?;
-        let input = DataBlock::empty();
-        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
-
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(data_schema.fields.len());
         for field in &data_schema.fields {
             let expr = scalar_binder.get_default_value(field, data_schema).await?;
-            values.push(evaluator.run(&expr)?.as_scalar().unwrap().clone());
+            values.push(expr.as_remote_expr());
         }
         Ok(values)
     }

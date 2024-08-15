@@ -16,13 +16,20 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::F64;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storage::Histogram;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::table::ChangeType;
 use itertools::Itertools;
 
@@ -39,8 +46,9 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics as OpStatistics;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::optimizer::MAX_SELECTIVITY;
+use crate::plans::ConstantExpr;
+use crate::plans::FunctionCall;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -86,6 +94,7 @@ pub struct Statistics {
     pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
     pub column_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
+    pub histograms: HashMap<IndexType, Option<Histogram>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -101,6 +110,9 @@ pub struct Scan {
     // Whether to update stream columns.
     pub update_stream_columns: bool,
     pub inverted_index: Option<InvertedIndexInfo>,
+    // Lazy row fetch.
+    pub is_lazy_table: bool,
+    pub sample_conf: Option<SampleConfig>,
 
     pub statistics: Arc<Statistics>,
 }
@@ -115,6 +127,14 @@ impl Scan {
             .map(|(col, stat)| (*col, stat.clone()))
             .collect();
 
+        let histograms = self
+            .statistics
+            .histograms
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, hist)| (*col, hist.clone()))
+            .collect();
+
         Scan {
             table_index: self.table_index,
             columns,
@@ -124,20 +144,20 @@ impl Scan {
             statistics: Arc::new(Statistics {
                 table_stats: self.statistics.table_stats,
                 column_stats,
+                histograms,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
+            is_lazy_table: self.is_lazy_table,
+            sample_conf: self.sample_conf.clone(),
         }
     }
 
-    pub fn update_stream_columns(&self, update_stream_columns: bool) -> Self {
-        Scan {
-            update_stream_columns,
-            ..self.clone()
-        }
+    pub fn set_update_stream_columns(&mut self, update_stream_columns: bool) {
+        self.update_stream_columns = update_stream_columns;
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -153,6 +173,57 @@ impl Scan {
 
         used_columns.extend(self.columns.iter());
         used_columns
+    }
+
+    pub fn sample_filter(&self, stats: &Option<TableStatistics>) -> Result<Option<ScalarExpr>> {
+        if let Some(sample_conf) = &self.sample_conf {
+            let rand = match sample_conf {
+                SampleConfig::Probability(probability) => probability.as_double()? / 100.0,
+                SampleConfig::RowsNum(rows) => {
+                    let rows = if let Literal::UInt64(rows) = rows {
+                        *rows
+                    } else {
+                        return Err(ErrorCode::SyntaxException(
+                            "Sample rows should be a positive integer".to_string(),
+                        ));
+                    };
+                    if let Some(stats) = stats {
+                        if let Some(row_num) = stats.num_rows
+                            && row_num > 0
+                        {
+                            rows as f64 / row_num as f64
+                        } else {
+                            return Err(ErrorCode::Internal(
+                                "Number of rows in stats is invalid".to_string(),
+                            ));
+                        }
+                    } else {
+                        return Err(ErrorCode::Internal(
+                            "Table statistics is not available".to_string(),
+                        ));
+                    }
+                }
+            };
+            let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "rand".to_string(),
+                params: vec![],
+                arguments: vec![],
+            });
+            return Ok(Some(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "lte".to_string(),
+                params: vec![],
+                arguments: vec![
+                    rand_expr,
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::Float64(F64::from(rand))),
+                    }),
+                ],
+            })));
+        }
+        Ok(None)
     }
 }
 
@@ -222,13 +293,17 @@ impl Operator for Scan {
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
                 let ndv = col_stat.ndv.unwrap();
-                let histogram = histogram_from_ndv(
-                    ndv,
-                    num_rows,
-                    Some((min.clone(), max.clone())),
-                    DEFAULT_HISTOGRAM_BUCKETS,
-                )
-                .ok();
+                let histogram = if let Some(histogram) = self.statistics.histograms.get(k) {
+                    histogram.clone()
+                } else {
+                    histogram_from_ndv(
+                        ndv,
+                        num_rows,
+                        Some((min.clone(), max.clone())),
+                        DEFAULT_HISTOGRAM_BUCKETS,
+                    )
+                    .ok()
+                };
                 let column_stat = ColumnStat {
                     min,
                     max,

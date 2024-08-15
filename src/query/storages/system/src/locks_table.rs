@@ -87,6 +87,7 @@ impl AsyncSystemTable for LocksTable {
                                 }
                             }
                         }
+                        Ok(())
                     });
                 }
             }

@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -26,6 +25,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::InputColumns;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -147,7 +147,7 @@ pub(crate) fn dedup_build_key_column(
 // Get row hash by HashMethod
 pub fn hash_by_method<T>(
     method: &HashMethodKind,
-    columns: &[(Column, DataType)],
+    columns: InputColumns,
     num_rows: usize,
     hashes: &mut T,
 ) -> Result<()>

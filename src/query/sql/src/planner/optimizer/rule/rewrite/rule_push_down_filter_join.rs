@@ -35,6 +35,7 @@ use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -195,22 +196,19 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
         return Ok((false, s_expr.clone()));
     }
 
-    if !matches!(join.join_type, JoinType::Full) {
+    if !matches!(join.join_type, JoinType::Full) && !join.has_null_equi_condition() {
         // Infer new predicate and push down filter.
-        for (left_condition, right_condition) in join
-            .left_conditions
-            .iter()
-            .zip(join.right_conditions.iter())
-        {
+        for equi_condition in join.equi_conditions.iter() {
+            let left = equi_condition.left.clone();
+            let right = equi_condition.right.clone();
             push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
-                arguments: vec![left_condition.clone(), right_condition.clone()],
+                arguments: vec![left, right],
             }));
         }
-        join.left_conditions.clear();
-        join.right_conditions.clear();
+        join.equi_conditions.clear();
         match join.join_type {
             JoinType::Left | JoinType::LeftSingle => {
                 push_down_predicates.extend(left_push_down);
@@ -251,8 +249,11 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
                 right_push_down.push(predicate);
             }
             JoinPredicate::Both { left, right, .. } => {
-                join.left_conditions.push(left.clone());
-                join.right_conditions.push(right.clone());
+                join.equi_conditions.push(JoinEquiCondition::new(
+                    left.clone(),
+                    right.clone(),
+                    false,
+                ));
             }
             _ => original_predicates.push(predicate),
         }

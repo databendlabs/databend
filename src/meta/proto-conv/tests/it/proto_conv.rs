@@ -30,14 +30,19 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::ShareCatalogOption;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
-use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::share::ShareCredential;
+use databend_common_meta_app::share::ShareCredentialHmac;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
+use enumflags2::BitFlags;
 use maplit::btreemap;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -57,6 +62,8 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
+        using_share_endpoint: Some("endpoint".to_string()),
+        from_share_db_id: Some(ShareDbId::Usage(1024)),
     }
 }
 
@@ -71,10 +78,12 @@ fn new_db_meta() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
+        using_share_endpoint: None,
+        from_share_db_id: None,
     }
 }
 
-fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
+fn new_share_meta_share_from_db_ids() -> share::ShareMetaV1 {
     let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
@@ -91,7 +100,7 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
     );
     entries.insert(entry.to_string().clone(), entry);
 
-    share::ShareMeta {
+    share::ShareMetaV1 {
         database: Some(db_entry),
         entries,
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
@@ -102,7 +111,7 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
     }
 }
 
-fn new_share_meta() -> share::ShareMeta {
+fn new_share_meta_v1() -> share::ShareMetaV1 {
     let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
@@ -119,7 +128,7 @@ fn new_share_meta() -> share::ShareMeta {
     );
     entries.insert(entry.to_string().clone(), entry);
 
-    share::ShareMeta {
+    share::ShareMetaV1 {
         database: Some(db_entry),
         entries,
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
@@ -127,6 +136,76 @@ fn new_share_meta() -> share::ShareMeta {
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
+    }
+}
+
+fn new_share_meta() -> share::ShareMeta {
+    let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
+
+    let use_database = Some(share::ShareDatabase {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::Usage),
+        db_name: "db".to_string(),
+        db_id: 4,
+        grant_on: now,
+    });
+
+    let reference_database = vec![share::ShareDatabase {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::ReferenceUsage),
+        db_name: "db1".to_string(),
+        db_id: 5,
+        grant_on: now,
+    }];
+
+    let mut view_reference_table = BTreeSet::new();
+    view_reference_table.insert(42);
+    let table = vec![share::ShareTable {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::Select),
+        table_name: "table".to_string(),
+        db_id: 4,
+        table_id: 41,
+        grant_on: now,
+        engine: "VIEW".to_string(),
+        view_reference_table,
+    }];
+
+    let mut reference_by = BTreeSet::new();
+    reference_by.insert(41);
+    let reference_table = vec![share::ShareReferenceTable {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::ReferenceUsage),
+        table_name: "table".to_string(),
+        db_id: 5,
+        table_id: 42,
+        grant_on: now,
+        engine: "FUSE".to_string(),
+        reference_by,
+    }];
+
+    share::ShareMeta {
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
+        comment: Some(s("comment")),
+        create_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        update_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+
+        use_database,
+        reference_database,
+        table,
+        reference_table,
+    }
+}
+
+fn new_share_endpoint_meta() -> share::ShareEndpointMeta {
+    let create_on = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
+    let mut args: BTreeMap<String, String> = BTreeMap::new();
+    args.insert("key".to_string(), "value".to_string());
+    share::ShareEndpointMeta {
+        url: "http://127.0.0.1:2222".to_string(),
+        tenant: "".to_string(),
+        args,
+        comment: Some("comment".to_string()),
+        create_on,
+        credential: Some(ShareCredential::HMAC(ShareCredentialHmac {
+            key: "hello".to_string(),
+        })),
     }
 }
 
@@ -205,7 +284,6 @@ fn new_table_meta() -> mt::TableMeta {
             ],
             btreemap! {s("a") => s("b")},
         )),
-        catalog: "default".to_string(),
         engine: "44".to_string(),
         storage_params: None,
         part_prefix: "".to_string(),
@@ -321,17 +399,23 @@ fn new_table_statistics() -> databend_common_meta_app::schema::TableStatistics {
 
 fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
     databend_common_meta_app::schema::CatalogMeta {
-        catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
-            storage_params: Box::new(databend_common_meta_app::storage::StorageParams::S3(
-                StorageS3Config {
-                    endpoint_url: "http://127.0.0.1:9900".to_string(),
-                    region: "hello".to_string(),
-                    bucket: "world".to_string(),
-                    access_key_id: "databend_has_super_power".to_string(),
-                    secret_access_key: "databend_has_super_power".to_string(),
-                    ..Default::default()
-                },
-            )),
+        catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Rest(
+            IcebergRestCatalogOption {
+                uri: "http://127.0.0.1:9900".to_string(),
+                warehouse: "databend_has_super_power".to_string(),
+                props: Default::default(),
+            },
+        )),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+    }
+}
+
+fn new_share_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
+    databend_common_meta_app::schema::CatalogMeta {
+        catalog_option: CatalogOption::Share(ShareCatalogOption {
+            provider: "provider".to_string(),
+            share_name: "test".to_string(),
+            share_endpoint: "share_endpoint".to_string(),
         }),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
     }
@@ -349,6 +433,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let got = mt::TableMeta::from_pb(p)?;
     assert_eq!(tbl, got);
 
+    let share_v1 = new_share_meta_v1();
+    let p = share_v1.to_pb()?;
+    let got = share::ShareMetaV1::from_pb(p)?;
+    assert_eq!(share_v1, got);
+
     let share = new_share_meta();
     let p = share.to_pb()?;
     let got = share::ShareMeta::from_pb(p)?;
@@ -358,6 +447,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let p = share_account_meta.to_pb()?;
     let got = share::ShareAccountMeta::from_pb(p)?;
     assert_eq!(share_account_meta, got);
+
+    let share_endpoint_meta = new_share_endpoint_meta();
+    let p = share_endpoint_meta.to_pb()?;
+    let got = share::ShareEndpointMeta::from_pb(p)?;
+    assert_eq!(share_endpoint_meta, got);
 
     let index = new_index_meta();
     let p = index.to_pb()?;
@@ -418,9 +512,19 @@ fn test_incompatible() -> anyhow::Result<()> {
 fn test_build_pb_buf() -> anyhow::Result<()> {
     // build serialized buf of protobuf data, for backward compatibility test with a new version binary.
 
-    // DatabaseMeta
+    // share DatabaseMeta
     {
         let db_meta = new_db_meta_share();
+        let p = db_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("db from share:{:?}", buf);
+    }
+
+    // DatabaseMeta
+    {
+        let db_meta = new_db_meta();
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];
@@ -439,7 +543,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("table:{:?}", buf);
     }
 
-    // ShareMeta
+    // ShareMetaV1
     {
         let tbl = new_share_meta_share_from_db_ids();
 
@@ -447,7 +551,18 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
-        println!("share:{:?}", buf);
+        println!("share meta v1:{:?}", buf);
+    }
+
+    // ShareMeta
+    {
+        let tbl = new_share_meta();
+
+        let p = tbl.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("share meta v2:{:?}", buf);
     }
 
     // ShareAccountMeta
@@ -459,6 +574,17 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("share account:{:?}", buf);
+    }
+
+    // ShareEndpointMeta
+    {
+        let share_endpoint_meta = new_share_endpoint_meta();
+
+        let p = share_endpoint_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("share endpoint meta:{:?}", buf);
     }
 
     // IndexMeta
@@ -538,6 +664,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("catalog catalog_meta:{:?}", buf);
+    }
+
+    // share catalog meta
+    {
+        let catalog_meta = new_share_catalog_meta();
+        let p = catalog_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("share catalog catalog_meta:{:?}", buf);
     }
 
     // lvt

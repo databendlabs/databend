@@ -175,8 +175,7 @@ impl ExpressionScanContext {
 }
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_values(
+    pub(crate) fn bind_values(
         &mut self,
         bind_context: &mut BindContext,
         span: Span,
@@ -191,7 +190,6 @@ impl Binder {
             values,
             Some(&mut self.expression_scan_context),
         )
-        .await
     }
 
     fn check_values_semantic(span: Span, values: &[Vec<AExpr>]) -> Result<()> {
@@ -212,6 +210,7 @@ impl Binder {
     }
 
     // Remove unused cache columns and join conditions and construct ExpressionScan's child.
+    #[recursive::recursive]
     pub fn construct_expression_scan(
         &mut self,
         s_expr: &SExpr,
@@ -239,20 +238,13 @@ impl Binder {
                 }
 
                 // Remove unused join conditions.
-                let join_conditions = [join.left_conditions.clone(), join.right_conditions.clone()];
-                for index in (0..join.left_conditions.len()).rev() {
-                    let mut used = false;
-                    for conditions in join_conditions.iter() {
-                        let used_columns = conditions[index].used_columns();
-                        if used_columns.is_subset(&left_correlated_columns) {
-                            used = true;
-                            break;
-                        }
-                    }
-
-                    if !used {
-                        join.left_conditions.remove(index);
-                        join.right_conditions.remove(index);
+                for index in (0..join.equi_conditions.len()).rev() {
+                    let left_used_columns = join.equi_conditions[index].left.used_columns();
+                    let right_used_columns = join.equi_conditions[index].right.used_columns();
+                    if !left_used_columns.is_subset(&left_correlated_columns)
+                        && !right_used_columns.is_subset(&left_correlated_columns)
+                    {
+                        join.equi_conditions.remove(index);
                     }
                 }
 
@@ -382,7 +374,7 @@ impl Binder {
     }
 }
 
-pub async fn bind_values(
+pub fn bind_values(
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     metadata: MetadataRef,
@@ -415,7 +407,7 @@ pub async fn bind_values(
 
     for (row_idx, row) in values.iter().enumerate() {
         for (column_idx, expr) in row.iter().enumerate() {
-            let (scalar, data_type) = scalar_binder.bind(expr).await?;
+            let (scalar, data_type) = scalar_binder.bind(expr)?;
             let used_columns = scalar.used_columns();
             if !used_columns.is_empty() {
                 if let Some(expression_scan_info) = expression_scan_info.as_ref() {

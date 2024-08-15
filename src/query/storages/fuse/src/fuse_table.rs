@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -55,7 +57,6 @@ use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
-use databend_common_storage::ShareTableConfig;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
@@ -76,7 +77,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
 use log::warn;
@@ -87,6 +87,7 @@ use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
@@ -133,7 +134,7 @@ impl FuseTable {
             DatabaseType::ShareDB(_) => false,
             DatabaseType::NormalDB => {
                 table_info.meta.storage_params.is_some()
-                    && Self::is_table_attached_read_only(&table_info.meta.options)
+                    && Self::is_table_attached(&table_info.meta.options)
             }
         };
 
@@ -161,13 +162,9 @@ impl FuseTable {
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_ident) => {
-                let operator = create_share_table_operator(
-                    ShareTableConfig::share_endpoint_address(),
-                    ShareTableConfig::share_endpoint_token(),
-                    &share_ident,
-                    &table_info.name,
-                )?;
+            DatabaseType::ShareDB(share_params) => {
+                let operator =
+                    create_share_table_operator(&share_params, table_info.ident.table_id)?;
                 (operator, FuseTableType::SharedReadOnly)
             }
             DatabaseType::NormalDB => {
@@ -177,9 +174,7 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
 
-                        let table_type = if Self::is_table_attached_read_only(table_meta_options) {
-                            FuseTableType::AttachedReadOnly
-                        } else if Self::is_table_attached(table_meta_options) {
+                        let table_type = if Self::is_table_attached(table_meta_options) {
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
@@ -301,7 +296,7 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_statistics(
         &self,
@@ -329,11 +324,25 @@ impl FuseTable {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        self.read_table_snapshot_with_reader(reader).await
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
+        self.read_table_snapshot_with_reader(reader).await
+    }
+
+    async fn read_table_snapshot_with_reader(
+        &self,
+        reader: TableSnapshotReader,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version(Some(loc.clone())).await?;
             let params = LoadParams {
                 location: loc,
@@ -355,7 +364,7 @@ impl FuseTable {
             self.snapshot_loc().await?
         };
         // If no snapshot location here, indicates that there are no data of this table yet
-        // in this case, we just returns the current snapshot version
+        // in this case, we just return the current snapshot version
         Ok(location_opt.map_or(TableSnapshot::VERSION, |loc| {
             TableMetaLocationGenerator::snapshot_version(loc.as_str())
         }))
@@ -381,9 +390,8 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
-                if options.get(OPT_KEY_TABLE_ATTACHED_READ_ONLY).is_some() {
-                    // if table is read-only attached, parse snapshot location from hint
-                    let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
+                if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
+                    // if table is attached, parse snapshot location from hint file
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
                     let snapshot_loc = {
                         let hint_content = self.operator.read(&hint).await?.to_vec();
@@ -441,16 +449,9 @@ impl FuseTable {
     }
 
     // Check if table is attached.
-    fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
+    pub fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
         table_meta_options
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
-            .is_some()
-    }
-
-    // Check if table is read-only attached.
-    fn is_table_attached_read_only(table_meta_options: &BTreeMap<String, String>) -> bool {
-        table_meta_options
-            .get(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
             .is_some()
     }
 
@@ -654,7 +655,7 @@ impl Table for FuseTable {
         .await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -665,7 +666,7 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -706,13 +707,13 @@ impl Table for FuseTable {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn purge(
         &self,
@@ -739,6 +740,7 @@ impl Table for FuseTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         if let Some(desc) = &self.changes_desc {
@@ -749,7 +751,7 @@ impl Table for FuseTable {
         }
 
         let stats = match self.table_type {
-            FuseTableType::AttachedReadOnly => {
+            FuseTableType::Attached if require_fresh => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
@@ -792,12 +794,14 @@ impl Table for FuseTable {
             if let Some(table_statistics) = table_statistics {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
+                    table_statistics.histograms.clone(),
                     Some(table_statistics.column_distinct_values()),
                     snapshot.summary.row_count,
                 )
             } else {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
+                    HashMap::new(),
                     None,
                     snapshot.summary.row_count,
                 )
@@ -808,7 +812,7 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
@@ -843,13 +847,14 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         _ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
         _consume: bool,
     ) -> Result<String> {
+        let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {
             seq,
             desc,
@@ -858,12 +863,11 @@ impl Table for FuseTable {
         }) = self.changes_desc.as_ref()
         else {
             return Err(ErrorCode::Internal(format!(
-                "No changes descriptor found in table {} {}",
-                database_name, table_name
+                "No changes descriptor found in table {db_tb_name}"
             )));
         };
 
-        self.check_changes_valid(database_name, table_name, *seq)?;
+        self.check_changes_valid(&db_tb_name, *seq)?;
         self.get_changes_query(
             mode,
             location,
@@ -900,6 +904,16 @@ impl Table for FuseTable {
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
         self.do_compact_blocks(ctx, limits).await
+    }
+
+    #[async_backtrace::framed]
+    async fn recluster(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
+        self.do_recluster(ctx, push_downs, limit).await
     }
 
     #[async_backtrace::framed]

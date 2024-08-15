@@ -167,6 +167,16 @@ pub fn walk_table_ref<'a, V: Visitor<'a>>(visitor: &mut V, table: &'a TableRef) 
     visitor.visit_identifier(&table.table);
 }
 
+pub fn walk_dictionary_ref<'a, V: Visitor<'a>>(visitor: &mut V, dictionary: &'a DictionaryRef) {
+    if let Some(catalog) = &dictionary.catalog {
+        visitor.visit_identifier(catalog);
+    }
+    if let Some(database) = &dictionary.database {
+        visitor.visit_identifier(database);
+    }
+    visitor.visit_identifier(&dictionary.dictionary_name);
+}
+
 pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query) {
     let Query {
         with,
@@ -401,7 +411,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             options,
             query,
         } => visitor.visit_explain(kind, options, query),
-        Statement::ExplainAnalyze { query } => visitor.visit_statement(query),
+        Statement::ExplainAnalyze { query, .. } => visitor.visit_statement(query),
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
@@ -429,12 +439,15 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             kill_target,
             object_id,
         } => visitor.visit_kill(kill_target, object_id),
-        Statement::SetVariable {
-            is_global,
-            variable,
-            value,
-        } => visitor.visit_set_variable(*is_global, variable, value),
-        Statement::UnSetVariable(stmt) => visitor.visit_unset_variable(stmt),
+        Statement::SetStmt {
+            set_type,
+            identifiers,
+            values,
+        } => visitor.visit_set(*set_type, identifiers, values),
+        Statement::UnSetStmt {
+            unset_type,
+            identifiers,
+        } => visitor.visit_unset(*unset_type, identifiers.as_slice()),
         Statement::SetRole {
             is_default,
             role_name,
@@ -469,6 +482,12 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::VacuumTemporaryFiles(stmt) => visitor.visit_vacuum_temporary_files(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
+        Statement::CreateDictionary(stmt) => visitor.visit_create_dictionary(stmt),
+        Statement::DropDictionary(stmt) => visitor.visit_drop_dictionary(stmt),
+        Statement::ShowCreateDictionary(stmt) => visitor.visit_show_create_dictionary(stmt),
+        Statement::ShowDictionaries { show_options } => {
+            visitor.visit_show_dictionaries(show_options)
+        }
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
@@ -597,5 +616,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             priority,
             object_id,
         } => visitor.visit_set_priority(priority, object_id),
+        Statement::System(stmt) => visitor.visit_system(stmt),
     }
 }

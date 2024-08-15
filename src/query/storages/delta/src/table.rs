@@ -45,14 +45,12 @@ use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
 use deltalake::DeltaTableBuilder;
-use opendal::Metakey;
+use object_store_opendal::OpendalStore;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::OnceCell;
 use url::Url;
 
-// use object_store_opendal::OpendalStore;
-use crate::dal::OpendalStore;
 use crate::partition::DeltaPartInfo;
 use crate::partition_columns::get_partition_values;
 use crate::partition_columns::get_pushdown_without_partition_columns;
@@ -73,14 +71,17 @@ pub struct DeltaTableMeta {
 
 /// In a delta table, partition columns are not stored in parquet file.
 /// so it needs a few efforts to make pushdown work:
+///
 /// - context:
 ///   - Table store partition column names in meta.engine_options.
 ///   - Each partition carries all partition column values in the same order.
 ///   - With this order, we can get need info with a PartitionIndex.
+///
 /// - pushdown:
 ///   - projections (mask): partition columns are excluded when read parquet file and inserted at last.
 ///   - filter pass to parquet reader: all partition columns are appended to the filter input columns.
 ///   - pruner: ColumnRef of partition columns in filter expr are replace with const scalars.
+///
 /// Type of partition columns can only be simple primitive types.
 impl DeltaTable {
     #[async_backtrace::framed]
@@ -156,7 +157,7 @@ impl DeltaTable {
     #[async_backtrace::framed]
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
         let op = init_operator(sp)?;
-        let opendal_store = Arc::new(OpendalStore::new(op).with_metakey(Metakey::Version));
+        let opendal_store = Arc::new(OpendalStore::new(op));
 
         let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())
             .with_storage_backend(opendal_store, Url::from_directory_path("/").unwrap())
@@ -244,7 +245,7 @@ impl DeltaTable {
             None
         };
         let mut builder =
-            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, &arrow_schema)?
+            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, arrow_schema)?
                 .with_options(read_options)
                 .with_push_downs(push_downs.as_ref())
                 .with_pruner(Some(pruner))
@@ -267,7 +268,7 @@ impl DeltaTable {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,

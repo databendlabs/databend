@@ -59,8 +59,7 @@ impl Binder {
                 alias: None,
             };
 
-            let (s_expr, bind_context) =
-                self.bind_table_reference(bind_context, &table_ref).await?;
+            let (s_expr, bind_context) = self.bind_table_reference(bind_context, &table_ref)?;
 
             let select_plan = Plan::Query {
                 s_expr: Box::new(s_expr),
@@ -96,7 +95,7 @@ impl Binder {
                 self.m_cte_bound_ctx.clone(),
                 self.ctes_map.clone(),
             );
-            let (condition, _) = scalar_binder.bind(&when_clause.condition).await?;
+            let (condition, _) = scalar_binder.bind(&when_clause.condition)?;
             if !matches!(condition.data_type()?.remove_nullable(), DataType::Boolean) {
                 return Err(ErrorCode::IllegalDataType(
                     "The condition in WHEN clause must be a boolean expression".to_string(),
@@ -250,7 +249,7 @@ impl Binder {
                 for source_column in source_columns {
                     match source_column {
                         SourceExpr::Expr(expr) => {
-                            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+                            let (scalar_expr, _) = scalar_binder.bind(expr)?;
                             source_scalar_exprs.push(scalar_expr);
                         }
                         SourceExpr::Default => {

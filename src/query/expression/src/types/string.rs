@@ -140,6 +140,10 @@ impl ValueType for StringType {
         builder.commit_row();
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.commit_row();
     }
@@ -464,18 +468,22 @@ impl StringColumnBuilder {
     }
 
     pub fn repeat(scalar: &str, n: usize) -> Self {
-        let bytes = scalar.as_bytes();
-        let len = bytes.len();
-        let mut data = Vec::with_capacity(len * n);
-        for _ in 0..n {
-            data.extend_from_slice(bytes);
-        }
+        let len = scalar.len();
+        let data = scalar.as_bytes().repeat(n);
         let offsets = once(0)
             .chain((0..n).map(|i| (len * (i + 1)) as u64))
             .collect();
         StringColumnBuilder {
             data,
             offsets,
+            need_estimated: false,
+        }
+    }
+
+    pub fn repeat_default(n: usize) -> Self {
+        StringColumnBuilder {
+            data: vec![],
+            offsets: vec![0; n + 1],
             need_estimated: false,
         }
     }
@@ -586,6 +594,24 @@ impl StringColumnBuilder {
         bytes.check_utf8().unwrap();
 
         std::str::from_utf8_unchecked(bytes)
+    }
+
+    pub fn push_repeat(&mut self, item: &str, n: usize) {
+        self.data.reserve(item.len() * n);
+        if self.need_estimated && self.offsets.len() - 1 < 64 {
+            for _ in 0..n {
+                self.data.extend_from_slice(item.as_bytes());
+                self.commit_row();
+            }
+        } else {
+            let start = self.data.len();
+            let len = item.len();
+            for _ in 0..n {
+                self.data.extend_from_slice(item.as_bytes());
+            }
+            self.offsets
+                .extend((1..=n).map(|i| (start + len * i) as u64));
+        }
     }
 
     pub fn pop(&mut self) -> Option<String> {

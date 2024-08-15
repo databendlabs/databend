@@ -21,13 +21,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar as DataScalar;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
 pub struct TransformAddConstColumns {
@@ -43,14 +39,12 @@ where Self: Transform
     /// output_schema has all 3 columns,
     /// input_schema has columns (a, c) to load data from attachment,
     /// const_values contains a scalar 1
-    pub fn try_create(
+    pub fn try_new(
         ctx: Arc<QueryContext>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         mut const_values: Vec<DataScalar>,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Self> {
         let fields = output_schema.fields();
         let mut exprs = Vec::with_capacity(fields.len());
 
@@ -83,14 +77,10 @@ where Self: Transform
             }],
         };
 
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            Self {
-                expression_transform,
-                input_len: input_schema.num_fields(),
-            },
-        )))
+        Ok(Self {
+            expression_transform,
+            input_len: input_schema.num_fields(),
+        })
     }
 }
 

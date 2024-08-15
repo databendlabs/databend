@@ -19,8 +19,8 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_storages_common_txn::TxnManager;
+use fastrace::func_name;
 use log::debug;
-use minitrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
@@ -52,7 +52,7 @@ async fn check_stream_status(
         .await?;
     let stream = StreamTable::try_from_table(tbl.as_ref())?;
 
-    let table_id = stream.source_table_id();
+    let table_id = stream.source_table_id()?;
     let seqv = catalog
         .get_table_meta_by_id(table_id)
         .await?
@@ -62,7 +62,7 @@ async fn check_stream_status(
         })?;
 
     Ok(StreamStatusResponse {
-        has_data: seqv.seq != stream.offset(),
+        has_data: seqv.seq != stream.offset()?,
         params: params.0,
     })
 }
@@ -75,7 +75,7 @@ pub async fn stream_status_handler(
     params: Query<StreamStatusQuery>,
 ) -> poem::Result<impl IntoResponse> {
     debug!(
-        "check_stream_stauts: tenant: {}, params: {:?}",
+        "check_stream_status: tenant: {}, params: {:?}",
         tenant, params
     );
 

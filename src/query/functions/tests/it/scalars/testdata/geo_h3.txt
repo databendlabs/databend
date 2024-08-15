@@ -2,9 +2,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo(-1)
-  | ^^^^^^^^^^^^^ no overload satisfies `h3_to_geo(Int16)`
+  | ^^^^^^^^^^^^^ no function matches signature `h3_to_geo(Int16)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   h3_to_geo(UInt64) :: Tuple(Float64, Float64)            : unable to unify `Int16` with `UInt64`
   h3_to_geo(UInt64 NULL) :: Tuple(Float64, Float64) NULL  : unable to unify `Int16` with `UInt64`
 
@@ -14,7 +14,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo(0)
-  | ^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_geo(0)`
+  | ^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_geo(0)` in expr `h3_to_geo(to_uint64(0))`
 
 
 
@@ -22,7 +22,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo(1)
-  | ^^^^^^^^^^^^ invalid cell index (got Some(1)): invalid index mode while evaluating function `h3_to_geo(1)`
+  | ^^^^^^^^^^^^ invalid cell index (got Some(1)): invalid index mode while evaluating function `h3_to_geo(1)` in expr `h3_to_geo(to_uint64(1))`
 
 
 
@@ -61,9 +61,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo_boundary(-1)
-  | ^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `h3_to_geo_boundary(Int16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `h3_to_geo_boundary(Int16)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   h3_to_geo_boundary(UInt64) :: Array(Tuple(Float64, Float64))            : unable to unify `Int16` with `UInt64`
   h3_to_geo_boundary(UInt64 NULL) :: Array(Tuple(Float64, Float64)) NULL  : unable to unify `Int16` with `UInt64`
 
@@ -73,7 +73,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo_boundary(0)
-  | ^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_geo_boundary(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_geo_boundary(0)` in expr `h3_to_geo_boundary(to_uint64(0))`
 
 
 
@@ -81,7 +81,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo_boundary(1)
-  | ^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(1)): invalid index mode while evaluating function `h3_to_geo_boundary(1)`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(1)): invalid index mode while evaluating function `h3_to_geo_boundary(1)` in expr `h3_to_geo_boundary(to_uint64(1))`
 
 
 
@@ -121,9 +121,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(-1, 1)
-  | ^^^^^^^^^^^^^^^^ no overload satisfies `h3_k_ring(Int16, UInt8)`
+  | ^^^^^^^^^^^^^^^^ no function matches signature `h3_k_ring(Int16, UInt8)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   h3_k_ring(UInt64, UInt32) :: Array(UInt64)                 : unable to unify `Int16` with `UInt64`
   h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL  : unable to unify `Int16` with `UInt64`
 
@@ -133,7 +133,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(0, 0)
-  | ^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_k_ring(0, 0)`
+  | ^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_k_ring(0, 0)` in expr `h3_k_ring(to_uint64(0), to_uint32(0))`
 
 
 
@@ -141,9 +141,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(0, -1)
-  | ^^^^^^^^^^^^^^^^ no overload satisfies `h3_k_ring(UInt8, Int16)`
+  | ^^^^^^^^^^^^^^^^ no function matches signature `h3_k_ring(UInt8, Int16)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   h3_k_ring(UInt64, UInt32) :: Array(UInt64)                 : unable to unify `Int16` with `UInt32`
   h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL  : unable to unify `Int16` with `UInt32`
 
@@ -153,9 +153,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(644325524701193974, -1)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `h3_k_ring(UInt64, Int16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `h3_k_ring(UInt64, Int16)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   h3_k_ring(UInt64, UInt32) :: Array(UInt64)                 : unable to unify `Int16` with `UInt32`
   h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL  : unable to unify `Int16` with `UInt32`
 
@@ -267,7 +267,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_resolution(0)
-  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_resolution(0)`
+  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_resolution(0)` in expr `h3_get_resolution(to_uint64(0))`
 
 
 
@@ -334,7 +334,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_edge_length_m(16)
-  | ^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_length_m(16)`
+  | ^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_length_m(16)` in expr `h3_edge_length_m(16)`
 
 
 
@@ -392,7 +392,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_edge_length_km(16)
-  | ^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_length_km(16)`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_length_km(16)` in expr `h3_edge_length_km(16)`
 
 
 
@@ -423,7 +423,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_base_cell(0)
-  | ^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_base_cell(0)`
+  | ^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_base_cell(0)` in expr `h3_get_base_cell(to_uint64(0))`
 
 
 
@@ -490,7 +490,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_hex_area_m2(16)
-  | ^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_hex_area_m2(16)`
+  | ^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_hex_area_m2(16)` in expr `h3_hex_area_m2(16)`
 
 
 
@@ -548,7 +548,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_hex_area_km2(16)
-  | ^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_hex_area_km2(16)`
+  | ^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_hex_area_km2(16)` in expr `h3_hex_area_km2(16)`
 
 
 
@@ -579,7 +579,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_indexes_are_neighbors(0, 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_indexes_are_neighbors(0, 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_indexes_are_neighbors(0, 0)` in expr `h3_indexes_are_neighbors(to_uint64(0), to_uint64(0))`
 
 
 
@@ -629,7 +629,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_children(0, 1)
-  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_children(0, 1)`
+  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_children(0, 1)` in expr `h3_to_children(to_uint64(0), 1)`
 
 
 
@@ -646,7 +646,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_children(644325524701193974, 16)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_to_children(644325524701193974, 16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_to_children(644325524701193974, 16)` in expr `h3_to_children(644325524701193974, 16)`
 
 
 
@@ -678,7 +678,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_parent(0, 1)
-  | ^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_parent(0, 1)`
+  | ^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_parent(0, 1)` in expr `h3_to_parent(to_uint64(0), 1)`
 
 
 
@@ -686,7 +686,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_parent(635318325446452991, 16)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_to_parent(635318325446452991, 16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_to_parent(635318325446452991, 16)` in expr `h3_to_parent(635318325446452991, 16)`
 
 
 
@@ -736,7 +736,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_string(0)
-  | ^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_string(0)`
+  | ^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_string(0)` in expr `h3_to_string(to_uint64(0))`
 
 
 
@@ -775,7 +775,7 @@ error:
   --> SQL:1:1
   |
 1 | string_to_h3('')
-  | ^^^^^^^^^^^^^^^^ invalid cell index (got None): invalid 64-bit hex number while evaluating function `string_to_h3('')`
+  | ^^^^^^^^^^^^^^^^ invalid cell index (got None): invalid 64-bit hex number while evaluating function `string_to_h3('')` in expr `string_to_h3('')`
 
 
 
@@ -783,7 +783,7 @@ error:
   --> SQL:1:1
   |
 1 | string_to_h3('xxxx')
-  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got None): invalid 64-bit hex number while evaluating function `string_to_h3('xxxx')`
+  | ^^^^^^^^^^^^^^^^^^^^ invalid cell index (got None): invalid 64-bit hex number while evaluating function `string_to_h3('xxxx')` in expr `string_to_h3('xxxx')`
 
 
 
@@ -791,7 +791,7 @@ error:
   --> SQL:1:14
   |
 1 | h3_to_string('8d11aa6a38826ff')
-  |              ^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('8d11aa6a38826ff')`
+  |              ^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('8d11aa6a38826ff')` in expr `to_uint64('8d11aa6a38826ff')`, during run expr: `h3_to_string(to_uint64('8d11aa6a38826ff'))`
 
 
 
@@ -821,7 +821,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_is_res_class_iii(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_is_res_class_iii(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_is_res_class_iii(0)` in expr `h3_is_res_class_iii(to_uint64(0))`
 
 
 
@@ -860,7 +860,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_is_pentagon(0)
-  | ^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_is_pentagon(0)`
+  | ^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_is_pentagon(0)` in expr `h3_is_pentagon(to_uint64(0))`
 
 
 
@@ -899,7 +899,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_faces(0)
-  | ^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_faces(0)`
+  | ^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_faces(0)` in expr `h3_get_faces(to_uint64(0))`
 
 
 
@@ -938,7 +938,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_cell_area_m2(0)
-  | ^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_cell_area_m2(0)`
+  | ^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_cell_area_m2(0)` in expr `h3_cell_area_m2(to_uint64(0))`
 
 
 
@@ -977,7 +977,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_cell_area_rads2(0)
-  | ^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_cell_area_rads2(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_cell_area_rads2(0)` in expr `h3_cell_area_rads2(to_uint64(0))`
 
 
 
@@ -1016,7 +1016,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_center_child(0, 1)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_center_child(0, 1)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_to_center_child(0, 1)` in expr `h3_to_center_child(to_uint64(0), 1)`
 
 
 
@@ -1024,7 +1024,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_center_child(599119489002373119, 16)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_to_center_child(599119489002373119, 16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_to_center_child(599119489002373119, 16)` in expr `h3_to_center_child(599119489002373119, 16)`
 
 
 
@@ -1063,7 +1063,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_exact_edge_length_m(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_exact_edge_length_m(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_exact_edge_length_m(0)` in expr `h3_exact_edge_length_m(to_uint64(0))`
 
 
 
@@ -1071,7 +1071,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_exact_edge_length_m(599119489002373119)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(599119489002373119)): invalid index mode while evaluating function `h3_exact_edge_length_m(599119489002373119)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(599119489002373119)): invalid index mode while evaluating function `h3_exact_edge_length_m(599119489002373119)` in expr `h3_exact_edge_length_m(599119489002373119)`
 
 
 
@@ -1109,7 +1109,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_exact_edge_length_km(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_exact_edge_length_km(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_exact_edge_length_km(0)` in expr `h3_exact_edge_length_km(to_uint64(0))`
 
 
 
@@ -1117,7 +1117,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_exact_edge_length_km(599119489002373119)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(599119489002373119)): invalid index mode while evaluating function `h3_exact_edge_length_km(599119489002373119)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(599119489002373119)): invalid index mode while evaluating function `h3_exact_edge_length_km(599119489002373119)` in expr `h3_exact_edge_length_km(599119489002373119)`
 
 
 
@@ -1155,7 +1155,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_exact_edge_length_rads(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_exact_edge_length_rads(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_exact_edge_length_rads(0)` in expr `h3_exact_edge_length_rads(to_uint64(0))`
 
 
 
@@ -1163,7 +1163,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_exact_edge_length_rads(599119489002373119)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(599119489002373119)): invalid index mode while evaluating function `h3_exact_edge_length_rads(599119489002373119)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(599119489002373119)): invalid index mode while evaluating function `h3_exact_edge_length_rads(599119489002373119)` in expr `h3_exact_edge_length_rads(599119489002373119)`
 
 
 
@@ -1210,7 +1210,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_num_hexagons(16)
-  | ^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_num_hexagons(16)`
+  | ^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_num_hexagons(16)` in expr `h3_num_hexagons(16)`
 
 
 
@@ -1248,7 +1248,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_line(0, 0)
-  | ^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_line(0, 0)`
+  | ^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_line(0, 0)` in expr `h3_line(to_uint64(0), to_uint64(0))`
 
 
 
@@ -1256,7 +1256,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_line(599119489002373119, 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_line(599119489002373119, 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_line(599119489002373119, 0)` in expr `h3_line(599119489002373119, to_uint64(0))`
 
 
 
@@ -1296,7 +1296,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_distance(0, 0)
-  | ^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_distance(0, 0)`
+  | ^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_distance(0, 0)` in expr `h3_distance(to_uint64(0), to_uint64(0))`
 
 
 
@@ -1304,7 +1304,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_distance(599119489002373119, 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_distance(599119489002373119, 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_distance(599119489002373119, 0)` in expr `h3_distance(599119489002373119, to_uint64(0))`
 
 
 
@@ -1344,7 +1344,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_hex_ring(0, 0)
-  | ^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_hex_ring(0, 0)`
+  | ^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_hex_ring(0, 0)` in expr `h3_hex_ring(to_uint64(0), to_uint32(0))`
 
 
 
@@ -1361,7 +1361,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_hex_ring(599119489002373119, 2)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a pentagon (or a pentagon distortion) is encountered while evaluating function `h3_hex_ring(599119489002373119, 2)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a pentagon (or a pentagon distortion) is encountered while evaluating function `h3_hex_ring(599119489002373119, 2)` in expr `h3_hex_ring(599119489002373119, to_uint32(2))`
 
 
 
@@ -1378,7 +1378,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_distance(h3, k)
-  | ^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(2)): invalid index mode while evaluating function `h3_distance(599686042433355775, 2)`
+  | ^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(2)): invalid index mode while evaluating function `h3_distance(599686042433355775, 2)` in expr `h3_distance(h3, to_uint64(k))`
 
 
 
@@ -1386,7 +1386,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_unidirectional_edge(0, 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edge(0, 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edge(0, 0)` in expr `h3_get_unidirectional_edge(to_uint64(0), to_uint64(0))`
 
 
 
@@ -1394,7 +1394,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_unidirectional_edge(644325524701193897, 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edge(644325524701193897, 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edge(644325524701193897, 0)` in expr `h3_get_unidirectional_edge(644325524701193897, to_uint64(0))`
 
 
 
@@ -1473,7 +1473,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_origin_index_from_unidirectional_edge(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_origin_index_from_unidirectional_edge(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_origin_index_from_unidirectional_edge(0)` in expr `h3_get_origin_index_from_unidirectional_edge(to_uint64(0))`
 
 
 
@@ -1511,7 +1511,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_destination_index_from_unidirectional_edge(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_destination_index_from_unidirectional_edge(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_destination_index_from_unidirectional_edge(0)` in expr `h3_get_destination_index_from_unidirectional_edge(to_uint64(0))`
 
 
 
@@ -1549,7 +1549,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_indexes_from_unidirectional_edge(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_indexes_from_unidirectional_edge(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_indexes_from_unidirectional_edge(0)` in expr `h3_get_indexes_from_unidirectional_edge(to_uint64(0))`
 
 
 
@@ -1587,7 +1587,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_unidirectional_edges_from_hexagon(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edges_from_hexagon(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid cell index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edges_from_hexagon(0)` in expr `h3_get_unidirectional_edges_from_hexagon(to_uint64(0))`
 
 
 
@@ -1625,7 +1625,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_get_unidirectional_edge_boundary(0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edge_boundary(0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid directed edge index (got Some(0)): invalid index mode while evaluating function `h3_get_unidirectional_edge_boundary(0)` in expr `h3_get_unidirectional_edge_boundary(to_uint64(0))`
 
 
 
@@ -1681,7 +1681,7 @@ error:
   --> SQL:1:1
   |
 1 | h3_edge_angle(16)
-  | ^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_angle(16)`
+  | ^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `h3_edge_angle(16)` in expr `h3_edge_angle(16)`
 
 
 

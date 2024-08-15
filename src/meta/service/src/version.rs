@@ -115,6 +115,8 @@ pub(crate) mod raft {
             add_provide(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
             add_provide(("install_snapshot", 2), "2024-05-06", (1,  2, 453)),
             del_provide(("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
+            del_provide(("install_snapshot", 2), "2024-07-02", (1,  2, 552)),
+            add_provide(("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
         ];
 
         /// The client features that raft server depends on.
@@ -143,6 +145,9 @@ pub(crate) mod raft {
             add_optional(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
             add_require( ("install_snapshot", 1), "2023-05-21", (1,  2, 479)),
             del_require( ("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
+            del_require( ("install_snapshot", 1), "2024-07-02", (1,  2, 552)),
+            add_require( ("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
+            
         ];
 
         /// Feature set provided by raft client.

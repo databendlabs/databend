@@ -384,6 +384,20 @@ impl MultiStmtTxnCommitFailed {
     }
 }
 
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UpdateStreamMetasFailed: {message}")]
+pub struct UpdateStreamMetasFailed {
+    message: String,
+}
+
+impl crate::app_error::UpdateStreamMetasFailed {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
@@ -648,6 +662,20 @@ impl WrongShareObject {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("WrongSharePrivileges: wrong share privileges of {obj_name}")]
+pub struct WrongSharePrivileges {
+    obj_name: String,
+}
+
+impl WrongSharePrivileges {
+    pub fn new(obj_name: impl ToString) -> Self {
+        Self {
+            obj_name: obj_name.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("ShareHasNoGrantedDatabase: {tenant}.{share_name} has no granted database")]
 pub struct ShareHasNoGrantedDatabase {
     pub tenant: String,
@@ -680,14 +708,16 @@ impl ShareHasNoGrantedPrivilege {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareTable: {tenant}.{share_name} has no share table {table_name}")]
-pub struct UnknownShareTable {
+#[error(
+    "CannotAccessShareTable: cannot access share table {table_name} from {tenant}.{share_name}"
+)]
+pub struct CannotAccessShareTable {
     pub tenant: String,
     pub share_name: String,
     pub table_name: String,
 }
 
-impl UnknownShareTable {
+impl CannotAccessShareTable {
     pub fn new(
         tenant: impl Into<String>,
         share_name: impl Into<String>,
@@ -1045,6 +1075,38 @@ impl WrongSequenceCount {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DictionaryAlreadyExists: `{dictionary_name}` while `{context}`")]
+pub struct DictionaryAlreadyExists {
+    dictionary_name: String,
+    context: String,
+}
+
+impl DictionaryAlreadyExists {
+    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownDictionary: `{dictionary_name}` while `{context}`")]
+pub struct UnknownDictionary {
+    dictionary_name: String,
+    context: String,
+}
+
+impl UnknownDictionary {
+    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1142,13 +1204,16 @@ pub enum AppError {
     WrongShareObject(#[from] WrongShareObject),
 
     #[error(transparent)]
+    WrongSharePrivileges(#[from] WrongSharePrivileges),
+
+    #[error(transparent)]
     ShareHasNoGrantedDatabase(#[from] ShareHasNoGrantedDatabase),
 
     #[error(transparent)]
     ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
 
     #[error(transparent)]
-    UnknownShareTable(#[from] UnknownShareTable),
+    CannotAccessShareTable(#[from] CannotAccessShareTable),
 
     #[error(transparent)]
     WrongShare(#[from] WrongShare),
@@ -1228,6 +1293,16 @@ pub enum AppError {
     // sequence
     #[error(transparent)]
     SequenceError(#[from] SequenceError),
+
+    #[error(transparent)]
+    UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
+
+    // dictionary
+    #[error(transparent)]
+    DictionaryAlreadyExists(#[from] DictionaryAlreadyExists),
+
+    #[error(transparent)]
+    UnknownDictionary(#[from] UnknownDictionary),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1326,6 +1401,8 @@ impl AppErrorMessage for UnknownStreamId {}
 
 impl AppErrorMessage for MultiStmtTxnCommitFailed {}
 
+impl AppErrorMessage for UpdateStreamMetasFailed {}
+
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for CommitTableMetaError {
@@ -1418,6 +1495,12 @@ impl AppErrorMessage for WrongShareObject {
     }
 }
 
+impl AppErrorMessage for WrongSharePrivileges {
+    fn message(&self) -> String {
+        format!("wrong share privileges of {}", self.obj_name)
+    }
+}
+
 impl AppErrorMessage for ShareHasNoGrantedDatabase {
     fn message(&self) -> String {
         format!(
@@ -1436,10 +1519,10 @@ impl AppErrorMessage for ShareHasNoGrantedPrivilege {
     }
 }
 
-impl AppErrorMessage for UnknownShareTable {
+impl AppErrorMessage for CannotAccessShareTable {
     fn message(&self) -> String {
         format!(
-            "unknown share table {} of share {}.{}",
+            "cannot access to share table {} from share {}.{}",
             self.table_name, self.tenant, self.share_name
         )
     }
@@ -1663,6 +1746,19 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
+// dictionary
+impl AppErrorMessage for DictionaryAlreadyExists {
+    fn message(&self) -> String {
+        format!("dictionary '{}' already exists", self.dictionary_name)
+    }
+}
+
+impl AppErrorMessage for UnknownDictionary {
+    fn message(&self) -> String {
+        format!("Unknown dictionary '{}'", self.dictionary_name)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1717,13 +1813,16 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UnknownShareAccounts(err) => ErrorCode::UnknownShareAccounts(err.message()),
             AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
+            AppError::WrongSharePrivileges(err) => ErrorCode::WrongSharePrivileges(err.message()),
             AppError::ShareHasNoGrantedDatabase(err) => {
                 ErrorCode::ShareHasNoGrantedDatabase(err.message())
             }
             AppError::ShareHasNoGrantedPrivilege(err) => {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
-            AppError::UnknownShareTable(err) => ErrorCode::UnknownShareTable(err.message()),
+            AppError::CannotAccessShareTable(err) => {
+                ErrorCode::CannotAccessShareTable(err.message())
+            }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())
@@ -1769,6 +1868,12 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UnresolvableConflict(err.message())
             }
             AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
+            AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
+            // dictionary
+            AppError::DictionaryAlreadyExists(err) => {
+                ErrorCode::DictionaryAlreadyExists(err.message())
+            }
+            AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
         }
     }
 }

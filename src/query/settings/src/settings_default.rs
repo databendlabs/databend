@@ -290,11 +290,23 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("disable_merge_into_join_reorder", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Disable merge into join reorder optimization.",
+                ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Set the spilling buffer threshold (MB) for each join processor.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("enable_merge_into_row_fetch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable merge into row fetch optimization.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_cte_recursive_depth", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Max recursive depth for recursive cte",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
@@ -335,6 +347,12 @@ impl DefaultSettings {
                 ("enforce_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce broadcast join.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enforce_shuffle_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce shuffle join.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -417,6 +435,19 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("window_partition_spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that a window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("window_partition_spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
+
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
@@ -428,6 +459,12 @@ impl DefaultSettings {
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("sort_spilling_batch_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8 * 1024 * 1024),
+                    desc: "Sets the uncompressed size that merge sorter will spill to storage",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -469,13 +506,13 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(15),
+                    value: UserSettingValue::UInt64(30),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20),
+                    value: UserSettingValue::UInt64(30),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -499,7 +536,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -513,6 +550,12 @@ impl DefaultSettings {
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables distributed execution of table compaction.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_analyze_histogram", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables analyze histogram for query optimization during analyzing table.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -668,7 +711,19 @@ impl DefaultSettings {
                 }),
                 ("parse_datetime_ignore_remainder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Ignore trailing chars when parse string to datetime(disable by default)",
+                    desc: "Ignore trailing chars when parse string to datetime",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_dst_hour_fix", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time conversion handles invalid DST by adding an hour. Accuracy not guaranteed.(disable by default)",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_strict_datetime_parser", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Strict datetime parser. Only support ISO 8601 as Default format.The best practice is to turn this parameter on.(enable by default)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -751,6 +806,24 @@ impl DefaultSettings {
                     desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("enable_loser_tree_merge_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables loser tree merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_last_snapshot_location_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables writing last_snapshot_location_hint object",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("format_null_as_str", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Format NULL as str in query api response",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 })
             ]);
 

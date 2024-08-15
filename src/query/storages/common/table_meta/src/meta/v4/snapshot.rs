@@ -31,6 +31,7 @@ use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::v2;
+use crate::meta::v2::StatisticsMessagePack;
 use crate::meta::v3;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
@@ -52,7 +53,7 @@ pub struct TableSnapshot {
     ///   That indicates this instance is converted from a v2/v1::TableSnapshot.
     ///
     /// - The meta writers are responsible for only writing down the latest version of TableSnapshot, and
-    /// the format_version being written is of the latest version.
+    ///   the format_version being written is of the latest version.
     ///
     ///   e.g. if the current version of TableSnapshot is v3::TableSnapshot, then the format_version
     ///   that will be written down to object storage as part of TableSnapshot table meta data,
@@ -87,6 +88,39 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
+}
+
+/// An exact copy of `TableSnapshot` with specific `deserialize_with` implementation
+/// in `summary` that can correctly deserialize legacy MessagePack format.
+#[derive(Deserialize)]
+pub struct TableSnapshotMessagePack {
+    format_version: FormatVersion,
+    snapshot_id: SnapshotId,
+    timestamp: Option<DateTime<Utc>>,
+    prev_table_seq: Option<u64>,
+    prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+    schema: TableSchema,
+    summary: StatisticsMessagePack,
+    segments: Vec<Location>,
+    cluster_key_meta: Option<ClusterKey>,
+    table_statistics_location: Option<String>,
+}
+
+impl From<TableSnapshotMessagePack> for TableSnapshot {
+    fn from(v: TableSnapshotMessagePack) -> Self {
+        Self {
+            format_version: v.format_version,
+            snapshot_id: v.snapshot_id,
+            timestamp: v.timestamp,
+            prev_table_seq: v.prev_table_seq,
+            prev_snapshot_id: v.prev_snapshot_id,
+            schema: v.schema,
+            summary: v.summary.into(),
+            segments: v.segments,
+            cluster_key_meta: v.cluster_key_meta,
+            table_statistics_location: v.table_statistics_location,
+        }
+    }
 }
 
 impl TableSnapshot {
@@ -209,7 +243,18 @@ impl TableSnapshot {
         let compression = MetaCompression::try_from(r.read_scalar::<u8>()?)?;
         let snapshot_size: u64 = r.read_scalar::<u64>()?;
 
-        read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
+        match encoding {
+            MetaEncoding::MessagePack => {
+                let snapshot: TableSnapshotMessagePack =
+                    read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)?;
+                Ok(snapshot.into())
+            }
+            MetaEncoding::Bincode | MetaEncoding::Json => {
+                let snapshot: TableSnapshot =
+                    read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)?;
+                Ok(snapshot)
+            }
+        }
     }
 
     #[inline]

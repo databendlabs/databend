@@ -1,0 +1,241 @@
+statement ok
+set enforce_broadcast_join = 0;
+
+statement ok
+set enforce_shuffle_join = 0;
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+set enforce_broadcast_join = 1;
+
+# matched only, target broadcast inner join source
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_broadcast_join = 0;
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+set enforce_shuffle_join = 1;
+
+# matched only, target shuffle inner join source
+query I
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_shuffle_join = 0;
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+set enforce_broadcast_join = 1;
+
+# matched only, source broadcast inner join target
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_broadcast_join = 0;
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+set enforce_shuffle_join = 1;
+
+# matched only, source shuffle inner join target
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_shuffle_join = 0;
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+16667
+
+# not matched only, target shuffle right-anti join source
+query T
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+8334
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+8334
+
+# not matched only, source shuffle left-anti join target
+query T
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+33334
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+16667
+
+# mixed matched, target shuffle right-outer join source
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+8334 16666
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0 25000
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+8334
+
+# mixed matched, source shuffle left-outer join target
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+33334 16666
+
+# execute again
+query T
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0 50000
+
+statement ok
+create or replace table t1 as select * from numbers(250000);
+
+statement ok
+create or replace table t2(number int);
+
+statement ok
+create or replace stream t2_s ON TABLE t2;
+
+statement ok
+insert into t2(number) select * from numbers(500000);
+
+statement ok
+delete from t2 where number % 3 = 0;
+
+statement ok
+insert into t2 select * from numbers(400000);
+
+statement ok
+set disable_join_reorder = 1;
+
+query T
+MERGE INTO t1 USING (SELECT number FROM t2_s QUALIFY row_number() OVER ( PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number WHEN MATCHED then UPDATE SET t1.number = t2.number WHEN NOT MATCHED THEN INSERT(number) VALUES(t2.number);
+----
+216667 250000
+
+query T
+select count(*) from t1;
+----
+466667
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop stream if exists t2_s;
+
+statement ok
+drop table if exists t2;

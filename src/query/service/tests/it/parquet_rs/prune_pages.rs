@@ -74,7 +74,7 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 //                         null count  min                                       max
 // page-0                         1  2020-01-01T01:01:01.000000                2020-01-02T01:01:01.000000
 // page-1                         1  2020-01-01T01:01:11.000000                2020-01-02T01:01:11.000000
@@ -89,7 +89,7 @@ async fn test_timestamp() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 //                       null count  min                                       max
 // page-0                         1  2020-01-01                                2020-01-04
 // page-1                         1  2020-01-11                                2020-01-14
@@ -104,7 +104,7 @@ async fn test_date() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 //                      null count  min                                       max
 // page-0                         0  -5                                        -1
 // page-1                         0  -4                                        0
@@ -127,7 +127,7 @@ async fn test_int32_lt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_gt() {
     test(
         Scenario::Int32,
@@ -144,7 +144,7 @@ async fn test_int32_gt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq() {
     test(
         Scenario::Int32,
@@ -157,7 +157,7 @@ async fn test_int32_eq() {
     )
     .await;
 }
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_scalar_fun_and_eq() {
     test(
         Scenario::Int32,
@@ -171,7 +171,7 @@ async fn test_int32_scalar_fun_and_eq() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_scalar_fun() {
     test(
         Scenario::Int32,
@@ -181,7 +181,7 @@ async fn test_int32_scalar_fun() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_complex_expr() {
     test(
         Scenario::Int32,
@@ -195,7 +195,7 @@ async fn test_int32_complex_expr() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_complex_expr_subtract() {
     test(
         Scenario::Int32,
@@ -205,7 +205,7 @@ async fn test_int32_complex_expr_subtract() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 //                      null count  min                                       max
 // page-0                         0  -5.0                                      -1.0
 // page-1                         0  -4.0                                      0.0
@@ -226,7 +226,7 @@ async fn test_f64_lt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_scalar_fun_and_gt() {
     test(
         Scenario::Float64,
@@ -240,7 +240,7 @@ async fn test_f64_scalar_fun_and_gt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_scalar_fun() {
     test(
         Scenario::Float64,
@@ -254,7 +254,7 @@ async fn test_f64_scalar_fun() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_complex_expr() {
     test(
         Scenario::Float64,
@@ -264,7 +264,7 @@ async fn test_f64_complex_expr() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_complex_expr_subtract() {
     test(
         Scenario::Float64,
@@ -274,7 +274,7 @@ async fn test_f64_complex_expr_subtract() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 //                      null count  min                                       max
 // page-0                         0  -5                                        -1
 // page-1                         0  -4                                        0
@@ -293,7 +293,7 @@ async fn test_int32_eq_in_list() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq_in_list_2() {
     test(
         Scenario::Int32,
@@ -303,7 +303,7 @@ async fn test_int32_eq_in_list_2() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq_in_list_negated() {
     test(
         Scenario::Int32,
@@ -313,7 +313,7 @@ async fn test_int32_eq_in_list_negated() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decimal_lt() {
     // The data type of decimal_col is decimal(9,2)
     // There are three pages each 5 rows:
@@ -348,7 +348,7 @@ async fn test_decimal_lt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decimal_eq() {
     // The data type of decimal_col is decimal(9,2)
     // There are three pages:
@@ -387,7 +387,7 @@ async fn test_decimal_eq() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decimal_in_list() {
     // The data type of decimal_col is decimal(9,2)
     // There are three pages:
@@ -420,7 +420,7 @@ async fn test_decimal_in_list() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_periods_in_column_names() {
     // There are three row groups for "service.name", each with 5 rows = 15 rows total
     // name = "HTTP GET / DISPATCH", service.name = ['frontend', 'frontend'],

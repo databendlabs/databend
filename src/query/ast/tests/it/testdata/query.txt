@@ -162,6 +162,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -182,6 +183,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -384,6 +386,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -483,6 +486,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -568,6 +572,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -693,6 +698,7 @@ Query {
                     consume: true,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -766,6 +772,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -786,6 +793,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -861,6 +869,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -881,6 +890,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -1001,6 +1011,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -1021,6 +1032,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -1141,6 +1153,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -1161,6 +1174,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -1290,6 +1304,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -1310,6 +1325,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -1403,6 +1419,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Table {
                             span: Some(
@@ -1423,6 +1440,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -1516,6 +1534,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                                 right: Table {
                                     span: Some(
@@ -1536,6 +1555,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             },
                         },
@@ -1558,6 +1578,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     },
                 },
@@ -1674,6 +1695,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -1753,6 +1775,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: Some(
@@ -1910,6 +1933,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -1989,6 +2013,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: Some(
@@ -2137,6 +2162,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -2216,6 +2242,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: Some(
@@ -2373,6 +2400,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -2449,6 +2477,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -2537,6 +2566,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: Some(
@@ -2712,6 +2742,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
                 Table {
                     span: Some(
@@ -2732,6 +2763,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
                 Table {
                     span: Some(
@@ -2752,6 +2784,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: Some(
@@ -2916,6 +2949,7 @@ Query {
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         ],
                                         selection: None,
@@ -2977,6 +3011,7 @@ Query {
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         ],
                                         selection: None,
@@ -3058,6 +3093,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -3286,6 +3322,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -3458,6 +3495,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
                 Table {
                     span: Some(
@@ -3490,6 +3528,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
                 Subquery {
                     span: Some(
@@ -3687,6 +3726,7 @@ Query {
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                             right: Table {
                                                 span: Some(
@@ -3707,6 +3747,7 @@ Query {
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         },
                                     },
@@ -3963,6 +4004,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4012,6 +4054,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4087,6 +4130,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4136,6 +4180,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4218,6 +4263,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4267,6 +4313,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4318,6 +4365,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4400,6 +4448,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4449,6 +4498,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4500,6 +4550,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4575,6 +4626,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4631,6 +4683,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4680,6 +4733,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4764,6 +4818,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4813,6 +4868,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -4864,6 +4920,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4939,6 +4996,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -4995,6 +5053,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -5044,6 +5103,7 @@ Query {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -5425,6 +5485,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -5650,6 +5711,7 @@ Query {
                         },
                     ),
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -5793,6 +5855,7 @@ Query {
                             ],
                         },
                     ),
+                    sample: None,
                 },
             ],
             selection: None,
@@ -5970,18 +6033,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                19..20,
-                                            ),
-                                            name: "w",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    19..20,
+                                                ),
+                                                name: "w",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6009,6 +6075,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -6167,18 +6234,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                22..23,
-                                            ),
-                                            name: "w",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    22..23,
+                                                ),
+                                                name: "w",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6223,18 +6293,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                37..39,
-                                            ),
-                                            name: "w1",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    37..39,
+                                                ),
+                                                name: "w1",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6279,18 +6352,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                53..55,
-                                            ),
-                                            name: "w2",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    53..55,
+                                                ),
+                                                name: "w2",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6318,6 +6394,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
             ],
             selection: None,
@@ -6558,6 +6635,7 @@ Query {
                                         consume: false,
                                         pivot: None,
                                         unpivot: None,
+                                        sample: None,
                                     },
                                 ],
                                 selection: None,
@@ -6972,6 +7050,7 @@ Query {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                         right: Subquery {
                             span: Some(
@@ -7132,6 +7211,7 @@ Query {
                     consume: false,
                     pivot: None,
                     unpivot: None,
+                    sample: None,
                 },
                 TableFunction {
                     span: Some(

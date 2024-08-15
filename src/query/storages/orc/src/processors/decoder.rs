@@ -17,7 +17,6 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -28,6 +27,7 @@ use databend_common_storage::FileStatus;
 use orc_rust::array_decoder::NaiveStripeDecoder;
 
 use crate::strip::StripeInMemory;
+use crate::utils::map_orc_error;
 
 pub struct StripeDecoder {
     data_schema: Arc<DataSchema>,
@@ -36,21 +36,21 @@ pub struct StripeDecoder {
 }
 
 impl StripeDecoder {
-    pub fn try_create(
+    pub fn new(
         table_ctx: Arc<dyn TableContext>,
         data_schema: Arc<DataSchema>,
         arrow_schema: arrow_schema::SchemaRef,
-    ) -> Result<Self> {
+    ) -> Self {
         let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {
             Some(table_ctx.get_copy_status())
         } else {
             None
         };
-        Ok(StripeDecoder {
+        StripeDecoder {
             copy_status,
             arrow_schema,
             data_schema,
-        })
+        }
     }
 }
 
@@ -64,9 +64,9 @@ impl AccumulatingTransform for StripeDecoder {
             .unwrap();
 
         let decoder = NaiveStripeDecoder::new(stripe.stripe, self.arrow_schema.clone(), 8192)
-            .map_err(|e| ErrorCode::BadBytes(e.to_string()))?;
+            .map_err(|e| map_orc_error(e, &stripe.path))?;
         let batches: Result<Vec<RecordBatch>, _> = decoder.into_iter().collect();
-        let batches = batches.map_err(|e| ErrorCode::BadBytes(e.to_string()))?;
+        let batches = batches.map_err(|e| map_orc_error(e, &stripe.path))?;
         let mut blocks = vec![];
         for batch in batches {
             let (block, _) = DataBlock::from_record_batch(self.data_schema.as_ref(), &batch)?;

@@ -65,6 +65,23 @@ pub trait Visitor<'ast>: Sized {
         walk_identifier(self, table);
     }
 
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Option<Identifier>,
+        dictionary_name: &'ast Identifier,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier(self, catalog);
+        }
+
+        if let Some(database) = database {
+            walk_identifier(self, database);
+        }
+
+        walk_identifier(self, dictionary_name);
+    }
+
     fn visit_index_ref(&mut self, index: &'ast Identifier) {
         walk_identifier(self, index);
     }
@@ -227,7 +244,7 @@ pub trait Visitor<'ast>: Sized {
         _name: &'ast Identifier,
         args: &'ast [Expr],
         params: &'ast [Expr],
-        over: &'ast Option<Window>,
+        over: &'ast Option<WindowDesc>,
         lambda: &'ast Option<Lambda>,
     ) {
         for arg in args {
@@ -238,7 +255,7 @@ pub trait Visitor<'ast>: Sized {
         }
 
         if let Some(over) = over {
-            self.visit_window(over);
+            self.visit_window(&over.window);
         }
         if let Some(lambda) = lambda {
             walk_expr(self, &lambda.expr)
@@ -387,7 +404,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_settings(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_unset_variable(&mut self, _stmt: &'ast UnSetStmt) {}
+    fn visit_unset(&mut self, _set_type: SetType, _args: &'ast [Identifier]) {}
 
     fn visit_show_process_list(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
@@ -411,11 +428,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
-    fn visit_set_variable(
+    fn visit_set(
         &mut self,
-        _is_global: bool,
-        _variable: &'ast Identifier,
-        _value: &'ast Expr,
+        _set_type: SetType,
+        _idens: &'ast [Identifier],
+        _values: &'ast SetValues,
     ) {
     }
 
@@ -554,6 +571,14 @@ pub trait Visitor<'ast>: Sized {
     fn visit_analyze_table(&mut self, _stmt: &'ast AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &'ast ExistsTableStmt) {}
+
+    fn visit_create_dictionary(&mut self, _stmt: &'ast CreateDictionaryStmt) {}
+
+    fn visit_drop_dictionary(&mut self, _stmt: &'ast DropDictionaryStmt) {}
+
+    fn visit_show_create_dictionary(&mut self, _stmt: &'ast ShowCreateDictionaryStmt) {}
+
+    fn visit_show_dictionaries(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_create_view(&mut self, _stmt: &'ast CreateViewStmt) {}
 
@@ -844,4 +869,6 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_sequence(&mut self, _stmt: &'ast DropSequenceStmt) {}
     fn visit_set_priority(&mut self, _priority: &'ast Priority, _object_id: &'ast str) {}
     fn visit_multi_table_insert(&mut self, insert: &'ast InsertMultiTableStmt);
+
+    fn visit_system(&mut self, _stmt: &'ast SystemStmt) {}
 }

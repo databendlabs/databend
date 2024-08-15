@@ -129,6 +129,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
+        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
         r#"create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );"#,
         r#"create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');"#,
@@ -146,10 +147,10 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');"#,
+        r#"create catalog ctl type=share connection=(name='provider.test_share' endpoint='endpoint_name');"#,
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
-        r#"create database t FROM SHARE a.s;"#,
         r#"CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';"#,
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
@@ -228,6 +229,10 @@ fn test_statement() {
         r#"select * FROM t where ((a));"#,
         r#"select * FROM t where ((select 1) > 1);"#,
         r#"select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));"#,
+        r#"select * from t sample row (99);"#,
+        r#"select * from t sample block (99);"#,
+        r#"select * from t sample row (10 rows);"#,
+        r#"select * from t sample block (10 rows);"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
@@ -543,8 +548,8 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
-        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
-        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -571,12 +576,17 @@ fn test_statement() {
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"SHOW GRANTS OF SHARE t;"#,
         r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
+        r#"select $abc + 3"#,
         r#"SET max_threads = 10;"#,
         r#"SET max_threads = 10*2;"#,
+        r#"SET global (max_threads, max_memory_usage) = (10*2, 10*4);"#,
         r#"UNSET max_threads;"#,
         r#"UNSET session max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
         r#"UNSET session (max_threads, sql_dialect);"#,
+        r#"SET variable a = 3"#,
+        r#"SET variable a = select 3"#,
+        r#"SET variable a = (select max(number) from numbers(10))"#,
         r#"select $1 FROM '@my_stage/my data/'"#,
         r#"
             SELECT t.c1 FROM @stage1/dir/file
@@ -758,6 +768,10 @@ fn test_statement() {
         "-- xxxxx\n  select 34343;",
         r#"REMOVE @t;"#,
         r#"SELECT sum(d) OVER (w) FROM e;"#,
+        r#"SELECT first_value(d) OVER (w) FROM e;"#,
+        r#"SELECT first_value(d) ignore nulls OVER (w) FROM e;"#,
+        r#"SELECT first_value(d) respect nulls OVER (w) FROM e;"#,
+        r#"SELECT sum(d) IGNORE NULLS OVER (w) FROM e;"#,
         r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
@@ -768,6 +782,9 @@ fn test_statement() {
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE file format my_orc type = orc"#,
+        r#"CREATE file format my_orc type = orc missing_field_as=field_default"#,
+        r#"CREATE file format my_orc type = orc missing_field_as='field_default'"#,
         r#"CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');"#,
         r#"
             create or replace function addone(int)
@@ -811,6 +828,15 @@ fn test_statement() {
             )
             select * from abc;
         "#,
+        // dictionary
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            )
+            PRIMARY KEY username
+            SOURCE (mysql(host='localhost' username='root' password='1234'))
+            COMMENT 'This is a comment';"#,
     ];
 
     for case in cases {
@@ -844,7 +870,6 @@ fn test_statement_error() {
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
-        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
@@ -916,6 +941,20 @@ fn test_statement_error() {
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
         r#"SHOW GRANTS ON task t1;"#,
+        // dictionary
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            );"#,
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+        (
+            user_name tuple(),
+            age Int16
+        )
+        PRIMARY KEY username
+        SOURCE ()
+        COMMENT 'This is a comment';"#,
     ];
 
     for case in cases {
@@ -935,7 +974,6 @@ fn test_raw_insert_stmt() {
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
-        r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
     ];
 

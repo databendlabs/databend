@@ -22,9 +22,9 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use fastrace::func_name;
 use maplit::btreemap;
 use maplit::btreeset;
-use minitrace::func_name;
 
 use crate::common;
 
@@ -75,7 +75,6 @@ fn test_decode_v74_table_meta() -> anyhow::Result<()> {
             ],
             btreemap! {s("a") => s("b")},
         )),
-        catalog: "default".to_string(),
         engine: "44".to_string(),
         storage_params: None,
         part_prefix: "".to_string(),
@@ -121,6 +120,8 @@ fn test_decode_v74_database_meta() -> anyhow::Result<()> {
         drop_on: None,
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
+        using_share_endpoint: None,
+        from_share_db_id: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

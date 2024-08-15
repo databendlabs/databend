@@ -57,10 +57,6 @@ impl Operator for Sort {
         RelOp::Sort
     }
 
-    fn arity(&self) -> usize {
-        1
-    }
-
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         if input_physical_prop.distribution == Distribution::Serial

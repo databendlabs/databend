@@ -15,6 +15,7 @@ ahash = "0.8.3"
 arrow = { workspace = true }
 arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
+async-channel = "1.7.1"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = { workspace = true }
@@ -28,6 +29,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-license = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
@@ -38,6 +40,7 @@ databend-common-pipeline-transforms = { workspace = true }
 databend-common-sharing = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-enterprise-fail-safe = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-cache-manager = { workspace = true }
@@ -45,16 +48,17 @@ databend-storages-common-index = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-storages-common-txn = { workspace = true }
 enum-as-inner = "0.5"
+fastrace = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

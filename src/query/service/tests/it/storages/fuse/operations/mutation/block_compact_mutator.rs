@@ -22,12 +22,15 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactOptions;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::schedulers::build_query_pipeline_without_render_result_set;
@@ -117,15 +120,26 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         .await?;
 
     let table_info = table.get_table_info().clone();
-    let catalog_info = ctx.get_catalog("default").await?.info();
     if let Some((parts, snapshot)) = res {
-        let physical_plan = OptimizeTableInterpreter::build_physical_plan(
+        let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
+        let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
+            table_info: table_info.clone(),
+            column_ids: snapshot.schema.to_leaf_column_id_set(),
+            plan_id: u32::MAX,
+        }));
+
+        let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+            input: Box::new(root),
             table_info,
-            snapshot,
-            catalog_info,
-            false,
-        )?;
+            snapshot: Some(snapshot),
+            mutation_kind: MutationKind::Compact,
+            update_stream_meta: vec![],
+            merge_meta,
+            deduplicated_label: None,
+            plan_id: u32::MAX,
+            recluster_info: None,
+        }));
 
         let build_res =
             build_query_pipeline_without_render_result_set(&ctx, &physical_plan).await?;

@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::hash::BuildHasher;
 use std::sync::Arc;
 
 use databend_common_arrow::parquet::metadata::FileMetaData;
 use databend_common_cache::Count;
 use databend_common_cache::CountableMeter;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_cache::Meter;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -30,6 +28,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -38,9 +37,10 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use crate::cache_manager::CacheManager;
 
 /// In memory object cache of SegmentInfo
-pub type CompactSegmentInfoCache = NamedCache<
-    InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>,
->;
+pub type CompactSegmentInfoCache =
+    NamedCache<InMemoryItemCacheHolder<CompactSegmentInfo, CompactSegmentInfoMeter>>;
+
+pub type BlockMetaCache = NamedCache<InMemoryItemCacheHolder<Vec<Arc<BlockMeta>>>>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
@@ -49,14 +49,13 @@ pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableS
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache =
-    NamedCache<InMemoryItemCacheHolder<Xor8Filter, DefaultHashBuilder, BloomIndexFilterMeter>>;
+    NamedCache<InMemoryItemCacheHolder<Xor8Filter, BloomIndexFilterMeter>>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 
 pub type InvertedIndexMetaCache = NamedCache<InMemoryItemCacheHolder<InvertedIndexMeta>>;
-pub type InvertedIndexFileCache = NamedCache<
-    InMemoryItemCacheHolder<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>,
->;
+pub type InvertedIndexFileCache =
+    NamedCache<InMemoryItemCacheHolder<InvertedIndexFile, InvertedIndexFileMeter>>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
@@ -64,8 +63,7 @@ pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
 pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
 
 /// In memory object cache of table column array
-pub type ColumnArrayCache =
-    NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
+pub type ColumnArrayCache = NamedCache<InMemoryItemCacheHolder<SizedColumnArray, ColumnArrayMeter>>;
 pub type ArrayRawDataUncompressedSize = usize;
 pub type SizedColumnArray = (
     Box<dyn databend_common_arrow::arrow::array::Array>,
@@ -77,25 +75,21 @@ pub type SizedColumnArray = (
 // The `Cache` should return
 // - cache item of Type `T`
 // - and implement `CacheAccessor` properly
-pub trait CachedObject<T, S = DefaultHashBuilder, M = Count>
-where
-    S: BuildHasher,
-    M: CountableMeter<String, Arc<T>>,
+pub trait CachedObject<T, M = Count>
+where M: CountableMeter<String, Arc<T>>
 {
-    type Cache: CacheAccessor<String, T, S, M>;
+    type Cache: CacheAccessor<String, T, M>;
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>
-    for CompactSegmentInfo
-{
+impl CachedObject<CompactSegmentInfo, CompactSegmentInfoMeter> for CompactSegmentInfo {
     type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
     }
 }
 
-impl CachedObject<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter> for SegmentInfo {
+impl CachedObject<CompactSegmentInfo, CompactSegmentInfoMeter> for SegmentInfo {
     type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
@@ -106,6 +100,13 @@ impl CachedObject<TableSnapshot> for TableSnapshot {
     type Cache = TableSnapshotCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_snapshot_cache()
+    }
+}
+
+impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
+    type Cache = BlockMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_block_meta_cache()
     }
 }
 
@@ -130,7 +131,7 @@ impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions)
     }
 }
 
-impl CachedObject<Xor8Filter, DefaultHashBuilder, BloomIndexFilterMeter> for Xor8Filter {
+impl CachedObject<Xor8Filter, BloomIndexFilterMeter> for Xor8Filter {
     type Cache = BloomIndexFilterCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_filter_cache()
@@ -144,9 +145,7 @@ impl CachedObject<FileMetaData> for FileMetaData {
     }
 }
 
-impl CachedObject<InvertedIndexFile, DefaultHashBuilder, InvertedIndexFileMeter>
-    for InvertedIndexFile
-{
+impl CachedObject<InvertedIndexFile, InvertedIndexFileMeter> for InvertedIndexFile {
     type Cache = InvertedIndexFileCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_file_cache()

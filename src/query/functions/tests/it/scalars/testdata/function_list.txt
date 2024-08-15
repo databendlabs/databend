@@ -46,6 +46,7 @@ st_geomfromtext -> st_geometryfromwkt
 st_geomfromwkb -> st_geometryfromwkb
 st_geomfromwkt -> st_geometryfromwkt
 st_make_line -> st_makeline
+st_numpoints -> st_npoints
 st_polygon -> st_makepolygon
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
@@ -2187,6 +2188,8 @@ Functions overloads:
 1 h3_to_string(UInt64 NULL) :: String NULL
 0 h3_unidirectional_edge_is_valid(UInt64) :: Boolean
 1 h3_unidirectional_edge_is_valid(UInt64 NULL) :: Boolean NULL
+0 haversine(Float64, Float64, Float64, Float64) :: Float64
+1 haversine(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float64 NULL
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
@@ -3550,8 +3553,12 @@ Functions overloads:
 1 st_aswkb(Geometry NULL) :: Binary NULL
 0 st_aswkt(Geometry) :: String
 1 st_aswkt(Geometry NULL) :: String NULL
+0 st_contains(Geometry, Geometry) :: Boolean NULL
+1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
+0 st_distance(Geometry, Geometry) :: Float64 NULL
+1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry
 1 st_endpoint(Geometry NULL) :: Geometry NULL
 0 st_geohash(Geometry) :: String
@@ -3574,18 +3581,28 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
+0 st_length(Geometry) :: Float64 NULL
+1 st_length(Geometry NULL) :: Float64 NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
+0 st_npoints(Geometry) :: UInt32 NULL
+1 st_npoints(Geometry NULL) :: UInt32 NULL
 0 st_pointn(Geometry, Int32) :: Geometry
 1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
+0 st_setsrid(Geometry, Int32) :: Geometry NULL
+1 st_setsrid(Geometry NULL, Int32 NULL) :: Geometry NULL
 0 st_srid(Geometry) :: Int32 NULL
 1 st_srid(Geometry NULL) :: Int32 NULL
 0 st_startpoint(Geometry) :: Geometry
 1 st_startpoint(Geometry NULL) :: Geometry NULL
+0 st_transform(Geometry, Int32) :: Geometry
+1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
+2 st_transform(Geometry, Int32, Int32) :: Geometry
+3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
 0 st_x(Geometry) :: Float64 NULL
 1 st_x(Geometry NULL) :: Float64 NULL
 0 st_xmax(Geometry) :: Float64 NULL
@@ -4207,12 +4224,14 @@ Functions overloads:
 23 try_to_boolean(Float64 NULL) :: Boolean NULL
 0 try_to_date(Variant) :: Date NULL
 1 try_to_date(Variant NULL) :: Date NULL
-2 try_to_date(String) :: Date NULL
-3 try_to_date(String NULL) :: Date NULL
-4 try_to_date(Timestamp) :: Date NULL
-5 try_to_date(Timestamp NULL) :: Date NULL
-6 try_to_date(Int64) :: Date NULL
-7 try_to_date(Int64 NULL) :: Date NULL
+2 try_to_date(String, String) :: Date NULL
+3 try_to_date(String NULL, String NULL) :: Date NULL
+4 try_to_date(String) :: Date NULL
+5 try_to_date(String NULL) :: Date NULL
+6 try_to_date(Timestamp) :: Date NULL
+7 try_to_date(Timestamp NULL) :: Date NULL
+8 try_to_date(Int64) :: Date NULL
+9 try_to_date(Int64 NULL) :: Date NULL
 0 try_to_decimal FACTORY
 1 try_to_decimal FACTORY
 0 try_to_float32(Variant) :: Float32 NULL
@@ -4421,10 +4440,12 @@ Functions overloads:
 1 try_to_timestamp(Variant NULL) :: Timestamp NULL
 2 try_to_timestamp(String) :: Timestamp NULL
 3 try_to_timestamp(String NULL) :: Timestamp NULL
-4 try_to_timestamp(Date) :: Timestamp NULL
-5 try_to_timestamp(Date NULL) :: Timestamp NULL
-6 try_to_timestamp(Int64) :: Timestamp NULL
-7 try_to_timestamp(Int64 NULL) :: Timestamp NULL
+4 try_to_timestamp(String, String) :: Timestamp NULL
+5 try_to_timestamp(String NULL, String NULL) :: Timestamp NULL
+6 try_to_timestamp(Date) :: Timestamp NULL
+7 try_to_timestamp(Date NULL) :: Timestamp NULL
+8 try_to_timestamp(Int64) :: Timestamp NULL
+9 try_to_timestamp(Int64 NULL) :: Timestamp NULL
 0 try_to_uint16(Variant) :: UInt16 NULL
 1 try_to_uint16(Variant NULL) :: UInt16 NULL
 2 try_to_uint16(String) :: UInt16 NULL

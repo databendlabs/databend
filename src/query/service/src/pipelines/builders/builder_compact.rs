@@ -21,11 +21,9 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_compact_source(&mut self, compact_block: &CompactSource) -> Result<()> {
-        let table = self.ctx.build_table_by_table_info(
-            &compact_block.catalog_info,
-            &compact_block.table_info,
-            None,
-        )?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&compact_block.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         if compact_block.parts.is_empty() {

@@ -26,6 +26,7 @@ use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
 use databend_common_license::license_manager::get_license_manager;
@@ -44,17 +45,17 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
-use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
-use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use databend_common_storages_share::remove_share_table_info;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_attach_table::get_attach_table_handler;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -70,7 +71,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
 use log::info;
@@ -80,11 +80,12 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::insert::Insert;
-use crate::sql::plans::insert::InsertInputSource;
+use crate::sql::plans::Insert;
+use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
+#[derive(Clone, Debug)]
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateTablePlan,
@@ -177,8 +178,8 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         assert!(
-            !self.plan.read_only_attach,
-            "There should be no CREATE(not ATTACH) TABLE plan which is READ_ONLY"
+            !self.plan.options.contains_key(OPT_KEY_STORAGE_PREFIX),
+            "There should be no ATTACH TABLE AS SELECT plan"
         );
 
         let tenant = self.ctx.get_tenant();
@@ -191,7 +192,7 @@ impl CreateTableInterpreter {
         req.as_dropped = true;
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
-        let reply = catalog.create_table(req).await?;
+        let reply = catalog.create_table(req.clone()).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
@@ -249,14 +250,25 @@ impl CreateTableInterpreter {
         };
 
         // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
             save_share_spec(
-                tenant.tenant_name(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
+                &spec_vec,
             )
             .await?;
+
+            // remove table info file
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    revoke_table_id,
+                )
+                .await?;
+            }
         }
 
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
@@ -368,14 +380,25 @@ impl CreateTableInterpreter {
         }
 
         // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
+                &spec_vec,
             )
             .await?;
+
+            // remove table spec
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    revoke_table_id,
+                )
+                .await?;
+            }
         }
 
         Ok(PipelineBuildResult::create())
@@ -455,70 +478,15 @@ impl CreateTableInterpreter {
     }
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
-        // Safe to unwrap in this function, as attach table must have storage params.
-        let sp = self.plan.storage_params.as_ref().unwrap();
-        let operator = DataOperator::try_create(sp).await?;
-        let operator = operator.operator();
-        let reader = MetaReaders::table_snapshot_reader(operator.clone());
-        let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-        let snapshot_loc = operator.read(&hint).await?.to_vec();
-        let snapshot_loc = String::from_utf8(snapshot_loc)?;
-        let info = operator.info();
-        let root = info.root();
-        let snapshot_loc = snapshot_loc[root.len()..].to_string();
-        let mut options = self.plan.options.clone();
-        options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AttacheTable)?;
 
-        if self.plan.read_only_attach {
-            // mark table as read_only attached
-            options.insert(
-                OPT_KEY_TABLE_ATTACHED_READ_ONLY.to_string(),
-                "T".to_string(),
-            );
-        }
-
-        let params = LoadParams {
-            location: snapshot_loc.clone(),
-            len_hint: None,
-            ver: TableSnapshot::VERSION,
-            put_cache: true,
-        };
-
-        let snapshot = reader.read(&params).await?;
-        let stat = TableStatistics {
-            number_of_rows: snapshot.summary.row_count,
-            data_bytes: snapshot.summary.uncompressed_byte_size,
-            compressed_data_bytes: snapshot.summary.compressed_byte_size,
-            index_data_bytes: snapshot.summary.index_size,
-            number_of_segments: Some(snapshot.segments.len() as u64),
-            number_of_blocks: Some(snapshot.summary.block_count),
-        };
-
-        let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
-        let table_meta = TableMeta {
-            schema: Arc::new(snapshot.schema.clone()),
-            engine: self.plan.engine.to_string(),
-            storage_params: self.plan.storage_params.clone(),
-            part_prefix: self.plan.part_prefix.clone(),
-            options,
-            default_cluster_key: None,
-            field_comments,
-            drop_on: None,
-            statistics: stat,
-            ..Default::default()
-        };
-        let req = CreateTableReq {
-            create_option: self.plan.create_option,
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name: self.plan.database.to_string(),
-                table_name: self.plan.table.to_string(),
-            },
-            table_meta,
-            as_dropped: false,
-        };
-
-        Ok(req)
+        let handler = get_attach_table_handler();
+        handler
+            .build_attach_table_request(storage_prefix, &self.plan)
+            .await
     }
 }
 

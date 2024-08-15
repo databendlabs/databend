@@ -35,8 +35,8 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
-use parquet_rs::arrow::arrow_to_parquet_schema;
-use parquet_rs::schema::types::SchemaDescPtr;
+use parquet::arrow::arrow_to_parquet_schema;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
@@ -80,7 +80,7 @@ impl BloomBlockFilterReader for Location {
 }
 
 /// load index column data
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
@@ -144,7 +144,7 @@ async fn load_bloom_filter_by_columns<'a>(
 
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_column_xor8_filter<'a>(
     idx: ColumnId,
     col_chunk_meta: &'a SingleColumnMeta,
@@ -170,7 +170,7 @@ async fn load_column_xor8_filter<'a>(
 
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {

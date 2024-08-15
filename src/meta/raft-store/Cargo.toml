@@ -17,6 +17,7 @@ io-uring = ["databend-common-meta-sled-store/io-uring"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bincode = { workspace = true }
 byteorder = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
@@ -29,6 +30,7 @@ databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
@@ -36,10 +38,10 @@ hostname = "0.3.1"
 itertools = { workspace = true }
 log = { workspace = true }
 maplit = "1.0.2"
-minitrace = { workspace = true }
 num = "0.4.0"
 openraft = { workspace = true }
 ordq = { workspace = true }
+rotbl = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

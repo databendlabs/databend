@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::udf_client::UDFFlightClient;
@@ -27,29 +28,29 @@ use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::AsyncRetry;
 use databend_common_pipeline_transforms::processors::AsyncRetryWrapper;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_pipeline_transforms::processors::RetryStrategy;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
+use crate::sessions::QueryContext;
 
 pub struct TransformUdfServer {
+    ctx: Arc<QueryContext>,
     func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
 }
 
 impl TransformUdfServer {
-    pub fn try_create(
+    pub fn new_retry_wrapper(
+        ctx: Arc<QueryContext>,
         func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-    ) -> Result<Box<dyn Processor>> {
-        let s = Self { func_ctx, funcs };
-        let retry_wrapper = AsyncRetryWrapper::create(s);
-        Ok(AsyncTransformer::create(input, output, retry_wrapper))
+    ) -> AsyncRetryWrapper<Self> {
+        let s = Self {
+            ctx,
+            func_ctx,
+            funcs,
+        };
+        AsyncRetryWrapper::create(s)
     }
 }
 
@@ -113,7 +114,10 @@ impl AsyncTransform for TransformUdfServer {
                 request_timeout,
                 request_bacth_rows,
             )
-            .await?;
+            .await?
+            .with_tenant(self.ctx.get_tenant().tenant_name())?
+            .with_func_name(&func.func_name)?
+            .with_query_id(&self.ctx.get_id())?;
 
             let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
             let schema = DataSchema::try_from(&(*result_batch.schema()))?;

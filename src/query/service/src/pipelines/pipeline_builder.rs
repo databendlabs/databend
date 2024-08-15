@@ -24,11 +24,11 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
-use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
+use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::HashJoinState;
@@ -55,6 +55,8 @@ pub struct PipelineBuilder {
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
+
+    pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
 }
 
 impl PipelineBuilder {
@@ -75,6 +77,7 @@ impl PipelineBuilder {
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
+            r_cte_scan_interpreters: vec![],
         }
     }
 
@@ -97,13 +100,13 @@ impl PipelineBuilder {
                 input_join_state: self.join_state,
                 input_probe_schema: self.merge_into_probe_data_fields,
             },
+            r_cte_scan_interpreters: self.r_cte_scan_interpreters,
         })
     }
 
     pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
-            PhysicalPlan::MergeInto(v) if v.merge_type != MergeIntoType::FullOperation => Ok(None),
 
             // hided plans in profile
             PhysicalPlan::Shuffle(_) => Ok(None),
@@ -130,6 +133,7 @@ impl PipelineBuilder {
         }
     }
 
+    #[recursive::recursive]
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
         match plan {
@@ -142,6 +146,9 @@ impl PipelineBuilder {
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Window(window) => self.build_window(window),
+            PhysicalPlan::WindowPartition(window_partition) => {
+                self.build_window_partition_pipeline(window_partition)
+            }
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
@@ -170,9 +177,6 @@ impl PipelineBuilder {
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
-            // Delete.
-            PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
-
             // Replace.
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => {
                 self.build_async_sourcer(async_sourcer)
@@ -180,13 +184,19 @@ impl PipelineBuilder {
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
 
-            // Merge into.
-            PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
-            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
-                self.build_merge_into_append_not_matched(merge_into_append_not_matched)
+            // Mutation.
+            PhysicalPlan::Mutation(mutation) => self.build_mutation(mutation),
+            PhysicalPlan::MutationSplit(mutation_split) => {
+                self.build_mutation_split(mutation_split)
             }
-            PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => {
-                self.build_add_row_number(add_row_number)
+            PhysicalPlan::MutationManipulate(mutation_manipulate) => {
+                self.build_mutation_manipulate(mutation_manipulate)
+            }
+            PhysicalPlan::MutationOrganize(mutation_organize) => {
+                self.build_mutation_organize(mutation_organize)
+            }
+            PhysicalPlan::AddStreamColumn(add_stream_column) => {
+                self.build_add_stream_column(add_stream_column)
             }
 
             // Commit.
@@ -196,15 +206,7 @@ impl PipelineBuilder {
             PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
 
             // Recluster.
-            PhysicalPlan::ReclusterSource(recluster_source) => {
-                self.build_recluster_source(recluster_source)
-            }
-            PhysicalPlan::ReclusterSink(recluster_sink) => {
-                self.build_recluster_sink(recluster_sink)
-            }
-
-            // Update.
-            PhysicalPlan::UpdateSource(update) => self.build_update_source(update),
+            PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
 
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),
@@ -226,6 +228,13 @@ impl PipelineBuilder {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
             PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
+            PhysicalPlan::RecursiveCteScan(scan) => self.build_recursive_cte_scan(scan),
+            PhysicalPlan::MutationSource(mutation_source) => {
+                self.build_mutation_source(mutation_source)
+            }
+            PhysicalPlan::ColumnMutation(column_mutation) => {
+                self.build_column_mutation(column_mutation)
+            }
         }
     }
 }

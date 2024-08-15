@@ -68,7 +68,7 @@ impl TopKSorter {
                 if self.data.len() == self.limit {
                     self.make_heap();
                 }
-            } else if !self.push_value(value) {
+            } else if !self.push_value::<T>(value) {
                 bitmap.set(i, false);
             }
         }
@@ -121,7 +121,7 @@ impl TopKSorter {
                 }
                 selection[result_count] = idx;
                 result_count += 1;
-            } else if self.push_value(value) {
+            } else if self.push_value::<T>(value) {
                 selection[result_count] = idx;
                 result_count += 1;
             }

@@ -42,6 +42,7 @@ mod geometry;
 mod position;
 mod stat_buffer;
 
+pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;

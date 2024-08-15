@@ -12,24 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::AggregateExpand;
+use databend_common_sql::executor::physical_plans::AggregateFinal;
+use databend_common_sql::executor::physical_plans::AggregatePartial;
+use databend_common_sql::executor::physical_plans::EvalScalar;
+use databend_common_sql::executor::physical_plans::Filter;
+use databend_common_sql::executor::physical_plans::Sort;
+use databend_common_sql::executor::physical_plans::Window;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::NavigationPoint;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::HistogramInfoSink;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use itertools::Itertools;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -42,6 +57,28 @@ pub struct AnalyzeTableInterpreter {
 impl AnalyzeTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: AnalyzeTablePlan) -> Result<Self> {
         Ok(AnalyzeTableInterpreter { ctx, plan })
+    }
+
+    async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, BindContext)> {
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _) = planner.plan_sql(&sql).await?;
+        let (select_plan, bind_context) = match &plan {
+            Plan::Query {
+                s_expr,
+                metadata,
+                bind_context,
+                ..
+            } => {
+                let mut builder =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                (
+                    builder.build(s_expr, bind_context.column_set()).await?,
+                    (**bind_context).clone(),
+                )
+            }
+            _ => unreachable!(),
+        };
+        Ok((select_plan, bind_context))
     }
 }
 
@@ -133,7 +170,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             // 0.01625 --> 12 buckets --> 4K size per column
             // 1.04 / math.sqrt(1<<12) --> 0.01625
             const DISTINCT_ERROR_RATE: f64 = 0.01625;
-            let select_expr = index_cols
+            let ndv_select_expr = index_cols
                 .iter()
                 .map(|c| {
                     format!(
@@ -144,46 +181,162 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .join(", ");
 
             let sql = format!(
-                "SELECT {select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
+                "SELECT {ndv_select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
                 plan.database, plan.table,
             );
 
-            log::info!("Analyze via sql {:?}", sql);
+            info!("Analyze via sql {:?}", sql);
 
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = planner.plan_sql(&sql).await?;
-            let (select_plan, schema) = match &plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } => {
-                    let mut builder1 =
-                        PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                    (
-                        builder1.build(s_expr, bind_context.column_set()).await?,
-                        bind_context.output_schema(),
-                    )
-                }
-                _ => unreachable!(),
-            };
-
+            let (physical_plan, bind_context) = self.plan_sql(sql).await?;
             let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &select_plan).await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+            // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
+            // It's possible to OOM if the table is too large and spilling isn't enabled.
+            // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
+            let mut histogram_info_receivers = HashMap::new();
+            if self.ctx.get_settings().get_enable_analyze_histogram()? {
+                let histogram_sqls = index_cols
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "SELECT quantile,
+                            COUNT(DISTINCT {}) AS ndv,
+                            MAX({}) AS max_value,
+                            MIN({}) AS min_value,
+                            COUNT() as count
+                        FROM  (
+                            SELECT {}, NTILE({}) OVER (ORDER BY {}) AS quantile
+                            FROM {}.{} WHERE {} IS DISTINCT FROM NULL
+                        )
+                        GROUP BY quantile ORDER BY quantile \n",
+                            c.1,
+                            c.1,
+                            c.1,
+                            c.1,
+                            DEFAULT_HISTOGRAM_BUCKETS,
+                            c.1,
+                            plan.database,
+                            plan.table,
+                            c.1,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                for (sql, (col_id, _)) in histogram_sqls.into_iter().zip(index_cols.iter()) {
+                    info!("Analyze histogram via sql {:?}", sql);
+                    let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
+                    if !self.ctx.get_cluster().is_empty() {
+                        histogram_plan = remove_exchange(histogram_plan);
+                    }
+                    let mut histogram_build_res = build_query_pipeline(
+                        &QueryContext::create_from(self.ctx.clone()),
+                        &bind_context.columns,
+                        &histogram_plan,
+                        false,
+                    )
+                    .await?;
+                    let (tx, rx) = async_channel::unbounded();
+                    histogram_build_res.main_pipeline.add_sink(|input_port| {
+                        Ok(ProcessorPtr::create(HistogramInfoSink::create(
+                            Some(tx.clone()),
+                            input_port.clone(),
+                        )))
+                    })?;
 
+                    build_res
+                        .sources_pipelines
+                        .push(histogram_build_res.main_pipeline.finalize());
+                    build_res
+                        .sources_pipelines
+                        .extend(histogram_build_res.sources_pipelines);
+                    histogram_info_receivers.insert(*col_id, rx);
+                }
+            }
             FuseTable::do_analyze(
                 self.ctx.clone(),
-                schema,
+                bind_context.output_schema(),
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
                 snapshot.snapshot_id,
                 &mut build_res.main_pipeline,
+                histogram_info_receivers,
             )?;
             return Ok(build_res);
         }
 
         return Ok(PipelineBuildResult::create());
     }
+}
+
+fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
+    fn traverse(plan: PhysicalPlan) -> PhysicalPlan {
+        match plan {
+            PhysicalPlan::Filter(plan) => PhysicalPlan::Filter(Filter {
+                plan_id: plan.plan_id,
+                projections: plan.projections,
+                input: Box::new(traverse(*plan.input)),
+                predicates: plan.predicates,
+                stat_info: plan.stat_info,
+            }),
+            PhysicalPlan::EvalScalar(plan) => PhysicalPlan::EvalScalar(EvalScalar {
+                plan_id: plan.plan_id,
+                projections: plan.projections,
+                input: Box::new(traverse(*plan.input)),
+                exprs: plan.exprs,
+                stat_info: plan.stat_info,
+            }),
+            PhysicalPlan::AggregateExpand(plan) => PhysicalPlan::AggregateExpand(AggregateExpand {
+                plan_id: plan.plan_id,
+                input: Box::new(traverse(*plan.input)),
+                group_bys: plan.group_bys,
+                grouping_sets: plan.grouping_sets,
+                stat_info: plan.stat_info,
+            }),
+            PhysicalPlan::AggregatePartial(plan) => {
+                PhysicalPlan::AggregatePartial(AggregatePartial {
+                    plan_id: plan.plan_id,
+                    input: Box::new(traverse(*plan.input)),
+                    group_by: plan.group_by,
+                    agg_funcs: plan.agg_funcs,
+                    enable_experimental_aggregate_hashtable: plan
+                        .enable_experimental_aggregate_hashtable,
+                    group_by_display: plan.group_by_display,
+                    stat_info: plan.stat_info,
+                })
+            }
+            PhysicalPlan::AggregateFinal(plan) => PhysicalPlan::AggregateFinal(AggregateFinal {
+                plan_id: plan.plan_id,
+                input: Box::new(traverse(*plan.input)),
+                group_by: plan.group_by,
+                agg_funcs: plan.agg_funcs,
+                before_group_by_schema: plan.before_group_by_schema,
+                limit: plan.limit,
+                group_by_display: plan.group_by_display,
+                stat_info: plan.stat_info,
+            }),
+            PhysicalPlan::Window(plan) => PhysicalPlan::Window(Window {
+                plan_id: plan.plan_id,
+                index: plan.index,
+                input: Box::new(traverse(*plan.input)),
+                func: plan.func,
+                partition_by: plan.partition_by,
+                order_by: plan.order_by,
+                window_frame: plan.window_frame,
+                limit: plan.limit,
+            }),
+            PhysicalPlan::Sort(plan) => PhysicalPlan::Sort(Sort {
+                plan_id: plan.plan_id,
+                input: Box::new(traverse(*plan.input)),
+                order_by: plan.order_by,
+                limit: plan.limit,
+                after_exchange: plan.after_exchange,
+                pre_projection: plan.pre_projection,
+                stat_info: plan.stat_info,
+            }),
+            PhysicalPlan::Exchange(plan) => traverse(*plan.input),
+            _ => plan,
+        }
+    }
+
+    traverse(plan)
 }

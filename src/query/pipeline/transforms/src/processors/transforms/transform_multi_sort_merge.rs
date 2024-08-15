@@ -39,7 +39,10 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 
-use super::sort::HeapMerger;
+use super::sort::algorithm::HeapSort;
+use super::sort::algorithm::LoserTreeSort;
+use super::sort::algorithm::SortAlgorithm;
+use super::sort::Merger;
 use super::sort::Rows;
 use super::sort::SimpleRows;
 use super::sort::SortedStream;
@@ -52,6 +55,7 @@ pub fn try_add_multi_sort_merge(
     limit: Option<usize>,
     sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
+    enable_loser_tree: bool,
 ) -> Result<()> {
     debug_assert!(if !remove_order_col {
         schema.has_field(ORDER_COL_NAME)
@@ -81,6 +85,7 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 sort_columns_descriptions,
                 remove_order_col,
+                enable_loser_tree,
             )?);
 
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
@@ -101,76 +106,68 @@ fn create_processor(
     limit: Option<usize>,
     sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
+    enable_loser_tree: bool,
 ) -> Result<Box<dyn Processor>> {
-    Ok(if sort_columns_descriptions.len() == 1 {
-        let sort_type = schema
-            .field(sort_columns_descriptions[0].offset)
-            .data_type();
+    struct Args {
+        inputs: Vec<Arc<InputPort>>,
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
+        block_size: usize,
+        limit: Option<usize>,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
+        remove_order_col: bool,
+        enable_loser_tree: bool,
+    }
+
+    let args = Args {
+        inputs,
+        output,
+        schema,
+        block_size,
+        limit,
+        sort_desc: sort_columns_descriptions,
+        remove_order_col,
+        enable_loser_tree,
+    };
+
+    fn create<R>(args: Args) -> Result<Box<dyn Processor>>
+    where R: Rows + Send + 'static {
+        Ok(if args.enable_loser_tree {
+            Box::new(MultiSortMergeProcessor::<LoserTreeSort<R>>::create(
+                args.inputs,
+                args.output,
+                args.schema,
+                args.block_size,
+                args.limit,
+                args.sort_desc,
+                args.remove_order_col,
+            )?)
+        } else {
+            Box::new(MultiSortMergeProcessor::<HeapSort<R>>::create(
+                args.inputs,
+                args.output,
+                args.schema,
+                args.block_size,
+                args.limit,
+                args.sort_desc,
+                args.remove_order_col,
+            )?)
+        })
+    }
+
+    Ok(if args.sort_desc.len() == 1 {
+        let sort_type = args.schema.field(args.sort_desc[0].offset).data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => Box::new(MultiSortMergeProcessor::<
-                    SimpleRows<NumberType<NUM_TYPE>>,
-                >::create(
-                    inputs,
-                    output,
-                    schema,
-                    block_size,
-                    limit,
-                    sort_columns_descriptions,
-                    remove_order_col,
-                )?),
+                NumberDataType::NUM_TYPE => create::<SimpleRows<NumberType<NUM_TYPE>>>(args)?,
             }),
-            DataType::Date => Box::new(MultiSortMergeProcessor::<SimpleRows<DateType>>::create(
-                inputs,
-                output,
-                schema,
-                block_size,
-                limit,
-                sort_columns_descriptions,
-                remove_order_col,
-            )?),
-            DataType::Timestamp => Box::new(
-                MultiSortMergeProcessor::<SimpleRows<TimestampType>>::create(
-                    inputs,
-                    output,
-                    schema,
-                    block_size,
-                    limit,
-                    sort_columns_descriptions,
-                    remove_order_col,
-                )?,
-            ),
-            DataType::String => {
-                Box::new(MultiSortMergeProcessor::<SimpleRows<StringType>>::create(
-                    inputs,
-                    output,
-                    schema,
-                    block_size,
-                    limit,
-                    sort_columns_descriptions,
-                    remove_order_col,
-                )?)
-            }
-            _ => Box::new(MultiSortMergeProcessor::<BinaryColumn>::create(
-                inputs,
-                output,
-                schema,
-                block_size,
-                limit,
-                sort_columns_descriptions,
-                remove_order_col,
-            )?),
+            DataType::Date => create::<SimpleRows<DateType>>(args)?,
+            DataType::Timestamp => create::<SimpleRows<TimestampType>>(args)?,
+            DataType::String => create::<SimpleRows<StringType>>(args)?,
+            _ => create::<BinaryColumn>(args)?,
         }
     } else {
-        Box::new(MultiSortMergeProcessor::<BinaryColumn>::create(
-            inputs,
-            output,
-            schema,
-            block_size,
-            limit,
-            sort_columns_descriptions,
-            remove_order_col,
-        )?)
+        create::<BinaryColumn>(args)?
     })
 }
 
@@ -208,10 +205,10 @@ impl SortedStream for BlockStream {
 }
 
 /// TransformMultiSortMerge is a processor with multiple input ports;
-pub struct MultiSortMergeProcessor<R>
-where R: Rows
+pub struct MultiSortMergeProcessor<A>
+where A: SortAlgorithm
 {
-    merger: HeapMerger<R, BlockStream>,
+    merger: Merger<A, BlockStream>,
 
     /// This field is used to drive the processor's state.
     ///
@@ -222,8 +219,8 @@ where R: Rows
     output_data: VecDeque<DataBlock>,
 }
 
-impl<R> MultiSortMergeProcessor<R>
-where R: Rows
+impl<A> MultiSortMergeProcessor<A>
+where A: SortAlgorithm
 {
     pub fn create(
         inputs: Vec<Arc<InputPort>>,
@@ -238,7 +235,8 @@ where R: Rows
             .iter()
             .map(|i| BlockStream::new(i.clone(), remove_order_col))
             .collect::<Vec<_>>();
-        let merger = HeapMerger::create(schema, streams, sort_desc, block_size, limit);
+        let merger =
+            Merger::<A, BlockStream>::create(schema, streams, sort_desc, block_size, limit);
         Ok(Self {
             merger,
             inputs,
@@ -248,8 +246,8 @@ where R: Rows
     }
 }
 
-impl<R> Processor for MultiSortMergeProcessor<R>
-where R: Rows + Send + 'static
+impl<A> Processor for MultiSortMergeProcessor<A>
+where A: SortAlgorithm + Send + 'static
 {
     fn name(&self) -> String {
         "MultiSortMerge".to_string()

@@ -15,9 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
@@ -36,6 +40,8 @@ pub struct PhysicalPlanBuilder {
     pub(crate) dry_run: bool,
     // Record cte_idx and the cte's output columns
     pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
+    // DataMutation info, used to build MergeInto physical plan
+    pub(crate) mutation_build_info: Option<MutationBuildInfo>,
 }
 
 impl PhysicalPlanBuilder {
@@ -47,6 +53,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             cte_output_columns: Default::default(),
+            mutation_build_info: None,
         }
     }
 
@@ -66,8 +73,7 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion::async_recursion(#[recursive::recursive])]
     pub async fn build_physical_plan(
         &mut self,
         s_expr: &SExpr,
@@ -116,12 +122,34 @@ impl PhysicalPlanBuilder {
                 self.build_expression_scan(s_expr, scan, required).await
             }
             RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
-            RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
+            RelOperator::RecursiveCteScan(scan) => {
+                self.build_recursive_cte_scan(scan, stat_info).await
+            }
             RelOperator::AsyncFunction(async_func) => {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
+            RelOperator::Mutation(mutation) => {
+                self.build_mutation(s_expr, mutation, required).await
+            }
+            RelOperator::MutationSource(mutation_source) => {
+                self.build_mutation_source(mutation_source).await
+            }
+            RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
+            RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
         }
     }
+
+    pub fn set_mutation_build_info(&mut self, mutation_build_info: MutationBuildInfo) {
+        self.mutation_build_info = Some(mutation_build_info);
+    }
+}
+
+#[derive(Clone)]
+pub struct MutationBuildInfo {
+    pub table_info: TableInfo,
+    pub table_snapshot: Option<Arc<TableSnapshot>>,
+    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
+    pub partitions: Option<Partitions>,
 }

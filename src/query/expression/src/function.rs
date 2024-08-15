@@ -48,6 +48,7 @@ use crate::FunctionDomain;
 use crate::Scalar;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
@@ -94,7 +95,7 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct FunctionContext {
     pub tz: TzLUT,
     pub now: DateTime<Utc>,
@@ -114,6 +115,32 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
+    pub enable_dst_hour_fix: bool,
+    pub enable_strict_datetime_parser: bool,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        FunctionContext {
+            tz: Default::default(),
+            now: Default::default(),
+            rounding_mode: false,
+            disable_variant_check: false,
+            openai_api_chat_base_url: "".to_string(),
+            openai_api_embedding_base_url: "".to_string(),
+            openai_api_key: "".to_string(),
+            openai_api_version: "".to_string(),
+            openai_api_embedding_model: "".to_string(),
+            openai_api_completion_model: "".to_string(),
+            external_server_connect_timeout_secs: 0,
+            external_server_request_timeout_secs: 0,
+            external_server_request_batch_rows: 0,
+            geometry_output_format: Default::default(),
+            parse_datetime_ignore_remainder: false,
+            enable_dst_hour_fix: false,
+            enable_strict_datetime_parser: true,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -157,7 +184,7 @@ pub struct FunctionRegistry {
 
     /// Default cast rules for all functions.
     pub default_cast_rules: Vec<(DataType, DataType)>,
-    /// Cast rules for specific functions, in addition to default cast rules.
+    /// Cast rules for specific functions, which will override the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
@@ -434,8 +461,7 @@ impl FunctionRegistry {
         &mut self,
         default_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
     ) {
-        self.default_cast_rules
-            .extend(default_cast_rules.into_iter());
+        self.default_cast_rules.extend(default_cast_rules);
     }
 
     pub fn register_additional_cast_rules(
@@ -446,7 +472,7 @@ impl FunctionRegistry {
         self.additional_cast_rules
             .entry(fn_name.to_string())
             .or_default()
-            .extend(additional_cast_rules.into_iter());
+            .extend(additional_cast_rules);
     }
 
     pub fn register_auto_try_cast_rules(
@@ -571,6 +597,7 @@ impl<'a> EvalContext<'a> {
         params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        expr_name: &str,
         selection: Option<&[u32]>,
     ) -> Result<()> {
         if self.suppress_error {
@@ -578,24 +605,26 @@ impl<'a> EvalContext<'a> {
         }
         match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = if let Some(selection) = selection {
-                    if let Some(first_invalid) =
-                        selection.iter().find(|idx| !valids.get(**idx as usize))
-                    {
-                        *first_invalid as usize
-                    } else {
-                        return Ok(());
+                let first_error_row = match selection {
+                    None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+                    Some(selection) if valids.len() == 1 => {
+                        if valids.get(0) || selection.is_empty() {
+                            return Ok(());
+                        }
+
+                        selection.first().map(|x| *x as usize).unwrap()
                     }
-                } else {
-                    valids
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, valid)| !valid)
-                        .take(1)
-                        .next()
-                        .unwrap()
-                        .0
+                    Some(selection) => {
+                        let Some(first_invalid) =
+                            selection.iter().find(|idx| !valids.get(**idx as usize))
+                        else {
+                            return Ok(());
+                        };
+
+                        *first_invalid as usize
+                    }
                 };
+
                 let args = args
                     .iter()
                     .map(|arg| {
@@ -605,10 +634,12 @@ impl<'a> EvalContext<'a> {
                     .join(", ");
 
                 let err_msg = if params.is_empty() {
-                    format!("{error} while evaluating function `{func_name}({args})`")
+                    format!(
+                        "{error} while evaluating function `{func_name}({args})` in expr `{expr_name}`"
+                    )
                 } else {
                     format!(
-                        "{error} while evaluating function `{func_name}({params})({args})`",
+                        "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
                         params = params.iter().join(", ")
                     )
                 };

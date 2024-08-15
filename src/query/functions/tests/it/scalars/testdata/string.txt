@@ -1963,9 +1963,9 @@ error:
   --> SQL:1:1
   |
 1 | concat_ws('', a, 2)
-  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `concat_ws(String, Boolean, UInt8)`
+  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `concat_ws(String, Boolean, UInt8)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   concat_ws(String, String, String) :: String                      : unable to unify `Boolean` with `String`
   concat_ws(String NULL, String NULL, String NULL) :: String NULL  : unable to unify `Boolean` with `String`
 
@@ -2063,9 +2063,9 @@ error:
   --> SQL:1:1
   |
 1 | bin(d)
-  | ^^^^^^ no overload satisfies `bin(Float64)`
+  | ^^^^^^ no function matches signature `bin(Float64)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   bin(Int64) :: String            : unable to unify `Float64` with `Int64`
   bin(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
 
@@ -2075,7 +2075,7 @@ error:
   --> SQL:1:5
   |
 1 | bin(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`, during run expr: `bin(to_int64(e))`
 
 
 
@@ -2171,9 +2171,9 @@ error:
   --> SQL:1:1
   |
 1 | oct(d)
-  | ^^^^^^ no overload satisfies `oct(Float64)`
+  | ^^^^^^ no function matches signature `oct(Float64)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   oct(Int64) :: String            : unable to unify `Float64` with `Int64`
   oct(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
 
@@ -2183,7 +2183,7 @@ error:
   --> SQL:1:5
   |
 1 | oct(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`, during run expr: `oct(to_int64(e))`
 
 
 
@@ -2279,15 +2279,13 @@ error:
   --> SQL:1:1
   |
 1 | hex(d)
-  | ^^^^^^ no overload satisfies `to_hex(Float64)`
+  | ^^^^^^ no function matches signature `to_hex(Float64)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   to_hex(String) :: String            : unable to unify `Float64` with `String`
   to_hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
   to_hex(Int64) :: String             : unable to unify `Float64` with `Int64`
-  to_hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
-  to_hex(Binary) :: String            : unable to unify `Float64` with `Binary`
-  to_hex(Binary NULL) :: String NULL  : unable to unify `Float64` with `Binary`
+... and 3 more
 
 
 
@@ -2353,7 +2351,7 @@ error:
   --> SQL:1:1
   |
 1 | lpad('', 1, '')
-  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')`
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')` in expr `lpad('', to_uint64(1), '')`
 
 
 
@@ -2376,14 +2374,10 @@ output         : '?'
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:12
   |
 1 | lpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int16, String)`
-
-has tried possible overloads:
-  lpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
-  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64(- 1)`, during run expr: `lpad('hi', to_uint64(- 1), '?')`
 
 
 
@@ -2391,7 +2385,7 @@ error:
   --> SQL:1:1
   |
 1 | lpad('hi', 2000000, '?')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')` in expr `lpad('hi', to_uint64(2000000), '?')`
 
 
 
@@ -2423,7 +2417,7 @@ error:
   --> SQL:1:1
   |
 1 | lpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')` in expr `lpad(a, to_uint64(b), c)`
 
 
 
@@ -2467,7 +2461,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad('', 1, '')
-  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')`
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')` in expr `rpad('', to_uint64(1), '')`
 
 
 
@@ -2490,14 +2484,10 @@ output         : '?'
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:12
   |
 1 | rpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int16, String)`
-
-has tried possible overloads:
-  rpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
-  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64(- 1)`, during run expr: `rpad('hi', to_uint64(- 1), '?')`
 
 
 
@@ -2505,7 +2495,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad('hi', 2000000, '?')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')` in expr `rpad('hi', to_uint64(2000000), '?')`
 
 
 
@@ -2537,7 +2527,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')` in expr `rpad(a, to_uint64(b), c)`
 
 
 
@@ -2925,9 +2915,9 @@ error:
   --> SQL:1:1
   |
 1 | char(c2)
-  | ^^^^^^^^ no overload satisfies `char(UInt16)`
+  | ^^^^^^^^ no function matches signature `char(UInt16)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   char(UInt8) :: Binary            : unable to unify `UInt16` with `UInt8`
   char(UInt8 NULL) :: Binary NULL  : unable to unify `UInt16` with `UInt8`
 
@@ -3068,7 +3058,7 @@ error:
   --> SQL:1:1
   |
 1 | repeat('3', 1000001)
-  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat('3', 1000001)`
+  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat('3', 1000001)` in expr `repeat('3', to_uint64(1000001))`
 
 
 
@@ -3099,7 +3089,7 @@ error:
   --> SQL:1:1
   |
 1 | insert('Quadratic', 3, 4, 'What', 4)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `insert(String, UInt8, UInt8, String, UInt8)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `insert(String, UInt8, UInt8, String, UInt8)`, you might need to add explicit type casts.
 
 
 
@@ -3107,7 +3097,7 @@ error:
   --> SQL:1:1
   |
 1 | insert('Quadratic', 3, 4)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `insert(String, UInt8, UInt8)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `insert(String, UInt8, UInt8)`, you might need to add explicit type casts.
 
 
 
@@ -3257,7 +3247,7 @@ error:
   --> SQL:1:1
   |
 1 | space(2000000)
-  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)`
+  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)` in expr `space(to_uint64(2000000))`
 
 
 
@@ -3312,23 +3302,23 @@ ast            : left('123456789', a)
 raw expr       : left('123456789', a::UInt8)
 checked expr   : left<String, UInt64>("123456789", to_uint64<UInt8>(a))
 evaluation:
-+--------+----------+-------------+
-|        | a        | Output      |
-+--------+----------+-------------+
-| Type   | UInt8    | String      |
-| Domain | {0..=10} | {""..}      |
-| Row 0  | 0        | ''          |
-| Row 1  | 1        | '1'         |
-| Row 2  | 2        | '12'        |
-| Row 3  | 3        | '123'       |
-| Row 4  | 4        | '1234'      |
-| Row 5  | 5        | '12345'     |
-| Row 6  | 6        | '123456'    |
-| Row 7  | 7        | '1234567'   |
-| Row 8  | 8        | '12345678'  |
-| Row 9  | 9        | '123456789' |
-| Row 10 | 10       | '123456789' |
-+--------+----------+-------------+
++--------+----------+--------------------+
+|        | a        | Output             |
++--------+----------+--------------------+
+| Type   | UInt8    | String             |
+| Domain | {0..=10} | {""..="123456789"} |
+| Row 0  | 0        | ''                 |
+| Row 1  | 1        | '1'                |
+| Row 2  | 2        | '12'               |
+| Row 3  | 3        | '123'              |
+| Row 4  | 4        | '1234'             |
+| Row 5  | 5        | '12345'            |
+| Row 6  | 6        | '123456'           |
+| Row 7  | 7        | '1234567'          |
+| Row 8  | 8        | '12345678'         |
+| Row 9  | 9        | '123456789'        |
+| Row 10 | 10       | '123456789'        |
++--------+----------+--------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                        |
@@ -3389,6 +3379,15 @@ evaluation (internal):
 ast            : mid('1234567890', -3, 3)
 raw expr       : mid('1234567890', minus(3), 3)
 checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<UInt8>(3_u8))
+optimized expr : "890"
+output type    : String
+output domain  : {"890"..="890"}
+output         : '890'
+
+
+ast            : mid('1234567890', -3, 4 - 1)
+raw expr       : mid('1234567890', minus(3), minus(4, 1))
+checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8)))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}

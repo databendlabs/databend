@@ -43,8 +43,8 @@ use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::UnlockApi;
 use databend_common_users::UserApiProvider;
+use fastrace::func_name;
 use futures_util::StreamExt;
-use minitrace::func_name;
 use parking_lot::RwLock;
 
 use crate::locks::lock_holder::LockHolder;
@@ -96,7 +96,7 @@ impl LockManager {
         ctx: Arc<dyn TableContext>,
         lock: &T,
         should_retry: bool,
-    ) -> Result<Option<LockGuard>> {
+    ) -> Result<Option<Arc<LockGuard>>> {
         let user = ctx.get_current_user()?.name;
         let node = ctx.get_cluster().local_id.clone();
         let query_id = ctx.get_current_session_id();
@@ -200,7 +200,7 @@ impl LockManager {
             }?;
         }
 
-        Ok(Some(guard))
+        Ok(Some(Arc::new(guard)))
     }
 
     fn insert_lock(&self, revision: u64, lock_holder: Arc<LockHolder>) {

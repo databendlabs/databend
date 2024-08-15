@@ -61,7 +61,7 @@ impl Binder {
         let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         let navigation = if let Some(point) = travel_point {
-            Some(self.resolve_data_travel_point(bind_context, point).await?)
+            Some(self.resolve_data_travel_point(bind_context, point)?)
         } else {
             None
         };

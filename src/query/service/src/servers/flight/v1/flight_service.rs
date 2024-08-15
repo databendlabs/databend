@@ -28,9 +28,11 @@ use databend_common_arrow::arrow_format::flight::data::Result as FlightResult;
 use databend_common_arrow::arrow_format::flight::data::SchemaResult;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures_util::stream;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -148,6 +150,16 @@ impl FlightService for DatabendQueryFlightService {
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+
+        let secret = request.get_metadata("secret")?;
+
+        let config = GlobalConfig::instance();
+        if secret != config.query.node_secret {
+            return Err(Into::into(ErrorCode::AuthenticateFailure(format!(
+                "authenticate failure while flight, node: {}",
+                config.query.node_id,
+            ))));
+        }
 
         let action = request.into_inner();
         match self

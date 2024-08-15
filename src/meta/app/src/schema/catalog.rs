@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::Deref;
 
@@ -29,6 +30,7 @@ pub enum CatalogType {
     Default = 1,
     Hive = 2,
     Iceberg = 3,
+    Share = 4,
 }
 
 impl From<databend_common_ast::ast::CatalogType> for CatalogType {
@@ -37,6 +39,7 @@ impl From<databend_common_ast::ast::CatalogType> for CatalogType {
             databend_common_ast::ast::CatalogType::Default => CatalogType::Default,
             databend_common_ast::ast::CatalogType::Hive => CatalogType::Hive,
             databend_common_ast::ast::CatalogType::Iceberg => CatalogType::Iceberg,
+            databend_common_ast::ast::CatalogType::Share => CatalogType::Share,
         }
     }
 }
@@ -52,6 +55,7 @@ pub enum CatalogOption {
     Hive(HiveCatalogOption),
     // Catalog option for Iceberg.
     Iceberg(IcebergCatalogOption),
+    Share(ShareCatalogOption),
 }
 
 impl CatalogOption {
@@ -60,6 +64,7 @@ impl CatalogOption {
             CatalogOption::Default => CatalogType::Default,
             CatalogOption::Hive(_) => CatalogType::Hive,
             CatalogOption::Iceberg(_) => CatalogType::Iceberg,
+            CatalogOption::Share(_) => CatalogType::Share,
         }
     }
 }
@@ -71,10 +76,48 @@ pub struct HiveCatalogOption {
     pub storage_params: Option<Box<StorageParams>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum IcebergCatalogType {
+    Rest = 1,
+    Hms = 2,
+}
+
 /// Option for creating a iceberg catalog
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct IcebergCatalogOption {
-    pub storage_params: Box<StorageParams>,
+pub enum IcebergCatalogOption {
+    Rest(IcebergRestCatalogOption),
+    Hms(IcebergHmsCatalogOption),
+}
+
+impl IcebergCatalogOption {
+    /// Fetch the iceberg catalog type.
+    pub fn catalog_type(&self) -> IcebergCatalogType {
+        match self {
+            IcebergCatalogOption::Rest(_) => IcebergCatalogType::Rest,
+            IcebergCatalogOption::Hms(_) => IcebergCatalogType::Hms,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShareCatalogOption {
+    pub provider: String,
+    pub share_name: String,
+    pub share_endpoint: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IcebergRestCatalogOption {
+    pub uri: String,
+    pub warehouse: String,
+    pub props: HashMap<String, String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IcebergHmsCatalogOption {
+    pub address: String,
+    pub warehouse: String,
+    pub props: HashMap<String, String>,
 }
 
 /// Same as `CatalogNameIdent`, but with `serde` support,
@@ -105,7 +148,7 @@ impl Display for CatalogName {
 // serde is required by `CommitSink.catalog_info`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CatalogInfo {
-    pub id: catalog_info::CatalogId,
+    pub id: CatalogId,
     pub name_ident: CatalogName,
     pub meta: CatalogMeta,
 }
@@ -131,19 +174,8 @@ mod catalog_info {
     }
 }
 
-impl CatalogInfo {
-    /// Get the catalog type via catalog info.
-    pub fn catalog_type(&self) -> CatalogType {
-        self.meta.catalog_option.catalog_type()
-    }
-
-    /// Get the catalog name via catalog info.
-    pub fn catalog_name(&self) -> &str {
-        &self.name_ident.catalog_name
-    }
-
-    /// Create a new default catalog info.
-    pub fn new_default() -> CatalogInfo {
+impl Default for CatalogInfo {
+    fn default() -> Self {
         Self {
             id: CatalogId { catalog_id: 0 },
             name_ident: CatalogName {
@@ -156,6 +188,18 @@ impl CatalogInfo {
                 created_on: Default::default(),
             },
         }
+    }
+}
+
+impl CatalogInfo {
+    /// Get the catalog type via catalog info.
+    pub fn catalog_type(&self) -> CatalogType {
+        self.meta.catalog_option.catalog_type()
+    }
+
+    /// Get the catalog name via catalog info.
+    pub fn catalog_name(&self) -> &str {
+        &self.name_ident.catalog_name
     }
 }
 

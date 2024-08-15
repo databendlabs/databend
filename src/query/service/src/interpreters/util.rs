@@ -12,23 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::quote::ident_needs_quote;
-use databend_common_ast::ast::quote::QuotedIdent;
-use databend_common_ast::parser::Dialect;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-
-pub fn format_name(name: &str, quoted_ident_case_sensitive: bool, dialect: Dialect) -> String {
-    // Db-s -> "Db-s" ; dbs -> dbs
-    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive
-        || ident_needs_quote(name)
-    {
-        QuotedIdent(name, dialect.default_ident_quote()).to_string()
-    } else {
-        name.to_string()
-    }
-}
 
 #[allow(clippy::type_complexity)]
 pub fn generate_desc_schema(

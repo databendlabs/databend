@@ -31,35 +31,39 @@ use crate::BindContext;
 
 impl Binder {
     /// Bind a location.
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_location(
+    pub(crate) fn bind_location(
         &mut self,
         bind_context: &mut BindContext,
         location: &FileLocation,
         options: &SelectStageOptions,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let location = match location {
-            FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
-                connection: Connection::new(options.connection.clone()),
-                ..uri.clone()
-            }),
-            _ => location.clone(),
-        };
-        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &location).await?;
-        if let Some(f) = &options.file_format {
-            stage_info.file_format_params = match StageFileFormatType::from_str(f) {
-                Ok(t) => FileFormatParams::default_by_type(t)?,
-                _ => self.ctx.get_file_format(f).await?,
+        databend_common_base::runtime::block_on(async move {
+            let location = match location {
+                FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
+                    connection: Connection::new(options.connection.clone()),
+                    ..uri.clone()
+                }),
+                _ => location.clone(),
+            };
+
+            let (mut stage_info, path) =
+                resolve_file_location(self.ctx.as_ref(), &location).await?;
+
+            if let Some(f) = &options.file_format {
+                stage_info.file_format_params = match StageFileFormatType::from_str(f) {
+                    Ok(t) => FileFormatParams::default_by_type(t)?,
+                    _ => databend_common_base::runtime::block_on(self.ctx.get_file_format(f))?,
+                }
             }
-        }
-        let files_info = StageFilesInfo {
-            path,
-            pattern: options.pattern.clone(),
-            files: options.files.clone(),
-        };
-        let table_ctx = self.ctx.clone();
-        self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
-            .await
+            let files_info = StageFilesInfo {
+                path,
+                pattern: options.pattern.clone(),
+                files: options.files.clone(),
+            };
+            let table_ctx = self.ctx.clone();
+            self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
+                .await
+        })
     }
 }

@@ -55,6 +55,8 @@ pub struct CatalogManager {
 
     /// catalog_creators is the catalog creators that registered.
     pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
+
+    conf: InnerConfig,
 }
 
 impl CatalogManager {
@@ -99,7 +101,8 @@ impl CatalogManager {
             let creator = catalog_creators.get(&CatalogType::Hive).ok_or_else(|| {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
-            let ctl = creator.try_create(&CatalogInfo {
+
+            let ctl_info = CatalogInfo {
                 id: CatalogIdIdent::new(&tenant, 0).into(),
                 name_ident: CatalogNameIdent::new(tenant.clone(), name).into(),
                 meta: CatalogMeta {
@@ -109,7 +112,8 @@ impl CatalogManager {
                     }),
                     created_on: Utc::now(),
                 },
-            })?;
+            };
+            let ctl = creator.try_create(Arc::new(ctl_info), conf.to_owned(), &meta)?;
             external_catalogs.insert(name.clone(), ctl);
         }
 
@@ -118,6 +122,7 @@ impl CatalogManager {
             default_catalog,
             external_catalogs,
             catalog_creators,
+            conf: conf.to_owned(),
         };
 
         Ok(Arc::new(catalog_manager))
@@ -137,7 +142,7 @@ impl CatalogManager {
     /// build_catalog builds a catalog from catalog info.
     pub fn build_catalog(
         &self,
-        info: &CatalogInfo,
+        info: Arc<CatalogInfo>,
         txn_mgr: TxnManagerRef,
     ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
@@ -151,7 +156,7 @@ impl CatalogManager {
             .get(&typ)
             .ok_or_else(|| ErrorCode::BadArguments(format!("unknown catalog type: {:?}", typ)))?;
 
-        creator.try_create(info)
+        creator.try_create(info, self.conf.clone(), &self.meta)
     }
 
     /// Get a catalog from manager.
@@ -182,7 +187,7 @@ impl CatalogManager {
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
 
-        self.build_catalog(&info, txn_mgr)
+        self.build_catalog(info, txn_mgr)
     }
 
     /// Create a new catalog.
@@ -198,7 +203,7 @@ impl CatalogManager {
             ));
         }
 
-        if self.external_catalogs.get(req.catalog_name()).is_some() {
+        if self.external_catalogs.contains_key(req.catalog_name()) {
             return Err(ErrorCode::BadArguments(
                 "catalog already exists that cannot be created".to_string(),
             ));
@@ -224,7 +229,7 @@ impl CatalogManager {
             ));
         }
 
-        if self.external_catalogs.get(catalog_name).is_some() {
+        if self.external_catalogs.contains_key(catalog_name) {
             return Err(ErrorCode::BadArguments(
                 "catalog already exists that cannot be dropped".to_string(),
             ));
@@ -255,7 +260,7 @@ impl CatalogManager {
             .await?;
 
         for info in infos {
-            catalogs.push(self.build_catalog(&info, txn_mgr.clone())?);
+            catalogs.push(self.build_catalog(info, txn_mgr.clone())?);
         }
 
         Ok(catalogs)

@@ -23,7 +23,6 @@ use crate::ast::write_dot_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
-use crate::ast::ShareNameIdent;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowDatabasesStmt {
@@ -71,7 +70,6 @@ pub struct CreateDatabaseStmt {
     pub database: DatabaseRef,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
-    pub from_share: Option<ShareNameIdent>,
 }
 
 impl Display for CreateDatabaseStmt {
@@ -89,9 +87,6 @@ impl Display for CreateDatabaseStmt {
 
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
-        }
-        if let Some(from_share) = &self.from_share {
-            write!(f, " FROM SHARE {from_share}",)?;
         }
 
         // TODO(leiysky): display rest information

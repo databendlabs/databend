@@ -16,6 +16,9 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+mod share_endpoint_client;
+pub use share_endpoint_client::ShareEndpointClient;
+
 mod layer;
 pub use layer::create_share_table_operator;
 
@@ -24,3 +27,6 @@ pub use signer::SharedSigner;
 
 mod share_endpoint;
 pub use share_endpoint::ShareEndpointManager;
+
+mod share_presigned_cache_manager;
+pub use share_presigned_cache_manager::SharePresignedCacheManager;

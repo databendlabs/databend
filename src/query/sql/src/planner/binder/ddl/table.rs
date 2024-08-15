@@ -54,15 +54,20 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -72,8 +77,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
-use databend_common_storages_delta::DeltaTable;
-use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
@@ -92,6 +95,8 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::executor::cast_expr_to_non_null_boolean;
+use crate::optimizer::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
@@ -107,14 +112,15 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
-use crate::plans::LockTableOption;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
-use crate::plans::OptimizeTableAction;
-use crate::plans::OptimizeTablePlan;
+use crate::plans::OptimizeCompactBlock;
+use crate::plans::OptimizeCompactSegmentPlan;
+use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
-use crate::plans::ReclusterTablePlan;
+use crate::plans::Recluster;
+use crate::plans::RelOperator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
@@ -497,7 +503,7 @@ impl Binder {
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -517,7 +523,7 @@ impl Binder {
                 let (source_schema, source_comments, inverted_indexes) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -539,9 +545,8 @@ impl Binder {
                     Engine::Iceberg => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let dop = DataOperator::try_new(&sp)?;
-                        let table = IcebergTable::load_iceberg_table(dop).await?;
-                        let table_schema = IcebergTable::get_schema(&table).await?;
+                        let (table_schema, _) =
+                            self.ctx.load_datalake_schema("iceberg", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
@@ -551,8 +556,8 @@ impl Binder {
                     Engine::Delta => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let table = DeltaTable::load(&sp).await?;
-                        let (table_schema, meta) = DeltaTable::get_meta(&table).await?;
+                        let (table_schema, meta) =
+                            self.ctx.load_datalake_schema("delta", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
@@ -651,7 +656,6 @@ impl Binder {
             engine,
             engine_options,
             storage_params,
-            read_only_attach: false,
             part_prefix,
             options,
             field_comments,
@@ -731,7 +735,6 @@ impl Binder {
             engine: Engine::Fuse,
             engine_options: BTreeMap::new(),
             storage_params: Some(sp),
-            read_only_attach: stmt.read_only,
             part_prefix,
             options,
             field_comments: vec![],
@@ -870,7 +873,8 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, comment) = self.analyze_add_column(column, schema).await?;
+                let (field, comment, is_deterministic) =
+                    self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -886,31 +890,44 @@ impl Binder {
                     field,
                     comment,
                     option,
+                    is_deterministic,
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
+                let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
-                        ModifyColumnActionInPlan::SetMaskingPolicy(
-                            column.to_string(),
-                            name.to_string(),
-                        )
+                        let column = self.normalize_object_identifier(column);
+                        ModifyColumnActionInPlan::SetMaskingPolicy(column, name.to_string())
                     }
                     ModifyColumnAction::UnsetMaskingPolicy(column) => {
-                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column.to_string())
+                        let column = self.normalize_object_identifier(column);
+                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column)
                     }
                     ModifyColumnAction::ConvertStoredComputedColumn(column) => {
-                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column.to_string())
+                        let column = self.normalize_object_identifier(column);
+                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column)
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
                         let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        // try add lock table.
+                        lock_guard = self
+                            .ctx
+                            .clone()
+                            .acquire_table_lock(
+                                &catalog,
+                                &database,
+                                &table,
+                                &LockTableOption::LockWithRetry,
+                            )
+                            .await?;
                         let schema = self
                             .ctx
                             .get_table(&catalog, &database, &table)
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, comment) =
+                            let (field, comment, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -922,14 +939,16 @@ impl Binder {
                     database,
                     table,
                     action: action_in_plan,
+                    lock_guard,
                 })))
             }
             AlterTableAction::DropColumn { column } => {
+                let column = self.normalize_object_identifier(column);
                 Ok(Plan::DropTableColumn(Box::new(DropTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    column: column.to_string(),
+                    column,
                 })))
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
@@ -963,40 +982,55 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let (_, mut context) = self
-                    .bind_table_reference(bind_context, table_reference)
-                    .await?;
+                let filters = if let Some(expr) = selection {
+                    let (_, mut context) =
+                        self.bind_table_reference(bind_context, table_reference)?;
 
-                let mut scalar_binder = ScalarBinder::new(
-                    &mut context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
-                );
+                    let mut scalar_binder = ScalarBinder::new(
+                        &mut context,
+                        self.ctx.clone(),
+                        &self.name_resolution_ctx,
+                        self.metadata.clone(),
+                        &[],
+                        self.m_cte_bound_ctx.clone(),
+                        self.ctes_map.clone(),
+                    );
+                    scalar_binder.forbid_udf();
+                    let (scalar, _) = scalar_binder.bind(expr)?;
 
-                let push_downs = if let Some(expr) = selection {
-                    let (scalar, _) = scalar_binder.bind(expr).await?;
-                    Some(scalar)
+                    // prepare the filter expression
+                    let filter = cast_expr_to_non_null_boolean(
+                        scalar
+                            .as_expr()?
+                            .project_column_ref(|col| col.column_name.clone()),
+                    )?;
+                    // prepare the inverse filter expression
+                    let inverted_filter =
+                        check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+                    Some(Filters {
+                        filter: filter.as_remote_expr(),
+                        inverted_filter: inverted_filter.as_remote_expr(),
+                    })
                 } else {
                     None
                 };
 
-                Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant,
+                let recluster = RelOperator::Recluster(Recluster {
                     catalog,
                     database,
                     table,
-                    is_final: *is_final,
-                    metadata: self.metadata.clone(),
-                    push_downs,
+                    filters,
                     limit: limit.map(|v| v as usize),
-                })))
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+                Ok(Plan::ReclusterTable {
+                    s_expr: Box::new(s_expr),
+                    is_final: *is_final,
+                })
             }
             AlterTableAction::FlashbackTo { point } => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant,
                     catalog,
@@ -1093,31 +1127,68 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
-        let action = match ast_action {
-            AstOptimizeTableAction::All => OptimizeTableAction::All,
+        let limit = limit.map(|v| v as usize);
+        let plan = match ast_action {
+            AstOptimizeTableAction::All => {
+                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                    catalog,
+                    database,
+                    table,
+                    limit: CompactionLimits {
+                        segment_limit: limit,
+                        block_limit: None,
+                    },
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                Plan::OptimizeCompactBlock {
+                    s_expr: Box::new(s_expr),
+                    need_purge: true,
+                }
+            }
             AstOptimizeTableAction::Purge { before } => {
-                let p = if let Some(point) = before {
-                    let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let instant = if let Some(point) = before {
+                    let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
                 } else {
                     None
                 };
-                OptimizeTableAction::Purge(p)
+                Plan::OptimizePurge(Box::new(OptimizePurgePlan {
+                    catalog,
+                    database,
+                    table,
+                    instant,
+                    num_snapshot_limit: limit,
+                }))
             }
             AstOptimizeTableAction::Compact { target } => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks(None),
-                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+                CompactTarget::Block => {
+                    let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                        catalog,
+                        database,
+                        table,
+                        limit: CompactionLimits {
+                            segment_limit: limit,
+                            block_limit: None,
+                        },
+                    });
+                    let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                    Plan::OptimizeCompactBlock {
+                        s_expr: Box::new(s_expr),
+                        need_purge: false,
+                    }
+                }
+                CompactTarget::Segment => {
+                    Plan::OptimizeCompactSegment(Box::new(OptimizeCompactSegmentPlan {
+                        catalog,
+                        database,
+                        table,
+                        num_segment_limit: limit,
+                    }))
+                }
             },
         };
 
-        Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
-            catalog,
-            database,
-            table,
-            action,
-            limit: limit.map(|v| v as usize),
-            lock_opt: LockTableOption::LockWithRetry,
-        })))
+        Ok(plan)
     }
 
     #[async_backtrace::framed]
@@ -1278,17 +1349,19 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, String)> {
+    ) -> Result<(TableField, String, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
+        let mut is_deterministic = true;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
-                    let expr =
-                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr, true)?;
+                    let (expr, expr_is_deterministic) =
+                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
                     field = field.with_default_expr(Some(expr));
+                    is_deterministic = expr_is_deterministic;
                 }
                 ColumnExpr::Virtual(virtual_expr) => {
                     let expr = parse_computed_expr_to_string(
@@ -1308,7 +1381,7 @@ impl Binder {
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, comment))
+        Ok((field, comment, is_deterministic))
     }
 
     #[async_backtrace::framed]
@@ -1329,12 +1402,8 @@ impl Binder {
             if let Some(expr) = &column.expr {
                 match expr {
                     ColumnExpr::Default(default_expr) => {
-                        let expr = parse_default_expr_to_string(
-                            self.ctx.clone(),
-                            &field,
-                            default_expr,
-                            false,
-                        )?;
+                        let (expr, _) =
+                            parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }
                     _ => has_computed = true,
@@ -1488,6 +1557,12 @@ impl Binder {
                     field.name()
                 )));
             }
+            if field.data_type == TableDataType::Null {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Column `{}` have NULL type is not allowed",
+                    field.name()
+                )));
+            }
         }
 
         Ok(())
@@ -1545,7 +1620,7 @@ impl Binder {
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
+            let (cluster_key, _) = scalar_binder.bind(cluster_by)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",

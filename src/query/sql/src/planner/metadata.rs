@@ -21,8 +21,10 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
+use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::Scalar;
@@ -57,6 +59,10 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
+    /// Table column indexes that are lazy materialized.
+    table_lazy_columns: HashMap<IndexType, ColumnSet>,
+    table_source: HashMap<IndexType, DataSourcePlan>,
+    retained_columns: HashSet<IndexType>,
     /// Columns that are lazy materialized.
     lazy_columns: HashSet<IndexType>,
     /// Columns that are used for compute lazy materialized.
@@ -120,6 +126,30 @@ impl Metadata {
 
     pub fn columns(&self) -> &[ColumnEntry] {
         self.columns.as_slice()
+    }
+
+    pub fn add_retained_column(&mut self, index: IndexType) {
+        self.retained_columns.insert(index);
+    }
+
+    pub fn get_retained_column(&self) -> &HashSet<IndexType> {
+        &self.retained_columns
+    }
+
+    pub fn set_table_lazy_columns(&mut self, table_index: IndexType, lazy_columns: ColumnSet) {
+        self.table_lazy_columns.insert(table_index, lazy_columns);
+    }
+
+    pub fn get_table_lazy_columns(&self, table_index: &IndexType) -> Option<ColumnSet> {
+        self.table_lazy_columns.get(table_index).cloned()
+    }
+
+    pub fn set_table_source(&mut self, table_index: IndexType, source: DataSourcePlan) {
+        self.table_source.insert(table_index, source);
+    }
+
+    pub fn get_table_source(&self, table_index: &IndexType) -> Option<&DataSourcePlan> {
+        self.table_source.get(table_index)
     }
 
     pub fn is_lazy_column(&self, index: usize) -> bool {
@@ -381,7 +411,11 @@ impl Metadata {
                     let mut inner_indices = indices.clone();
                     inner_indices.push(i);
                     // create tuple inner field
-                    let inner_name = format!("{}:{}", field.name(), inner_field_name);
+                    let inner_name = format!(
+                        "{}:{}",
+                        field.name(),
+                        display_tuple_field_name(inner_field_name)
+                    );
                     let inner_field = TableField::new(&inner_name, inner_field_type.clone());
                     fields.push_front((inner_indices, inner_field));
                 }

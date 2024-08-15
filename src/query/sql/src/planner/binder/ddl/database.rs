@@ -30,8 +30,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use log::debug;
 
 use crate::binder::Binder;
@@ -213,7 +211,6 @@ impl Binder {
             database: DatabaseRef { catalog, database },
             engine,
             options,
-            from_share,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
@@ -223,17 +220,7 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
-        // change the database engine to share if create from share
-        let engine = if from_share.is_some() {
-            &Some(DatabaseEngine::Share)
-        } else {
-            engine
-        };
-        let meta = self.database_meta(
-            engine,
-            options,
-            &from_share.clone().map(TryInto::try_into).transpose()?,
-        )?;
+        let meta = self.database_meta(engine, options)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             create_option: create_option.clone().into(),
@@ -248,7 +235,6 @@ impl Binder {
         &self,
         engine: &Option<DatabaseEngine>,
         options: &[SQLProperty],
-        from_share: &Option<ShareNameIdent>,
     ) -> Result<DatabaseMeta> {
         let options = options
             .iter()
@@ -265,7 +251,8 @@ impl Binder {
             engine: engine.to_string(),
             engine_options,
             options,
-            from_share: from_share.as_ref().map(ShareNameIdentRaw::from),
+            from_share: None,
+            using_share_endpoint: None,
             ..Default::default()
         })
     }

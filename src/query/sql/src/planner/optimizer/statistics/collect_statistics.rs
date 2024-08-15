@@ -18,10 +18,12 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use log::info;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
+use crate::plans::Filter;
 use crate::plans::RelOperator;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -49,6 +51,7 @@ impl CollectStatisticsOptimizer {
         self.collect(s_expr).await
     }
 
+    #[async_recursion::async_recursion(#[recursive::recursive])]
     pub async fn collect(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Scan(scan) => {
@@ -63,10 +66,13 @@ impl CollectStatisticsOptimizer {
                     .column_statistics_provider(self.table_ctx.clone())
                     .await?;
                 let table_stats = table
-                    .table_statistics(self.table_ctx.clone(), scan.change_type.clone())
+                    .table_statistics(self.table_ctx.clone(), true, scan.change_type.clone())
                     .await?;
 
+                let sample_filter = scan.sample_filter(&table_stats)?;
+
                 let mut column_stats = HashMap::new();
+                let mut histograms = HashMap::new();
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
@@ -80,7 +86,16 @@ impl CollectStatisticsOptimizer {
                             if let Some(col_id) = *leaf_index {
                                 let col_stat = column_statistics_provider
                                     .column_statistics(col_id as ColumnId);
+                                if col_stat.is_none() {
+                                    info!("column {} doesn't have global statistics", col_id);
+                                }
                                 column_stats.insert(*column_index, col_stat.cloned());
+                                let histogram =
+                                    column_statistics_provider.histogram(col_id as ColumnId);
+                                if histogram.is_none() {
+                                    info!("column {} doesn't have accurate histogram", col_id);
+                                }
+                                histograms.insert(*column_index, histogram);
                             }
                         }
                     }
@@ -90,9 +105,16 @@ impl CollectStatisticsOptimizer {
                 scan.statistics = Arc::new(Statistics {
                     table_stats,
                     column_stats,
+                    histograms,
                 });
-
-                Ok(s_expr.replace_plan(Arc::new(RelOperator::Scan(scan))))
+                let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan)));
+                if let Some(sample_filter) = sample_filter {
+                    let filter = Filter {
+                        predicates: vec![sample_filter],
+                    };
+                    s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr))
+                }
+                Ok(s_expr)
             }
             RelOperator::MaterializedCte(materialized_cte) => {
                 // Collect the common table expression statistics first.

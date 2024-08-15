@@ -40,3 +40,15 @@ pub fn parse_bitmap(buf: &[u8]) -> Result<RoaringTreemap> {
             },
         )
 }
+
+pub fn deserialize_bitmap(buf: &[u8]) -> databend_common_exception::Result<RoaringTreemap> {
+    if buf.is_empty() {
+        Ok(RoaringTreemap::new())
+    } else {
+        RoaringTreemap::deserialize_from(buf).map_err(|e| {
+            let len = buf.len();
+            let msg = format!("fail to decode bitmap from buffer of size {len}: {e}");
+            ErrorCode::BadBytes(msg)
+        })
+    }
+}

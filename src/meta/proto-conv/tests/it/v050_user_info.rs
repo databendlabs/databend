@@ -18,7 +18,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 
@@ -52,6 +52,7 @@ fn test_decode_v50_user_info() -> anyhow::Result<()> {
             ]
             .to_vec(),
             hash_method: databend_common_meta_app::principal::PasswordHashMethod::DoubleSha1,
+            need_change: false,
         },
         grants: databend_common_meta_app::principal::UserGrantSet::new(
             vec![databend_common_meta_app::principal::GrantEntry::new(

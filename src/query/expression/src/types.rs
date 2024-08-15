@@ -37,6 +37,7 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -367,6 +368,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize);
     fn push_default(builder: &mut Self::ColumnBuilder);
     fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column);
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;

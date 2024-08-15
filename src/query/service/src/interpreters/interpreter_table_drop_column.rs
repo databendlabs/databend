@@ -23,12 +23,12 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_share::update_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
-use crate::interpreters::common::save_share_table_info;
 use crate::interpreters::interpreter_table_add_column::generate_new_snapshot;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -130,20 +130,27 @@ impl Interpreter for DropTableColumnInterpreter {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
+        generate_new_snapshot(self.ctx.as_ref(), table.as_ref(), &mut new_table_meta).await?;
 
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
-        let res = catalog.update_table_meta(table_info, req).await?;
-
-        save_share_table_info(&self.ctx, &res.share_table_info).await?;
+        let resp = catalog.update_single_table_meta(req, table_info).await?;
+        if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+            for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    share_name_vec,
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

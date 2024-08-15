@@ -49,10 +49,10 @@ use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_io::deserialize_bitmap;
 use databend_common_sql::resolve_type_name;
 use itertools::join;
 use rand::Rng;
-use roaring::RoaringTreemap;
 
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
@@ -302,6 +302,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
         (table, table_reference)
     }
@@ -505,6 +506,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
         Some((
             AlterTableStmt {
@@ -551,7 +553,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 buf.extend_from_slice(NULL_BYTES_UPPER.as_bytes());
                             }
                             ScalarRef::Bitmap(v) => {
-                                let rb = RoaringTreemap::deserialize_from(v).unwrap();
+                                let rb = deserialize_bitmap(v).unwrap();
                                 let vals = rb.into_iter().collect::<Vec<_>>();
                                 let s = join(vals.iter(), ",");
                                 buf.push(b'\'');

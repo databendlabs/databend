@@ -22,6 +22,7 @@
 //! - raft_network: for metrics about communication between nodes in raft protocol.
 //! - raft_storage: for metrics about the local storage of a raft node.
 //! - meta_network: for metrics about meta-service grpc api.
+//!
 //! The `field` is arbitrary string.
 
 use std::time::Instant;

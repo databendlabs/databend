@@ -77,7 +77,6 @@ impl PhysicalPlanBuilder {
         }
 
         // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
-
         let input_schema = input_plan.output_schema()?;
 
         // Lazy materialization is enabled.
@@ -162,6 +161,7 @@ impl PhysicalPlanBuilder {
             row_id_col_offset,
             cols_to_fetch,
             fetched_fields,
+            need_wrap_nullable: false,
             stat_info: Some(stat_info),
         }))
     }

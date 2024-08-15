@@ -36,6 +36,7 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use itertools::join;
 use roaring::RoaringTreemap;
@@ -123,7 +124,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_count",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|arg, builder, ctx| {
-            match RoaringTreemap::deserialize_from(arg) {
+            match deserialize_bitmap(arg) {
                 Ok(rb) => {
                     builder.push(rb.len());
                 }
@@ -141,7 +142,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, StringType>(|b, builder, ctx| {
-            match RoaringTreemap::deserialize_from(b) {
+            match deserialize_bitmap(b) {
                 Ok(rb) => {
                     let raw = rb.into_iter().collect::<Vec<_>>();
                     let s = join(raw.iter(), ",");
@@ -160,7 +161,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_contains",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, UInt64Type, BooleanType>(
-            |b, item, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+            |b, item, builder, ctx| match deserialize_bitmap(b) {
                 Ok(rb) => {
                     builder.push(rb.contains(item));
                 }
@@ -176,7 +177,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_subset_limit",
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
-            |b, range_start, limit, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+            |b, range_start, limit, builder, ctx| match deserialize_bitmap(b) {
                 Ok(rb) => {
                     let collection = rb.iter().filter(|x| x >= &range_start).take(limit as usize);
                     let subset_bitmap = RoaringTreemap::from_iter(collection);
@@ -194,7 +195,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_subset_in_range",
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
-            |b, start, end, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+            |b, start, end, builder, ctx| match deserialize_bitmap(b) {
                 Ok(rb) => {
                     let collection = rb.iter().filter(|x| x >= &start && x < &end);
                     let subset_bitmap = RoaringTreemap::from_iter(collection);
@@ -213,7 +214,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, offset, length, builder, ctx| {
-                match RoaringTreemap::deserialize_from(b) {
+                match deserialize_bitmap(b) {
                     Ok(rb) => {
                         let subset_start = offset;
                         let subset_length = length;
@@ -242,7 +243,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
             |b, items, builder, ctx| {
-                let rb = match RoaringTreemap::deserialize_from(b) {
+                let rb = match deserialize_bitmap(b) {
                     Ok(rb) => rb,
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -250,7 +251,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 };
-                let rb2 = match RoaringTreemap::deserialize_from(items) {
+                let rb2 = match deserialize_bitmap(items) {
                     Ok(rb) => rb,
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -268,7 +269,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
             |b, items, builder, ctx| {
-                let rb = match RoaringTreemap::deserialize_from(b) {
+                let rb = match deserialize_bitmap(b) {
                     Ok(rb) => rb,
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -276,7 +277,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 };
-                let rb2 = match RoaringTreemap::deserialize_from(items) {
+                let rb2 = match deserialize_bitmap(items) {
                     Ok(rb) => rb,
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -293,7 +294,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_max",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
-            let val = match RoaringTreemap::deserialize_from(b) {
+            let val = match deserialize_bitmap(b) {
                 Ok(rb) => match rb.max() {
                     Some(val) => val,
                     None => {
@@ -314,7 +315,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_min",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
-            let val = match RoaringTreemap::deserialize_from(b) {
+            let val = match deserialize_bitmap(b) {
                 Ok(rb) => match rb.min() {
                     Some(val) => val,
                     None => {
@@ -381,7 +382,7 @@ fn bitmap_logic_operate(
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {
-    let Some(rb1) = RoaringTreemap::deserialize_from(arg1)
+    let Some(rb1) = deserialize_bitmap(arg1)
         .map_err(|e| {
             ctx.set_error(builder.len(), e.to_string());
             builder.commit_row();
@@ -391,7 +392,7 @@ fn bitmap_logic_operate(
         return;
     };
 
-    let Some(rb2) = RoaringTreemap::deserialize_from(arg2)
+    let Some(rb2) = deserialize_bitmap(arg2)
         .map_err(|e| {
             ctx.set_error(builder.len(), e.to_string());
             builder.commit_row();

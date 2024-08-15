@@ -16,6 +16,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use databend_common_base::base::tokio::sync::oneshot::Sender;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -30,7 +31,7 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use minitrace::Span;
+use fastrace::Span;
 use tonic::codegen::BoxStream;
 
 use crate::established_client::EstablishedClient;
@@ -47,6 +48,8 @@ pub struct ClientWorkerRequest {
 
     /// Tracing span for this request
     pub(crate) span: Span,
+
+    pub(crate) tracking_payload: Option<TrackingPayload>,
 }
 
 impl fmt::Debug for ClientWorkerRequest {

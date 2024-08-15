@@ -18,8 +18,9 @@ databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-storage = { path = "../../../../common/storage" }
 enum-as-inner = "0.5"
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

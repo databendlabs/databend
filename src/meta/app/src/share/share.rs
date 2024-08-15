@@ -23,15 +23,17 @@ use chrono::Utc;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
-use crate::app_error::AppError;
-use crate::app_error::WrongShareObject;
+use super::ShareObject;
 use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
+use crate::schema::ReplyShareObject;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
 use crate::share::share_name_ident::ShareNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareEndpointIdent;
+use crate::share::ShareMeta;
+use crate::storage::mask_string;
 use crate::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,7 +71,7 @@ pub struct CreateShareReq {
 pub struct CreateShareReply {
     pub share_id: u64,
 
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,7 +83,7 @@ pub struct DropShareReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,7 +97,7 @@ pub struct AddShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AddShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,7 +110,7 @@ pub struct RemoveShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -125,6 +127,8 @@ pub enum ShareGrantObjectName {
     Database(String),
     // database name, table name
     Table(String, String),
+    // database name, view name
+    View(String, String),
 }
 
 impl Display for ShareGrantObjectName {
@@ -135,6 +139,9 @@ impl Display for ShareGrantObjectName {
             }
             ShareGrantObjectName::Table(db, table) => {
                 write!(f, "TABLE {}.{}", db, table)
+            }
+            ShareGrantObjectName::View(db, view) => {
+                write!(f, "VIEW {}.{}", db, view)
             }
         }
     }
@@ -149,6 +156,9 @@ impl From<databend_common_ast::ast::ShareGrantObjectName> for ShareGrantObjectNa
             databend_common_ast::ast::ShareGrantObjectName::Table(db_name, table_name) => {
                 ShareGrantObjectName::Table(db_name.name, table_name.name)
             }
+            databend_common_ast::ast::ShareGrantObjectName::View(db_name, table_name) => {
+                ShareGrantObjectName::View(db_name.name, table_name.name)
+            }
         }
     }
 }
@@ -159,11 +169,15 @@ pub enum ShareGrantObjectSeqAndId {
     Database(u64, u64, DatabaseMeta),
     // db_id, table_meta_seq, table_id, table_meta
     Table(u64, u64, u64, TableMeta),
+    // db_id, table_meta_seq, table_id, table_meta
+    View(u64, u64, u64, TableMeta),
 }
 
 // share name and shared (table name, table info) map
 pub type TableInfoMap = BTreeMap<String, TableInfo>;
-pub type ShareTableInfoMap = (String, Option<TableInfoMap>);
+
+// Vec<share name>, db id, table info
+pub type ShareVecTableInfo = (Vec<String>, u64, TableInfo);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {
@@ -171,13 +185,17 @@ pub struct GrantShareObjectReq {
     pub object: ShareGrantObjectName,
     pub grant_on: DateTime<Utc>,
     pub privilege: ShareGrantObjectPrivilege,
+    // reference tables used in view, if any
+    pub reference_tables: Option<Vec<(String, String)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
-    pub share_table_info: ShareTableInfoMap,
+    pub share_spec: Option<ShareSpec>,
+    // (db id, TableInfo)
+    pub grant_share_table: Option<(u64, TableInfo)>,
+    pub reference_tables: Option<Vec<(u64, TableInfo)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -191,8 +209,8 @@ pub struct RevokeShareObjectReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
-    pub share_table_info: ShareTableInfoMap,
+    pub share_spec: Option<ShareSpec>,
+    pub revoke_object: Option<ReplyShareObject>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -247,12 +265,32 @@ pub struct GetObjectGrantPrivilegesReply {
     pub privileges: Vec<ObjectGrantPrivilege>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ShareCredential {
+    HMAC(ShareCredentialHmac),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShareCredentialHmac {
+    pub key: String,
+}
+
+impl Display for &ShareCredential {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ShareCredential::HMAC(hmac) => {
+                write!(f, "{{TYPE:'HMAC',KEY:'{}'}}", mask_string(&hmac.key, 2))
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareEndpointReq {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: Tenant,
+    pub credential: Option<ShareCredential>,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
@@ -267,7 +305,7 @@ pub struct CreateShareEndpointReply {
 pub struct UpsertShareEndpointReq {
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub credential: Option<ShareCredential>,
     pub args: BTreeMap<String, String>,
     pub create_on: DateTime<Utc>,
 }
@@ -283,9 +321,6 @@ pub struct GetShareEndpointReq {
     // If `endpoint` is not None, return the specified endpoint,
     // else return all share endpoints meta of tenant
     pub endpoint: Option<String>,
-
-    // If `to_tenant` is not None, return the specified endpoint to the tenant,
-    pub to_tenant: Option<Tenant>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -305,10 +340,12 @@ pub struct DropShareEndpointReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ShareEndpointMeta {
     pub url: String,
+    // `tenant` is needless anymore, keep it as empty string
     pub tenant: String,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
+    pub credential: Option<ShareCredential>,
 }
 
 impl ShareEndpointMeta {
@@ -319,16 +356,20 @@ impl ShareEndpointMeta {
     pub fn new(req: &CreateShareEndpointReq) -> Self {
         Self {
             url: req.url.clone(),
-            tenant: req.tenant.tenant_name().to_string(),
+            tenant: "".to_string(),
             args: req.args.clone(),
+            credential: req.credential.clone(),
             comment: req.comment.clone(),
             create_on: req.create_on,
         }
     }
 
     pub fn if_need_to_upsert(&self, req: &UpsertShareEndpointReq) -> bool {
-        // upsert only when these fields not equal
-        self.url != req.url || self.args != req.args || self.tenant != req.tenant
+        if self.url != req.url || self.args != req.args || self.credential != req.credential {
+            return true;
+        };
+
+        true
     }
 
     pub fn upsert(&self, req: &UpsertShareEndpointReq) -> Self {
@@ -336,7 +377,7 @@ impl ShareEndpointMeta {
 
         meta.url = req.url.clone();
         meta.args = req.args.clone();
-        meta.tenant = req.tenant.clone();
+        meta.credential = req.credential.clone();
         meta.create_on = req.create_on;
 
         meta
@@ -407,38 +448,6 @@ impl Display for ShareEndpointIdToName {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ShareGrantObject {
-    Database(u64),
-    Table(u64),
-}
-
-impl ShareGrantObject {
-    pub fn new(seq_and_id: &ShareGrantObjectSeqAndId) -> ShareGrantObject {
-        match seq_and_id {
-            ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => {
-                ShareGrantObject::Database(*db_id)
-            }
-            ShareGrantObjectSeqAndId::Table(_db_id, _seq, table_id, _meta) => {
-                ShareGrantObject::Table(*table_id)
-            }
-        }
-    }
-}
-
-impl Display for ShareGrantObject {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ShareGrantObject::Database(db_id) => {
-                write!(f, "db/{}", *db_id)
-            }
-            ShareGrantObject::Table(table_id) => {
-                write!(f, "table/{}", *table_id)
-            }
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ObjectSharedByShareIds {
     // save share ids which shares this object
     pub share_ids: BTreeSet<u64>,
@@ -504,196 +513,6 @@ impl From<databend_common_ast::ast::ShareGrantObjectPrivilege> for ShareGrantObj
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ShareGrantEntry {
-    pub object: ShareGrantObject,
-    pub privileges: BitFlags<ShareGrantObjectPrivilege>,
-    pub grant_on: DateTime<Utc>,
-    pub update_on: Option<DateTime<Utc>>,
-}
-
-impl ShareGrantEntry {
-    pub fn new(
-        object: ShareGrantObject,
-        privileges: ShareGrantObjectPrivilege,
-        grant_on: DateTime<Utc>,
-    ) -> Self {
-        Self {
-            object,
-            privileges: BitFlags::from(privileges),
-            grant_on,
-            update_on: None,
-        }
-    }
-
-    pub fn grant_privileges(
-        &mut self,
-        privileges: ShareGrantObjectPrivilege,
-        grant_on: DateTime<Utc>,
-    ) {
-        self.update_on = Some(grant_on);
-        self.privileges = BitFlags::from(privileges);
-    }
-
-    // return true if all privileges are empty.
-    pub fn revoke_privileges(
-        &mut self,
-        privileges: ShareGrantObjectPrivilege,
-        update_on: DateTime<Utc>,
-    ) -> bool {
-        self.update_on = Some(update_on);
-        self.privileges.remove(BitFlags::from(privileges));
-        self.privileges.is_empty()
-    }
-
-    pub fn object(&self) -> &ShareGrantObject {
-        &self.object
-    }
-
-    pub fn privileges(&self) -> &BitFlags<ShareGrantObjectPrivilege> {
-        &self.privileges
-    }
-
-    pub fn has_granted_privileges(&self, privileges: ShareGrantObjectPrivilege) -> bool {
-        self.privileges.contains(privileges)
-    }
-}
-
-impl Display for ShareGrantEntry {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.object)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
-pub struct ShareMeta {
-    pub database: Option<ShareGrantEntry>,
-    pub entries: BTreeMap<String, ShareGrantEntry>,
-
-    // save accounts which has been granted access to this share.
-    pub accounts: BTreeSet<String>,
-    pub comment: Option<String>,
-    pub share_on: DateTime<Utc>,
-    pub update_on: Option<DateTime<Utc>>,
-
-    // save db ids which created from this share
-    pub share_from_db_ids: BTreeSet<u64>,
-}
-
-impl ShareMeta {
-    pub fn new(share_on: DateTime<Utc>, comment: Option<String>) -> Self {
-        ShareMeta {
-            share_on,
-            comment,
-            ..Default::default()
-        }
-    }
-
-    pub fn get_accounts(&self) -> Vec<String> {
-        Vec::<String>::from_iter(self.accounts.clone())
-    }
-
-    pub fn has_account(&self, account: &String) -> bool {
-        self.accounts.contains(account)
-    }
-
-    pub fn add_account(&mut self, account: String) {
-        self.accounts.insert(account);
-    }
-
-    pub fn del_account(&mut self, account: &str) {
-        self.accounts.remove(account);
-    }
-
-    pub fn has_share_from_db_id(&self, db_id: u64) -> bool {
-        self.share_from_db_ids.contains(&db_id)
-    }
-
-    pub fn add_share_from_db_id(&mut self, db_id: u64) {
-        self.share_from_db_ids.insert(db_id);
-    }
-
-    pub fn remove_share_from_db_id(&mut self, db_id: u64) {
-        self.share_from_db_ids.remove(&db_id);
-    }
-
-    pub fn get_grant_entry(&self, object: ShareGrantObject) -> Option<ShareGrantEntry> {
-        let database = self.database.as_ref()?;
-        if database.object == object {
-            return Some(database.clone());
-        }
-
-        match object {
-            ShareGrantObject::Database(_db_id) => None,
-            ShareGrantObject::Table(_table_id) => self.entries.get(&object.to_string()).cloned(),
-        }
-    }
-
-    pub fn grant_object_privileges(
-        &mut self,
-        object: ShareGrantObject,
-        privileges: ShareGrantObjectPrivilege,
-        grant_on: DateTime<Utc>,
-    ) {
-        let key = object.to_string();
-
-        match object {
-            ShareGrantObject::Database(_db_id) => {
-                if let Some(db) = &mut self.database {
-                    db.grant_privileges(privileges, grant_on);
-                } else {
-                    self.database = Some(ShareGrantEntry::new(object, privileges, grant_on));
-                }
-            }
-            ShareGrantObject::Table(_table_id) => {
-                match self.entries.get_mut(&key) {
-                    Some(entry) => {
-                        entry.grant_privileges(privileges, grant_on);
-                    }
-                    None => {
-                        let entry = ShareGrantEntry::new(object, privileges, grant_on);
-                        self.entries.insert(key, entry);
-                    }
-                };
-            }
-        }
-    }
-
-    pub fn has_granted_privileges(
-        &self,
-        obj_name: &ShareGrantObjectName,
-        object: &ShareGrantObjectSeqAndId,
-        privileges: ShareGrantObjectPrivilege,
-    ) -> Result<bool, AppError> {
-        match object {
-            ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => match &self.database {
-                Some(db) => match db.object {
-                    ShareGrantObject::Database(self_db_id) => {
-                        if self_db_id != *db_id {
-                            Err(AppError::WrongShareObject(WrongShareObject::new(
-                                obj_name.to_string(),
-                            )))
-                        } else {
-                            Ok(db.has_granted_privileges(privileges))
-                        }
-                    }
-                    ShareGrantObject::Table(_) => {
-                        unreachable!("grant database CANNOT be a table");
-                    }
-                },
-                None => Ok(false),
-            },
-            ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id, _meta) => {
-                let key = ShareGrantObject::Table(*table_id).to_string();
-                Ok(self
-                    .entries
-                    .get(&key)
-                    .map_or(false, |entry| entry.has_granted_privileges(privileges)))
-            }
-        }
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareIdent {
     pub share_id: u64,
@@ -708,11 +527,18 @@ pub struct ShareInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareDatabaseSpec {
+    pub name: String,
+    pub id: u64,
+    pub created_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareTableSpec {
     pub name: String,
     pub database_id: u64,
     pub table_id: u64,
-    pub presigned_url_timeout: String,
+    pub engine: String,
 }
 
 impl ShareTableSpec {
@@ -721,15 +547,9 @@ impl ShareTableSpec {
             name: name.to_owned(),
             database_id,
             table_id,
-            presigned_url_timeout: "120s".to_string(),
+            engine: "FUSE".to_string(),
         }
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareDatabaseSpec {
-    pub name: String,
-    pub id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -737,12 +557,50 @@ pub struct ShareSpec {
     pub name: String,
     pub share_id: u64,
     pub version: u64,
-    pub database: Option<ShareDatabaseSpec>,
-    pub tables: Vec<ShareTableSpec>,
     pub tenants: Vec<String>,
-    pub db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
     pub comment: Option<String>,
-    pub share_on: Option<DateTime<Utc>>,
+    pub create_on: DateTime<Utc>,
+    pub use_database: Option<ShareDatabaseSpec>,
+    pub reference_database: Vec<ShareDatabaseSpec>,
+    pub tables: Vec<ShareTableSpec>,
+    pub reference_tables: Vec<ShareTableSpec>,
+}
+
+// meta key of `ObjectSharedByShareIds`
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ShareGrantObject {
+    // db id
+    Database(u64),
+    // table id
+    Table(u64),
+    // view id
+    View(u64),
+}
+
+impl ShareGrantObject {
+    pub fn new(object: &ShareObject) -> ShareGrantObject {
+        match object {
+            ShareObject::Database(_db_name, db_id) => ShareGrantObject::Database(*db_id),
+            ShareObject::Table(_table_name, _db_id, table_id) => ShareGrantObject::Table(*table_id),
+            ShareObject::View(_table_name, _db_id, table_id) => ShareGrantObject::View(*table_id),
+        }
+    }
+}
+
+impl Display for ShareGrantObject {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ShareGrantObject::Database(db_id) => {
+                write!(f, "db/{}", *db_id)
+            }
+            ShareGrantObject::Table(table_id) => {
+                write!(f, "table/{}", *table_id)
+            }
+            ShareGrantObject::View(table_id) => {
+                write!(f, "view/{}", *table_id)
+            }
+        }
+    }
 }
 
 mod kvapi_key_impl {
@@ -766,6 +624,7 @@ mod kvapi_key_impl {
             match self {
                 ShareGrantObject::Database(db_id) => b.push_raw("db").push_u64(*db_id),
                 ShareGrantObject::Table(table_id) => b.push_raw("table").push_u64(*table_id),
+                ShareGrantObject::View(table_id) => b.push_raw("table").push_u64(*table_id),
             }
         }
 
@@ -795,6 +654,7 @@ mod kvapi_key_impl {
             let k = match self {
                 ShareGrantObject::Database(db_id) => DatabaseId::new(*db_id).to_string_key(),
                 ShareGrantObject::Table(table_id) => TableId::new(*table_id).to_string_key(),
+                ShareGrantObject::View(table_id) => TableId::new(*table_id).to_string_key(),
             };
             Some(k)
         }
@@ -814,7 +674,7 @@ mod kvapi_key_impl {
 
     /// __fd_share_id/<share_id> -> <share_meta>
     impl kvapi::Key for ShareId {
-        const PREFIX: &'static str = "__fd_share_id";
+        const PREFIX: &'static str = "__fd_share_id_v2";
 
         type ValueType = ShareMeta;
 
@@ -895,12 +755,6 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for ObjectSharedByShareIds {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for ShareMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }

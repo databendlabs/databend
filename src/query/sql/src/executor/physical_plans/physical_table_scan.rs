@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
@@ -45,6 +44,7 @@ use itertools::Itertools;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -120,6 +120,14 @@ impl PhysicalPlanBuilder {
             let columns = scan.columns.clone();
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
+            if scan.is_lazy_table {
+                let lazy_columns = columns.difference(&used).cloned().collect();
+                let mut metadata = self.metadata.write();
+                metadata.set_table_lazy_columns(scan.table_index, lazy_columns);
+                for column_index in used.iter() {
+                    metadata.add_retained_column(*column_index);
+                }
+            }
             if let Some(ref mut pw) = prewhere {
                 debug_assert!(
                     pw.prewhere_columns.is_subset(&columns),
@@ -214,9 +222,8 @@ impl PhysicalPlanBuilder {
             self.push_downs(&scan, &table_schema, has_inner_column, has_virtual_column)?;
 
         let mut source = table
-            .read_plan_with_catalog(
+            .read_plan(
                 self.ctx.clone(),
-                table_entry.catalog().to_string(),
                 Some(push_downs),
                 if project_internal_columns.is_empty() {
                     None
@@ -240,14 +247,32 @@ impl PhysicalPlanBuilder {
         } else {
             Some(project_internal_columns)
         };
-        Ok(PhysicalPlan::TableScan(TableScan {
+
+        if scan.is_lazy_table {
+            let mut metadata = self.metadata.write();
+            metadata.set_table_source(scan.table_index, source.clone());
+        }
+
+        let mut plan = PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
             name_mapping,
             source: Box::new(source),
             table_index: Some(scan.table_index),
             stat_info: Some(stat_info),
             internal_column,
-        }))
+        });
+
+        // Update stream columns if needed.
+        if scan.update_stream_columns {
+            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
+                &self.metadata,
+                plan,
+                scan.table_index,
+                table.get_table_info().ident.seq,
+            )?));
+        }
+
+        Ok(plan)
     }
 
     pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
@@ -262,14 +287,7 @@ impl PhysicalPlanBuilder {
         }
 
         let source = table
-            .read_plan_with_catalog(
-                self.ctx.clone(),
-                CATALOG_DEFAULT.to_string(),
-                None,
-                None,
-                false,
-                self.dry_run,
-            )
+            .read_plan(self.ctx.clone(), None, None, false, self.dry_run)
             .await?;
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
@@ -578,7 +596,7 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub(crate) fn build_projection<'a>(
+    pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
         columns: impl Iterator<Item = &'a IndexType>,

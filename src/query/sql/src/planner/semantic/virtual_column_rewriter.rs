@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -38,6 +39,7 @@ use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::TableEntry;
 use crate::Visibility;
 
 pub(crate) struct VirtualColumnRewriter {
@@ -63,8 +65,7 @@ impl VirtualColumnRewriter {
         }
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let license_manager = get_license_manager();
         if license_manager
             .manager
@@ -92,18 +93,7 @@ impl VirtualColumnRewriter {
                 continue;
             }
 
-            let table_id = table.get_id();
-            let req = ListVirtualColumnsReq::new(&self.ctx.get_tenant(), Some(table_id));
-            let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
-
-            if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
-                if !virtual_column_metas.is_empty() {
-                    let virtual_column_name_set =
-                        HashSet::from_iter(virtual_column_metas[0].virtual_columns.iter().cloned());
-                    self.virtual_column_names
-                        .insert(table_entry.index(), virtual_column_name_set);
-                }
-            }
+            databend_common_base::runtime::block_on(self.full_virtual_columns(table_entry, table))?;
         }
         // If all tables do not have virtual columns created,
         // there is no need to continue checking for rewrites as virtual columns
@@ -114,9 +104,30 @@ impl VirtualColumnRewriter {
         self.rewrite_virtual_column(s_expr)
     }
 
+    async fn full_virtual_columns(
+        &mut self,
+        table_entry: &TableEntry,
+        table: Arc<dyn Table>,
+    ) -> Result<()> {
+        let table_id = table.get_id();
+        let req = ListVirtualColumnsReq::new(self.ctx.get_tenant(), Some(table_id));
+        let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
+
+        if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
+            if !virtual_column_metas.is_empty() {
+                let virtual_column_name_set =
+                    HashSet::from_iter(virtual_column_metas[0].virtual_columns.iter().cloned());
+                self.virtual_column_names
+                    .insert(table_entry.index(), virtual_column_name_set);
+            }
+        }
+        Ok(())
+    }
+
     // Find the functions that reads the inner fields of variant columns, rewrite them as virtual columns.
     // Add the indices of the virtual columns to the Scan plan of the corresponding table
     // to read the virtual columns at the storage layer.
+    #[recursive::recursive]
     fn rewrite_virtual_column(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
 

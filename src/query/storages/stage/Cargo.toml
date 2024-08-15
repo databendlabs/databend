@@ -16,7 +16,6 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bstr = "1.9.1"
 csv-core = "0.1.11"
-dashmap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-compress = { workspace = true }
@@ -24,6 +23,7 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-formats = { workspace = true }
+databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
@@ -31,16 +31,19 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
+databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = "0.6.0"
 futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
+
 uuid = { workspace = true }
 
 [build-dependencies]

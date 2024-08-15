@@ -86,8 +86,8 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
-    if let Plan::Delete(delete) = plan {
-        do_deletion(ctx.clone(), *delete).await?;
+    if let Plan::DataMutation { s_expr, schema, .. } = plan {
+        do_mutation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
     }
     ctx.evict_table_from_cache("default", "default", "t")?;
     fixture.execute_command(statistics_sql).await?;
@@ -118,8 +118,8 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let query = format!("update {}.{} set id = 3 where id = 0", db_name, tb_name);
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
-    if let Plan::Update(update) = plan {
-        do_update(ctx.clone(), *update).await?;
+    if let Plan::DataMutation { s_expr, schema, .. } = plan {
+        do_mutation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
     }
 
     // check summary after update
@@ -213,7 +213,8 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     // generate table statistics.
     let col: Vec<u8> = vec![1, 3, 0, 0, 0, 118, 5, 1, 21, 6, 3, 229, 13, 3];
     let hll: HashMap<ColumnId, MetaHLL> = HashMap::from([(0, borsh_deserialize_from_slice(&col)?)]);
-    let table_statistics = TableSnapshotStatistics::new(hll, snapshot_1.snapshot_id);
+    let table_statistics =
+        TableSnapshotStatistics::new(hll, HashMap::new(), snapshot_1.snapshot_id);
     let table_statistics_location = location_gen.snapshot_statistics_location_from_uuid(
         &table_statistics.snapshot_id,
         table_statistics.format_version(),

@@ -402,15 +402,10 @@ impl FuseTable {
         Ok((del_blocks, add_blocks))
     }
 
-    pub fn check_changes_valid(
-        &self,
-        database_name: &str,
-        table_name: &str,
-        seq: u64,
-    ) -> Result<()> {
+    pub fn check_changes_valid(&self, desc: &str, seq: u64) -> Result<()> {
         if !self.change_tracking_enabled() {
             return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled on table '{database_name}.{table_name}'",
+                "Change tracking is not enabled on table {desc}",
             )));
         }
 
@@ -422,7 +417,7 @@ impl FuseTable {
             let begin_version = value.parse::<u64>()?;
             if begin_version > seq {
                 return Err(ErrorCode::IllegalStream(format!(
-                    "Change tracking has been missing for the time range requested on table '{database_name}.{table_name}'",
+                    "Change tracking has been missing for the time range requested on table {desc}",
                 )));
             }
         }
@@ -436,7 +431,7 @@ impl FuseTable {
         change_type: ChangeType,
     ) -> Result<Option<TableStatistics>> {
         let Some(base_location) = base_location else {
-            return self.table_statistics(ctx, None).await;
+            return self.table_statistics(ctx, true, None).await;
         };
 
         let (base_snapshot, _) =

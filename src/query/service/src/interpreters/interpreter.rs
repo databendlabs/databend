@@ -34,6 +34,8 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
+use databend_common_storages_system::ProfilesLogElement;
+use databend_common_storages_system::ProfilesLogQueue;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use log::error;
@@ -70,7 +72,7 @@ pub trait Interpreter: Sync + Send {
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         log_query_start(&ctx);
         match self.execute_inner(ctx.clone()).await {
@@ -113,46 +115,7 @@ pub trait Interpreter: Sync + Send {
         build_res
             .main_pipeline
             .set_on_finished(always_callback(move |info: &ExecutionInfo| {
-                let mut has_profiles = false;
-                // Standalone mode or query executed is successfully
-                if query_ctx.get_cluster().is_empty() || info.res.is_ok() {
-                    query_ctx.add_query_profiles(&info.profiling);
-
-                    let query_profiles = query_ctx.get_query_profiles();
-
-                    if !query_profiles.is_empty() {
-                        has_profiles = true;
-                        #[derive(serde::Serialize)]
-                        struct QueryProfiles {
-                            query_id: String,
-                            profiles: Vec<PlanProfile>,
-                            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
-                        }
-
-                        info!(
-                            target: "databend::log::profile",
-                            "{}",
-                            serde_json::to_string(&QueryProfiles {
-                                query_id: query_ctx.get_id(),
-                                profiles: query_profiles,
-                                statistics_desc: get_statistics_desc(),
-                            })?
-                        );
-                    }
-                }
-
-                hook_vacuum_temp_files(&query_ctx)?;
-
-                let err_opt = match &info.res {
-                    Ok(_) => None,
-                    Err(e) => Some(e.clone()),
-                };
-
-                log_query_finished(&query_ctx, err_opt, has_profiles);
-                match &info.res {
-                    Ok(_) => Ok(()),
-                    Err(error) => Err(error.clone()),
-                }
+                on_execution_finished(info, query_ctx)
             }));
 
         ctx.set_status_info("executing pipeline");
@@ -277,4 +240,51 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     };
 
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
+}
+
+pub fn on_execution_finished(
+    info: &ExecutionInfo,
+    query_ctx: Arc<QueryContext>,
+) -> Result<(), ErrorCode> {
+    let mut has_profiles = false;
+    query_ctx.add_query_profiles(&info.profiling);
+
+    let query_profiles = query_ctx.get_query_profiles();
+    if !query_profiles.is_empty() {
+        has_profiles = true;
+        #[derive(serde::Serialize)]
+        struct QueryProfiles {
+            query_id: String,
+            profiles: Vec<PlanProfile>,
+            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+        }
+
+        info!(
+            target: "databend::log::profile",
+            "{}",
+            serde_json::to_string(&QueryProfiles {
+                query_id: query_ctx.get_id(),
+                profiles: query_profiles.clone(),
+                statistics_desc: get_statistics_desc(),
+            })?
+        );
+        let profiles_queue = ProfilesLogQueue::instance()?;
+        profiles_queue.append_data(ProfilesLogElement {
+            query_id: query_ctx.get_id(),
+            profiles: query_profiles,
+        })?;
+    }
+
+    hook_vacuum_temp_files(&query_ctx)?;
+
+    let err_opt = match &info.res {
+        Ok(_) => None,
+        Err(e) => Some(e.clone()),
+    };
+
+    log_query_finished(&query_ctx, err_opt, has_profiles);
+    match &info.res {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error.clone()),
+    }
 }

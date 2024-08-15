@@ -18,7 +18,6 @@ use std::io::BufWriter;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
 
 use databend_common_base::runtime::ThreadTracker;
 use fern::FormatCallback;
@@ -61,9 +60,9 @@ pub(crate) fn new_file_log_writer(
     (buffered_non_blocking, flush_guard)
 }
 
-pub(crate) struct MinitraceLogger;
+pub(crate) struct FastraceLogger;
 
-impl log::Log for MinitraceLogger {
+impl log::Log for FastraceLogger {
     fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
         true
     }
@@ -71,7 +70,7 @@ impl log::Log for MinitraceLogger {
     fn log(&self, record: &log::Record<'_>) {
         let mut message = format!(
             "{} {:>5} {}{}",
-            humantime::format_rfc3339_micros(SystemTime::now()),
+            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
             record.level(),
             record.args(),
             KvDisplay::new(record.key_values()),
@@ -80,7 +79,7 @@ impl log::Log for MinitraceLogger {
             // Align multi-line log messages with the first line after `level``.
             message = message.replace('\n', "\n                                  ");
         }
-        minitrace::Event::add_to_local_parent(message, || []);
+        fastrace::Event::add_to_local_parent(message, || []);
     }
 
     fn flush(&self) {}
@@ -101,10 +100,16 @@ impl OpenTelemetryLogger {
         config: &OTLPEndpointConfig,
         labels: &BTreeMap<String, String>,
     ) -> Self {
+        let endpoint = if !config.endpoint.trim_end_matches('/').ends_with("/v1/logs") {
+            format!("{}/v1/logs", config.endpoint)
+        } else {
+            config.endpoint.clone()
+        };
+
         let exporter = match config.protocol {
             OTLPProtocol::Grpc => {
                 let export_config = opentelemetry_otlp::ExportConfig {
-                    endpoint: config.endpoint.clone(),
+                    endpoint,
                     protocol: opentelemetry_otlp::Protocol::Grpc,
                     timeout: Duration::from_secs(
                         opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
@@ -121,7 +126,7 @@ impl OpenTelemetryLogger {
             }
             OTLPProtocol::Http => {
                 let export_config = opentelemetry_otlp::ExportConfig {
-                    endpoint: config.endpoint.clone(),
+                    endpoint,
                     protocol: opentelemetry_otlp::Protocol::HttpBinary,
                     timeout: Duration::from_secs(
                         opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
@@ -156,12 +161,7 @@ impl OpenTelemetryLogger {
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
             )
             .build();
-        let library = Arc::new(InstrumentationLibrary::new(
-            name.to_string(),
-            None::<&str>,
-            None::<&str>,
-            None,
-        ));
+        let library = Arc::new(InstrumentationLibrary::builder(name.to_string()).build());
         Self {
             name: name.to_string(),
             category: category.to_string(),
@@ -183,18 +183,16 @@ impl log::Log for OpenTelemetryLogger {
 
     fn log(&self, log_record: &log::Record<'_>) {
         let provider = self.provider.clone();
-        let config = provider.config();
-        let builder = opentelemetry::logs::LogRecord::builder()
-            .with_observed_timestamp(SystemTime::now())
-            .with_severity_number(map_severity_to_otel_severity(log_record.level()))
-            .with_severity_text(log_record.level().as_str())
-            .with_body(AnyValue::from(log_record.args().to_string()));
-        let record = builder.build();
+        let mut record = opentelemetry_sdk::logs::LogRecord::default();
+        record.observed_timestamp = Some(chrono::Utc::now().into());
+        record.severity_number = Some(map_severity_to_otel_severity(log_record.level()));
+        record.severity_text = Some(log_record.level().as_str().into());
+        record.body = Some(AnyValue::from(log_record.args().to_string()));
+
         for processor in provider.log_processors() {
             let record = record.clone();
             let data = opentelemetry_sdk::export::logs::LogData {
                 record,
-                resource: config.resource.clone(),
                 instrumentation: self.instrumentation_library().clone(),
             };
             processor.emit(data);
@@ -233,7 +231,7 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
         None => {
             out.finish(format_args!(
                 r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 serde_json::to_string(&fields).unwrap_or_default(),
             ));
@@ -241,7 +239,7 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
         Some(query_id) => {
             out.finish(format_args!(
                 r#"{{"timestamp":"{}","level":"{}","query_id":"{}","fields":{}}}"#,
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 query_id,
                 serde_json::to_string(&fields).unwrap_or_default(),
@@ -271,7 +269,7 @@ fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
         None => {
             out.finish(format_args!(
                 "{} {:>5} {}: {}:{} {}{}",
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 record.module_path().unwrap_or(""),
                 Path::new(record.file().unwrap_or_default())
@@ -287,7 +285,7 @@ fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
             out.finish(format_args!(
                 "{} {} {:>5} {}: {}:{} {}{}",
                 query_id,
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 record.module_path().unwrap_or(""),
                 Path::new(record.file().unwrap_or_default())

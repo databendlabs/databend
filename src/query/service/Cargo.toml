@@ -38,6 +38,7 @@ arrow-udf-python = { workspace = true, optional = true }
 arrow-udf-wasm = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
+async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
@@ -48,7 +49,7 @@ byteorder = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
-ctor = "0.1.26"
+ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
@@ -56,7 +57,6 @@ databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-cloud-control = { workspace = true }
-databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -91,6 +91,7 @@ databend-common-storages-fuse = { workspace = true }
 databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
+databend-common-storages-memory = { workspace = true }
 databend-common-storages-null = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
@@ -103,6 +104,7 @@ databend-common-storages-view = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
+databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
@@ -118,10 +120,12 @@ databend-storages-common-table-meta = { workspace = true }
 databend-storages-common-txn = { workspace = true }
 derive-visitor = { workspace = true }
 ethnum = { workspace = true }
+fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 headers = "0.4.0"
+hex = "0.4.3"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"
@@ -133,7 +137,6 @@ log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
 md-5 = "0.10.5"
-minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
 once_cell = { workspace = true }
@@ -143,12 +146,13 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
-paste = "1.0.9"
+paste = { workspace = true }
 petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project-lite = "0.2.9"
 poem = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
+recursive = "0.1.1"
 regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = "0.22"
@@ -159,6 +163,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_stacker = { workspace = true }
 serde_urlencoded = "0.7.1"
+sha2 = "0.10.8"
 socket2 = "0.5.3"
 strength_reduce = "0.2.4"
 sysinfo = "0.30"

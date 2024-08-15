@@ -31,28 +31,6 @@ jobs:
         with:
           github_token: ${{ github.token }}
 
-  license:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    outputs:
-      license: ${{ steps.license.outputs.license }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Get License from S3
-        if: inputs.runner_provider == 'aws'
-        run: |
-          aws s3 cp s3://databend-ci/misc/license.key license.key
-          aws s3 cp s3://databend-ci/misc/license.json license.json
-      - name: Get License from GCS
-        if: inputs.runner_provider == 'gcp'
-        run: |
-          gcloud storage cp gs://databend-ci/misc/license.key license.key
-          gcloud storage cp gs://databend-ci/misc/license.json license.json
-      - name: Output License
-        id: license
-        run: |
-          echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
-          cat license.json
-
   build:
     runs-on:
       - self-hosted
@@ -104,48 +82,28 @@ jobs:
           category: udf
           artifacts: query
 
-  build_address_sanitizer:
-    runs-on:
-      - self-hosted
-      - "${{ matrix.runner }}"
-      - Linux
-      - 16c32g
-      - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: aarch64, runner: ARM64 }
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux_sanitizer
-        timeout-minutes: 60
-        with:
-          target: ${{ matrix.arch }}-unknown-linux-gnu
-          artifacts: query
-
-  build_musl:
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x86_64
-          - aarch64
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.arch }}-unknown-linux-musl
-          artifacts: query
+  # build_address_sanitizer:
+  #   runs-on:
+  #     - self-hosted
+  #     - "${{ matrix.runner }}"
+  #     - Linux
+  #     - 16c32g
+  #     - "${{ inputs.runner_provider }}"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - { arch: aarch64, runner: ARM64 }
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         # fetch all tags, metasrv and metaclient need tag as its version.
+  #         fetch-depth: 0
+  #     - uses: ./.github/actions/build_linux_sanitizer
+  #       timeout-minutes: 60
+  #       with:
+  #         target: ${{ matrix.arch }}-unknown-linux-gnu
+  #         artifacts: query
 
   test_unit:
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
@@ -165,12 +123,12 @@ jobs:
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
-  test_compat:
+  test_compat_meta_query:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_compat
+      - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
   test_compat_fuse:
@@ -178,7 +136,23 @@ jobs:
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/fuse_compat
+      - uses: ./.github/actions/test_compat_fuse
+        timeout-minutes: 20
+
+  test_compat_meta_meta:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_compat_meta_meta
+        timeout-minutes: 20
+
+  test_logs:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
   test_meta_cluster:
@@ -195,15 +169,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -218,25 +195,14 @@ jobs:
         with:
           name: test-stateful-standalone-linux
 
-  test_stateful_sharing:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_stateful_sharing
-        if: env.BUILD_PROFILE == 'debug'
-        timeout-minutes: 10
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-stateful-sharing-linux
-
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_stateful_cluster_linux
         timeout-minutes: 15
       - name: Upload failure
@@ -254,6 +220,19 @@ jobs:
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
+  test_stateful_iceberg_rest:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_stateful_iceberg_rest_standalone
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-iceberg-rest-standalone
+
   # test_fuzz_standalone:
   #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
   #   needs: [build, check]
@@ -264,19 +243,15 @@ jobs:
   #       continue-on-error: true
 
   test_ee_standalone:
-    needs: [build, check, license]
+    needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -284,76 +259,54 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_ee_standalone_background:
-    needs: [build, check, license]
+    needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_standalone_background_linux
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
 
-  test_ee_management_mode:
-    needs: [build, check, license]
+  test_ee_standalone_fake_time:
+    needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+      - uses: ./.github/actions/test_ee_standalone_fake_time_linux
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-fake-time-linux
+
+  test_ee_management_mode:
+    needs: [build, check]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_management_mode_linux
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-ee-management-mode-linux
-
-  sqllogic_ee:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
-    needs: [build, check, license]
-    strategy:
-      fail-fast: false
-      matrix:
-        format:
-          - "parquet"
-          - "native"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
-      - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
-        timeout-minutes: 15
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
-        with:
-          dirs: ee
-          handlers: mysql,http
-          storage-format: ${{ matrix.format }}
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-ee-sqllogic-standalone-ee_${{ matrix.format }}
 
   sqllogic:
     needs: [build, check]

@@ -18,19 +18,20 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::CacheScan;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
@@ -41,13 +42,14 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoAddRowNumber;
-use crate::executor::physical_plans::MergeIntoAppendNotMatched;
+use crate::executor::physical_plans::Mutation;
+use crate::executor::physical_plans::MutationManipulate;
+use crate::executor::physical_plans::MutationOrganize;
+use crate::executor::physical_plans::MutationSource;
+use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::ReclusterSink;
-use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::Recluster;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -56,8 +58,8 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
+use crate::executor::physical_plans::WindowPartition;
 use crate::plans::CacheSource;
 use crate::plans::JoinType;
 
@@ -84,6 +86,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::Window(window) => write!(f, "{}", window)?,
+            PhysicalPlan::WindowPartition(window_partition) => write!(f, "{}", window_partition)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
             PhysicalPlan::Limit(limit) => write!(f, "{}", limit)?,
             PhysicalPlan::RowFetch(row_fetch) => write!(f, "{}", row_fetch)?,
@@ -94,7 +97,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::CompactSource(compact) => write!(f, "{}", compact)?,
-            PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
@@ -102,22 +104,29 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CopyIntoLocation(copy_into_location) => {
                 write!(f, "{}", copy_into_location)?
             }
+            PhysicalPlan::MutationSource(mutation_source) => write!(f, "{}", mutation_source)?,
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
-            PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
-            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
-                write!(f, "{}", merge_into_row_id_apply)?
+            PhysicalPlan::ColumnMutation(column_mutation) => write!(f, "{}", column_mutation)?,
+            PhysicalPlan::Mutation(merge_into) => write!(f, "{}", merge_into)?,
+            PhysicalPlan::MutationSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
+            PhysicalPlan::MutationManipulate(merge_into_manipulate) => {
+                write!(f, "{}", merge_into_manipulate)?
             }
-            PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
+            PhysicalPlan::MutationOrganize(merge_into_organize) => {
+                write!(f, "{}", merge_into_organize)?
+            }
+            PhysicalPlan::AddStreamColumn(add_stream_column) => write!(f, "{}", add_stream_column)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
+                write!(f, "{}", recursive_cte_scan)?
+            }
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::CacheScan(scan) => write!(f, "{}", scan)?,
-            PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::Recluster(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
             PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
             PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
@@ -341,6 +350,13 @@ impl Display for Window {
     }
 }
 
+impl Display for WindowPartition {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let window_partition_id = self.plan_id;
+        write!(f, "WindowPartition: [{}]", window_partition_id)
+    }
+}
+
 impl Display for Limit {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let limit = self.limit.as_ref().cloned().unwrap_or(0);
@@ -448,12 +464,6 @@ impl Display for CompactSource {
     }
 }
 
-impl Display for DeleteSource {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DeleteSource")
-    }
-}
-
 impl Display for CommitSink {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CommitSink")
@@ -505,39 +515,51 @@ impl Display for ReplaceInto {
     }
 }
 
-impl Display for MergeInto {
+impl Display for MutationSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeInto")
+        write!(f, "MutationSource")
     }
 }
 
-impl Display for MergeIntoAddRowNumber {
+impl Display for ColumnMutation {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoAddRowNumber")
+        write!(f, "ColumnMutation")
     }
 }
 
-impl Display for MergeIntoAppendNotMatched {
+impl Display for Mutation {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoAppendNotMatched")
+        write!(f, "Mutation")
     }
 }
 
-impl Display for ReclusterSource {
+impl Display for MutationSplit {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSource")
+        write!(f, "MutationSplit")
     }
 }
 
-impl Display for ReclusterSink {
+impl Display for MutationManipulate {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSink")
+        write!(f, "MutationManipulate")
     }
 }
 
-impl Display for UpdateSource {
+impl Display for MutationOrganize {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "UpdateSource")
+        write!(f, "MutationOrganize")
+    }
+}
+
+impl Display for AddStreamColumn {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "AddStreamColumn")
+    }
+}
+
+impl Display for Recluster {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "Recluster")
     }
 }
 

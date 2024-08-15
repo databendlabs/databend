@@ -76,12 +76,14 @@ async fn test_refresh_agg_index() -> Result<()> {
             .strip_prefix(root)
             .map_err(|e| ErrorCode::Internal(e.to_string()))?,
     );
-    let blocks = collect_file_names(&block_path)?;
+    let mut blocks = collect_file_names(&block_path)?;
 
     // Get aggregating index files
     let agg_index_path = find_agg_index_path(root, index_id)?.unwrap();
-    let indexes = collect_file_names(&agg_index_path)?;
+    let mut indexes = collect_file_names(&agg_index_path)?;
 
+    blocks.sort();
+    indexes.sort();
     assert_eq!(blocks, indexes);
 
     // Check aggregating index is correct.
@@ -117,6 +119,9 @@ async fn test_refresh_agg_index() -> Result<()> {
     {
         let pre_agg_index = indexes[0].clone();
         let mut indexes = collect_file_names(&agg_index_path)?;
+
+        blocks.sort();
+        indexes.sort();
         assert_eq!(blocks, indexes);
 
         let new_block = {
@@ -251,12 +256,14 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     let root = fixture.storage_root();
     let block_path = find_block_path(root)?.unwrap();
-    let blocks = collect_file_names(&block_path)?;
+    let mut blocks = collect_file_names(&block_path)?;
 
     // Get aggregating index files
     let agg_index_path_0 = find_agg_index_path(root, index_id0)?.unwrap();
-    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    let mut indexes_0 = collect_file_names(&agg_index_path_0)?;
 
+    blocks.sort();
+    indexes_0.sort();
     assert_eq!(blocks, indexes_0);
 
     // Check aggregating index_0 is correct.
@@ -289,10 +296,13 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
     let first_block = blocks[0].clone();
     let first_agg_index = indexes_0[0].clone();
 
-    let blocks = collect_file_names(&block_path)?;
+    let mut blocks = collect_file_names(&block_path)?;
 
     // check index0
-    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    let mut indexes_0 = collect_file_names(&agg_index_path_0)?;
+
+    blocks.sort();
+    indexes_0.sort();
     assert_eq!(blocks, indexes_0);
 
     // Check aggregating index_0 is correct after update.
@@ -366,7 +376,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     let root = fixture.storage_root();
     let block_path = find_block_path(root)?.unwrap();
-    let blocks = collect_file_names(&block_path)?;
+    let mut blocks = collect_file_names(&block_path)?;
 
     // Get aggregating index files
     let agg_index_path_0 = find_agg_index_path(root, index_id0)?.unwrap();
@@ -374,8 +384,10 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     // Get aggregating index files
     let agg_index_path_1 = find_agg_index_path(root, index_id1)?.unwrap();
-    let indexes_1 = collect_file_names(&agg_index_path_1)?;
+    let mut indexes_1 = collect_file_names(&agg_index_path_1)?;
 
+    blocks.sort();
+    indexes_1.sort();
     assert_eq!(blocks, indexes_1);
 
     // Check aggregating index_0 is correct.
@@ -427,14 +439,19 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
         .execute_query("INSERT INTO t0 SELECT * FROM t0")
         .await?;
 
-    let blocks = collect_file_names(&block_path)?;
+    let mut blocks = collect_file_names(&block_path)?;
 
     // check index0
-    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    let mut indexes_0 = collect_file_names(&agg_index_path_0)?;
+
+    blocks.sort();
+    indexes_0.sort();
     assert_eq!(blocks, indexes_0);
 
     // check index1
-    let indexes_1 = collect_file_names(&agg_index_path_1)?;
+    let mut indexes_1 = collect_file_names(&agg_index_path_1)?;
+
+    indexes_1.sort();
     assert_eq!(blocks, indexes_1);
 
     Ok(())
@@ -469,12 +486,14 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
 
     let root = fixture.storage_root();
     let block_path = find_block_path(root)?.unwrap();
-    let blocks = collect_file_names(&block_path)?;
+    let mut blocks = collect_file_names(&block_path)?;
 
     // Get aggregating index files
     let agg_index_path_0 = find_agg_index_path(root, index_id0)?.unwrap();
-    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    let mut indexes_0 = collect_file_names(&agg_index_path_0)?;
 
+    blocks.sort();
+    indexes_0.sort();
     assert_eq!(blocks, indexes_0);
 
     // Check aggregating index_0 is correct.

@@ -37,8 +37,8 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 
@@ -74,22 +74,26 @@ impl DefaultDatabase {
             .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?;
 
-        let mut refreshed = Vec::with_capacity(table_infos.len());
-        for table_info in table_infos {
-            refreshed.push(
-                self.ctx
-                    .storage_factory
-                    .refresh_table_info(table_info.clone())
-                    .await
-                    .map_err(|err| {
-                        err.add_message_back(format!(
-                            "(while refresh table info on {})",
-                            table_info.name
-                        ))
-                    })?,
-            );
+        if self.ctx.disable_table_info_refresh {
+            Ok(table_infos)
+        } else {
+            let mut refreshed = Vec::with_capacity(table_infos.len());
+            for table_info in table_infos {
+                refreshed.push(
+                    self.ctx
+                        .storage_factory
+                        .refresh_table_info(table_info.clone())
+                        .await
+                        .map_err(|err| {
+                            err.add_message_back(format!(
+                                "(while refresh table info on {})",
+                                table_info.name
+                            ))
+                        })?,
+                );
+            }
+            Ok(refreshed)
         }
-        Ok(refreshed)
     }
 }
 #[async_trait::async_trait]
@@ -120,13 +124,16 @@ impl Database for DefaultDatabase {
             ))
             .await?;
 
-        let table_info_refreshed = self
-            .ctx
-            .storage_factory
-            .refresh_table_info(table_info)
-            .await?;
+        let table_info = if self.ctx.disable_table_info_refresh {
+            table_info
+        } else {
+            self.ctx
+                .storage_factory
+                .refresh_table_info(table_info)
+                .await?
+        };
 
-        self.get_table_by_info(table_info_refreshed.as_ref())
+        self.get_table_by_info(table_info.as_ref())
     }
 
     #[async_backtrace::framed]
@@ -197,12 +204,6 @@ impl Database for DefaultDatabase {
         Ok(res)
     }
 
-    #[async_backtrace::framed]
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        let res = self.ctx.meta.update_table_meta(req).await?;
-        Ok(res)
-    }
-
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
@@ -223,6 +224,15 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
         let res = self.ctx.meta.truncate_table(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn retryable_update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        let res = self.ctx.meta.update_multi_table_meta(req).await?;
         Ok(res)
     }
 }

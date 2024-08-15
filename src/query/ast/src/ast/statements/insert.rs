@@ -21,7 +21,6 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
-use crate::ast::FileFormatOptions;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -72,48 +71,14 @@ impl Display for InsertStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum InsertSource {
-    Streaming {
-        format: String,
-        rest_str: String,
-        start: usize,
-    },
-    StreamingV2 {
-        settings: FileFormatOptions,
-        on_error_mode: Option<String>,
-        start: usize,
-    },
-    Values {
-        rows: Vec<Vec<Expr>>,
-    },
-    RawValues {
-        rest_str: String,
-        start: usize,
-    },
-    Select {
-        query: Box<Query>,
-    },
+    Values { rows: Vec<Vec<Expr>> },
+    RawValues { rest_str: String, start: usize },
+    Select { query: Box<Query> },
 }
 
 impl Display for InsertSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            InsertSource::Streaming {
-                format,
-                rest_str,
-                start: _,
-            } => write!(f, "FORMAT {format} {rest_str}"),
-            InsertSource::StreamingV2 {
-                settings,
-                on_error_mode,
-                start: _,
-            } => {
-                write!(f, " FILE_FORMAT = ({})", settings)?;
-                write!(
-                    f,
-                    " ON_ERROR = '{}'",
-                    on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
-                )
-            }
             InsertSource::Values { rows } => {
                 write!(f, "VALUES ")?;
                 for (i, row) in rows.iter().enumerate() {

@@ -68,7 +68,7 @@ impl Planner {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let start = Instant::now();
         let settings = self.ctx.get_settings();
@@ -141,7 +141,7 @@ impl Planner {
                 } else {
                     parse_sql(&tokens, sql_dialect)?
                 };
-                if !matches!(stmt, Statement::SetVariable { .. })
+                if !matches!(stmt, Statement::SetStmt { .. })
                     && sql_dialect == Dialect::PRQL
                     && !prql_converted
                 {
@@ -172,10 +172,7 @@ impl Planner {
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
                     .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
                     .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
-                    .with_enable_dphyp(settings.get_enable_dphyp()?)
-                    .with_enable_merge_into_join_reorder(
-                        !settings.get_disable_merge_into_join_reorder()?,
-                    );
+                    .with_enable_dphyp(settings.get_enable_dphyp()?);
 
                 let optimized_plan = optimize(opt_ctx, plan).await?;
                 Ok((optimized_plan, PlanExtras {

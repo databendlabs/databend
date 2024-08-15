@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_ast::ast::*;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::share::ShareCredential;
+use databend_common_meta_app::share::ShareCredentialHmac;
 use databend_common_meta_app::share::ShareEndpointIdent;
-use databend_common_meta_app::tenant::UninitTenant;
 use itertools::Itertools;
-use minitrace::func_name;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -35,6 +38,30 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
 
+fn try_convert_share_credential(p: &BTreeMap<String, String>) -> Result<Option<ShareCredential>> {
+    let typ = p.get("TYPE");
+    if let Some(typ) = typ {
+        if typ == "HMAC" {
+            if let Some(key) = p.get("KEY") {
+                Ok(Some(ShareCredential::HMAC(ShareCredentialHmac {
+                    key: key.clone(),
+                })))
+            } else {
+                Err(ErrorCode::ErrorShareEndpointCredential(
+                    "HMAC Credential miss key",
+                ))
+            }
+        } else {
+            Err(ErrorCode::ErrorShareEndpointCredential(format!(
+                "Unsupported Credential type {}",
+                typ
+            )))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_share_endpoint(
@@ -45,23 +72,19 @@ impl Binder {
             create_option,
             endpoint,
             url,
-            tenant,
+            credential_options,
             args,
             comment,
         } = stmt;
 
         let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
 
-        let tenant = {
-            let tenant_name = tenant.to_string();
-            let uninit_tenant = UninitTenant::new_or_err(tenant_name, func_name!())?;
-            uninit_tenant.initialize(())
-        };
+        let credential = try_convert_share_credential(credential_options)?;
 
         let plan = CreateShareEndpointPlan {
             create_option: create_option.clone().into(),
             endpoint: ShareEndpointIdent::new(self.ctx.get_tenant(), endpoint),
-            tenant,
+            credential,
             url: format!("{}://{}{}", url.protocol, url.name, url.path),
             args: args.clone(),
             comment: comment.as_ref().cloned(),

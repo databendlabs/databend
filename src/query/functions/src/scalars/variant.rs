@@ -438,16 +438,26 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path.as_bytes()) {
                     Ok(json_path) => {
-                        get_by_path_array(
+                        match get_by_path_array(
                             val,
                             json_path,
                             &mut output.builder.data,
                             &mut output.builder.offsets,
-                        );
-                        if output.builder.offsets.len() == output.len() + 1 {
-                            output.push_null();
-                        } else {
-                            output.validity.push(true);
+                        ) {
+                            Ok(()) => {
+                                if output.builder.offsets.len() == output.len() + 1 {
+                                    output.push_null();
+                                } else {
+                                    output.validity.push(true);
+                                }
+                            }
+                            Err(_) => {
+                                ctx.set_error(
+                                    output.len(),
+                                    format!("Invalid JSONB value '0x{}'", hex::encode(val)),
+                                );
+                                output.push_null();
+                            }
                         }
                     }
                     Err(_) => {
@@ -472,16 +482,26 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path.as_bytes()) {
                     Ok(json_path) => {
-                        get_by_path_first(
+                        match get_by_path_first(
                             val,
                             json_path,
                             &mut output.builder.data,
                             &mut output.builder.offsets,
-                        );
-                        if output.builder.offsets.len() == output.len() + 1 {
-                            output.push_null();
-                        } else {
-                            output.validity.push(true);
+                        ) {
+                            Ok(()) => {
+                                if output.builder.offsets.len() == output.len() + 1 {
+                                    output.push_null();
+                                } else {
+                                    output.validity.push(true);
+                                }
+                            }
+                            Err(_) => {
+                                ctx.set_error(
+                                    output.len(),
+                                    format!("Invalid JSONB value '0x{}'", hex::encode(val)),
+                                );
+                                output.push_null();
+                            }
                         }
                     }
                     Err(_) => {
@@ -535,7 +555,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(|args, ctx| {
-                    path_predicate_fn(args, ctx, |json, path| Ok(path_exists(json, path)))
+                    path_predicate_fn(args, ctx, |json, path| path_exists(json, path))
                 }),
             },
         }))
@@ -554,16 +574,26 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match parse_json_path(path.as_bytes()) {
                     Ok(json_path) => {
-                        get_by_path(
+                        match get_by_path(
                             val,
                             json_path,
                             &mut output.builder.data,
                             &mut output.builder.offsets,
-                        );
-                        if output.builder.offsets.len() == output.len() + 1 {
-                            output.push_null();
-                        } else {
-                            output.validity.push(true);
+                        ) {
+                            Ok(()) => {
+                                if output.builder.offsets.len() == output.len() + 1 {
+                                    output.push_null();
+                                } else {
+                                    output.validity.push(true);
+                                }
+                            }
+                            Err(_) => {
+                                ctx.set_error(
+                                    output.len(),
+                                    format!("Invalid JSONB value '0x{}'", hex::encode(val)),
+                                );
+                                output.push_null();
+                            }
                         }
                     }
                     Err(_) => {
@@ -594,12 +624,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                             Ok(json_path) => {
                                 let mut out_buf = Vec::new();
                                 let mut out_offsets = Vec::new();
-                                get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets);
-                                if out_offsets.is_empty() {
-                                    output.push_null();
-                                } else {
-                                    let json_str = cast_to_string(&out_buf);
-                                    output.push(&json_str);
+                                match get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets) {
+                                    Ok(()) => {
+                                        if out_offsets.is_empty() {
+                                            output.push_null();
+                                        } else {
+                                            let json_str = cast_to_string(&out_buf);
+                                            output.push(&json_str);
+                                        }
+                                    }
+                                    Err(_) => {
+                                        ctx.set_error(
+                                            output.len(),
+                                            format!("Invalid JSONB value '0x{}'", hex::encode(buf)),
+                                        );
+                                        output.push_null();
+                                    }
                                 }
                             }
                             Err(_) => {
@@ -997,8 +1037,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz)) {
-                Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+            let val = as_str(val);
+            match val {
+                Some(val) => match string_to_date(
+                    val.as_bytes(),
+                    ctx.func_ctx.tz.tz,
+                    ctx.func_ctx.enable_dst_hour_fix,
+                ) {
+                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("unable to cast to type `DATE`. {}", e),
+                        );
+                        output.push(0);
+                    }
+                },
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `DATE`");
                     output.push(0);
@@ -1017,10 +1071,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val)
-                .and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.func_ctx.tz.tz))
-            {
-                Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+            let val = as_str(val);
+            match val {
+                Some(val) => match string_to_date(
+                    val.as_bytes(),
+                    ctx.func_ctx.tz.tz,
+                    ctx.func_ctx.enable_dst_hour_fix,
+                ) {
+                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                    Err(_) => output.push_null(),
+                },
                 None => output.push_null(),
             }
         }),
@@ -1036,10 +1096,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val)
-                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
-            {
-                Some(ts) => output.push(ts.timestamp_micros()),
+            let val = as_str(val);
+            match val {
+                Some(val) => match string_to_timestamp(
+                    val.as_bytes(),
+                    ctx.func_ctx.tz.tz,
+                    ctx.func_ctx.enable_dst_hour_fix,
+                ) {
+                    Ok(ts) => output.push(ts.timestamp_micros()),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("unable to cast to type `TIMESTAMP`. {}", e),
+                        );
+                        output.push(0);
+                    }
+                },
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
                     output.push(0);
@@ -1059,11 +1131,21 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match as_str(val)
-                    .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
-                {
-                    Some(ts) => output.push(ts.timestamp_micros()),
-                    None => output.push_null(),
+                let val = as_str(val);
+                match val {
+                    Some(val) => match string_to_timestamp(
+                        val.as_bytes(),
+                        ctx.func_ctx.tz.tz,
+                        ctx.func_ctx.enable_dst_hour_fix,
+                    ) {
+                        Ok(ts) => output.push(ts.timestamp_micros()),
+                        Err(_) => {
+                            output.push_null();
+                        }
+                    },
+                    None => {
+                        output.push_null();
+                    }
                 }
             },
         ),

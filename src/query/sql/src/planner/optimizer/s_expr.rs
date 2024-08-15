@@ -155,6 +155,7 @@ impl SExpr {
     }
 
     /// Check if contain subquery
+    #[recursive::recursive]
     pub(crate) fn contain_subquery(&self) -> bool {
         if !find_subquery(&self.plan) {
             return self.children.iter().any(|child| child.contain_subquery());
@@ -162,6 +163,7 @@ impl SExpr {
         true
     }
 
+    #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
 
@@ -211,15 +213,15 @@ impl SExpr {
                 }
             }
             RelOperator::Join(op) => {
-                for left in &op.left_conditions {
-                    get_udf_names(left)?.iter().for_each(|udf| {
+                for equi_condition in op.equi_conditions.iter() {
+                    get_udf_names(&equi_condition.left)?.iter().for_each(|udf| {
                         udfs.insert(*udf);
                     });
-                }
-                for right in &op.right_conditions {
-                    get_udf_names(right)?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
+                    get_udf_names(&equi_condition.right)?
+                        .iter()
+                        .for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
                 }
                 for non in &op.non_equi_conditions {
                     get_udf_names(non)?.iter().for_each(|udf| {
@@ -312,17 +314,27 @@ impl SExpr {
                     });
                 }
             }
+            RelOperator::MutationSource(mutation_source) => {
+                if let Some(filter) = &mutation_source.filter {
+                    get_udf_names(filter)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
             RelOperator::Limit(_)
             | RelOperator::UnionAll(_)
             | RelOperator::Sort(_)
             | RelOperator::DummyTableScan(_)
             | RelOperator::CteScan(_)
-            | RelOperator::AddRowNumber(_)
             | RelOperator::MaterializedCte(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::AsyncFunction(_) => {}
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => {}
         };
         for child in &self.children {
             let udf = child.get_udfs()?;
@@ -340,6 +352,7 @@ impl SExpr {
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
     ) -> SExpr {
+        #[recursive::recursive]
         fn add_internal_column_index_into_child(
             s_expr: &SExpr,
             column_index: IndexType,
@@ -382,6 +395,7 @@ impl SExpr {
     }
 
     // The method will clear the applied rules of current SExpr and its children.
+    #[recursive::recursive]
     pub fn clear_applied_rules(&mut self) {
         self.applied_rules.clear();
         let children = self
@@ -395,6 +409,7 @@ impl SExpr {
         self.children = children;
     }
 
+    #[recursive::recursive]
     pub fn has_merge_exchange(&self) -> bool {
         if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
             return true;
@@ -412,16 +427,19 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
         | RelOperator::CteScan(_)
-        | RelOperator::AddRowNumber(_)
         | RelOperator::MaterializedCte(_)
         | RelOperator::ConstantTableScan(_)
         | RelOperator::ExpressionScan(_)
         | RelOperator::CacheScan(_)
-        | RelOperator::AsyncFunction(_) => false,
+        | RelOperator::AsyncFunction(_)
+        | RelOperator::RecursiveCteScan(_)
+        | RelOperator::Mutation(_)
+        | RelOperator::Recluster(_)
+        | RelOperator::CompactBlock(_) => false,
         RelOperator::Join(op) => {
-            op.left_conditions.iter().any(find_subquery_in_expr)
-                || op.right_conditions.iter().any(find_subquery_in_expr)
-                || op.non_equi_conditions.iter().any(find_subquery_in_expr)
+            op.equi_conditions.iter().any(|condition| {
+                find_subquery_in_expr(&condition.left) || find_subquery_in_expr(&condition.right)
+            }) || op.non_equi_conditions.iter().any(find_subquery_in_expr)
         }
         RelOperator::EvalScalar(op) => op
             .items
@@ -458,6 +476,13 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .items
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::MutationSource(op) => {
+            if let Some(filter) = &op.filter {
+                find_subquery_in_expr(filter)
+            } else {
+                false
+            }
+        }
     }
 }
 

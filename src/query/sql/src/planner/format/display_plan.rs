@@ -12,32 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::ROW_ID_COL_NAME;
 use itertools::Itertools;
 
-use crate::binder::ColumnBindingBuilder;
-use crate::binder::MergeIntoType;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
-use crate::plans::BoundColumnRef;
 use crate::plans::CreateTablePlan;
-use crate::plans::DeletePlan;
-use crate::plans::EvalScalar;
-use crate::plans::Filter;
-use crate::plans::MergeInto;
+use crate::plans::Mutation;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
-use crate::plans::ScalarItem;
-use crate::plans::Scan;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 impl Plan {
     pub fn format_indent(&self, verbose: bool) -> Result<String> {
@@ -86,9 +70,11 @@ impl Plan {
             Plan::DropTableColumn(_) => Ok("DropTableColumn".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
-            Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
+            Plan::ReclusterTable { .. } => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
-            Plan::OptimizeTable(_) => Ok("OptimizeTable".to_string()),
+            Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
+            Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
+            Plan::OptimizeCompactBlock { .. } => Ok("OptimizeCompactBlock".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
             Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
             Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
@@ -126,9 +112,7 @@ impl Plan {
             Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
-            Plan::MergeInto(merge_into) => format_merge_into(merge_into),
-            Plan::Delete(delete) => format_delete(delete),
-            Plan::Update(_) => Ok("Update".to_string()),
+            Plan::DataMutation { s_expr, .. } => format_merge_into(s_expr),
 
             // Stages
             Plan::CreateStage(_) => Ok("CreateStage".to_string()),
@@ -155,8 +139,8 @@ impl Plan {
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),
 
-            Plan::SetVariable(_) => Ok("SetVariable".to_string()),
-            Plan::UnSetVariable(_) => Ok("UnSetVariable".to_string()),
+            Plan::Set(_) => Ok("Set".to_string()),
+            Plan::Unset(_) => Ok("Unset".to_string()),
             Plan::SetRole(_) => Ok("SetRole".to_string()),
             Plan::SetSecondaryRoles(_) => Ok("SetSecondaryRoles".to_string()),
             Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),
@@ -226,67 +210,9 @@ impl Plan {
             Plan::DropSequence(_) => Ok("DropSequence".to_string()),
 
             Plan::SetPriority(_) => Ok("SetPriority".to_string()),
+            Plan::System(_) => Ok("System".to_string()),
         }
     }
-}
-
-fn format_delete(delete: &DeletePlan) -> Result<String> {
-    let table_index = delete
-        .metadata
-        .read()
-        .get_table_index(
-            Some(delete.database_name.as_str()),
-            delete.table_name.as_str(),
-        )
-        .unwrap();
-    let s_expr = if !delete.subquery_desc.is_empty() {
-        let row_id_column_binding = ColumnBindingBuilder::new(
-            ROW_ID_COL_NAME.to_string(),
-            delete.subquery_desc[0].index,
-            Box::new(DataType::Number(NumberDataType::UInt64)),
-            Visibility::InVisible,
-        )
-        .database_name(Some(delete.database_name.clone()))
-        .table_name(Some(delete.table_name.clone()))
-        .table_index(Some(table_index))
-        .build();
-        SExpr::create_unary(
-            Arc::new(RelOperator::EvalScalar(EvalScalar {
-                items: vec![ScalarItem {
-                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: row_id_column_binding,
-                    }),
-                    index: 0,
-                }],
-            })),
-            Arc::new(delete.subquery_desc[0].input_expr.clone()),
-        )
-    } else {
-        let scan = RelOperator::Scan(Scan {
-            table_index,
-            columns: Default::default(),
-            push_down_predicates: None,
-            limit: None,
-            order_by: None,
-            prewhere: None,
-            agg_index: None,
-            change_type: None,
-            inverted_index: None,
-            statistics: Default::default(),
-            update_stream_columns: false,
-        });
-        let scan_expr = SExpr::create_leaf(Arc::new(scan));
-        let mut predicates = vec![];
-        if let Some(selection) = &delete.selection {
-            predicates.push(selection.clone());
-        }
-        let filter = RelOperator::Filter(Filter { predicates });
-        SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
-    };
-    let metadata = &*delete.metadata.read();
-    let res = s_expr.to_format_tree(metadata, false)?.format_pretty()?;
-    Ok(format!("DeletePlan:\n{res}"))
 }
 
 fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
@@ -308,18 +234,19 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
     }
 }
 
-fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
+fn format_merge_into(s_expr: &SExpr) -> Result<String> {
+    let merge_into: Mutation = s_expr.plan().clone().try_into()?;
     // add merge into target_table
     let table_index = merge_into
-        .meta_data
+        .metadata
         .read()
         .get_table_index(
-            Some(merge_into.database.as_str()),
-            merge_into.table.as_str(),
+            Some(merge_into.database_name.as_str()),
+            merge_into.table_name.as_str(),
         )
         .unwrap();
 
-    let table_entry = merge_into.meta_data.read().table(table_index).clone();
+    let table_entry = merge_into.metadata.read().table(table_index).clone();
     let target_table_format = format!(
         "target_table: {}.{}.{}",
         table_entry.catalog(),
@@ -327,8 +254,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         table_entry.name(),
     );
 
-    let target_build_optimization = matches!(merge_into.merge_type, MergeIntoType::FullOperation)
-        && !merge_into.columns_set.contains(&merge_into.row_id_index);
+    let target_build_optimization = false;
     let target_build_optimization_format = FormatTreeNode::new(format!(
         "target_build_optimization: {}",
         target_build_optimization

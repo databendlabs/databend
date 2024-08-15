@@ -60,6 +60,7 @@ use crate::servers::flight::FlightClient;
 
 pub struct ClusterDiscovery {
     local_id: String,
+    local_secret: String,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
     cluster_id: String,
@@ -75,7 +76,7 @@ pub trait ClusterHelper {
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient>;
+
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 
     async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
@@ -111,37 +112,6 @@ impl ClusterHelper for Cluster {
         self.local_id.clone()
     }
 
-    #[async_backtrace::framed]
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient> {
-        for node in &self.nodes {
-            if node.id == name {
-                return match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            None,
-                        )
-                        .await?,
-                    ))),
-                };
-            }
-        }
-
-        Err(ErrorCode::NotFoundClusterNode(format!(
-            "The node \"{}\" not found in the cluster",
-            name
-        )))
-    }
-
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
         self.nodes.to_vec()
     }
@@ -172,12 +142,14 @@ impl ClusterHelper for Cluster {
             futures.push({
                 let config = GlobalConfig::instance();
                 let flight_address = node.flight_address.clone();
+                let node_secret = node.secret.clone();
 
                 async move {
                     let mut conn = create_client(&config, &flight_address).await?;
                     Ok::<_, ErrorCode>((
                         id,
-                        conn.do_action::<_, Res>(path, message, timeout).await?,
+                        conn.do_action::<_, Res>(path, node_secret, message, timeout)
+                            .await?,
                     ))
                 }
             });
@@ -217,6 +189,7 @@ impl ClusterDiscovery {
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
+            local_secret: cfg.query.node_secret.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -384,6 +357,7 @@ impl ClusterDiscovery {
 
         let node_info = NodeInfo::create(
             self.local_id.clone(),
+            self.local_secret.clone(),
             cpus,
             address,
             DATABEND_COMMIT_VERSION.to_string(),

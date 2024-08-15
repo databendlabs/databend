@@ -19,7 +19,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 crc32fast = "1.3.2"
 criterion = { workspace = true }
-ctor = "0.1.26"
+ctor = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -28,6 +28,7 @@ databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
+dtparse = { git = "https://github.com/TCeason/dtparse.git", rev = "de0a15b" }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geo-types = "0.7.13"
@@ -50,6 +51,7 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
+proj4rs = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"

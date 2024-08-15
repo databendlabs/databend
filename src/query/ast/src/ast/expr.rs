@@ -29,7 +29,6 @@ use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::expr::ExprElement;
 use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
@@ -414,10 +413,6 @@ impl Expr {
             "DATE_TRUNC",
         ]
     }
-
-    fn affix(&self) -> Affix {
-        ExprElement::from(self.clone()).affix()
-    }
 }
 
 impl Display for Expr {
@@ -455,6 +450,7 @@ impl Display for Expr {
             false
         }
 
+        #[recursive::recursive]
         fn write_expr(
             expr: &Expr,
             parent: Option<Affix>,
@@ -793,6 +789,23 @@ pub enum Literal {
     Null,
 }
 
+impl Literal {
+    pub fn as_double(&self) -> Result<f64> {
+        match self {
+            Literal::UInt64(val) => Ok(*val as f64),
+            Literal::Float64(val) => Ok(*val),
+            Literal::Decimal256 { value, scale, .. } => {
+                let div = 10_f64.powi(*scale as i32);
+                Ok(value.as_f64() / div)
+            }
+            _ => Err(ParseError(
+                None,
+                format!("Cannot convert {:?} to double", self),
+            )),
+        }
+    }
+}
+
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -839,7 +852,7 @@ pub struct FunctionCall {
     pub name: Identifier,
     pub args: Vec<Expr>,
     pub params: Vec<Expr>,
-    pub window: Option<Window>,
+    pub window: Option<WindowDesc>,
     pub lambda: Option<Lambda>,
 }
 
@@ -870,7 +883,14 @@ impl Display for FunctionCall {
         write!(f, ")")?;
 
         if let Some(window) = window {
-            write!(f, " OVER {window}")?;
+            if let Some(ignore_null) = window.ignore_nulls {
+                if ignore_null {
+                    write!(f, " IGNORE NULLS")?;
+                } else {
+                    write!(f, " RESPECT NULLS")?;
+                }
+            }
+            write!(f, " OVER {}", window.window)?;
         }
         Ok(())
     }
@@ -915,7 +935,7 @@ pub enum TypeName {
     },
     Bitmap,
     Tuple {
-        fields_name: Option<Vec<String>>,
+        fields_name: Option<Vec<Identifier>>,
         fields_type: Vec<TypeName>,
     },
     Variant,
@@ -1065,6 +1085,12 @@ impl Display for TrimWhere {
             TrimWhere::Trailing => "TRAILING",
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct WindowDesc {
+    pub ignore_nulls: Option<bool>,
+    pub window: Window,
 }
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut)]

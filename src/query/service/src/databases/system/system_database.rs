@@ -47,7 +47,7 @@ use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProcessesTable;
-use databend_common_storages_system::ProcessorProfileTable;
+use databend_common_storages_system::QueriesProfilingTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
@@ -130,7 +130,7 @@ impl SystemDatabase {
             TempFilesTable::create(sys_db_meta.next_table_id()),
             TasksTable::create(sys_db_meta.next_table_id()),
             TaskHistoryTable::create(sys_db_meta.next_table_id()),
-            ProcessorProfileTable::create(sys_db_meta.next_table_id()),
+            QueriesProfilingTable::create(sys_db_meta.next_table_id()),
             LocksTable::create(sys_db_meta.next_table_id()),
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
@@ -146,7 +146,7 @@ impl SystemDatabase {
             // Not load the disable system tables.
             if config.query.disable_system_table_load {
                 let name = tbl.name();
-                if disable_tables.get(name).is_none() {
+                if !disable_tables.contains_key(name) {
                     sys_db_meta.insert("system", tbl);
                 }
             } else {

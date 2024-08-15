@@ -70,9 +70,13 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
         RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
         RelOperator::CacheScan(_) => "CacheScan".to_string(),
-        RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
+        RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
+        RelOperator::Mutation(_) => "MergeInto".to_string(),
+        RelOperator::MutationSource(_) => "MutationSource".to_string(),
+        RelOperator::Recluster(_) => "Recluster".to_string(),
+        RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
     }
 }
 

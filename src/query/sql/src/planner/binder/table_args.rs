@@ -27,20 +27,19 @@ use crate::plans::ConstantExpr;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 
-#[async_backtrace::framed]
-pub async fn bind_table_args(
+pub fn bind_table_args(
     scalar_binder: &mut ScalarBinder<'_>,
     params: &[Expr],
     named_params: &[(Identifier, Expr)],
 ) -> Result<TableArgs> {
     let mut args = Vec::with_capacity(params.len());
     for arg in params.iter() {
-        args.push(scalar_binder.bind(arg).await?.0);
+        args.push(scalar_binder.bind(arg)?.0);
     }
 
     let mut named_args = Vec::with_capacity(named_params.len());
     for (name, arg) in named_params.iter() {
-        named_args.push((name.clone(), scalar_binder.bind(arg).await?.0));
+        named_args.push((name.clone(), scalar_binder.bind(arg)?.0));
     }
 
     let positioned_args = args

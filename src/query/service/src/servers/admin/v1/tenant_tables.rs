@@ -20,7 +20,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_storages_common_txn::TxnManager;
-use minitrace::func_name;
+use fastrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
@@ -82,10 +82,22 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
         };
         for table in tables {
             let create_query = ShowCreateTableInterpreter::show_create_query(
+                catalog.as_ref(),
                 database.name(),
                 table.as_ref(),
                 &settings,
-            )?;
+            )
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "show create query of {}.{}.{} failed(ignored): {}",
+                    catalog.name(),
+                    database.name(),
+                    table.name(),
+                    e
+                );
+                "".to_owned()
+            });
 
             let table_id = table.get_table_info().ident.table_id;
             let stats = &table.get_table_info().meta.statistics;

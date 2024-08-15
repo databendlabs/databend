@@ -95,7 +95,7 @@ impl Spiller {
     ) -> Result<Self> {
         let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
         Ok(Self {
-            ctx,
+            ctx: ctx.clone(),
             operator,
             config,
             _spiller_type: spiller_type,

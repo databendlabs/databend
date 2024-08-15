@@ -19,9 +19,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
-use databend_common_cache::FileSize;
-use databend_common_cache::LruCache;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,9 +29,7 @@ use parking_lot::RwLock;
 use crate::providers::disk_cache::DiskCache;
 use crate::CacheAccessor;
 
-impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Count>
-    for LruDiskCacheHolder
-{
+impl CacheAccessor<String, Bytes, Count> for LruDiskCacheHolder {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         let k = k.as_ref();
         {
@@ -113,6 +108,16 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
         cache.size()
     }
 
+    fn capacity(&self) -> u64 {
+        let cache = self.read();
+        cache.capacity()
+    }
+
+    fn set_capacity(&self, capacity: u64) {
+        let mut cache = self.write();
+        cache.set_capacity(capacity)
+    }
+
     fn len(&self) -> usize {
         let cache = self.read();
         cache.len()
@@ -142,7 +147,7 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
     }
 }
 
-pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
+pub type LruDiskCache = DiskCache;
 pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
 
 pub struct LruDiskCacheBuilder;
@@ -152,9 +157,15 @@ impl LruDiskCacheBuilder {
         path: &PathBuf,
         disk_cache_bytes_size: u64,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
     ) -> Result<LruDiskCacheHolder> {
-        let external_cache = DiskCache::new(path, disk_cache_bytes_size, disk_cache_reload_policy)
-            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
+        let external_cache = DiskCache::new(
+            path,
+            disk_cache_bytes_size,
+            disk_cache_reload_policy,
+            sync_data,
+        )
+        .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(external_cache)))
     }
 }

@@ -17,5 +17,6 @@ mod format;
 mod formats;
 mod processors;
 mod read_pipeline;
+mod utils;
 
 pub use read_pipeline::RowBasedReadPipelineBuilder;

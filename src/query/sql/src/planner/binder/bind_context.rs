@@ -32,6 +32,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_meta_app::schema::ShareDBParams;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -141,12 +142,14 @@ pub struct BindContext {
 
     pub expr_context: ExprContext,
 
-    pub allow_internal_columns: bool,
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
 
     pub window_definitions: DashMap<String, WindowSpec>,
+
+    // when access a share view, save share db params to access all the table referenced by the view
+    pub share_paramas: Option<ShareDBParams>,
 }
 
 #[derive(Clone, Debug)]
@@ -154,10 +157,11 @@ pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
     pub materialized: bool,
+    pub recursive: bool,
     pub cte_idx: IndexType,
     // Record how many times this cte is used
     pub used_count: usize,
-    // If cte is materialized, save it's columns
+    // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
 }
 
@@ -171,7 +175,6 @@ impl BindContext {
             windows: WindowInfo::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
-            allow_internal_columns: true,
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -179,6 +182,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
+            share_paramas: None,
         }
     }
 
@@ -191,7 +195,6 @@ impl BindContext {
             windows: Default::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
-            allow_internal_columns: parent.allow_internal_columns,
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -199,6 +202,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
+            share_paramas: None,
         }
     }
 
@@ -220,10 +224,6 @@ impl BindContext {
         self.columns.push(column_binding);
     }
 
-    pub fn allow_internal_columns(&mut self, allow: bool) {
-        self.allow_internal_columns = allow;
-    }
-
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
     /// This method will rename column bindings according to table alias.
     pub fn apply_table_alias(
@@ -231,28 +231,7 @@ impl BindContext {
         alias: &TableAlias,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<()> {
-        for column in self.columns.iter_mut() {
-            column.database_name = None;
-            column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
-        }
-
-        if alias.columns.len() > self.columns.len() {
-            return Err(ErrorCode::SemanticError(format!(
-                "table has {} columns available but {} columns specified",
-                self.columns.len(),
-                alias.columns.len()
-            ))
-            .set_span(alias.name.span));
-        }
-        for (index, column_name) in alias
-            .columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, name_resolution_ctx).name)
-            .enumerate()
-        {
-            self.columns[index].column_name = column_name;
-        }
-        Ok(())
+        apply_alias_for_columns(&mut self.columns, alias, name_resolution_ctx)
     }
 
     /// Try to find a column binding with given table name and column name.
@@ -523,21 +502,13 @@ impl BindContext {
         }
     }
 
-    // Add internal column binding into `BindContext`
-    // Convert `InternalColumnBinding` to `ColumnBinding`
+    // Add internal column binding into `BindContext` and convert `InternalColumnBinding` to `ColumnBinding`.
     pub fn add_internal_column_binding(
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
         visible: bool,
     ) -> Result<ColumnBinding> {
-        if !self.allow_internal_columns {
-            return Err(ErrorCode::SemanticError(format!(
-                "Internal column `{}` is not allowed in current statement",
-                column_binding.internal_column.column_name()
-            )));
-        }
-
         let column_id = column_binding.internal_column.column_id();
         let (table_index, column_index, new) = match self.bound_internal_columns.entry(column_id) {
             btree_map::Entry::Vacant(e) => {
@@ -637,4 +608,33 @@ impl Default for BindContext {
     fn default() -> Self {
         BindContext::new()
     }
+}
+
+pub fn apply_alias_for_columns(
+    columns: &mut [ColumnBinding],
+    alias: &TableAlias,
+    name_resolution_ctx: &NameResolutionContext,
+) -> Result<()> {
+    for column in columns.iter_mut() {
+        column.database_name = None;
+        column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
+    }
+
+    if alias.columns.len() > columns.len() {
+        return Err(ErrorCode::SemanticError(format!(
+            "table has {} columns available but {} columns specified",
+            columns.len(),
+            alias.columns.len()
+        ))
+        .set_span(alias.name.span));
+    }
+    for (index, column_name) in alias
+        .columns
+        .iter()
+        .map(|ident| normalize_identifier(ident, name_resolution_ctx).name)
+        .enumerate()
+    {
+        columns[index].column_name = column_name;
+    }
+    Ok(())
 }

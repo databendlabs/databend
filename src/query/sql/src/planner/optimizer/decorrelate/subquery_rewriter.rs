@@ -41,6 +41,7 @@ use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::RelOperator;
@@ -185,8 +186,12 @@ impl SubqueryRewriter {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::AddRowNumber(_)
-            | RelOperator::Exchange(_) => Ok(s_expr.clone()),
+            | RelOperator::Exchange(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }
 
@@ -518,8 +523,7 @@ impl SubqueryRewriter {
                 };
 
                 let cross_join = Join {
-                    left_conditions: vec![],
-                    right_conditions: vec![],
+                    equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
                     non_equi_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
@@ -590,8 +594,11 @@ impl SubqueryRewriter {
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        right_conditions,
+                        left_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
@@ -622,8 +629,7 @@ impl SubqueryRewriter {
         // Such as `SELECT * FROM c WHERE c_id=(SELECT max(c_id) FROM o WHERE ship='WA');`
         // We can push down `c_id = max(c_id)` to cross join then make it as inner join.
         let join_plan = Join {
-            left_conditions: vec![],
-            right_conditions: vec![],
+            equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
             non_equi_conditions: vec![],
             join_type: JoinType::Cross,
             marker_index: None,
@@ -790,13 +796,10 @@ pub fn check_child_expr_in_subquery(
     match child_expr {
         ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
         ScalarExpr::FunctionCall(func) => {
-            if func.func_name.eq("tuple") {
-                return Ok((child_expr.clone(), op != &ComparisonOp::Equal));
+            for arg in &func.arguments {
+                let _ = check_child_expr_in_subquery(arg, op)?;
             }
-            Err(ErrorCode::Internal(format!(
-                "Invalid child expr in subquery: {:?}",
-                child_expr
-            )))
+            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
         }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {

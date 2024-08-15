@@ -26,23 +26,30 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_sharing::ShareEndpointManager;
+use databend_common_sharing::SharePresignedCacheManager;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
 use databend_common_storages_iceberg::IcebergCreator;
+use databend_common_storages_system::ProfilesLogQueue;
 use databend_common_tracing::GlobalLogger;
+use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache_manager::CacheManager;
 
 use crate::auth::AuthMgr;
+use crate::builtin::BuiltinUDFs;
+use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::ShareCatalogCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::servers::http::v1::TokenManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
@@ -96,6 +103,7 @@ impl GlobalServices {
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
                 (CatalogType::Hive, Arc::new(HiveCreator)),
+                (CatalogType::Share, Arc::new(ShareCatalogCreator)),
             ];
 
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
@@ -103,17 +111,33 @@ impl GlobalServices {
 
         QueriesQueueManager::init(config.query.max_running_queries as usize)?;
         HttpQueryManager::init(config).await?;
+        TokenManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
         AuthMgr::init(config)?;
-        UserApiProvider::init(
-            config.meta.to_meta_grpc_client_conf(),
-            config.query.idm.clone(),
-            &config.query.tenant_id,
-            config.query.tenant_quota.clone(),
-        )
-        .await?;
+        SharePresignedCacheManager::init()?;
+
+        // Init user manager.
+        // Builtin users and udfs are created here.
+        {
+            let built_in_users = BuiltinUsers::create(config.query.builtin.users.clone());
+            let built_in_udfs = BuiltinUDFs::create(config.query.builtin.udfs.clone());
+
+            // We will ignore the error here, and just log a error.
+            let builtin = BuiltIn {
+                users: built_in_users.to_auth_infos(),
+                udfs: built_in_udfs.to_udfs(),
+            };
+            UserApiProvider::init(
+                config.meta.to_meta_grpc_client_conf(),
+                builtin,
+                &config.query.tenant_id,
+                config.query.tenant_quota.clone(),
+            )
+            .await?;
+        }
+
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
 
@@ -132,6 +156,8 @@ impl GlobalServices {
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
+
+        ProfilesLogQueue::init(config.query.max_cached_queries_profiles);
 
         #[cfg(feature = "enable_queries_executor")]
         {

@@ -52,9 +52,9 @@ pub trait SystemLogElement: Send + Sync + Clone {
     fn fill_to_data_block(&self, columns: &mut Vec<ColumnBuilder>) -> Result<()>;
 }
 
-struct Data<Event: SystemLogElement> {
+pub struct Data<Event: SystemLogElement> {
     index: usize,
-    event_queue: Vec<Option<Event>>,
+    pub event_queue: Vec<Option<Event>>,
 }
 
 impl<Event: SystemLogElement> Data<Event> {
@@ -68,7 +68,7 @@ impl<Event: SystemLogElement> Data<Event> {
 
 pub struct SystemLogQueue<Event: SystemLogElement> {
     max_rows: usize,
-    data: Arc<RwLock<Data<Event>>>,
+    pub data: Arc<RwLock<Data<Event>>>,
 }
 
 static INSTANCES_MAP: OnceCell<RwLock<HashMap<TypeId, Box<dyn Any + 'static + Send + Sync>>>> =

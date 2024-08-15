@@ -16,10 +16,11 @@ mod errors;
 mod forwarder;
 mod meta_node_kv_api_impl;
 
-pub(crate) mod snapshot_receiver;
+pub(crate) mod snapshot_receiver_v1;
 
 pub mod meta_leader;
 pub mod meta_node;
+pub mod meta_node_status;
 pub mod raft_service_impl;
 
 pub use forwarder::MetaForwarder;

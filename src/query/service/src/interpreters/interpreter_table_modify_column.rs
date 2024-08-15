@@ -37,13 +37,13 @@ use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::field_default_value;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_share::update_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -52,7 +52,6 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
-use crate::interpreters::common::save_share_table_info;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -124,9 +123,7 @@ impl ModifyTableColumnInterpreter {
             action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
         };
 
-        let res = catalog.set_table_column_mask_policy(req).await?;
-
-        save_share_table_info(&self.ctx, &res.share_table_info).await?;
+        let _resp = catalog.set_table_column_mask_policy(req).await?;
 
         Ok(PipelineBuildResult::create())
     }
@@ -162,7 +159,6 @@ impl ModifyTableColumnInterpreter {
 
         let catalog_name = table_info.catalog();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let prev_snapshot_id = fuse_table
@@ -246,14 +242,23 @@ impl ModifyTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: table_info.meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            catalog
-                .update_table_meta(table.get_table_info(), req)
+            let resp = catalog
+                .update_single_table_meta(req, table.get_table_info())
                 .await?;
+            if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+                for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                    update_share_table_info(
+                        self.ctx.get_tenant().tenant_name(),
+                        self.ctx.get_application_level_data_operator()?.operator(),
+                        share_name_vec,
+                        *db_id,
+                        share_table_info,
+                    )
+                    .await?;
+                }
+            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -329,16 +334,23 @@ impl ModifyTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: table_info.meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let res = catalog
-                .update_table_meta(table.get_table_info(), req)
+            let resp = catalog
+                .update_single_table_meta(req, table.get_table_info())
                 .await?;
-
-            save_share_table_info(&self.ctx, &res.share_table_info).await?;
+            if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+                for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                    update_share_table_info(
+                        self.ctx.get_tenant().tenant_name(),
+                        self.ctx.get_application_level_data_operator()?.operator(),
+                        share_name_vec,
+                        *db_id,
+                        share_table_info,
+                    )
+                    .await?;
+                }
+            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -394,7 +406,6 @@ impl ModifyTableColumnInterpreter {
             PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
                 plan_id: select_plan.get_id(),
                 input: Box::new(select_plan),
-                catalog_info,
                 table_info: new_table.get_table_info().clone(),
                 select_schema: Arc::new(Arc::new(schema).into()),
                 select_column_bindings,
@@ -450,9 +461,17 @@ impl ModifyTableColumnInterpreter {
                 action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
             };
 
-            let res = catalog.set_table_column_mask_policy(req).await?;
-
-            save_share_table_info(&self.ctx, &res.share_table_info).await?;
+            let resp = catalog.set_table_column_mask_policy(req).await?;
+            if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_name_vec,
+                    db_id,
+                    &share_table_info,
+                )
+                .await?;
+            }
         }
 
         Ok(PipelineBuildResult::create())
@@ -504,14 +523,21 @@ impl ModifyTableColumnInterpreter {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
-        let res = catalog.update_table_meta(table_info, req).await?;
-
-        save_share_table_info(&self.ctx, &res.share_table_info).await?;
+        let resp = catalog.update_single_table_meta(req, table_info).await?;
+        if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+            for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    share_name_vec,
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }
@@ -533,22 +559,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        // try add lock table.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                catalog_name,
-                db_name,
-                tbl_name,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
-
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await?;
+        let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         table.check_mutable()?;
 
@@ -594,7 +606,9 @@ impl Interpreter for ModifyTableColumnInterpreter {
             }
         };
 
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        build_res
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
         Ok(build_res)
     }
 }

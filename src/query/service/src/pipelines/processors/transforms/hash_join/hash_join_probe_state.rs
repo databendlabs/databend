@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -187,19 +188,13 @@ impl HashJoinProbeState {
         } else {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let mut probe_keys = self
-            .hash_join_state
-            .hash_join_desc
-            .probe_keys
+        let probe_keys = &self.hash_join_state.hash_join_desc.probe_keys;
+        let mut keys_columns = probe_keys
             .iter()
             .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, input_num_rows),
-                    return_type.clone(),
-                ))
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), input_num_rows))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -211,35 +206,47 @@ impl HashJoinProbeState {
                 .is_none()
         {
             self.hash_join_state.init_markers(
-                &probe_keys,
+                (&keys_columns).into(),
                 input_num_rows,
                 probe_state.markers.as_mut().unwrap(),
             );
         }
 
-        let mut valids = None;
-        if !Self::check_for_eliminate_valids(
+        let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
+        let valids = if !Self::check_for_eliminate_valids(
             self.hash_join_state.hash_join_desc.from_correlated_subquery,
             &self.hash_join_state.hash_join_desc.join_type,
-        ) && probe_keys
-            .iter()
-            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-        {
-            for (col, _) in probe_keys.iter() {
-                let (is_all_null, tmp_valids) = col.validity();
-                if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, input_num_rows));
-                    break;
-                } else {
-                    valids = and_validities(valids, tmp_valids.cloned());
-                }
+        ) && probe_keys.iter().any(|expr| {
+            let ty = expr.data_type();
+            ty.is_nullable() || ty.is_null()
+        }) {
+            let valids = keys_columns
+                .iter()
+                .zip(is_null_equal.iter().copied())
+                .filter(|(_, is_null_equal)| !is_null_equal)
+                .map(|(col, _)| col.validity())
+                .try_fold(None, |valids, (is_all_null, tmp_valids)| {
+                    if is_all_null {
+                        ControlFlow::Break(Some(Bitmap::new_constant(false, input_num_rows)))
+                    } else {
+                        ControlFlow::Continue(and_validities(valids, tmp_valids.cloned()))
+                    }
+                });
+            match valids {
+                ControlFlow::Continue(valids) | ControlFlow::Break(valids) => valids,
             }
-        }
+        } else {
+            None
+        };
 
-        for (col, ty) in probe_keys.iter_mut() {
-            *col = col.remove_nullable();
-            *ty = ty.remove_nullable();
-        }
+        keys_columns
+            .iter_mut()
+            .zip(is_null_equal.iter().copied())
+            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
+            .for_each(|(col, _)| {
+                *col = col.remove_nullable();
+            });
+        let probe_keys = (&keys_columns).into();
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
             input = input.project(&self.probe_projections);
@@ -284,7 +291,7 @@ impl HashJoinProbeState {
                 // Build `keys` and get the hashes of `keys`.
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input_num_rows)?;
+                    .build_keys_state(probe_keys, input_num_rows)?;
                 let keys = table
                     .hash_method
                     .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;

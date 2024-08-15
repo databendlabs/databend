@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
-#![feature(lazy_cell)]
 
 //! This crate defines data types used in meta data storage service.
 
@@ -32,7 +31,7 @@ mod non_empty;
 mod operation;
 mod raft_snapshot_data;
 mod raft_txid;
-mod raft_types;
+pub mod raft_types;
 mod seq_errors;
 mod seq_num;
 mod seq_value;
@@ -45,6 +44,8 @@ mod proto_ext;
 pub mod cmd;
 pub mod config;
 pub mod errors;
+pub mod snapshot_db;
+pub mod sys_data;
 
 // reexport
 
@@ -121,7 +122,6 @@ pub use crate::grpc_helper::GrpcHelper;
 pub use crate::non_empty::NonEmptyStr;
 pub use crate::non_empty::NonEmptyString;
 pub use crate::raft_snapshot_data::SnapshotData;
-pub use crate::raft_snapshot_data::TempSnapshotData;
 pub use crate::raft_types::new_log_id;
 pub use crate::raft_types::AppendEntriesRequest;
 pub use crate::raft_types::AppendEntriesResponse;
@@ -151,7 +151,6 @@ pub use crate::raft_types::SnapshotMeta;
 pub use crate::raft_types::SnapshotMismatch;
 pub use crate::raft_types::SnapshotResponse;
 pub use crate::raft_types::StorageError;
-pub use crate::raft_types::StorageIOError;
 pub use crate::raft_types::StoredMembership;
 pub use crate::raft_types::StreamingError;
 pub use crate::raft_types::Term;

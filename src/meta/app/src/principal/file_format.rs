@@ -107,6 +107,18 @@ impl FileFormatParams {
         }
     }
 
+    pub fn need_field_default(&self) -> bool {
+        match self {
+            FileFormatParams::Parquet(v) => v.missing_field_as == NullAs::FieldDefault,
+            FileFormatParams::Csv(v) => v.empty_field_as == EmptyFieldAs::FieldDefault,
+            FileFormatParams::NdJson(v) => {
+                v.null_field_as == NullAs::FieldDefault
+                    || v.missing_field_as == NullAs::FieldDefault
+            }
+            _ => true,
+        }
+    }
+
     pub fn try_from_reader(mut reader: FileFormatOptionsReader, old: bool) -> Result<Self> {
         let typ = reader.take_type()?;
         let params = match typ {
@@ -143,7 +155,12 @@ impl FileFormatParams {
                     null_if,
                 )?)
             }
-            StageFileFormatType::Orc => FileFormatParams::Orc(OrcFileFormatParams::try_create()?),
+            StageFileFormatType::Orc => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Orc(OrcFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression()?;
@@ -222,7 +239,7 @@ impl FileFormatParams {
             params.check().map_err(|msg| {
                 ErrorCode::BadArguments(format!(
                     "Invalid {} option value: {msg}",
-                    params.get_type().to_string()
+                    params.get_type()
                 ))
             })?;
             if reader.options.is_empty() {
@@ -497,7 +514,7 @@ impl FromStr for EmptyFieldAs {
             "null" => Ok(Self::Null),
             "field_default" => Ok(Self::FieldDefault),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "Invalid option value. EMPTY_FILED_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
+                "Invalid option value. EMPTY_FIELD_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
             ))),
         }
     }
@@ -506,7 +523,7 @@ impl FromStr for EmptyFieldAs {
 impl Display for EmptyFieldAs {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::FieldDefault => write!(f, "FILED_DEFAULT"),
+            Self::FieldDefault => write!(f, "FIELD_DEFAULT"),
             Self::Null => write!(f, "NULL"),
             Self::String => write!(f, "STRING"),
         }
@@ -668,11 +685,14 @@ impl ParquetFileFormatParams {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OrcFileFormatParams {}
+pub struct OrcFileFormatParams {
+    pub missing_field_as: NullAs,
+}
 
 impl OrcFileFormatParams {
-    pub fn try_create() -> Result<Self> {
-        Ok(Self {})
+    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        Ok(Self { missing_field_as })
     }
 }
 
@@ -685,7 +705,7 @@ impl Display for FileFormatParams {
                     "TYPE = CSV COMPRESSION = {:?} \
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
-                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}'  EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
@@ -705,7 +725,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = TSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}'  QUOTE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
                      SKIP_HEADER = {} \
                      NAN_DISPLAY = '{}'",
                     params.compression,
@@ -741,8 +761,12 @@ impl Display for FileFormatParams {
                     params.missing_field_as
                 )
             }
-            FileFormatParams::Orc(_) => {
-                write!(f, "TYPE = ORC",)
+            FileFormatParams::Orc(params) => {
+                write!(
+                    f,
+                    "TYPE = ORC MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
             }
         }
     }

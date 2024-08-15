@@ -19,6 +19,9 @@ use std::fmt::Formatter;
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
+use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::parser::Dialect;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use geozero::wkb::Ewkb;
@@ -27,7 +30,6 @@ use geozero::ToGeos;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
-use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -143,7 +145,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -169,7 +171,9 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Geometry(s) => {
                 let ewkb = Ewkb(s.to_vec());
                 let geos = ewkb.to_geos().unwrap();
-                let geom = geos.to_ewkt(geos.srid()).unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "{geom:?}")
             }
         }
@@ -233,11 +237,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = if !bits.is_empty() {
-                    RoaringTreemap::deserialize_from(*bits).unwrap()
-                } else {
-                    RoaringTreemap::new()
-                };
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "'{}'", rb.into_iter().join(","))
             }
             ScalarRef::Tuple(fields) => {
@@ -260,7 +260,9 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Geometry(s) => {
                 let ewkb = Ewkb(s.to_vec());
                 let geos = ewkb.to_geos().unwrap();
-                let geom = geos.to_ewkt(geos.srid()).unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "'{geom}'")
             }
         }
@@ -753,6 +755,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
+        #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
                 Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
@@ -851,7 +854,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                     ..
                 } => {
                     let mut s = String::new();
-                    s += &name;
+                    s += name;
                     s += "(";
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
@@ -860,7 +863,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s += &arg.sql_display();
                     }
                     s += ", ";
-                    s += &lambda_display;
+                    s += lambda_display;
                     s += ")";
                     s
                 }
@@ -1063,4 +1066,9 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
+}
+
+/// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
+pub fn display_tuple_field_name(field_name: &str) -> String {
+    display_ident(field_name, true, Dialect::PostgreSQL)
 }

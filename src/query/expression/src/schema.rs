@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
@@ -24,6 +25,7 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::display::display_tuple_field_name;
 use crate::types::decimal::DecimalDataType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
@@ -78,6 +80,30 @@ pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
 pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
+// The change$row_id might be expended to the computation of
+// the ORIGIN_BLOCK_ROW_NUM_COL_NAME and BASE_ROW_ID_COL_NAME.
+pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        ROW_ID_COL_NAME,
+        SNAPSHOT_NAME_COL_NAME,
+        SEGMENT_NAME_COL_NAME,
+        BLOCK_NAME_COL_NAME,
+        BASE_ROW_ID_COL_NAME,
+        BASE_BLOCK_IDS_COL_NAME,
+        SEARCH_MATCHED_COL_NAME,
+        SEARCH_SCORE_COL_NAME,
+        CHANGE_ACTION_COL_NAME,
+        CHANGE_IS_UPDATE_COL_NAME,
+        CHANGE_ROW_ID_COL_NAME,
+        ROW_NUMBER_COL_NAME,
+        PREDICATE_COLUMN_NAME,
+        ORIGIN_VERSION_COL_NAME,
+        ORIGIN_BLOCK_ID_COL_NAME,
+        ORIGIN_BLOCK_ROW_NUM_COL_NAME,
+        ROW_VERSION_COL_NAME,
+    ])
+});
+
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
     column_id >= SEARCH_SCORE_COLUMN_ID
@@ -85,25 +111,7 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 
 #[inline]
 pub fn is_internal_column(column_name: &str) -> bool {
-    matches!(
-        column_name,
-        ROW_ID_COL_NAME
-            | SNAPSHOT_NAME_COL_NAME
-            | SEGMENT_NAME_COL_NAME
-            | BLOCK_NAME_COL_NAME
-            | BASE_BLOCK_IDS_COL_NAME
-            | ROW_NUMBER_COL_NAME
-            | PREDICATE_COLUMN_NAME
-            | CHANGE_ACTION_COL_NAME
-            | CHANGE_IS_UPDATE_COL_NAME
-            | CHANGE_ROW_ID_COL_NAME
-            // change$row_id might be expended
-            // to the computation of the two following internal columns
-            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
-            | BASE_ROW_ID_COL_NAME
-            | SEARCH_MATCHED_COL_NAME
-            | SEARCH_SCORE_COL_NAME
-    )
+    INTERNAL_COLUMNS.contains(column_name)
 }
 
 #[inline]
@@ -748,7 +756,11 @@ impl TableSchema {
                     for ((i, inner_field_name), inner_field_type) in
                         fields_name.iter().enumerate().zip(fields_type.iter())
                     {
-                        let inner_name = format!("{}:{}", field_name, inner_field_name);
+                        let inner_name = format!(
+                            "{}:{}",
+                            field_name,
+                            display_tuple_field_name(inner_field_name)
+                        );
                         if col_name.starts_with(&inner_name) {
                             return collect_inner_column_ids(
                                 col_name,
@@ -821,13 +833,12 @@ impl TableSchema {
             fields_type,
         } = &field.data_type.remove_nullable()
         {
-            let field_name = field.name();
             let mut next_column_id = field.column_id;
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
                 .map(|(name, ty)| {
-                    let inner_name = format!("{}:{}", field_name, name.to_lowercase());
+                    let inner_name = format!("{}:{}", field.name(), display_tuple_field_name(name));
                     let field = TableField::new(&inner_name, ty.clone());
                     field.build_column_id(&mut next_column_id)
                 })
@@ -860,9 +871,11 @@ impl TableSchema {
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
+                        let inner_name =
+                            format!("{}:{}", field.name(), display_tuple_field_name(name));
                         collect_in_field(
                             &TableField::new_from_column_id(
-                                &format!("{}:{}", field.name(), name),
+                                &inner_name,
                                 ty.clone(),
                                 *next_column_id,
                             ),
@@ -1191,7 +1204,7 @@ impl From<&TableDataType> for DataType {
 impl TableDataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
-            TableDataType::Nullable(_) => self.clone(),
+            TableDataType::Null | TableDataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }

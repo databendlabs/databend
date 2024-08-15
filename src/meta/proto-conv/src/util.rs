@@ -34,7 +34,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (2, "2022-07-13: Add: share.proto", ),
     (3, "2022-07-29: Add: user.proto/UserOption::default_role", ),
     (4, "2022-08-22: Add: config.proto/GcsStorageConfig", ),
-    (5, "2022-08-25: Add: ShareMeta::share_from_db_ids; DatabaseMeta::from_share", ),
+    (5, "2022-08-25: Add: ShareMetaV1::share_from_db_ids; DatabaseMeta::from_share", ),
     (6, "2022-09-08: Add: users.proto/CopyOptions::purge", ),
     (7, "2022-09-09: Add: table.proto/{TableCopiedFileInfo,TableCopiedFileLock} type", ),
     (8, "2022-09-16: Add: users.proto/StageFile::entity_tag", ),
@@ -123,6 +123,19 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (91, "2024-05-28: Add: user/role.proto and User/RoleInfo add update/created_on field"),
     (92, "2024-06-03: Add: user.proto/OrcFileFormatParams", ),
     (93, "2024-06-06: Add: null_if in user.proto/ParquetFileFormatParams"),
+    (94, "2024-06-21: Remove: catalog in table meta"),
+    (95, "2024-07-01: Add: add credential into share endpoint meta"),
+    (96, "2024-07-02: Add: add using_share_endpoint field into DatabaseMeta"),
+    (97, "2024-07-04: Add: missing_field_as in user.proto/OrcFileFormatParams"),
+    (98, "2024-07-04: Add: add iceberg catalog option in catalog option"),
+    (99, "2024-07-08: Add: missing_field_as in user.proto/ParquetFileFormatParams"),
+    (100, "2024-06-21: Add: tenant.proto/TenantQuota"),
+    (101, "2024-07-06: Add: add from_share_db_id field into DatabaseMeta"),
+    (102, "2024-07-11: Add: UserOption add must_change_password, AuthInfo.Password add need_change"),
+    (103, "2024-07-31: Add: ShareMetaV2"),
+    (104, "2024-08-02: Add: add share catalog into Catalog meta"),
+    (105, "2024-08-05: Add: add Dictionary meta"),
+    (106, "2024-08-08: Add: add QueryTokenInfo"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

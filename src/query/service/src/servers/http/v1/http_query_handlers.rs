@@ -13,17 +13,20 @@
 // limitations under the License.
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
+use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use highway::HighwayHash;
 use http::StatusCode;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -35,23 +38,21 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::middleware::EndpointKind;
+use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
-use crate::servers::http::v1::JsonBlock;
+use crate::servers::http::v1::StringBlock;
+use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
-
-const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
-const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
-const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -128,7 +129,7 @@ pub struct QueryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<JsonValue>>,
+    pub data: Vec<Vec<Option<String>>>,
     pub affect: Option<QueryAffect>,
 
     pub stats: QueryStats,
@@ -148,11 +149,11 @@ impl QueryResponse {
     ) -> impl IntoResponse {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
-            (JsonBlock::empty(), None)
+            (StringBlock::empty(), None)
         } else {
             match state.state {
                 ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
-                    None => (JsonBlock::empty(), Some(make_state_uri(&id))),
+                    None => (StringBlock::empty(), Some(make_state_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -161,9 +162,9 @@ impl QueryResponse {
                         (d.page.data, uri)
                     }
                 },
-                ExecuteStateKind::Failed => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                ExecuteStateKind::Failed => (StringBlock::empty(), Some(make_final_uri(&id))),
                 ExecuteStateKind::Succeeded => match r.data {
-                    None => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                    None => (StringBlock::empty(), Some(make_final_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -398,7 +399,7 @@ pub(crate) async fn query_handler(
         .await
 }
 
-pub fn query_route() -> Route {
+pub fn query_route(http_handler_kind: HttpHandlerKind) -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
         ("/", post(query_handler)),
@@ -416,7 +417,17 @@ pub fn query_route() -> Route {
 
     let mut route = Route::new();
     for (path, endpoint) in rules.into_iter() {
-        route = route.at(path, endpoint.with(MetricsMiddleware::new(path)));
+        let kind = if path == "/" {
+            EndpointKind::StartQuery
+        } else {
+            EndpointKind::PollQuery
+        };
+        route = route.at(
+            path,
+            endpoint
+                .with(MetricsMiddleware::new(path))
+                .with(HTTPSessionMiddleware::create(http_handler_kind, kind)),
+        );
     }
     route
 }
@@ -483,7 +494,7 @@ fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &
         match SpanContext::decode_w3c_traceparent(trace) {
             Some(span_context) => {
                 return Span::root(name, span_context)
-                    .with_properties(|| ctx.to_minitrace_properties());
+                    .with_properties(|| ctx.to_fastrace_properties());
             }
             None => {
                 warn!("failed to decode trace parent: {}", trace);
@@ -493,5 +504,5 @@ fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &
 
     let trace_id = query_id_to_trace_id(query_id);
     Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
-        .with_properties(|| ctx.to_minitrace_properties())
+        .with_properties(|| ctx.to_fastrace_properties())
 }

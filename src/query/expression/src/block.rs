@@ -586,7 +586,7 @@ impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
 impl BlockEntry {
     pub fn memory_size(&self) -> usize {
         match &self.value {
-            Value::Scalar(s) => std::mem::size_of_val(s),
+            Value::Scalar(s) => s.as_ref().memory_size(),
             Value::Column(c) => c.memory_size(),
         }
     }

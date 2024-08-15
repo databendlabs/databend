@@ -502,7 +502,7 @@ Sort
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [and_filters(and_filters(onebrc.measurement (#1) > 0, onebrc.station_name (#0) = 'Beijing'), onebrc.measurement (#1) = 1 OR onebrc.measurement (#1) = 2)], limit: NONE]
                     ├── aggregating index: [SELECT station_name, measurement, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc GROUP BY station_name, measurement]
-                    ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_5 (#5), index_col_6 (#6), index_col_3 (#3), index_col_4 (#4)], filter: is_true(CAST(onebrc.station_name (#0) AS Boolean NULL) AND CAST('Beijing' AS Boolean NULL) AND (onebrc.measurement (#1) = CAST(1 AS Float64 NULL) OR onebrc.measurement (#1) = CAST(2 AS Float64 NULL)) AND index_col_1 (#1) > CAST(0 AS Float64 NULL))]
+                    ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_5 (#5), index_col_6 (#6), index_col_3 (#3), index_col_4 (#4)], filter: is_true(index_col_1 (#1) > CAST(0 AS Float64 NULL) AND index_col_0 (#0) = CAST('Beijing' AS String NULL) AND (index_col_1 (#1) = CAST(1 AS Float64 NULL) OR index_col_1 (#1) = CAST(2 AS Float64 NULL)))]
                     └── estimated rows: 0.00
 
 statement ok
@@ -588,7 +588,7 @@ Sort
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [and_filters(onebrc.measurement (#1) > 2, onebrc.measurement (#1) < 5)], limit: NONE]
                     ├── aggregating index: [SELECT station_name, measurement, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc WHERE measurement > 1 AND measurement < 5 GROUP BY station_name, measurement]
-                    ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_5 (#5), index_col_6 (#6), index_col_3 (#3), index_col_4 (#4)], filter: is_true(index_col_1 (#1) > CAST(2 AS Float64 NULL) AND index_col_1 (#1) < CAST(5 AS Float64 NULL))]
+                    ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_5 (#5), index_col_6 (#6), index_col_3 (#3), index_col_4 (#4)], filter: is_true(index_col_1 (#1) > CAST(2 AS Float64 NULL))]
                     └── estimated rows: 0.00
 
 statement ok

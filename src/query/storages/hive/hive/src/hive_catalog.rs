@@ -25,6 +25,7 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -91,8 +92,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -100,24 +99,30 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
 use hive_metastore::ThriftHiveMetastoreClient;
 use hive_metastore::ThriftHiveMetastoreClientBuilder;
-use hive_metastore::ThriftHiveMetastoreGetTableException;
 use volo_thrift::transport::pool;
+use volo_thrift::MaybeException;
 
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
-
-pub const HIVE_CATALOG: &str = "hive";
+use crate::utils::from_thrift_error;
+use crate::utils::from_thrift_exception;
 
 #[derive(Debug)]
 pub struct HiveCreator;
 
 impl CatalogCreator for HiveCreator {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        _conf: InnerConfig,
+        _meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(opt) => opt,
             _ => unreachable!(
@@ -137,7 +142,7 @@ impl CatalogCreator for HiveCreator {
 
 #[derive(Clone)]
 pub struct HiveCatalog {
-    info: CatalogInfo,
+    info: Arc<CatalogInfo>,
 
     /// storage params for this hive catalog
     ///
@@ -162,7 +167,7 @@ impl Debug for HiveCatalog {
 
 impl HiveCatalog {
     pub fn try_create(
-        info: CatalogInfo,
+        info: Arc<CatalogInfo>,
         sp: Option<StorageParams>,
         hms_address: impl Into<String>,
     ) -> Result<HiveCatalog> {
@@ -212,10 +217,11 @@ impl HiveCatalog {
                 partition_names.into_iter().map(FastStr::new).collect(),
             )
             .await
-            .map_err(from_thrift_error)
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)?
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn get_partition_names(
         &self,
@@ -227,7 +233,8 @@ impl HiveCatalog {
             .client
             .get_partition_names(FastStr::new(db), FastStr::new(table), max_parts)
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         Ok(partition_names.into_iter().map(|v| v.to_string()).collect())
     }
@@ -254,14 +261,6 @@ impl HiveCatalog {
     }
 }
 
-fn from_thrift_error<T>(error: volo_thrift::error::ResponseError<T>) -> ErrorCode
-where T: Debug {
-    ErrorCode::Internal(format!(
-        "thrift error: {:?}, please check your thrift client config",
-        error
-    ))
-}
-
 #[async_trait::async_trait]
 impl Catalog for HiveCatalog {
     fn as_any(&self) -> &dyn Any {
@@ -272,18 +271,19 @@ impl Catalog for HiveCatalog {
         self.info.name_ident.catalog_name.clone()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.info.clone()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db = self
             .client
             .get_database(FastStr::new(db_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let hive_database: HiveDatabase = db.into();
         let res: Arc<dyn Database> = Arc::new(hive_database);
@@ -291,14 +291,15 @@ impl Catalog for HiveCatalog {
     }
 
     // Get all the databases.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
             .client
             .get_all_databases()
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let mut dbs = Vec::with_capacity(db_names.len());
 
@@ -307,7 +308,8 @@ impl Catalog for HiveCatalog {
                 .client
                 .get_database(name)
                 .await
-                .map_err(from_thrift_error)?;
+                .map(from_thrift_exception)
+                .map_err(from_thrift_error)??;
 
             let hive_database: HiveDatabase = db.into();
             let res: Arc<dyn Database> = Arc::new(hive_database);
@@ -368,6 +370,13 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in HIVE catalog",
+        ))
+    }
+
     async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",
@@ -385,7 +394,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Get one table by db and table name.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,
@@ -398,13 +407,9 @@ impl Catalog for HiveCatalog {
             .get_table(FastStr::new(db_name), FastStr::new(table_name))
             .await
         {
-            Ok(meta) => meta,
-            Err(volo_thrift::ResponseError::UserException(
-                ThriftHiveMetastoreGetTableException::O2(e),
-            )) => {
-                return Err(ErrorCode::TableInfoError(
-                    e.message.clone().unwrap_or_default(),
-                ));
+            Ok(MaybeException::Ok(meta)) => meta,
+            Ok(MaybeException::Exception(exception)) => {
+                return Err(ErrorCode::TableInfoError(format!("{exception:?}")));
             }
             Err(e) => {
                 return Err(from_thrift_error(e));
@@ -417,22 +422,28 @@ impl Catalog for HiveCatalog {
             .client
             .get_schema(FastStr::new(db_name), FastStr::new(table_name))
             .await
-            .map_err(from_thrift_error)?;
-        let table_info: TableInfo =
-            super::converters::try_into_table_info(self.sp.clone(), table_meta, fields)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
+        let table_info: TableInfo = super::converters::try_into_table_info(
+            self.info.clone(),
+            self.sp.clone(),
+            table_meta,
+            fields,
+        )?;
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
 
         Ok(res)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self
             .client
             .get_all_tables(FastStr::new(db_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let mut tables = Vec::with_capacity(table_names.len());
 
@@ -515,17 +526,6 @@ impl Catalog for HiveCatalog {
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot upsert table option in HIVE catalog",
-        ))
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        _table_info: &TableInfo,
-        _req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot update table meta in HIVE catalog",
         ))
     }
 

@@ -20,7 +20,6 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_io::cursor_ext::BufferReadStringExt;
-use databend_common_pipeline_sources::input_formats::error_utils::get_decode_error_by_pos;
 use databend_common_storage::FileParseError;
 
 use crate::read::load_context::LoadContext;
@@ -28,10 +27,10 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::tsv::format::TsvInputFormat;
 use crate::read::row_based::processors::BlockBuilderState;
+use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct TsvDecoder {
     pub load_context: Arc<LoadContext>,
-    pub fmt: TsvInputFormat,
     pub field_decoder: SeparatedTextDecoder,
 
     pub field_delimiter: u8,
@@ -52,7 +51,6 @@ impl TsvDecoder {
         let record_delimiter = *fmt.params.record_delimiter.as_bytes().last().unwrap();
         Self {
             load_context,
-            fmt,
             field_decoder,
             field_delimiter,
             record_delimiter,
@@ -78,15 +76,8 @@ impl TsvDecoder {
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
-            match &self.load_context.default_values {
-                None => {
-                    builder.push_default();
-                }
-                Some(values) => {
-                    builder.push(values[column_index].as_ref());
-                }
-            }
-            Ok(())
+            self.load_context
+                .push_default_value(builder, column_index, false)
         } else {
             // todo(youngsofun): optimize this later after refactor.
             let mut cursor = Cursor::new(col_data);

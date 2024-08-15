@@ -52,7 +52,6 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::DropTableIndexPlan;
-use crate::plans::LockTableOption;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
@@ -172,7 +171,7 @@ impl Binder {
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
                         if let Statement::Query(query) = &stmt {
-                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query).await?;
+                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
                             s_exprs.push((index_id, index_meta.query.clone(), s_expr));
                         }
                     }
@@ -214,8 +213,8 @@ impl Binder {
             if !agg_index_checker.is_supported() {
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Currently create aggregating index just support simple query, like: {}, \
-                and these aggregate funcs: {}, \
-                and non-deterministic functions are not support like: NOW()",
+                     and these aggregate funcs: {}, \
+                     and non-deterministic functions are not support like: NOW()",
                     "SELECT ... FROM ... WHERE ... GROUP BY ...",
                     SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
                 )));
@@ -233,7 +232,7 @@ impl Binder {
         let index_name = self.normalize_object_identifier(index_name);
 
         bind_context.planning_agg_index = true;
-        self.bind_query(bind_context, &query).await?;
+        self.bind_query(bind_context, &query)?;
         bind_context.planning_agg_index = false;
 
         let tables = self.metadata.read().tables().to_vec();
@@ -246,6 +245,13 @@ impl Binder {
 
         let table_entry = &tables[0];
         let table = table_entry.table();
+
+        if table.is_read_only() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is read-only, creating index not allowed",
+                table.name()
+            )));
+        }
 
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
@@ -417,6 +423,14 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let table = self.ctx.get_table(&catalog, &database, &table).await?;
+
+        if table.is_read_only() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is read-only, creating inverted index not allowed",
+                table.name()
+            )));
+        }
+
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create inverted index",
@@ -591,7 +605,6 @@ impl Binder {
             table,
             index_name,
             segment_locs: None,
-            lock_opt: LockTableOption::LockWithRetry,
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }

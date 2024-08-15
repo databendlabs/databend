@@ -116,6 +116,7 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
+    NeedChangePasswordDenied(1066),
     UnknownException(1067),
     TokioError(1068),
     HttpNotFound(1072),
@@ -157,6 +158,7 @@ build_exceptions! {
     OutofSequenceRange(1124),
     WrongSequenceCount(1125),
     UnknownSequence(1126),
+    UnknownQuery(1127),
 
     // Data Related Errors
 
@@ -214,7 +216,9 @@ build_exceptions! {
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
-    TantivyQueryParserError(1903)
+    TantivyQueryParserError(1903),
+
+    ReqwestError(1910)
 }
 
 // Meta service errors [2001, 3000].
@@ -336,7 +340,7 @@ build_exceptions! {
     ShareEndpointAlreadyExists(2714),
     UnknownShareEndpoint(2715),
     UnknownShareEndpointId(2716),
-    UnknownShareTable(2717),
+    CannotAccessShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
     ShareStorageError(2719),
 
@@ -375,6 +379,14 @@ build_exceptions! {
 
     // sequence
     SequenceError(3101),
+
+    // Share error codes(continue).
+    ErrorShareEndpointCredential(3111),
+    WrongSharePrivileges(3112),
+
+    // dictionary
+    DictionaryAlreadyExists(3113),
+    UnknownDictionary(3114),
 }
 
 // Storage errors [3001, 4000].
@@ -393,10 +405,21 @@ build_exceptions! {
     CurrentTransactionIsAborted(4002),
     TransactionTimeout(4003),
     InvalidSessionState(4004),
+
+    // recluster error codes
+    NoNeedToRecluster(4011),
+    NoNeedToCompact(4012),
+
+    RefreshTableInfoFailure(4012),
 }
 
 // Service errors [5001,6000].
 build_exceptions! {
     // A task that already stopped and can not stopped twice.
     AlreadyStopped(5002),
+
+    SessionTokenExpired(5100),
+    RefreshTokenExpired(5101),
+    SessionTokenNotFound(5102),
+    RefreshTokenNotFound(5103)
 }

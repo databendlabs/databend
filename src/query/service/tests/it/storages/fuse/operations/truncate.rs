@@ -56,7 +56,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
         .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
 
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.seq;

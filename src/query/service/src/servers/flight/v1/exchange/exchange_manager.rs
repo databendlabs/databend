@@ -25,23 +25,22 @@ use async_channel::Receiver;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlan;
+use fastrace::prelude::*;
 use log::warn;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
 use petgraph::Direction;
-use tokio::task::JoinHandle;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;
@@ -108,26 +107,8 @@ impl DataExchangeManager {
         )))
     }
 
-    pub fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-
-        let mut queries_profiles = HashMap::new();
-        for (query_id, coordinator) in queries_coordinator.iter() {
-            if let Some(executor) = coordinator
-                .info
-                .as_ref()
-                .and_then(|x| x.query_executor.as_ref())
-            {
-                queries_profiles.insert(query_id.clone(), executor.get_inner().get_profiles());
-            }
-        }
-
-        queries_profiles
-    }
-
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn init_query_env(
         &self,
         env: &QueryEnv,
@@ -332,7 +313,7 @@ impl DataExchangeManager {
     }
 
     // Execute query in background
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -347,7 +328,7 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -362,7 +343,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn handle_statistics_exchange(
         &self,
         id: String,
@@ -379,7 +360,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
@@ -406,7 +387,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -421,7 +402,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -855,8 +836,8 @@ impl QueryCoordinator {
             }
         }
 
-        let executor_settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
-        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+        let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
+        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
         assert!(self.fragment_exchanges.is_empty());
         let info_mut = self.info.as_mut().expect("Query info is None");
@@ -874,8 +855,12 @@ impl QueryCoordinator {
 
         let ctx = query_ctx.clone();
         let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
-        let mut statistics_sender =
-            StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
+        let mut statistics_sender = StatisticsSender::spawn(
+            &query_id,
+            ctx,
+            request_server_exchange,
+            executor.get_inner(),
+        );
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root("Distributed-Executor", parent)
@@ -885,9 +870,7 @@ impl QueryCoordinator {
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
-            let res = executor.execute().err();
-            let profiles = executor.get_inner().get_plans_profile();
-            statistics_sender.shutdown(res, profiles);
+            statistics_sender.shutdown(executor.execute().err());
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id);

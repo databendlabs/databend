@@ -39,6 +39,7 @@ pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use name_resolution::IdentifierNormalizer;
 pub use name_resolution::NameResolutionContext;
+pub use name_resolution::NameResolutionSuggest;
 pub use type_check::resolve_type_name;
 pub use type_check::resolve_type_name_by_str;
 pub use type_check::validate_function_arg;

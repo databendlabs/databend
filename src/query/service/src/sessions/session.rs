@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -27,6 +29,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_txn::TxnManagerRef;
@@ -34,7 +37,6 @@ use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::QueryContext;
@@ -71,7 +73,7 @@ impl Session {
         })
     }
 
-    pub fn to_minitrace_properties(&self) -> Vec<(String, String)> {
+    pub fn to_fastrace_properties(&self) -> Vec<(String, String)> {
         let mut properties = vec![
             ("session_id".to_string(), self.id.clone()),
             ("session_database".to_string(), self.get_current_database()),
@@ -119,9 +121,6 @@ impl Session {
                 shutdown_fun();
             }
         }
-
-        let http_queries_manager = HttpQueryManager::instance();
-        http_queries_manager.kill_session(&self.id);
     }
 
     pub fn kill(&self) {
@@ -218,7 +217,7 @@ impl Session {
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
-    // granted by external authenticator, it will over write the current user's granted roles, and
+    // granted by external authenticator, it will overwrite the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(
@@ -262,7 +261,9 @@ impl Session {
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(&self) -> Result<()> {
-        self.privilege_mgr().set_current_role(None).await
+        self.privilege_mgr()
+            .set_current_role(Some("public".to_string()))
+            .await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,
@@ -283,21 +284,28 @@ impl Session {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr()
-            .validate_privilege(object, privilege)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 
     #[async_backtrace::framed]
-    pub async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
+    pub async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }
-        self.privilege_mgr().has_ownership(object).await
+        self.privilege_mgr()
+            .has_ownership(object, check_current_role_only)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -338,6 +346,21 @@ impl Session {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.set_priority(priority);
         }
+    }
+
+    pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        match self.session_ctx.get_query_context_shared() {
+            None => vec![],
+            Some(x) => x.get_query_profiles(),
+        }
+    }
+
+    pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.session_ctx.get_all_variables()
+    }
+
+    pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
+        self.session_ctx.set_all_variables(variables)
     }
 }
 

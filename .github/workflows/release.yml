@@ -23,7 +23,7 @@ permissions:
 
 env:
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: gcp
+  RUNNER_PROVIDER: aws
 
 jobs:
   create_release:
@@ -99,7 +99,7 @@ jobs:
           delete-branch: true
 
   build_default:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -107,8 +107,6 @@ jobs:
         include:
           - { target: x86_64-unknown-linux-gnu, runner: X64 }
           - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
-          - { target: x86_64-unknown-linux-musl, runner: X64 }
-          - { target: aarch64-unknown-linux-musl, runner: X64 }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,9 +120,8 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier
       - name: Basic Sqllogic Test
-        if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash
         env:
           TEST_HANDLERS: http
@@ -134,7 +131,7 @@ jobs:
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_udf:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -160,7 +157,7 @@ jobs:
           category: udf
 
   build_hdfs:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -186,7 +183,7 @@ jobs:
           category: hdfs
 
   publish:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, aws]
     needs: [create_release, build_default, build_hdfs]
     strategy:
       fail-fast: false
@@ -198,12 +195,6 @@ jobs:
           - category: default
             target: aarch64-unknown-linux-gnu
             runner: ARM64
-          - category: default
-            target: x86_64-unknown-linux-musl
-            runner: X64
-          - category: default
-            target: aarch64-unknown-linux-musl
-            runner: X64
           - category: hdfs
             target: x86_64-unknown-linux-gnu
             runner: X64
@@ -263,7 +254,7 @@ jobs:
           category: ${{ matrix.category }}
 
   publish_testsuite:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_default]
     strategy:
       fail-fast: false
@@ -307,7 +298,7 @@ jobs:
           category: testsuite
 
   docker_all_in_one:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_default]
     steps:
       - name: Checkout
@@ -382,7 +373,7 @@ jobs:
           readme-filepath: ./docker/README.md
 
   docker_service:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_udf]
     strategy:
       fail-fast: false
@@ -453,7 +444,7 @@ jobs:
           file: ./docker/service/${{ matrix.service }}.Dockerfile
 
   distribution:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_default]
     strategy:
       matrix:
@@ -603,8 +594,8 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   sqlsmith:
-    needs: [create_release, build_default]
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    needs: [create_release, notify]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -627,6 +618,61 @@ jobs:
         with:
           name: test-sqlsmith
 
+  metachaos:
+    needs: [create_release, notify]
+    runs-on: [self-hosted, X64, Linux, 8c16g, aws]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - name: Download artifacts
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          category: default
+          artifacts: meta,metactl,metaverifier
+      - uses: ./.github/actions/io_delay_chaos
+        timeout-minutes: 20
+      - name: Notify failure
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          REPORT_WEBHOOK: ${{ secrets.META_REPORT_WEBHOOK }}
+          TITLE: Meta Service chaos tests failed
+        with:
+          script: |
+            const script = require('./.github/scripts/notify_failure.js')
+            await script({context, core})
+
+  sharing:
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
+    needs: [create_release, notify]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - name: checkout share endpoint
+        uses: actions/checkout@v4
+        with:
+          repository: datafuselabs/share-endpoint
+          token: ${{ secrets.DATABEND_BOT_TOKEN }}
+          path: share-endpoint
+      - name: Download artifacts
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          category: default
+          artifacts: metactl,meta,query
+      - uses: ./.github/actions/test_share_integration
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-integration-sharing
+
   benchmark:
     needs: [create_release, docker_service, notify]
     uses: ./.github/workflows/reuse.benchmark.yml
@@ -637,5 +683,5 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
-      runner_provider: gcp
+      runner_provider: aws
       target: all

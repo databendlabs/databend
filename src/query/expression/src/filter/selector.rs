@@ -530,6 +530,7 @@ impl<'a> Selector<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &expr.sql_display(),
                     selection,
                 )?;
                 let data_type = self
@@ -583,6 +584,7 @@ impl<'a> Selector<'a> {
                 );
                 let mut eval_options = EvaluateOptions::new(selection);
 
+                let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
                     .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
@@ -595,9 +597,9 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let result = self
-                    .evaluator
-                    .run_lambda(name, args, lambda_expr, return_type)?;
+                let result =
+                    self.evaluator
+                        .run_lambda(name, args, data_types, lambda_expr, return_type)?;
                 (result, return_type.clone())
             }
             _ => {

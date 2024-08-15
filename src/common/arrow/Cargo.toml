@@ -113,15 +113,14 @@ lz4 = { version = "1.24" }
 num = { version = "0.4", default-features = false, features = ["std"] }
 num-traits = "0.2"
 opendal = { workspace = true }
-ordered-float = "3.7.0"
-parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default_features = false, features = [
+ordered-float = { workspace = true }
+parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default-features = false, features = [
     "serde_types",
     "async",
 ] }
 rand = { workspace = true }
 ringbuffer = "0.14.2"
 roaring = "0.10.1"
-seq-macro = { version = "0.3", default-features = false }
 serde = { version = "^1.0", features = ["rc"], optional = true }
 serde_derive = { version = "^1.0", optional = true }
 simdutf8 = "0.1.4"
@@ -137,7 +136,7 @@ tokio-util = { version = "0.7", features = ["compat"] }
 async-std = "1.12"
 env_logger = "0.10"
 flate2 = "1.0.28"
-proptest = { version = "1", default_features = false, features = ["std"] }
+proptest = { version = "1", default-features = false, features = ["std"] }
 quanta = "0.11.1"
 
 [lints]

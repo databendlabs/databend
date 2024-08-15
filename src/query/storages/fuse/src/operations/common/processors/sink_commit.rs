@@ -274,7 +274,7 @@ where F: SnapshotGenerator + Send + 'static
                 // now:
                 // - either current txn IS append-only
                 //    even if this is a conflict txn T (in the meaning of table version) has been
-                // commited, which has changed the change-tracking state from disabled to enabled,
+                // committed, which has changed the change-tracking state from disabled to enabled,
                 // merging with transaction T is still safe, since the CDC mechanism allows it.
                 // - or change-tracking state is NOT changed.
                 //    in this case, we only need standard conflict resolution.
@@ -286,6 +286,8 @@ where F: SnapshotGenerator + Send + 'static
                     cluster_key_meta,
                     previous,
                     Some(table_info.ident.seq),
+                    self.ctx.txn_mgr(),
+                    table_info.ident.table_id,
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {
@@ -363,6 +365,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 match FuseTable::update_table_meta(
+                    self.ctx.as_ref(),
                     catalog.clone(),
                     &table_info,
                     &self.location_gen,

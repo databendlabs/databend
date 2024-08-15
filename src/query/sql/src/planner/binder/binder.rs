@@ -97,6 +97,9 @@ pub struct Binder {
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
+    /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
+    /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
+    pub bind_recursive_cte: bool,
 }
 
 impl<'a> Binder {
@@ -117,11 +120,12 @@ impl<'a> Binder {
             m_cte_bound_s_expr: Default::default(),
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
+            bind_recursive_cte: false,
         }
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let start = Instant::now();
         self.ctx.set_status_info("binding");
@@ -135,8 +139,7 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion::async_recursion(#[recursive::recursive])]
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &mut BindContext,
@@ -144,7 +147,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
@@ -182,9 +185,9 @@ impl<'a> Binder {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze { query } => {
+            Statement::ExplainAnalyze {partial, query } => {
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { plan: Box::new(plan) }
+                Plan::ExplainAnalyze { partial: *partial, plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { show_options } => {
@@ -201,7 +204,7 @@ impl<'a> Binder {
 
             Statement::CopyIntoTable(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -210,7 +213,7 @@ impl<'a> Binder {
 
             Statement::CopyIntoLocation(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -267,7 +270,11 @@ impl<'a> Binder {
             Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
-
+            // Dictionaries
+            Statement::CreateDictionary(_stmt) => todo!(),
+            Statement::DropDictionary(_stmt) => todo!(),
+            Statement::ShowCreateDictionary(_stmt) => todo!(),
+            Statement::ShowDictionaries { show_options: _ } => todo!(),
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -353,7 +360,7 @@ impl<'a> Binder {
             }
             Statement::Insert(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -364,7 +371,7 @@ impl<'a> Binder {
             }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In REPLACE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -372,7 +379,7 @@ impl<'a> Binder {
             }
             Statement::MergeInto(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In Merge resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -380,7 +387,7 @@ impl<'a> Binder {
             }
             Statement::Delete(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In DELETE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -389,7 +396,7 @@ impl<'a> Binder {
             }
             Statement::Update(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In UPDATE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -446,17 +453,13 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetVariable {
-                is_global,
-                variable,
-                value,
-            } => {
-                self.bind_set_variable(bind_context, *is_global, variable, value)
+            Statement::SetStmt {set_type, identifiers, values } => {
+                self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetVariable(stmt) => {
-                self.bind_unset_variable(bind_context, stmt)
+            Statement::UnSetStmt{unset_type, identifiers } => {
+                self.bind_unset(bind_context, *unset_type, identifiers)
                     .await?
             }
 
@@ -614,6 +617,7 @@ impl<'a> Binder {
             Statement::SetPriority {priority, object_id} => {
                 self.bind_set_priority(priority, object_id).await?
             },
+            Statement::System(stmt) => self.bind_system(stmt).await?,
         };
 
         match plan.kind() {
@@ -638,7 +642,7 @@ impl<'a> Binder {
         normalize_identifier(ident, &self.name_resolution_ctx)
     }
 
-    pub(crate) async fn opt_hints_set_var(
+    pub(crate) fn opt_hints_set_var(
         &mut self,
         bind_context: &mut BindContext,
         hints: &Hint,
@@ -654,7 +658,7 @@ impl<'a> Binder {
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
+            let (scalar, _) = *type_checker.resolve(&hint.expr)?;
 
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;
@@ -688,6 +692,10 @@ impl<'a> Binder {
 
     pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
         self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
+    }
+
+    pub fn set_bind_recursive_cte(&mut self, val: bool) {
+        self.bind_recursive_cte = val;
     }
 
     #[async_backtrace::framed]
@@ -748,6 +756,21 @@ impl<'a> Binder {
         normalize_identifier(ident, &self.name_resolution_ctx).name
     }
 
+    pub(crate) fn check_allowed_scalar_expr_with_udf(&self, scalar: &ScalarExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
     pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| {
             matches!(
@@ -771,6 +794,7 @@ impl<'a> Binder {
         Self::check_sexpr(s_expr, &mut finder)
     }
 
+    #[recursive::recursive]
     pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
     where F: Fn(&ScalarExpr) -> bool {
         let result = match s_expr.plan.as_ref() {
@@ -793,11 +817,9 @@ impl<'a> Binder {
             }
             RelOperator::Join(join) => {
                 f.reset_finder();
-                for condition in &join.left_conditions {
-                    f.visit(condition)?;
-                }
-                for condition in &join.right_conditions {
-                    f.visit(condition)?;
+                for condition in join.equi_conditions.iter() {
+                    f.visit(&condition.left)?;
+                    f.visit(&condition.right)?;
                 }
                 for condition in &join.non_equi_conditions {
                     f.visit(condition)?;
@@ -881,25 +903,6 @@ impl<'a> Binder {
                     | ScalarExpr::AsyncFunctionCall(_)
             )
         };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
-    }
-
-    pub(crate) fn check_allowed_scalar_expr_with_subquery(
-        &self,
-        scalar: &ScalarExpr,
-    ) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-                    | ScalarExpr::UDFCall(_)
-            )
-        };
-
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())

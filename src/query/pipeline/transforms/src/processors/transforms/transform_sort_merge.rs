@@ -26,11 +26,12 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
+use super::sort::algorithm::HeapSort;
+use super::sort::algorithm::LoserTreeSort;
+use super::sort::algorithm::SortAlgorithm;
 use super::sort::CommonRows;
-use super::sort::Cursor;
 use super::sort::DateConverter;
 use super::sort::DateRows;
-use super::sort::HeapMerger;
 use super::sort::Rows;
 use super::sort::SortedStream;
 use super::sort::StringConverter;
@@ -40,6 +41,7 @@ use super::sort::TimestampRows;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
+use crate::processors::sort::Merger;
 
 /// Merge sort blocks without limit.
 ///
@@ -47,6 +49,7 @@ use super::AccumulatingTransform;
 pub struct TransformSortMerge<R: Rows> {
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
+    enable_loser_tree: bool,
 
     block_size: usize,
     buffer: Vec<Option<(DataBlock, Column)>>,
@@ -65,10 +68,12 @@ impl<R: Rows> TransformSortMerge<R> {
         schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         block_size: usize,
+        enable_loser_tree: bool,
     ) -> Self {
         TransformSortMerge {
             schema,
             sort_desc,
+            enable_loser_tree,
             block_size,
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
@@ -82,7 +87,7 @@ impl<R: Rows> TransformSortMerge<R> {
 impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
-    fn add_block(&mut self, block: DataBlock, init_cursor: Cursor<R>) -> Result<()> {
+    fn add_block(&mut self, block: DataBlock, init_rows: R, _input_index: usize) -> Result<()> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
@@ -95,7 +100,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
 
         self.num_bytes += block.memory_size();
         self.num_rows += block.num_rows();
-        self.buffer.push(Some((block, init_cursor.to_column())));
+        self.buffer.push(Some((block, init_rows.to_column())));
 
         Ok(())
     }
@@ -159,9 +164,22 @@ impl<R: Rows> TransformSortMerge<R> {
             return Ok(result);
         }
 
+        if self.enable_loser_tree {
+            self.merge_sort_algo::<LoserTreeSort<R>>(batch_size, size_hint)
+        } else {
+            self.merge_sort_algo::<HeapSort<R>>(batch_size, size_hint)
+        }
+    }
+
+    fn merge_sort_algo<A: SortAlgorithm>(
+        &mut self,
+        batch_size: usize,
+        size_hint: usize,
+    ) -> Result<Vec<DataBlock>> {
         let streams = self.buffer.drain(..).collect::<Vec<_>>();
         let mut result = Vec::with_capacity(size_hint);
-        let mut merger = HeapMerger::<R, BlockStream>::create(
+
+        let mut merger = Merger::<A, BlockStream>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
@@ -212,16 +230,20 @@ pub fn sort_merge(
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: Vec<DataBlock>,
+    sort_spilling_batch_bytes: usize,
+    enable_loser_tree: bool,
+    have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
     let sort_desc = Arc::new(sort_desc);
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),
         sort_desc.clone(),
-        false,
+        have_order_col,
         false,
         0,
         0,
-        MergeSortCommonImpl::create(schema, sort_desc, block_size),
+        sort_spilling_batch_bytes,
+        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
     )?;
     for block in data_blocks {
         processor.transform(block)?;

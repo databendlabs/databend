@@ -32,11 +32,11 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures_util::StreamExt;
 use log::error;
 use log::info;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
 use opensrv_mysql::InitWriter;
@@ -192,7 +192,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     ) -> Result<()> {
         let query_id = Uuid::new_v4().to_string();
         let root = Span::root(full_name!(), SpanContext::random())
-            .with_properties(|| self.base.session.to_minitrace_properties());
+            .with_properties(|| self.base.session.to_fastrace_properties());
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
@@ -269,21 +269,24 @@ impl InteractiveWorkerBase {
         let ctx = self.session.create_query_context().await?;
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
-        let user_info = UserApiProvider::instance()
+        let mut user = UserApiProvider::instance()
             .get_user_with_client_ip(&ctx.get_tenant(), identity.clone(), Some(client_ip))
             .await?;
 
         // Check password policy for login
-        UserApiProvider::instance()
-            .check_login_password(&ctx.get_tenant(), identity.clone(), &user_info)
+        let need_change = UserApiProvider::instance()
+            .check_login_password(&ctx.get_tenant(), identity.clone(), &user)
             .await?;
+        if need_change {
+            user.update_auth_need_change_password();
+        }
 
-        let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
+        let authed = user.auth_info.auth_mysql(&info.user_password, salt)?;
         UserApiProvider::instance()
-            .update_user_login_result(ctx.get_tenant(), identity, authed, &user_info)
+            .update_user_login_result(ctx.get_tenant(), identity, authed, &user)
             .await?;
         if authed {
-            self.session.set_authed_user(user_info, None).await?;
+            self.session.set_authed_user(user, None).await?;
         }
         Ok(authed)
     }
@@ -339,7 +342,7 @@ impl InteractiveWorkerBase {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn do_query(
         &mut self,
         query_id: String,
@@ -395,7 +398,7 @@ impl InteractiveWorkerBase {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,

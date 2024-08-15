@@ -17,8 +17,8 @@ use std::collections::BTreeSet;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
+use fastrace::func_name;
 use maplit::btreemap;
-use minitrace::func_name;
 
 use crate::common;
 
@@ -52,6 +52,8 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
+        using_share_endpoint: None,
+        from_share_db_id: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

@@ -70,7 +70,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::ShowCreateTable(_)
 
                 // Set
-                | Plan::SetVariable(_)
+                | Plan::Set(_)
 
                 // Database.
                 | Plan::CreateDatabase(_)

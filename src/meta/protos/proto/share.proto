@@ -29,39 +29,6 @@ message ShareDatabaseObject {
   uint64 db_id = 3;
 }
 
-message ShareGrantObject {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  oneof object {
-    uint64 db_id = 1;
-    uint64 table_id = 2;
-  }
-}
-
-message ShareGrantEntry {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  ShareGrantObject object = 1;
-  uint64 privileges = 2;
-  string grant_on = 3;
-  optional string update_on = 4;
-}
-
-message ShareMeta {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  optional ShareGrantEntry database = 1;
-  repeated ShareGrantEntry entries = 2;
-  repeated string accounts = 3;
-  optional string comment = 4;
-  string share_on = 5;
-  optional string update_on = 6;
-  repeated uint64 share_from_db_ids = 7;
-}
-
 message ShareAccountMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -79,6 +46,19 @@ message ObjectSharedByShareIds {
   repeated uint64 share_ids = 1;
 }
 
+message ShareCredential {
+  oneof credential {
+    ShareCredentialHMAC hmac = 1;
+  }
+}
+
+message ShareCredentialHMAC {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string key = 1;
+}
+
 message ShareEndpointMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -88,6 +68,7 @@ message ShareEndpointMeta {
   map<string, string> args = 3;
   optional string comment = 4;
   string create_on = 5;
+  optional ShareCredential credential = 6;
 }
 
 message ShareEndpointIdent {

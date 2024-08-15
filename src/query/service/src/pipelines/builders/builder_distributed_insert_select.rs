@@ -14,6 +14,7 @@
 
 use databend_common_catalog::table::AppendMode;
 use databend_common_exception::Result;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 
 use crate::pipelines::processors::TransformCastSchema;
@@ -39,23 +40,18 @@ impl PipelineBuilder {
         )?;
 
         if insert_select.cast_needed {
-            self.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    TransformCastSchema::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        select_schema.clone(),
-                        insert_schema.clone(),
-                        self.func_ctx.clone(),
-                    )
-                })?;
+            self.main_pipeline.try_add_transformer(|| {
+                TransformCastSchema::try_new(
+                    select_schema.clone(),
+                    insert_schema.clone(),
+                    self.func_ctx.clone(),
+                )
+            })?;
         }
 
-        let table = self.ctx.build_table_by_table_info(
-            &insert_select.catalog_info,
-            &insert_select.table_info,
-            None,
-        )?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&insert_select.table_info, None)?;
 
         let source_schema = insert_schema;
         Self::fill_and_reorder_columns(

@@ -29,7 +29,7 @@ limit 10
 ----
 Memo
 ├── root group: #10
-├── estimated memory: 10.00 KiB
+├── estimated memory: 12.81 KiB
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
@@ -66,31 +66,31 @@ Memo
 │   └── #0 Join [#0, #3]
 ├── Group #5
 │   ├── Best properties
-│   │   ├── { dist: Any }: expr: #0, cost: 4419.000, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: 4878.000, children: [{ dist: Any }]
+│   │   ├── { dist: Any }: expr: #0, cost: 4420.000, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: 4930.000, children: [{ dist: Any }]
 │   ├── #0 EvalScalar [#4]
 │   └── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#5]
 ├── Group #6
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: 4923.000, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: 4980.000, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#5]
 ├── Group #7
 │   ├── Best properties
-│   │   ├── { dist: Any }: expr: #0, cost: 4968.000, children: [{ dist: Any }]
-│   │   └── { dist: Serial }: expr: #1, cost: 8118.000, children: [{ dist: Any }]
+│   │   ├── { dist: Any }: expr: #0, cost: 5030.000, children: [{ dist: Any }]
+│   │   └── { dist: Serial }: expr: #1, cost: 8530.000, children: [{ dist: Any }]
 │   ├── #0 Aggregate [#6]
 │   └── #1 Exchange: (Merge) [#7]
 ├── Group #8
 │   ├── Best properties
-│   │   └── { dist: Serial }: expr: #0, cost: 8127.000, children: [{ dist: Serial }]
+│   │   └── { dist: Serial }: expr: #0, cost: 8540.000, children: [{ dist: Serial }]
 │   └── #0 Sort [#7]
 ├── Group #9
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: 8136.000, children: [{ dist: Serial }]
+│   │   └── { dist: Any }: expr: #0, cost: 8550.000, children: [{ dist: Serial }]
 │   └── #0 Limit [#8]
 └── Group #10
     ├── Best properties
-    │   └── { dist: Serial }: expr: #0, cost: 8145.000, children: [{ dist: Any }]
+    │   └── { dist: Serial }: expr: #0, cost: 8560.000, children: [{ dist: Any }]
     └── #0 EvalScalar [#9]
 
 

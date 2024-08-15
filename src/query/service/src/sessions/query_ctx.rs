@@ -32,15 +32,17 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
@@ -60,34 +62,39 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::TableContext;
@@ -99,6 +106,7 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
@@ -137,6 +145,8 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    snapshot: Arc<RwLock<Option<Arc<TableSnapshot>>>>,
+    lazy_mutaion_delete: Arc<RwLock<bool>>,
 }
 
 impl QueryContext {
@@ -159,22 +169,21 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
+            snapshot: Arc::new(RwLock::new(None)),
+            lazy_mutaion_delete: Arc::new(RwLock::new(false)),
         })
     }
 
     /// Build fuse/system normal table by table info.
-    ///
-    /// TODO(xuanwo): we should support build table via table info in the future.
     pub fn build_table_by_table_info(
         &self,
-        catalog_info: &CatalogInfo,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(catalog_info, self.txn_mgr())?;
+            .build_catalog(table_info.catalog_info.clone(), self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -203,7 +212,6 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_external_by_table_info(
         &self,
-        _catalog: &CatalogInfo,
         table_info: &StageTableInfo,
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
@@ -322,35 +330,6 @@ impl QueryContext {
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
     }
-
-    pub async fn acquire_table_lock(
-        self: Arc<Self>,
-        catalog_name: &str,
-        db_name: &str,
-        tbl_name: &str,
-        lock_opt: &LockTableOption,
-    ) -> Result<Option<LockGuard>> {
-        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
-        if !enabled_table_lock {
-            return Ok(None);
-        }
-
-        let catalog = self.get_catalog(catalog_name).await?;
-        let tbl = catalog
-            .get_table(&self.get_tenant(), db_name, tbl_name)
-            .await?;
-        if tbl.engine() != "FUSE" {
-            return Ok(None);
-        }
-
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
-            LockTableOption::NoLock => Ok(None),
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -364,16 +343,12 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
-                &plan.catalog_info,
-                table_info,
-                plan.tbl_args.clone(),
-            ),
-            DataSourceInfo::StageSource(stage_info) => self.build_external_by_table_info(
-                &plan.catalog_info,
-                stage_info,
-                plan.tbl_args.clone(),
-            ),
+            DataSourceInfo::TableSource(table_info) => {
+                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+            }
+            DataSourceInfo::StageSource(stage_info) => {
+                self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
+            }
             DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
             DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
@@ -412,6 +387,10 @@ impl TableContext for QueryContext {
         self.shared.group_by_spill_progress.clone()
     }
 
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.shared.window_partition_spill_progress.clone()
+    }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
@@ -426,6 +405,13 @@ impl TableContext for QueryContext {
 
     fn get_group_by_spill_progress_value(&self) -> ProgressValues {
         self.shared.group_by_spill_progress.as_ref().get_values()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
+        self.shared
+            .window_partition_spill_progress
+            .as_ref()
+            .get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {
@@ -491,6 +477,22 @@ impl TableContext for QueryContext {
             partition_queue.push_back(part);
         }
         Ok(())
+    }
+
+    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>) {
+        *self.snapshot.write() = Some(snapshot);
+    }
+
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
+        self.snapshot.read().clone()
+    }
+
+    fn set_lazy_mutation_delete(&self, lazy: bool) {
+        *self.lazy_mutaion_delete.write() = lazy;
+    }
+
+    fn get_lazy_mutation_delete(&self) -> bool {
+        *self.lazy_mutaion_delete.read()
     }
 
     fn partition_num(&self) -> usize {
@@ -637,9 +639,10 @@ impl TableContext for QueryContext {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         self.get_current_session()
-            .validate_privilege(object, privilege)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 
@@ -666,9 +669,13 @@ impl TableContext for QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format_null_as_str = self.get_settings().get_format_null_as_str()?;
+        let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
             geometry_format,
+            enable_dst_hour_fix,
+            format_null_as_str,
         };
         Ok(format)
     }
@@ -698,6 +705,8 @@ impl TableContext for QueryContext {
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
+        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
+        let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -718,6 +727,8 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
+            enable_dst_hour_fix,
+            enable_strict_datetime_parser,
         })
     }
 
@@ -868,18 +879,20 @@ impl TableContext for QueryContext {
         let table = self.shared.get_table(catalog, database, table).await?;
         // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
         // but there is no way to access dyn TableContext.
-        let table: Arc<dyn Table> = if table.engine() == "ICEBERG" {
-            let sp = get_storage_params_from_options(self, table.options()).await?;
-            let mut info = table.get_table_info().to_owned();
-            info.meta.storage_params = Some(sp);
-            IcebergTable::try_create(info.to_owned())?.into()
-        } else if table.engine() == "DELTA" {
-            let sp = get_storage_params_from_options(self, table.options()).await?;
-            let mut info = table.get_table_info().to_owned();
-            info.meta.storage_params = Some(sp);
-            DeltaTable::try_create(info.to_owned())?.into()
-        } else {
-            table
+        let table: Arc<dyn Table> = match table.engine() {
+            "ICEBERG" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                IcebergTable::try_create(info.to_owned())?.into()
+            }
+            "DELTA" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                DeltaTable::try_create(info.to_owned())?.into()
+            }
+            _ => table,
         };
         Ok(table)
     }
@@ -1007,12 +1020,15 @@ impl TableContext for QueryContext {
         self.shared.copy_status.clone()
     }
 
-    fn add_merge_status(&self, merge_status: MergeStatus) {
-        self.shared.merge_status.write().merge_status(merge_status)
+    fn add_mutation_status(&self, mutation_status: MutationStatus) {
+        self.shared
+            .mutation_status
+            .write()
+            .merge_mutation_status(mutation_status)
     }
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
-        self.shared.merge_status.clone()
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+        self.shared.mutation_status.clone()
     }
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
@@ -1041,52 +1057,26 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn add_query_profiles(&self, profiles: &[PlanProfile]) {
-        let mut merged_profiles = self.shared.query_profiles.write();
-
-        for query_profile in profiles {
-            match merged_profiles.entry(query_profile.id) {
-                Entry::Vacant(v) => {
-                    v.insert(query_profile.clone());
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().merge(query_profile);
-                }
-            };
-        }
-    }
-
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        self.shared
-            .query_profiles
-            .read()
-            .values()
-            .cloned()
-            .collect::<Vec<_>>()
+        self.shared.get_query_profiles()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
-        let mut queries_profile = SessionManager::instance().get_queries_profile();
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        self.shared.add_query_profiles(profiles)
+    }
 
-        let exchange_profiles = DataExchangeManager::instance().get_queries_profile();
-
-        for (query_id, profiles) in exchange_profiles {
-            match queries_profile.entry(query_id) {
-                Entry::Vacant(v) => {
-                    v.insert(profiles);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().extend(profiles);
-                }
-            }
-        }
-
-        queries_profile
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        SessionManager::instance().get_queries_profiles()
     }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin) {
         let mut merge_into_join = self.shared.merge_into_join.write();
         *merge_into_join = join;
+    }
+
+    fn clear_runtime_filter(&self) {
+        let mut runtime_filters = self.shared.runtime_filters.write();
+        runtime_filters.clear();
     }
 
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
@@ -1167,6 +1157,168 @@ impl TableContext for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+
+    fn set_variable(&self, key: String, value: Scalar) {
+        self.shared.session.session_ctx.set_variable(key, value)
+    }
+
+    fn unset_variable(&self, key: &str) {
+        self.shared.session.session_ctx.unset_variable(key)
+    }
+
+    fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.shared.session.session_ctx.get_variable(key)
+    }
+
+    #[async_backtrace::framed]
+    async fn load_datalake_schema(
+        &self,
+        kind: &str,
+        sp: &StorageParams,
+    ) -> Result<(TableSchema, String)> {
+        match kind {
+            "delta" => {
+                let table = DeltaTable::load(sp).await?;
+                DeltaTable::get_meta(&table).await
+            }
+            // TODO: iceberg doesn't support load from storage directly.
+            _ => Err(ErrorCode::Internal("unsupported datalake type {}")),
+        }
+    }
+
+    async fn create_stage_table(
+        &self,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        files_to_copy: Option<Vec<StageFileInfo>>,
+        max_column_position: usize,
+    ) -> Result<Arc<dyn Table>> {
+        match stage_info.file_format_params {
+            FileFormatParams::Parquet(..) => {
+                let mut read_options = ParquetReadOptions::default();
+
+                if !self.get_settings().get_enable_parquet_page_index()? {
+                    read_options = read_options.with_prune_pages(false);
+                }
+
+                if !self.get_settings().get_enable_parquet_rowgroup_pruning()? {
+                    read_options = read_options.with_prune_row_groups(false);
+                }
+
+                if !self.get_settings().get_enable_parquet_prewhere()? {
+                    read_options = read_options.with_do_prewhere(false);
+                }
+
+                ParquetRSTable::create(
+                    stage_info.clone(),
+                    files_info,
+                    read_options,
+                    files_to_copy,
+                    self.get_settings(),
+                    self.get_query_kind(),
+                )
+                .await
+            }
+            FileFormatParams::Orc(..) => {
+                let schema = Arc::new(TableSchema::empty());
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                OrcTable::try_create(info).await
+            }
+            FileFormatParams::NdJson(..) => {
+                let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                    "_$1", // TODO: this name should be in visible
+                    TableDataType::Variant,
+                )]));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                StageTable::try_create(info)
+            }
+            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
+                if max_column_position == 0 {
+                    let file_type = match stage_info.file_format_params {
+                        FileFormatParams::Csv(..) => "CSV",
+                        FileFormatParams::Tsv(..) => "TSV",
+                        _ => unreachable!(), // This branch should never be reached
+                    };
+
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        file_type
+                    )));
+                }
+
+                let mut fields = vec![];
+                for i in 1..(max_column_position + 1) {
+                    fields.push(TableField::new(
+                        &format!("_${}", i),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ));
+                }
+
+                let schema = Arc::new(TableSchema::new(fields));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                StageTable::try_create(info)
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
+                    stage_info.file_format_params
+                )));
+            }
+        }
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        catalog_name: &str,
+        db_name: &str,
+        tbl_name: &str,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
+        if !enabled_table_lock {
+            return Ok(None);
+        }
+
+        let catalog = self.get_catalog(catalog_name).await?;
+        let tbl = catalog
+            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .await?;
+        if tbl.engine() != "FUSE" {
+            return Ok(None);
+        }
+
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
+            LockTableOption::NoLock => Ok(None),
+        }
     }
 }
 

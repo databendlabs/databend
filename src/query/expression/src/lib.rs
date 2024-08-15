@@ -37,7 +37,6 @@
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
-#![feature(lazy_cell)]
 #![feature(try_blocks)]
 #![feature(let_chains)]
 #![feature(trait_upcasting)]
@@ -51,6 +50,7 @@ mod evaluator;
 mod expression;
 pub mod filter;
 mod function;
+mod input_columns;
 mod kernels;
 mod property;
 mod register;
@@ -69,6 +69,7 @@ pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::filter::*;
 pub use crate::function::*;
+pub use crate::input_columns::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;

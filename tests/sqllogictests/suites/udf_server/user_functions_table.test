@@ -58,6 +58,7 @@ SELECT definition FROM SYSTEM.USER_FUNCTIONS ORDER BY name;
  (UInt8 NULL, UInt16 NULL, UInt32 NULL, UInt64 NULL) RETURNS UInt64 NULL LANGUAGE python HANDLER = add_unsigned ADDRESS = http://0.0.0.0:8815
  (a, b, c, d, e) -> a + c * (e / b) - d
  (p) -> NOT is_null(p)
+ (String NULL) RETURNS String NULL LANGUAGE python HANDLER = ping ADDRESS = http://0.0.0.0:8815
 
 # DROP FUNCTIONS
 statement ok

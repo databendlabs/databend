@@ -20,6 +20,7 @@ use crate::optimizer::hyper_dp::join_relation::JoinRelation;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
@@ -80,8 +81,11 @@ impl JoinNode {
             .map(|(_, r)| r.clone())
             .collect();
         let rel_op = RelOperator::Join(Join {
-            left_conditions,
-            right_conditions,
+            equi_conditions: JoinEquiCondition::new_conditions(
+                left_conditions,
+                right_conditions,
+                vec![],
+            ),
             non_equi_conditions: vec![],
             join_type: self.join_type.clone(),
             marker_index: None,

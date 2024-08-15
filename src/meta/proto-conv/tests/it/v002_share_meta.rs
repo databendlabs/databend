@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::share;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 
@@ -60,7 +60,7 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
         );
         entries.insert(entry.to_string().clone(), entry);
 
-        share::ShareMeta {
+        share::ShareMetaV1 {
             database: Some(db_entry),
             entries,
             accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),

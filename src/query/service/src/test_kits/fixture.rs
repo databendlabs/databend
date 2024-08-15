@@ -184,6 +184,7 @@ impl TestFixture {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
+            need_change: false,
         });
 
         user_info.grants.grant_privileges(
@@ -200,6 +201,7 @@ impl TestFixture {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
+            need_change: false,
         });
 
         user_info.grants.grant_privileges(
@@ -337,7 +339,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -363,7 +364,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -400,7 +400,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -437,7 +436,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -483,7 +481,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE

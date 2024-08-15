@@ -36,12 +36,13 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
-use databend_common_sql::plans::insert::InsertValue;
+use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
@@ -105,7 +106,6 @@ impl PipelineBuilder {
             table_info,
             on_conflicts,
             bloom_filter_column_indexes,
-            catalog_info,
             segments,
             block_slots,
             need_insert,
@@ -113,9 +113,7 @@ impl PipelineBuilder {
         } = replace;
         let max_threads = self.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
-        let table = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let table = self.ctx.build_table_by_table_info(table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let schema = DataSchema::from(table.schema()).into();
         let cluster_stats_gen =
@@ -267,7 +265,6 @@ impl PipelineBuilder {
             bloom_filter_column_indexes,
             table_is_empty,
             table_info,
-            catalog_info,
             select_ctx,
             table_level_range_index,
             target_schema,
@@ -276,9 +273,7 @@ impl PipelineBuilder {
             ..
         } = deduplicate;
 
-        let tbl = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let tbl = self.ctx.build_table_by_table_info(table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;
@@ -312,17 +307,13 @@ impl PipelineBuilder {
                 ));
             }
             if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
-                self.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformCastSchema::try_create(
-                            transform_input_port,
-                            transform_output_port,
-                            select_schema.clone(),
-                            target_schema.clone(),
-                            self.func_ctx.clone(),
-                        )
-                    },
-                )?;
+                self.main_pipeline.try_add_transformer(|| {
+                    TransformCastSchema::try_new(
+                        select_schema.clone(),
+                        target_schema.clone(),
+                        self.func_ctx.clone(),
+                    )
+                })?;
             }
         }
 
@@ -397,7 +388,7 @@ impl PipelineBuilder {
 }
 
 pub struct ValueSource {
-    rows: Vec<Vec<Scalar>>,
+    rows: Arc<Vec<Vec<Scalar>>>,
     schema: DataSchemaRef,
     is_finished: bool,
 }
@@ -405,7 +396,7 @@ pub struct ValueSource {
 impl ValueSource {
     pub fn new(rows: Vec<Vec<Scalar>>, schema: DataSchemaRef) -> Self {
         Self {
-            rows,
+            rows: Arc::new(rows),
             schema,
             is_finished: false,
         }
@@ -431,7 +422,7 @@ impl AsyncSource for ValueSource {
             .map(|f| ColumnBuilder::with_capacity(f.data_type(), self.rows.len()))
             .collect::<Vec<_>>();
 
-        for row in &self.rows {
+        for row in self.rows.as_ref() {
             for (field, column) in row.iter().zip(columns.iter_mut()) {
                 column.push(field.as_ref());
             }

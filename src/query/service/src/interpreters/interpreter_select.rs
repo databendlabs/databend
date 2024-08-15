@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-use std::hash::RandomState;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
@@ -47,7 +45,6 @@ use log::error;
 use log::info;
 
 use crate::interpreters::common::query_build_update_stream_req;
-use crate::interpreters::common::StreamTableUpdates;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -141,65 +138,27 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        if let Some(StreamTableUpdates {
-            update_table_metas,
-            table_infos,
-        }) = query_build_update_stream_req(&self.ctx, &self.metadata).await?
-        {
-            assert!(!update_table_metas.is_empty());
+        let update_stream_metas = query_build_update_stream_req(&self.ctx, &self.metadata).await?;
 
-            // defensively checks that all catalog names are identical
-            {
-                let mut iter = update_table_metas
-                    .iter()
-                    .map(|item| item.new_table_meta.catalog.as_str());
-                let first = iter.next().unwrap();
-                let all_of_the_same_catalog = iter.all(|item| item == first);
-                if !all_of_the_same_catalog {
-                    let cats: HashSet<&str, RandomState> = HashSet::from_iter(iter);
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Consuming streams of different catalogs are not support. catalogs are {:?}",
-                        cats
-                    )));
-                }
-            }
-
-            let catalog_name = update_table_metas[0].new_table_meta.catalog.as_str();
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let query_id = self.ctx.get_id();
-            let auto_commit = !self.ctx.txn_mgr().lock().is_active();
-            build_res
-                .main_pipeline
-                .set_on_finished(move |info: &ExecutionInfo| match &info.res {
-                    Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                        info!(
-                            "Updating the stream meta to consume data, query_id: {}",
-                            query_id
-                        );
-
-                        if auto_commit {
-                            info!("(auto) committing stream consumptions");
-                            // commit to meta server directly
+        let catalog = self.ctx.get_default_catalog()?;
+        build_res
+            .main_pipeline
+            .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                    match update_stream_metas {
+                        Some(streams) => {
                             let r = UpdateMultiTableMetaReq {
-                                update_table_metas,
-                                copied_files: vec![],
-                                update_stream_metas: vec![],
-                                deduplicated_labels: vec![],
+                                update_table_metas: streams.update_table_metas,
+                                ..Default::default()
                             };
+                            info!("Updating the stream meta to consume data");
                             catalog.update_multi_table_meta(r).await.map(|_| ())
-                        } else {
-                            info!("(non-auto) committing stream consumptions");
-                            for (req, info) in
-                                update_table_metas.into_iter().zip(table_infos.into_iter())
-                            {
-                                catalog.update_table_meta(&info, req).await?;
-                            }
-                            Ok(())
                         }
-                    }),
-                    Err(error_code) => Err(error_code.clone()),
-                });
-        }
+                        None => Ok(()),
+                    }
+                }),
+                Err(error_code) => Err(error_code.clone()),
+            });
         Ok(build_res)
     }
 
@@ -315,7 +274,7 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.attach_tables_to_ctx();

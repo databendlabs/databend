@@ -23,6 +23,7 @@ use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::SortDesc;
+use crate::executor::physical_plans::WindowPartition;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
@@ -44,7 +45,6 @@ pub struct Sort {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-    pub window_partition: Vec<IndexType>,
 }
 
 impl Sort {
@@ -120,31 +120,46 @@ impl PhysicalPlanBuilder {
             None
         };
 
+        let input_plan = self.build(s_expr.child(0)?, required).await?;
+
         let window_partition = sort
             .window_partition
             .iter()
             .map(|v| v.index)
             .collect::<Vec<_>>();
 
+        let order_by = sort
+            .items
+            .iter()
+            .map(|v| SortDesc {
+                asc: v.asc,
+                nulls_first: v.nulls_first,
+                order_by: v.index,
+                display_name: self.metadata.read().column(v.index).name(),
+            })
+            .collect::<Vec<_>>();
+
+        // Add WindowPartition for parallel sort in window.
+        if !window_partition.is_empty() {
+            return Ok(PhysicalPlan::WindowPartition(WindowPartition {
+                plan_id: 0,
+                input: Box::new(input_plan.clone()),
+                partition_by: window_partition.clone(),
+                order_by: order_by.clone(),
+                after_exchange: sort.after_exchange,
+                stat_info: Some(stat_info.clone()),
+            }));
+        }
+
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {
             plan_id: 0,
-            input: Box::new(self.build(s_expr.child(0)?, required).await?),
-            order_by: sort
-                .items
-                .iter()
-                .map(|v| SortDesc {
-                    asc: v.asc,
-                    nulls_first: v.nulls_first,
-                    order_by: v.index,
-                    display_name: self.metadata.read().column(v.index).name(),
-                })
-                .collect(),
+            input: Box::new(input_plan),
+            order_by,
             limit: sort.limit,
             after_exchange: sort.after_exchange,
             pre_projection,
             stat_info: Some(stat_info),
-            window_partition,
         }))
     }
 }

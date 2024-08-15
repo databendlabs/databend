@@ -15,10 +15,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::plans::LockTableOption;
 use log::info;
 use log::warn;
 
@@ -63,7 +63,7 @@ impl HookOperator {
     /// 1. Compact if needed.
     /// 2. Refresh aggregating index if needed.
     /// 3. Refresh virtual columns if needed.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute(&self, pipeline: &mut Pipeline) {
         self.execute_compact(pipeline).await;
@@ -71,7 +71,7 @@ impl HookOperator {
     }
 
     /// Execute the compact hook operator.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_compact(&self, pipeline: &mut Pipeline) {
         match self.ctx.get_settings().get_enable_compact_after_write() {
@@ -114,7 +114,7 @@ impl HookOperator {
     /// Execute the refresh hook operator.
     // 1. Refresh aggregating index.
     // 2. Refresh virtual columns.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_refresh(&self, pipeline: &mut Pipeline) {
         let refresh_desc = RefreshDesc {
@@ -123,12 +123,6 @@ impl HookOperator {
             table: self.table.to_owned(),
         };
 
-        hook_refresh(
-            self.ctx.clone(),
-            pipeline,
-            refresh_desc,
-            self.lock_opt.clone(),
-        )
-        .await;
+        hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
     }
 }

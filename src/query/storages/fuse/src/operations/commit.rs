@@ -28,14 +28,14 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
@@ -86,13 +86,17 @@ impl FuseTable {
             proc.into_processor()
         })?;
 
-        pipeline.add_transform(|input, output| {
-            let aggregator =
-                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Insert);
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
+        pipeline.add_async_accumulating_transformer(|| {
+            TableMutationAggregator::create(
+                self,
+                ctx.clone(),
+                vec![],
+                vec![],
+                vec![],
+                Statistics::default(),
+                MutationKind::Insert,
+            )
+        });
 
         let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
         pipeline.add_sink(|input| {
@@ -145,6 +149,7 @@ impl FuseTable {
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
         let res = Self::update_table_meta(
+            ctx,
             catalog,
             table_info,
             location_generator,
@@ -203,6 +208,7 @@ impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
+        ctx: &dyn TableContext,
         catalog: Arc<dyn Catalog>,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
@@ -224,17 +230,21 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            copied_files: copied_files.clone(),
-            deduplicated_label,
-            update_stream_meta: update_stream_meta.to_vec(),
         };
 
         // 3. let's roll
-        catalog.update_table_meta(table_info, req).await?;
+        catalog
+            .update_multi_table_meta(UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table_info.clone())],
+                update_stream_metas: update_stream_meta.to_vec(),
+                copied_files: copied_files.iter().map(|c| (table_id, c.clone())).collect(),
+                deduplicated_labels: deduplicated_label.into_iter().collect(),
+            })
+            .await?;
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
-        Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
+        Self::write_last_snapshot_hint(ctx, operator, location_generator, &snapshot_location).await;
 
         Ok(())
     }
@@ -242,10 +252,19 @@ impl FuseTable {
     // Left a hint file which indicates the location of the latest snapshot
     #[async_backtrace::framed]
     pub async fn write_last_snapshot_hint(
+        ctx: &dyn TableContext,
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
-        last_snapshot_path: String,
+        last_snapshot_path: &str,
     ) {
+        if let Ok(false) = ctx.get_settings().get_enable_last_snapshot_location_hint() {
+            info!(
+                "Write last_snapshot_location_hint disabled. Snapshot {}",
+                last_snapshot_path
+            );
+            return;
+        }
+
         // Just try our best to write down the hint file of last snapshot
         // - will retry in the case of temporary failure
         // but
@@ -431,7 +450,7 @@ impl FuseTable {
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
                 new_statistics = merge_statistics(
-                    &new_statistics,
+                    new_statistics.clone(),
                     &concurrent_appended_segment.summary,
                     default_cluster_key_id,
                 );

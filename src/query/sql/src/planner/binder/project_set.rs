@@ -110,8 +110,7 @@ impl SrfCollector {
 }
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub async fn bind_project_set(
+    pub fn bind_project_set(
         &mut self,
         bind_context: &mut BindContext,
         srfs: &[Expr],
@@ -144,7 +143,7 @@ impl Binder {
                             self.m_cte_bound_ctx.clone(),
                             self.ctes_map.clone(),
                         );
-                        let (scalar, _) = scalar_binder.bind(arg).await?;
+                        let (scalar, _) = scalar_binder.bind(arg)?;
                         arguments.push(scalar);
                     }
 

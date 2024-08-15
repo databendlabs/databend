@@ -12,26 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::TruncateTablePlan;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::flight::v1::packets::Packet;
-use crate::servers::flight::v1::packets::TruncateTablePacket;
+use crate::servers::flight::v1::actions::TRUNCATE_TABLE;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 pub struct TruncateTableInterpreter {
     ctx: Arc<QueryContext>,
-    table_name: String,
-    catalog_name: String,
-    database_name: String,
+    plan: TruncateTablePlan,
 
     proxy_to_cluster: bool,
 }
@@ -40,19 +38,15 @@ impl TruncateTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<Self> {
         Ok(TruncateTableInterpreter {
             ctx,
-            table_name: plan.table,
-            catalog_name: plan.catalog,
-            database_name: plan.database,
+            plan,
             proxy_to_cluster: true,
         })
     }
 
-    pub fn from_flight(ctx: Arc<QueryContext>, packet: TruncateTablePacket) -> Result<Self> {
+    pub fn from_flight(ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<Self> {
         Ok(TruncateTableInterpreter {
             ctx,
-            table_name: packet.table_name,
-            catalog_name: packet.catalog_name,
-            database_name: packet.database_name,
+            plan,
             proxy_to_cluster: false,
         })
     }
@@ -69,43 +63,42 @@ impl Interpreter for TruncateTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // try add lock table.
         let lock_guard = self
             .ctx
             .clone()
             .acquire_table_lock(
-                &self.catalog_name,
-                &self.database_name,
-                &self.table_name,
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
                 &LockTableOption::LockWithRetry,
             )
             .await?;
 
         let table = self
             .ctx
-            .get_table(&self.catalog_name, &self.database_name, &self.table_name)
+            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
         // check mutability
         table.check_mutable()?;
 
         if self.proxy_to_cluster && table.broadcast_truncate_to_cluster() {
-            let settings = self.ctx.get_settings();
-            let timeout = settings.get_flight_client_timeout()?;
-            let conf = GlobalConfig::instance();
             let cluster = self.ctx.get_cluster();
+
+            let mut message = HashMap::with_capacity(cluster.nodes.len());
             for node_info in &cluster.nodes {
                 if node_info.id != cluster.local_id {
-                    let truncate_packet = TruncateTablePacket::create(
-                        node_info.clone(),
-                        self.table_name.clone(),
-                        self.catalog_name.clone(),
-                        self.database_name.clone(),
-                    );
-                    truncate_packet.commit(conf.as_ref(), timeout).await?;
+                    message.insert(node_info.id.clone(), self.plan.clone());
                 }
             }
+
+            let settings = self.ctx.get_settings();
+            let timeout = settings.get_flight_client_timeout()?;
+            cluster
+                .do_action::<_, ()>(TRUNCATE_TABLE, message, timeout)
+                .await?;
         }
 
         let mut build_res = PipelineBuildResult::create();

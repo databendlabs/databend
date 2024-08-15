@@ -63,6 +63,7 @@ pub struct HashJoin {
     pub probe: Box<PhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
+    pub is_null_equal: Vec<bool>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
@@ -104,14 +105,21 @@ impl PhysicalPlanBuilder {
         &mut self,
         join: &Join,
         s_expr: &SExpr,
+        mut required: ColumnSet,
+        mut others_required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
-        mut pre_column_projections: Vec<IndexType>,
-        column_projections: Vec<IndexType>,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
+
+        let retained_columns = self.metadata.read().get_retained_column().clone();
+        required = required.union(&retained_columns).cloned().collect();
+        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+
+        others_required = others_required.union(&retained_columns).cloned().collect();
+        let mut pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
 
         let mut is_broadcast = false;
         // Check if join is broadcast join
@@ -201,17 +209,15 @@ impl PhysicalPlanBuilder {
             _ => probe_side.output_schema()?,
         };
 
-        assert_eq!(join.left_conditions.len(), join.right_conditions.len());
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut is_null_equal = Vec::new();
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
         let mut table_index = None;
-        for (left_condition, right_condition) in join
-            .left_conditions
-            .iter()
-            .zip(join.right_conditions.iter())
-        {
+        for condition in join.equi_conditions.iter() {
+            let left_condition = &condition.left;
+            let right_condition = &condition.right;
             let right_expr = right_condition
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
@@ -329,6 +335,7 @@ impl PhysicalPlanBuilder {
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
+            is_null_equal.push(condition.is_null_equal);
             left_join_conditions_rt
                 .push(left_expr_for_runtime_filter.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
         }
@@ -502,7 +509,6 @@ impl PhysicalPlanBuilder {
             }
         }
         let output_schema = DataSchemaRefExt::create(output_fields);
-
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: 0,
             projections,
@@ -513,6 +519,7 @@ impl PhysicalPlanBuilder {
             join_type: join.join_type.clone(),
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
+            is_null_equal,
             probe_keys_rt: left_join_conditions_rt,
             non_equi_conditions: join
                 .non_equi_conditions
@@ -562,7 +569,10 @@ async fn adjust_bloom_runtime_filter(
         let table_entry = metadata.read().table(table_index).clone();
         let change_type = get_change_type(table_entry.alias_name());
         let table = table_entry.table();
-        if let Some(stats) = table.table_statistics(ctx.clone(), change_type).await? {
+        if let Some(stats) = table
+            .table_statistics(ctx.clone(), true, change_type)
+            .await?
+        {
             if let Some(num_rows) = stats.num_rows {
                 let join_cardinality = RelExpr::with_s_expr(s_expr)
                     .derive_cardinality()?

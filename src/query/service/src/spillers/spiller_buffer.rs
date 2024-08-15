@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+use crate::sessions::QueryContext;
+
 // The spiller buffer will record each partition's unspilled data.
-// When the buffer is full(>=8MB), it will pick the partition with the most unspilled data to spill.
 #[derive(Clone)]
 pub struct SpillBuffer {
     partition_data: Vec<Vec<DataBlock>>,

@@ -13,21 +13,23 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
+databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-futures = { workspace = true }
-icelake = "0.0.10"
+fastrace = { workspace = true }
+iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg", rev = "e8f8694" }
+iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "e8f8694" }
+iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "e8f8694" }
 match-template = { workspace = true }
-minitrace = { workspace = true }
-opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

@@ -682,7 +682,7 @@ error:
   --> SQL:1:1
   |
 1 | -g
-  | ^ number overflowed while evaluating function `minus(-9223372036854775808)`
+  | ^ number overflowed while evaluating function `minus(-9223372036854775808)` in expr `- g`
 
 
 
@@ -938,6 +938,50 @@ evaluation (internal):
 +--------+---------------------------------------+
 
 
+ast            : e * e
+raw expr       : multiply(e::Decimal(10, 1), e::Decimal(10, 1))
+checked expr   : multiply<Decimal(10, 1), Decimal(10, 1)>(e, e)
+evaluation:
++--------+----------------+-------------------+
+|        | e              | Output            |
++--------+----------------+-------------------+
+| Type   | Decimal(10, 1) | Decimal(20, 2)    |
+| Domain | {3.1..=188.8}  | {9.61..=35645.44} |
+| Row 0  | 3.1            | 9.61              |
+| Row 1  | 33.5           | 1122.25           |
+| Row 2  | 188.8          | 35645.44          |
++--------+----------------+-------------------+
+evaluation (internal):
++--------+---------------------------------------+
+| Column | Data                                  |
++--------+---------------------------------------+
+| e      | Decimal128([3.1, 33.5, 188.8])        |
+| Output | Decimal128([9.61, 1122.25, 35645.44]) |
++--------+---------------------------------------+
+
+
+ast            : f * f
+raw expr       : multiply(f::Decimal(76, 2), f::Decimal(76, 2))
+checked expr   : multiply<Decimal(76, 2), Decimal(76, 2)>(f, f)
+evaluation:
++--------+----------------+---------------------+
+|        | f              | Output              |
++--------+----------------+---------------------+
+| Type   | Decimal(76, 2) | Decimal(76, 4)      |
+| Domain | {0.50..=12.34} | {0.2500..=152.2756} |
+| Row 0  | 0.50           | 0.2500              |
+| Row 1  | 0.92           | 0.8464              |
+| Row 2  | 12.34          | 152.2756            |
++--------+----------------+---------------------+
+evaluation (internal):
++--------+----------------------------------------+
+| Column | Data                                   |
++--------+----------------------------------------+
+| f      | Decimal256([0.50, 0.92, 12.34])        |
+| Output | Decimal256([0.2500, 0.8464, 152.2756]) |
++--------+----------------------------------------+
+
+
 ast            : e * 0.5
 raw expr       : multiply(e::Decimal(10, 1), 0.5)
 checked expr   : multiply<Decimal(10, 1), Decimal(1, 1)>(e, 0.5_d128(1,1))
@@ -1124,7 +1168,7 @@ error:
   --> SQL:1:5
   |
 1 | 2.0 / 0
-  |     ^ divided by zero while evaluating function `divide(2.0, 0)`
+  |     ^ divided by zero while evaluating function `divide(2.0, 0)` in expr `2.0 / 0`
 
 
 
@@ -1408,7 +1452,7 @@ error:
   --> SQL:1:3
   |
 1 | c div 0
-  |   ^^^ divided by zero while evaluating function `div(10, 0)`
+  |   ^^^ divided by zero while evaluating function `div(10, 0)` in expr `c DIV 0`
 
 
 
@@ -1532,7 +1576,7 @@ error:
   --> SQL:1:3
   |
 1 | c % 0
-  |   ^ Division by zero while evaluating function `modulo(10, 0)`
+  |   ^ Division by zero while evaluating function `modulo(10, 0)` in expr `c % 0`
 
 
 
@@ -2302,7 +2346,7 @@ error:
   --> SQL:1:3
   |
 1 | 30!
-  |   ^ factorial number is out of range, max is: 20 while evaluating function `factorial(30)`
+  |   ^ factorial number is out of range, max is: 20 while evaluating function `factorial(30)` in expr `factorial(30)`
 
 
 

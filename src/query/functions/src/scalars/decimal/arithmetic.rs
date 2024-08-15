@@ -88,10 +88,8 @@ macro_rules! binary_decimal {
             let scale_a = $left.scale();
             let scale_b = $right.scale();
 
-
             // Note: the result scale is always larger than the left scale
-            let scale_mul = scale_b + $size.scale - scale_a;
-            let multiplier = T::e(scale_mul as u32);
+            let scale_mul = (scale_b + $size.scale - scale_a) as u32;
             let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
                 // We are using round div here which follow snowflake's behavior: https://docs.snowflake.com/sql-reference/operators-arithmetic
                 // For example:
@@ -102,17 +100,45 @@ macro_rules! binary_decimal {
                 if std::intrinsics::unlikely(b == zero) {
                     ctx.set_error(result.len(), "divided by zero");
                     result.push(one);
-                } else if a.is_negative() == b.is_negative() {
-                    result.push((a * multiplier + b / 2).div(b));
                 } else {
-                    result.push((a * multiplier - b / 2).div(b));
+                   match a.do_round_div(b, scale_mul) {
+                        Some(t) => result.push(t),
+                        None => {
+                            ctx.set_error(
+                                result.len(),
+                                concat!("Decimal div overflow at line : ", line!()),
+                            );
+                            result.push(one);
+                        }
+                   }
                 }
             };
 
             vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
                 a, b, $ctx,
             )
-        } else {
+        } else if matches!($arithmetic_op, ArithmeticOp::Multiply) {
+            let scale_a = $left.scale();
+            let scale_b = $right.scale();
+
+            let scale_mul = scale_a + scale_b - $size.scale;
+            let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
+                match a.do_round_mul(b, scale_mul as u32) {
+                    Some(t) => result.push(t),
+                    None => {
+                        ctx.set_error(
+                            result.len(),
+                            concat!("Decimal multiply overflow at line : ", line!()),
+                        );
+                        result.push(one);
+                    }
+                }
+            };
+
+            vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                a, b, $ctx,
+            )
+        }  else {
             if overflow {
                 let min_for_precision = T::min_for_precision($size.precision);
                 let max_for_precision = T::max_for_precision($size.precision);
