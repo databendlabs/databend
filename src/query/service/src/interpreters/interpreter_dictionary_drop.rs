@@ -73,16 +73,16 @@ impl Interpreter for DropDictionaryInterpreter {
             }
         }
 
-        // drop the ownership
-        let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-        let owner_object = OwnershipObject::Dictionary {
-            catalog_name: catalog_name.to_string(),
-            db_id,
-            dict_id,
-        };
+        // // drop the ownership
+        // let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+        // let owner_object = OwnershipObject::Dictionary {
+        //     catalog_name: catalog_name.to_string(),
+        //     db_id,
+        //     dict_id,
+        // };
 
-        role_api.revoke_ownership(&owner_object).await?;
-        RoleCacheManager::instance().invalidate_cache(&tenant);
+        // role_api.revoke_ownership(&owner_object).await?;
+        // RoleCacheManager::instance().invalidate_cache(&tenant);
 
         Ok(PipelineBuildResult::create())
     }

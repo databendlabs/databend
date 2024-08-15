@@ -68,39 +68,39 @@ impl Interpreter for CreateDictionaryInterpreter {
             };
             let dictionaries = catalog.list_dictionaries(req).await?;
             if dictionaries.len() >= quota.max_dictionaries_per_database as usize {
-                return Err(Err(ErrorCode::TenantQuotaExceeded(format!(
+                return Err(ErrorCode::TenantQuotaExceeded(format!(
                     "Max dictionaries per database quota exceeded: {}",
                     quota.max_dictionaries_per_database
-                ))));
+                )));
             }
         }
 
-        let dictionary_meta = self.plan.meta.clone();
-        let dict_ident =
-            DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
-        let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
-        let req = CreateDictionaryReq {
-            dictionary_ident,
-            dictionary_meta,
-        };
-        let reply = catalog.create_dictionary(req).await?;
+        // let dictionary_meta = self.plan.meta.clone();
+        // let dict_ident =
+        //     DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
+        // let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
+        // let req = CreateDictionaryReq {
+        //     dictionary_ident,
+        //     dictionary_meta,
+        // };
+        // let reply = catalog.create_dictionary(req).await?;
 
-        // Grant the ownership of the dictionary to the current role.
-        if let Some(current_role) = self.ctx.get_current_role() {
-            let tenant = self.ctx.get_tenant();
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Dictionary {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id: self.plan.database_id,
-                        dict_id: reply.dictionary_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+        // // Grant the ownership of the dictionary to the current role.
+        // if let Some(current_role) = self.ctx.get_current_role() {
+        //     let tenant = self.ctx.get_tenant();
+        //     let role_api = UserApiProvider::instance().role_api(&tenant);
+        //     role_api
+        //         .grant_ownership(
+        //             &OwnershipObject::Dictionary {
+        //                 catalog_name: self.plan.catalog.clone(),
+        //                 db_id: self.plan.database_id,
+        //                 dict_id: reply.dictionary_id,
+        //             },
+        //             &current_role.name,
+        //         )
+        //         .await?;
+        //     RoleCacheManager::instance().invalidate_cache(&tenant);
+        // }
 
         Ok(PipelineBuildResult::create())
     }
