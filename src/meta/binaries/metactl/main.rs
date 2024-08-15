@@ -42,7 +42,7 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, PartialEq, Args)]
+#[derive(Debug, Clone, Deserialize, Args)]
 struct GlobalArgs {
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
@@ -110,7 +110,7 @@ struct GlobalArgs {
     pub id: u64,
 }
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Deserialize, Args)]
 struct ExportArgs {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
@@ -153,7 +153,7 @@ impl From<ExportArgs> for RaftConfig {
     }
 }
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Deserialize, Args)]
 struct ImportArgs {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
@@ -191,13 +191,13 @@ impl From<ImportArgs> for RaftConfig {
     }
 }
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Deserialize, Args)]
 struct TransferLeaderArgs {
     #[clap(long)]
     pub to: Option<u64>,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Deserialize, Parser)]
 #[clap(name = "databend-metactl", about, version = &**METASRV_COMMIT_VERSION, author)]
 pub struct App {
     #[clap(long, default_value = "")]
@@ -335,7 +335,7 @@ async fn main() -> anyhow::Result<()> {
     let log_config = LogConfig {
         file: FileConfig {
             on: true,
-            level: config.log_level.clone(),
+            level: app.globals.log_level.clone(),
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
