@@ -31,14 +31,14 @@ use crate::ExportArgs;
 pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Export:");
-    eprintln!("    From: online meta-service: {}", addr);
+    eprintln!("    From: online meta-service: {}", args.grpc_api_address);
     eprintln!("    Export To: {}", args.db);
     eprintln!("    Export Chunk Size: {:?}", args.chunk_size);
 
-    let grpc_api_addr = get_available_socket_addr(addr).await?;
+    let grpc_api_addr = get_available_socket_addr(args.grpc_api_address.as_str()).await?;
 
     export_from_grpc(
-        args.grpc_api_addr.as_str(),
+        args.grpc_api_address.as_str(),
         args.db.clone(),
         args.chunk_size,
     )
