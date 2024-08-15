@@ -200,8 +200,8 @@ struct TransferLeaderArgs {
 #[derive(Debug, Deserialize, Parser)]
 #[clap(name = "databend-metactl", about, version = &**METASRV_COMMIT_VERSION, author)]
 pub struct App {
-    #[clap(long, default_value = "")]
-    pub command: Option<Command>,
+    #[clap(subcommand)]
+    pub command: Option<CtlCommand>,
 
     #[clap(flatten)]
     pub globals: GlobalArgs,
@@ -311,7 +311,7 @@ impl App {
 }
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
-enum Command {
+enum CtlCommand {
     Status,
     Export(ExportArgs),
     Import(ImportArgs),
