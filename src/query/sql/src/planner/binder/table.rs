@@ -125,7 +125,9 @@ impl Binder {
             .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
             .await?;
 
-        let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
+        let table_alias_name = alias
+            .as_ref()
+            .map(|table_alias| table_alias.name.normalized_name());
 
         let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_string(),
@@ -225,7 +227,7 @@ impl Binder {
         }
         let alias_table_name = alias
             .as_ref()
-            .map(|alias| alias.name.name())
+            .map(|alias| alias.name.normalized_name())
             .unwrap_or_else(|| table_name.to_string());
         for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
@@ -273,7 +275,7 @@ impl Binder {
             // Resolve the alias name for the bound cte.
             let alias_table_name = alias
                 .as_ref()
-                .map(|alias| alias.name.name())
+                .map(|alias| alias.name.normalized_name())
                 .unwrap_or_else(|| table_name.clone());
             for column in bound_ctx.columns.iter_mut() {
                 column.database_name = None;
@@ -357,7 +359,9 @@ impl Binder {
             new_bind_ctx.apply_table_alias(alias)?;
         }
 
-        let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
+        let table_alias_name = alias
+            .as_ref()
+            .map(|table_alias| table_alias.name.normalized_name());
         let table_name = if let Some(table_alias_name) = table_alias_name {
             table_alias_name
         } else {

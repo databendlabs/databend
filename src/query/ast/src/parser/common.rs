@@ -126,6 +126,7 @@ fn plain_identifier(
             |token| Identifier {
                 span: transform_span(&[token.clone()]),
                 name: token.text().to_string(),
+                normalized_name: None,
                 quote: None,
                 is_hole: false,
                 is_variable: false,
@@ -152,6 +153,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             Ok((i2, Identifier {
                 span: transform_span(&[token.clone()]),
                 name: ident,
+                normalized_name: None,
                 quote: Some(quote),
                 is_hole: false,
                 is_variable: false,
@@ -173,6 +175,7 @@ fn identifier_hole(i: Input) -> IResult<Identifier> {
         |(span, (_, _, (_, name), _))| Identifier {
             span: transform_span(span.tokens),
             name,
+            normalized_name: None,
             quote: None,
             is_hole: true,
             is_variable: false,
@@ -188,6 +191,7 @@ fn identifier_variable(i: Input) -> IResult<Identifier> {
         |(_, _, t, _)| Identifier {
             span: t.span,
             name: t.name,
+            normalized_name: None,
             quote: t.quote,
             is_hole: false,
             is_variable: true,

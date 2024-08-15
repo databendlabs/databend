@@ -194,7 +194,7 @@ impl Binder {
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
             Some(ident) => {
-                let catalog = ident.name();
+                let catalog = ident.normalized_name();
                 self.ctx.get_catalog(&catalog).await?;
                 catalog
             }
@@ -391,7 +391,7 @@ impl Binder {
         match database {
             None => Ok(self.ctx.get_current_database()),
             Some(ident) => {
-                let database = ident.name();
+                let database = ident.normalized_name();
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
@@ -825,7 +825,7 @@ impl Binder {
                     tenant,
                     if_exists: *if_exists,
                     new_database: database.clone(),
-                    new_table: new_table.name(),
+                    new_table: new_table.normalized_name(),
                     catalog,
                     database,
                     table,
@@ -874,7 +874,9 @@ impl Binder {
                     self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
-                    AstAddColumnOption::After(ident) => AddColumnOption::After(ident.name()),
+                    AstAddColumnOption::After(ident) => {
+                        AddColumnOption::After(ident.normalized_name())
+                    }
                     AstAddColumnOption::End => AddColumnOption::End,
                 };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
@@ -892,15 +894,15 @@ impl Binder {
                 let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
-                        let column = column.name();
+                        let column = column.normalized_name();
                         ModifyColumnActionInPlan::SetMaskingPolicy(column, name.to_string())
                     }
                     ModifyColumnAction::UnsetMaskingPolicy(column) => {
-                        let column = column.name();
+                        let column = column.normalized_name();
                         ModifyColumnActionInPlan::UnsetMaskingPolicy(column)
                     }
                     ModifyColumnAction::ConvertStoredComputedColumn(column) => {
-                        let column = column.name();
+                        let column = column.normalized_name();
                         ModifyColumnActionInPlan::ConvertStoredComputedColumn(column)
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
@@ -938,7 +940,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::DropColumn { column } => {
-                let column = column.name();
+                let column = column.normalized_name();
                 Ok(Plan::DropTableColumn(Box::new(DropTableColumnPlan {
                     catalog,
                     database,
@@ -1226,11 +1228,11 @@ impl Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|ident| ident.name())
+            .map(|ident| ident.normalized_name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| ident.name())
+            .map(|ident| ident.normalized_name())
             .unwrap_or_else(|| "".to_string());
 
         let option = {
@@ -1309,8 +1311,8 @@ impl Binder {
         new_column: &Identifier,
         table_schema: TableSchemaRef,
     ) -> Result<(TableSchema, String, String)> {
-        let old_name = old_column.name();
-        let new_name = new_column.name();
+        let old_name = old_column.normalized_name();
+        let new_name = new_column.normalized_name();
 
         if old_name == new_name {
             return Err(ErrorCode::SemanticError(
@@ -1344,7 +1346,7 @@ impl Binder {
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
     ) -> Result<(TableField, String, bool)> {
-        let name = column.name.name();
+        let name = column.name.normalized_name();
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
@@ -1388,7 +1390,7 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
         for column in columns.iter() {
-            let name = column.name.name();
+            let name = column.name.normalized_name();
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
 
@@ -1463,7 +1465,7 @@ impl Binder {
     ) -> Result<BTreeMap<String, TableIndex>> {
         let mut inverted_indexes = BTreeMap::new();
         for inverted_index_def in inverted_index_defs {
-            let name = inverted_index_def.index_name.name();
+            let name = inverted_index_def.index_name.normalized_name();
             if inverted_indexes.contains_key(&name) {
                 return Err(ErrorCode::BadArguments(format!(
                     "Duplicated inverted index name: {}",

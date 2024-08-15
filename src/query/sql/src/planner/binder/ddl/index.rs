@@ -229,7 +229,7 @@ impl Binder {
         let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
         query.drive_mut(&mut agg_index_rewritter);
 
-        let index_name = index_name.name();
+        let index_name = index_name.normalized_name();
 
         bind_context.planning_agg_index = true;
         self.bind_query(bind_context, &query)?;
@@ -305,7 +305,7 @@ impl Binder {
             )));
         }
 
-        let index_name = index.name();
+        let index_name = index.normalized_name();
         let catalog = self
             .ctx
             .get_catalog(&self.ctx.get_current_catalog())
@@ -439,7 +439,7 @@ impl Binder {
         }
         let table_schema = table.schema();
         let table_id = table.get_id();
-        let index_name = index_name.name();
+        let index_name = index_name.normalized_name();
         let column_ids = self
             .validate_inverted_index_columns(table_schema, columns)
             .await?;
@@ -570,7 +570,7 @@ impl Binder {
             )));
         }
         let table_id = table.get_id();
-        let index_name = index_name.name();
+        let index_name = index_name.normalized_name();
 
         let plan = DropTableIndexPlan {
             if_exists: *if_exists,
@@ -597,7 +597,7 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
-        let index_name = index_name.name();
+        let index_name = index_name.normalized_name();
 
         let plan = RefreshTableIndexPlan {
             catalog,

@@ -257,8 +257,8 @@ impl<'a> TypeChecker<'a> {
                         column: ident,
                     },
             } => {
-                let database = database.as_ref().map(|ident| ident.name());
-                let table = table.as_ref().map(|ident| ident.name());
+                let database = database.as_ref().map(|ident| ident.normalized_name());
+                let table = table.as_ref().map(|ident| ident.normalized_name());
                 let result = match ident {
                     ColumnID::Name(ident) => self.bind_context.resolve_name(
                         database.as_deref(),
@@ -733,7 +733,7 @@ impl<'a> TypeChecker<'a> {
                         lambda,
                     },
             } => {
-                let func_name = name.name();
+                let func_name = name.normalized_name();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
                     && !Self::all_sugar_functions().contains(&func_name)

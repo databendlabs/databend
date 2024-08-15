@@ -40,18 +40,15 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
-use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
-use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
-use crate::IdentifierNormalizer;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -277,7 +274,6 @@ pub fn parse_computed_expr_to_string(
         );
     }
 
-    let name_resolution_ctx = NameResolutionContext::default();
     let mut type_checker =
         TypeChecker::try_create(&mut bind_context, ctx, Arc::new(RwLock::new(metadata)), &[])?;
 
@@ -297,9 +293,6 @@ pub fn parse_computed_expr_to_string(
             computed_expr.sql_display(),
         )));
     }
-    let mut ast = ast.clone();
-    let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
-    ast.drive_mut(&mut normalizer);
     Ok(format!("{:#}", ast))
 }
 
@@ -420,7 +413,6 @@ pub fn analyze_cluster_keys(
     }
 
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::default();
     let mut type_checker =
         TypeChecker::try_create(&mut bind_context, ctx, metadata, &[])?.with_forbid_udf(true);
 
@@ -460,11 +452,7 @@ pub fn analyze_cluster_keys(
         }
 
         exprs.push(expr);
-
-        let mut cluster_by = ast.clone();
-        let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
-        cluster_by.drive_mut(&mut normalizer);
-        cluster_keys.push(format!("{:#}", &cluster_by));
+        cluster_keys.push(format!("{:#}", &ast));
     }
 
     let cluster_by_str = format!("({})", cluster_keys.join(", "));

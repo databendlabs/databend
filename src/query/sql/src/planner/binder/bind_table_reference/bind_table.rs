@@ -246,7 +246,7 @@ impl Binder {
                         // e.g. select v0.c0 from v0;
                         for column in new_bind_context.columns.iter_mut() {
                             column.database_name = Some(database.clone());
-                            column.table_name = Some(table.name());
+                            column.table_name = Some(table.normalized_name());
                         }
                     }
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));

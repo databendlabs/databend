@@ -80,7 +80,9 @@ pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext)
     {
         ident.clone()
     } else {
-        Identifier::from_name(ident.span, ident.name.to_lowercase())
+        let mut ident = ident.clone();
+        ident.normalized_name = Some(ident.name.to_lowercase());
+        ident
     }
 }
 

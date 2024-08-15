@@ -126,7 +126,7 @@ impl Binder {
                     func: FunctionCall { name, args, .. },
                     ..
                 } => {
-                    let name = name.name();
+                    let name = name.normalized_name();
 
                     let original_context = bind_context.expr_context.clone();
                     bind_context.set_expr_context(ExprContext::InSetReturningFunction);

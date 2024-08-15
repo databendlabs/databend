@@ -55,9 +55,9 @@ impl Binder {
 
         let table_database = table_database
             .as_ref()
-            .map(|ident| ident.name())
+            .map(|ident| ident.normalized_name())
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let table_name = table.name();
+        let table_name = table.normalized_name();
 
         let navigation = if let Some(point) = travel_point {
             Some(self.resolve_data_travel_point(bind_context, point)?)
@@ -158,7 +158,7 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
         if let Some(catalog) = catalog {
-            let catalog = catalog.name();
+            let catalog = catalog.normalized_name();
             select_builder.with_filter(format!("catalog = '{catalog}'"));
         }
         if let Some(limit) = limit {

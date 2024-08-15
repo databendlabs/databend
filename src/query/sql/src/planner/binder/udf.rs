@@ -50,7 +50,7 @@ impl Binder {
         udf_description: &Option<String>,
         udf_definition: &UDFDefinition,
     ) -> Result<UserDefinedFunction> {
-        let name = udf_name.name();
+        let name = udf_name.normalized_name();
         match udf_definition {
             UDFDefinition::LambdaUDF {
                 parameters,
@@ -187,7 +187,7 @@ impl Binder {
         if_exists: bool,
         udf_name: &Identifier,
     ) -> Result<Plan> {
-        let name = udf_name.name();
+        let name = udf_name.normalized_name();
         Ok(Plan::DropUDF(Box::new(DropUDFPlan {
             if_exists,
             udf: name,

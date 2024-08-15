@@ -115,27 +115,22 @@ impl TableIdentifier {
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
         let Binder { ctx, dialect, .. } = binder;
-        let catalog = catalog.to_owned().unwrap_or(Identifier {
-            span: None,
-            name: ctx.get_current_catalog(),
-            quote: Some(dialect.default_ident_quote()),
-            is_hole: false,
-            is_variable: false,
-        });
-        let database = database.to_owned().unwrap_or(Identifier {
-            span: None,
-            name: ctx.get_current_database(),
-            quote: Some(dialect.default_ident_quote()),
-            is_hole: false,
-            is_variable: false,
-        });
+        let catalog = catalog
+            .to_owned()
+            .unwrap_or(Identifier::from_name(None, ctx.get_current_catalog()));
+        let database = database
+            .to_owned()
+            .unwrap_or(Identifier::from_name(None, ctx.get_current_database()));
+
         let database = Identifier {
             span: merge_span(catalog.span, database.span),
             ..database
         };
+
         let table = Identifier {
             span: merge_span(database.span, table.span),
             name: table.name.clone(),
+            normalized_name: table.normalized_name.clone(),
             ..*table
         };
         TableIdentifier {
@@ -149,21 +144,21 @@ impl TableIdentifier {
     }
 
     pub fn catalog_name(&self) -> String {
-        self.catalog.name()
+        self.catalog.normalized_name()
     }
 
     pub fn database_name(&self) -> String {
-        self.database.name()
+        self.database.normalized_name()
     }
 
     pub fn table_name(&self) -> String {
-        self.table.name()
+        self.table.normalized_name()
     }
 
     pub fn table_name_alias(&self) -> Option<String> {
         self.table_alias
             .as_ref()
-            .map(|table_alias| table_alias.name.name())
+            .map(|table_alias| table_alias.name.normalized_name())
     }
 
     pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {

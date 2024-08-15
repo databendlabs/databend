@@ -44,14 +44,17 @@ use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
+use databend_common_sql::IdentifierNormalizer;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::NameResolutionContext;
 use databend_common_storages_fuse::operations::BroadcastProcessor;
 use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::FuseTable;
+use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::TransformCastSchema;
@@ -442,6 +445,7 @@ pub struct RawValueSource {
     metadata: MetadataRef,
     start: usize,
     is_finished: bool,
+    named_resolution_ctx: NameResolutionContext,
 }
 
 impl RawValueSource {
@@ -453,7 +457,8 @@ impl RawValueSource {
     ) -> Self {
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
-
+        let named_resolution_ctx =
+            NameResolutionContext::try_from_context(ctx.clone()).unwrap_or_default();
         Self {
             data,
             ctx,
@@ -463,6 +468,7 @@ impl RawValueSource {
             metadata,
             start,
             is_finished: false,
+            named_resolution_ctx,
         }
     }
 
@@ -525,7 +531,12 @@ impl FastValuesDecodeFallback for RawValueSource {
             let mut bind_context = self.bind_context.clone();
             let metadata = self.metadata.clone();
 
-            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            let mut exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            let mut identifier_normalizer = IdentifierNormalizer::new(&self.named_resolution_ctx);
+            for expr in exprs.iter_mut() {
+                expr.drive_mut(&mut identifier_normalizer);
+            }
+            identifier_normalizer.render_error()?;
 
             bind_context
                 .exprs_to_scalar(

@@ -28,6 +28,8 @@ use crate::Span;
 pub struct Identifier {
     pub span: Span,
     pub name: String,
+    // name after normalization, default to none if not normalized, we used it for better error message
+    pub normalized_name: Option<String>,
     pub quote: Option<char>,
     pub is_hole: bool,
     pub is_variable: bool,
@@ -42,20 +44,24 @@ impl Identifier {
         Self {
             span,
             name: name.into(),
+            normalized_name: None,
             quote: None,
             is_hole: false,
             is_variable: false,
         }
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn normalized_name(&self) -> String {
+        self.normalized_name
+            .clone()
+            .unwrap_or_else(|| self.name.clone())
     }
 
     pub fn from_name_with_quoted(span: Span, name: impl Into<String>, quote: Option<char>) -> Self {
         Self {
             span,
             name: name.into(),
+            normalized_name: None,
             quote,
             is_hole: false,
             is_variable: false,

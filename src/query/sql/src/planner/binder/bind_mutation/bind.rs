@@ -399,9 +399,9 @@ impl Binder {
                         )
                         .set_span(scalar_expr.span()));
                     }
-                    let col_name = update_expr.name.name();
+                    let col_name = update_expr.name.normalized_name();
                     if let Some(tbl_identify) = &update_expr.table {
-                        let update_table_name = tbl_identify.name();
+                        let update_table_name = tbl_identify.normalized_name();
                         if update_table_name != target_name {
                             return Err(ErrorCode::BadArguments(format!(
                                 "Update Identify's `{}` should be `{}`",

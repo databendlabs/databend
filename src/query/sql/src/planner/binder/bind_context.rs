@@ -607,7 +607,7 @@ impl Default for BindContext {
 pub fn apply_alias_for_columns(columns: &mut [ColumnBinding], alias: &TableAlias) -> Result<()> {
     for column in columns.iter_mut() {
         column.database_name = None;
-        column.table_name = Some(alias.name.name());
+        column.table_name = Some(alias.name.normalized_name());
     }
 
     if alias.columns.len() > columns.len() {
@@ -619,7 +619,7 @@ pub fn apply_alias_for_columns(columns: &mut [ColumnBinding], alias: &TableAlias
         .set_span(alias.name.span));
     }
     for (index, column_name) in alias.columns.iter().enumerate() {
-        columns[index].column_name = column_name.name();
+        columns[index].column_name = column_name.normalized_name();
     }
     Ok(())
 }

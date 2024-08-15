@@ -63,7 +63,7 @@ impl Binder {
         named_params: &[(Identifier, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let func_name = name.name();
+        let func_name = name.normalized_name();
 
         if BUILTIN_FUNCTIONS
             .get_property(&func_name)
@@ -130,7 +130,9 @@ impl Binder {
                 .get_default_catalog(self.ctx.txn_mgr())?
                 .get_table_function(&func_name, table_args)?;
             let table = table_meta.as_table();
-            let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
+            let table_alias_name = alias
+                .as_ref()
+                .map(|table_alias| table_alias.name.normalized_name());
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
@@ -193,7 +195,9 @@ impl Binder {
             };
             let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
 
-            let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
+            let table_alias_name = alias
+                .as_ref()
+                .map(|table_alias| table_alias.name.normalized_name());
 
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
@@ -320,7 +324,7 @@ impl Binder {
                 ..
             } => {
                 let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
-                let func_name = name.name();
+                let func_name = name.normalized_name();
 
                 if BUILTIN_FUNCTIONS
                     .get_property(&func_name)
