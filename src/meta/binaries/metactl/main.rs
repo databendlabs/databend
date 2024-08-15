@@ -298,8 +298,11 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(&self.globals.grpc_api_address, args)
-                    .await?;
+                export_from_grpc::export_from_running_node(
+                    self.globals.grpc_api_address.as_str(),
+                    args,
+                )
+                .await?;
             }
             Some(ref dir) => {
                 init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
@@ -310,7 +313,7 @@ impl App {
     }
 
     async fn import(&self, args: &ImportArgs) -> anyhow::Result<()> {
-        import::import_data(&args).await?;
+        import::import_data(args).await?;
         Ok(())
     }
 }
