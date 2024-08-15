@@ -606,5 +606,9 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             object_id,
         } => visitor.visit_set_priority(priority, object_id),
         Statement::System(stmt) => visitor.visit_system(stmt),
+        Statement::CreateProcedure(stmt) => visitor.visit_create_procedure(stmt),
+        Statement::DropProcedure(stmt) => visitor.visit_drop_procedure(stmt),
+        Statement::DescProcedure(stmt) => visitor.visit_describe_procedure(stmt),
+        Statement::ShowProcedures { show_options } => visitor.visit_show_settings(show_options),
     }
 }

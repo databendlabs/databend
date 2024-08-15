@@ -705,6 +705,10 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("PROCEDURE", ignore(ascii_case))]
+    PROCEDURE,
+    #[token("PROCEDURES", ignore(ascii_case))]
+    PROCEDURES,
     #[token("IMMEDIATE", ignore(ascii_case))]
     IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
@@ -1316,6 +1320,8 @@ pub enum TokenKind {
     PRIMARY,
     #[token("SOURCE", ignore(ascii_case))]
     SOURCE,
+    #[token("SQL", ignore(ascii_case))]
+    SQL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1565,6 +1571,7 @@ impl TokenKind {
             | TokenKind::AND
             | TokenKind::ANY
             | TokenKind::FUNCTION
+            | TokenKind::PROCEDURE
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC

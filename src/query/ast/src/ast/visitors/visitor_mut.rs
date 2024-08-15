@@ -880,4 +880,8 @@ pub trait VisitorMut: Sized {
     fn visit_drop_sequence(&mut self, _stmt: &mut DropSequenceStmt) {}
     fn visit_set_priority(&mut self, _priority: &mut Priority, _object_id: &mut String) {}
     fn visit_system(&mut self, _stmt: &mut SystemStmt) {}
+
+    fn visit_create_procedure(&mut self, _stmt: &mut CreateProcedureStmt) {}
+    fn visit_drop_procedure(&mut self, _stmt: &mut DropProcedureStmt) {}
+    fn visit_describe_procedure(&mut self, _stmt: &mut DescProcedureStmt) {}
 }

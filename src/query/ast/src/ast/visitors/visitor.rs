@@ -871,4 +871,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_multi_table_insert(&mut self, insert: &'ast InsertMultiTableStmt);
 
     fn visit_system(&mut self, _stmt: &'ast SystemStmt) {}
+
+    fn visit_create_procedure(&mut self, _stmt: &'ast CreateProcedureStmt) {}
+    fn visit_drop_procedure(&mut self, _stmt: &'ast DropProcedureStmt) {}
+    fn visit_describe_procedure(&mut self, _stmt: &'ast DescProcedureStmt) {}
 }

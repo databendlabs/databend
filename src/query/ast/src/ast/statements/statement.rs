@@ -323,6 +323,12 @@ pub enum Statement {
 
     // Stored procedures
     ExecuteImmediate(ExecuteImmediateStmt),
+    CreateProcedure(CreateProcedureStmt),
+    DropProcedure(DropProcedureStmt),
+    ShowProcedures {
+        show_options: Option<ShowOptions>,
+    },
+    DescProcedure(DescProcedureStmt),
 
     // Sequence
     CreateSequence(CreateSequenceStmt),
@@ -795,6 +801,15 @@ impl Display for Statement {
             Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
             Statement::ExecuteImmediate(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::DropProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::DescProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowProcedures { show_options } => {
+                write!(f, "SHOW PROCEDURES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,

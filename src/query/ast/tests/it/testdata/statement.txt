@@ -23114,3 +23114,144 @@ CreateDictionary(
 )
 
 
+---------- Input ----------
+describe PROCEDURE p1()
+---------- Output ---------
+DESCRIBE PROCEDURE p1() 
+---------- AST ------------
+DescProcedure(
+    DescProcedureStmt {
+        name: "p1",
+        args: None,
+    },
+)
+
+
+---------- Input ----------
+drop PROCEDURE p1()
+---------- Output ---------
+DROP PROCEDURE p1() 
+---------- AST ------------
+DropProcedure(
+    DropProcedureStmt {
+        name: "p1",
+        args: None,
+    },
+)
+
+
+---------- Input ----------
+show PROCEDURES like 'p1%'
+---------- Output ---------
+SHOW PROCEDURES LIKE 'p1%'
+---------- AST ------------
+ShowProcedures {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "p1%",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: Create,
+        name: "p1",
+        language: SQL,
+        args: None,
+        return_type: [
+            ProcedureReturnType {
+                name: None,
+                data_type: NotNull(
+                    String,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+create PROCEDURE p1() returns table(a string not null, b int null) language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: Create,
+        name: "p1",
+        language: SQL,
+        args: None,
+        return_type: [
+            ProcedureReturnType {
+                name: Some(
+                    "a",
+                ),
+                data_type: NotNull(
+                    String,
+                ),
+            },
+            ProcedureReturnType {
+                name: Some(
+                    "b",
+                ),
+                data_type: Nullable(
+                    Int32,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
+
+

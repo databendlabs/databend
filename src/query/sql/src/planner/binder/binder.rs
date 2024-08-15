@@ -618,6 +618,27 @@ impl<'a> Binder {
                 self.bind_set_priority(priority, object_id).await?
             },
             Statement::System(stmt) => self.bind_system(stmt).await?,
+            Statement::CreateProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_create_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+            }
+            }
+            Statement::DropProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_drop_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
+            }  }
+            Statement::ShowProcedures { show_options } => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.show_procedures(show_options).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
+            }  }
+            Statement::DescProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_desc_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+            }  }
         };
 
         match plan.kind() {
