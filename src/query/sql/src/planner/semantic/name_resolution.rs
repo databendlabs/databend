@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_ast::ast::quote::ident_needs_quote;
@@ -22,7 +20,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
-use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
 
 #[derive(Clone)]

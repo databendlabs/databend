@@ -71,7 +71,6 @@ use crate::plans::Plan;
 use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::Metadata;
-use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::UdfRewriter;
 

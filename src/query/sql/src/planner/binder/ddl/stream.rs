@@ -23,7 +23,6 @@ use databend_common_license::license_manager::get_license_manager;
 use log::debug;
 
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::Plan;

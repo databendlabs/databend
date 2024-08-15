@@ -33,7 +33,6 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use log::debug;
 
 use crate::binder::Binder;
-use crate::planner::semantic::normalize_identifier;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;

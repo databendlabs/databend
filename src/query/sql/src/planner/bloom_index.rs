@@ -26,8 +26,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::Settings;
 
 use crate::normalize_identifier;
 use crate::planner::semantic::NameResolutionContext;

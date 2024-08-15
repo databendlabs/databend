@@ -32,7 +32,6 @@ use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use log::debug;
 
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DropVirtualColumnPlan;

@@ -35,7 +35,7 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let sequence = self.normalize_object_identifier(sequence);
+        let sequence = sequence.name();
 
         let plan = CreateSequencePlan {
             create_option: create_option.clone().into(),
@@ -56,7 +56,7 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let sequence = self.normalize_object_identifier(sequence);
+        let sequence = sequence.name();
 
         let plan = DropSequencePlan {
             ident: SequenceIdent::new(tenant, sequence),

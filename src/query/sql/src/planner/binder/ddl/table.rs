@@ -99,7 +99,6 @@ use crate::executor::cast_expr_to_non_null_boolean;
 use crate::optimizer::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
-use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddColumnOption;
@@ -895,15 +894,15 @@ impl Binder {
                 let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
-                        let column = self.normalize_object_identifier(column);
+                        let column = column.name();
                         ModifyColumnActionInPlan::SetMaskingPolicy(column, name.to_string())
                     }
                     ModifyColumnAction::UnsetMaskingPolicy(column) => {
-                        let column = self.normalize_object_identifier(column);
+                        let column = column.name();
                         ModifyColumnActionInPlan::UnsetMaskingPolicy(column)
                     }
                     ModifyColumnAction::ConvertStoredComputedColumn(column) => {
-                        let column = self.normalize_object_identifier(column);
+                        let column = column.name();
                         ModifyColumnActionInPlan::ConvertStoredComputedColumn(column)
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
@@ -941,7 +940,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::DropColumn { column } => {
-                let column = self.normalize_object_identifier(column);
+                let column = column.name();
                 Ok(Plan::DropTableColumn(Box::new(DropTableColumnPlan {
                     catalog,
                     database,
@@ -1467,7 +1466,7 @@ impl Binder {
     ) -> Result<BTreeMap<String, TableIndex>> {
         let mut inverted_indexes = BTreeMap::new();
         for inverted_index_def in inverted_index_defs {
-            let name = self.normalize_object_identifier(&inverted_index_def.index_name);
+            let name = inverted_index_def.index_name.name();
             if inverted_indexes.contains_key(&name) {
                 return Err(ErrorCode::BadArguments(format!(
                     "Duplicated inverted index name: {}",

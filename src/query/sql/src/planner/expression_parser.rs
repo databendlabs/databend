@@ -40,8 +40,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::Settings;
 use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 

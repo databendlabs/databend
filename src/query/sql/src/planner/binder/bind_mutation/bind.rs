@@ -401,9 +401,9 @@ impl Binder {
                         )
                         .set_span(scalar_expr.span()));
                     }
-                    let col_name = update_expr.name.clone();
+                    let col_name = update_expr.name.name();
                     if let Some(tbl_identify) = &update_expr.table {
-                        let update_table_name = tbl_identify.clone();
+                        let update_table_name = tbl_identify.name();
                         if update_table_name != target_name {
                             return Err(ErrorCode::BadArguments(format!(
                                 "Update Identify's `{}` should be `{}`",

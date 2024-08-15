@@ -29,7 +29,6 @@ use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
-use crate::normalize_identifier;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;

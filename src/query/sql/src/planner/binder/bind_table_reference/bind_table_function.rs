@@ -45,7 +45,6 @@ use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
-use crate::planner::semantic::normalize_identifier;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
@@ -67,7 +66,7 @@ impl Binder {
         let func_name = name.name();
 
         if BUILTIN_FUNCTIONS
-            .get_property(&func_name.name)
+            .get_property(&func_name)
             .map(|p| p.kind == FunctionKind::SRF)
             .unwrap_or(false)
         {
@@ -84,10 +83,7 @@ impl Binder {
                         span: *span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: databend_common_ast::ast::Identifier::from_name(
-                                *span,
-                                &func_name.name,
-                            ),
+                            name: name.clone(),
                             params: vec![],
                             args,
                             window: None,
@@ -109,7 +105,7 @@ impl Binder {
             return self.extract_srf_table_function_columns(
                 &mut bind_context,
                 span,
-                &func_name,
+                name,
                 srf_expr,
                 alias,
             );
@@ -126,14 +122,14 @@ impl Binder {
         );
         let table_args = bind_table_args(&mut scalar_binder, params, named_params)?;
 
-        if func_name.name.eq_ignore_ascii_case("result_scan") {
+        if func_name.eq_ignore_ascii_case("result_scan") {
             self.bind_result_scan(bind_context, span, alias, &table_args)
         } else {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
                 .catalogs
                 .get_default_catalog(self.ctx.txn_mgr())?
-                .get_table_function(&func_name.name, table_args)?;
+                .get_table_function(&func_name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
                 Some(table_alias.name.name())
@@ -336,7 +332,7 @@ impl Binder {
                 let func_name = name.name();
 
                 if BUILTIN_FUNCTIONS
-                    .get_property(&func_name.name)
+                    .get_property(&func_name)
                     .map(|p| p.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
@@ -347,7 +343,7 @@ impl Binder {
                         span: *span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: func_name.clone(),
+                            name: name.clone(),
                             args,
                             params: vec![],
                             window: None,
@@ -394,7 +390,7 @@ impl Binder {
                             .extract_srf_table_function_columns(
                                 &mut bind_context,
                                 span,
-                                &func_name,
+                                name,
                                 flatten_expr,
                                 alias,
                             )?;
@@ -425,11 +421,11 @@ impl Binder {
 // parse flatten named params to arguments
 fn parse_table_function_args(
     span: &Span,
-    func_name: &Identifier,
+    func_name: &String,
     params: &[Expr],
     named_params: &[(Identifier, Expr)],
 ) -> Result<Vec<Expr>> {
-    if func_name.name.eq_ignore_ascii_case("flatten") {
+    if func_name.eq_ignore_ascii_case("flatten") {
         // build flatten function arguments.
         let mut named_args: HashMap<String, Expr> = named_params
             .iter()
@@ -472,7 +468,7 @@ fn parse_table_function_args(
                 .join(", ");
             return Err(ErrorCode::InvalidArgument(format!(
                 "Named parameters are not allowed for '{}'. Invalid parameters provided: {}.",
-                func_name.name, invalid_names
+                func_name, invalid_names
             ))
             .set_span(*span));
         }

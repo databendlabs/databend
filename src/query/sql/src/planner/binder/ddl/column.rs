@@ -17,7 +17,6 @@ use databend_common_ast::ast::ShowLimit;
 use databend_common_exception::Result;
 use log::debug;
 
-use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::BindContext;
@@ -41,8 +40,6 @@ impl Binder {
 
         let (catalog_name, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
-
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let mut select_builder = SelectBuilder::from("information_schema.columns");
 

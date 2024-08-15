@@ -104,7 +104,6 @@ use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
-use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;

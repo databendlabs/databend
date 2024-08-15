@@ -50,3 +50,17 @@ NULL NULL xxyyzz NULL
 
 statement ok
 unset variable (a, b, c)
+
+statement ok
+CREATE TABLE monthly_sales(empid INT, amount INT, month TEXT) as select 1,2,'3';
+
+statement ok
+set variable t = 'monthly_sales';
+
+query IIT
+select * from  identifier($t);
+----
+1 2 3
+
+statement ok
+DROP TABLE monthly_sales

@@ -41,7 +41,6 @@ use databend_common_meta_app::schema::ShareCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
 use crate::binder::parse_storage_params_from_uri;
-use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::Plan;

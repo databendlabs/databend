@@ -23,7 +23,6 @@ use databend_common_meta_app::share::ShareEndpointIdent;
 use itertools::Itertools;
 
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;

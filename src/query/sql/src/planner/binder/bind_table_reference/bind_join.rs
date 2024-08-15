@@ -31,7 +31,6 @@ use crate::binder::CteInfo;
 use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
-use crate::normalize_identifier;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::FlattenInfo;
 use crate::optimizer::RelExpr;

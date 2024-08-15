@@ -35,8 +35,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use log::info;

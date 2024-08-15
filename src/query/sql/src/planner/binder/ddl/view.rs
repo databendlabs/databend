@@ -26,7 +26,6 @@ use derive_visitor::DriveMut;
 use log::debug;
 
 use crate::binder::Binder;
-use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::DescribeViewPlan;
