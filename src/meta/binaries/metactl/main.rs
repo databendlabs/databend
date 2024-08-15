@@ -310,7 +310,7 @@ impl App {
     }
 }
 
-#[derive(Debug, Clone, Subcommand)]
+#[derive(Debug, Clone, Deserialize, Subcommand)]
 enum Command {
     Status,
     Export(ExportArgs),
@@ -346,7 +346,7 @@ async fn main() -> anyhow::Result<()> {
     let _guards = init_logging("metactl", &log_config, BTreeMap::new());
 
     match app.command {
-        Some(cmd) => match cmd {
+        Some(ref cmd) => match cmd {
             Command::Status => {
                 app.show_status().await?;
             }
@@ -361,9 +361,6 @@ async fn main() -> anyhow::Result<()> {
             }
             Command::Import(args) => {
                 app.import(&args).await?;
-            }
-            _ => {
-                app.print_help()?;
             }
         },
         // for backward compatibility
