@@ -296,6 +296,9 @@ pub trait Table: Sync + Send {
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
+    /// - Returns `Some(_)`
+    ///    if table has accurate columns ranges information,
+    /// - Otherwise returns `None`.
     #[async_backtrace::framed]
     async fn accurate_columns_ranges(
         &self,
