@@ -60,11 +60,11 @@ struct GlobalArgs {
     )]
     pub admin_api_address: String,
 
-    #[deprecated]
+    /// DEPRECATED
     #[clap(long)]
     pub import: bool,
 
-    #[deprecated]
+    /// DEPRECATED
     #[clap(long)]
     pub export: bool,
 
