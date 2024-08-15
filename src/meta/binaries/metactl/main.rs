@@ -41,7 +41,7 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Args)]
-struct GlobalArgs {
+pub struct GlobalArgs {
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
 
@@ -109,7 +109,7 @@ struct GlobalArgs {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
-struct ExportArgs {
+pub struct ExportArgs {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
     #[serde(alias = "kvsrv_raft_dir")]
@@ -152,7 +152,7 @@ impl From<ExportArgs> for RaftConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
-struct ImportArgs {
+pub struct ImportArgs {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
     #[serde(alias = "kvsrv_raft_dir")]
@@ -190,7 +190,7 @@ impl From<ImportArgs> for RaftConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
-struct TransferLeaderArgs {
+pub struct TransferLeaderArgs {
     #[clap(long)]
     pub to: Option<u64>,
 }
@@ -206,13 +206,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn print_help(&self) -> anyhow::Result<()> {
+    fn print_help(&self) -> anyhow::Result<()> {
         let mut cmd = Self::command();
         cmd.print_help()?;
         Ok(())
     }
 
-    pub async fn show_status(&self) -> anyhow::Result<()> {
+    async fn show_status(&self) -> anyhow::Result<()> {
         let addr = self.globals.grpc_api_address.clone();
         let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
 
