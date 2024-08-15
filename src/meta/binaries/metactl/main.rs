@@ -300,8 +300,7 @@ impl App {
         let client = MetaAdminClient::new(args.admin_api_address.as_str());
         let result = client.transfer_leader(args.to).await?;
         println!(
-            "triggered leader transfer from {} to {}.\n
-            voter list: {:?}",
+            "triggered leader transfer from {} to {}.\nvoter list: {:?}",
             result.from, result.to, result.voter_ids
         );
         Ok(())
