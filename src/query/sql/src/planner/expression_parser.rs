@@ -115,16 +115,8 @@ pub fn parse_exprs(
     sql: &str,
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::default();
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        false,
-    )?;
+    let mut type_checker = TypeChecker::try_create(&mut bind_context, ctx, metadata, &[])?;
 
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
@@ -207,16 +199,9 @@ pub fn parse_computed_expr(
         );
     }
 
-    let name_resolution_ctx = NameResolutionContext::default();
     let sql_dialect = ctx.get_settings().get_sql_dialect()?;
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        Arc::new(RwLock::new(metadata)),
-        &[],
-        false,
-    )?;
+    let mut type_checker =
+        TypeChecker::try_create(&mut bind_context, ctx, Arc::new(RwLock::new(metadata)), &[])?;
 
     let tokens = tokenize_sql(sql)?;
     let mut asts = parse_comma_separated_exprs(&tokens, sql_dialect)?;
@@ -240,14 +225,11 @@ pub fn parse_default_expr_to_string(
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
 
-    let name_resolution_ctx = NameResolutionContext::default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx.clone(),
-        &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
     )?;
 
     let (mut scalar, data_type) = *type_checker.resolve(ast)?;
@@ -296,14 +278,8 @@ pub fn parse_computed_expr_to_string(
     }
 
     let name_resolution_ctx = NameResolutionContext::default();
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        Arc::new(RwLock::new(metadata)),
-        &[],
-        false,
-    )?;
+    let mut type_checker =
+        TypeChecker::try_create(&mut bind_context, ctx, Arc::new(RwLock::new(metadata)), &[])?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
     if data_type != DataType::from(field.data_type()) {
@@ -349,14 +325,11 @@ pub fn parse_lambda_expr(
         );
     }
 
-    let name_resolution_ctx = NameResolutionContext::default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx.clone(),
-        &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
     )?;
 
     type_checker.resolve(ast)
@@ -368,16 +341,9 @@ pub fn parse_cluster_keys(
     cluster_key_str: &str,
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::default();
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        true,
-    )?;
+    let mut type_checker =
+        TypeChecker::try_create(&mut bind_context, ctx, metadata, &[])?.with_forbid_udf(true);
 
     let tokens = tokenize_sql(cluster_key_str)?;
     let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
@@ -455,14 +421,8 @@ pub fn analyze_cluster_keys(
 
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let name_resolution_ctx = NameResolutionContext::default();
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        true,
-    )?;
+    let mut type_checker =
+        TypeChecker::try_create(&mut bind_context, ctx, metadata, &[])?.with_forbid_udf(true);
 
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     let mut cluster_keys = Vec::with_capacity(exprs.len());

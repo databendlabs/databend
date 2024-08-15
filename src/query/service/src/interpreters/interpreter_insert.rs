@@ -29,7 +29,6 @@ use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::NameResolutionContext;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -122,17 +121,13 @@ impl Interpreter for InsertInterpreter {
             InsertInputSource::Values(InsertValue::RawValues { data, start }) => {
                 build_res.main_pipeline.add_source(
                     |output| {
-                        let name_resolution_ctx = NameResolutionContext {
-                            deny_column_reference: true,
-                            ..Default::default()
-                        };
                         let inner = RawValueSource::new(
                             data.to_string(),
                             self.ctx.clone(),
-                            name_resolution_ctx,
                             self.plan.dest_schema(),
                             *start,
-                        );
+                        )
+                        .with_deny_column_reference(true);
                         AsyncSourcer::create(self.ctx.clone(), output, inner)
                     },
                     1,

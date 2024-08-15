@@ -136,7 +136,6 @@ impl Binder {
                         let mut scalar_binder = ScalarBinder::new(
                             bind_context,
                             self.ctx.clone(),
-                            &self.name_resolution_ctx,
                             self.metadata.clone(),
                             &[],
                             self.m_cte_bound_ctx.clone(),

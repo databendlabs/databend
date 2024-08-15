@@ -33,7 +33,6 @@ use databend_common_sql::plans::RefreshVirtualColumnPlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::Binder;
 use databend_common_sql::Metadata;
-use databend_common_sql::NameResolutionContext;
 use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;
@@ -232,14 +231,7 @@ async fn build_refresh_index_plan(
     segment_locs: Vec<Location>,
 ) -> Result<RefreshIndexPlan> {
     let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let name_resolution_ctx = NameResolutionContext::try_from_context(ctx.clone())?;
-
-    let mut binder = Binder::new(
-        ctx.clone(),
-        CatalogManager::instance(),
-        name_resolution_ctx,
-        metadata.clone(),
-    );
+    let mut binder = Binder::new(ctx.clone(), CatalogManager::instance(), metadata.clone());
     let mut bind_context = BindContext::new();
 
     binder

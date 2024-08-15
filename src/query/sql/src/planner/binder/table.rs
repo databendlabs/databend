@@ -125,11 +125,7 @@ impl Binder {
             .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
             .await?;
 
-        let table_alias_name = if let Some(table_alias) = alias {
-            Some(table_alias.name.name())
-        } else {
-            None
-        };
+        let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
 
         let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_string(),
@@ -145,7 +141,7 @@ impl Binder {
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, &None)?;
         if let Some(alias) = alias {
-            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            bind_context.apply_table_alias(alias)?;
         }
 
         info!("bind_stage_table cost: {:?}", start.elapsed());
@@ -358,7 +354,7 @@ impl Binder {
                 cte_info.columns = new_bind_ctx.columns.clone();
             });
         if let Some(alias) = alias {
-            new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            new_bind_ctx.apply_table_alias(alias)?;
         }
 
         let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
@@ -403,7 +399,7 @@ impl Binder {
                 )?;
                 self.set_bind_recursive_cte(false);
                 if let Some(alias) = alias {
-                    new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    new_bind_ctx.apply_table_alias(alias)?;
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
@@ -571,10 +567,8 @@ impl Binder {
                 let mut type_checker = TypeChecker::try_create(
                     bind_context,
                     self.ctx.clone(),
-                    &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    false,
                 )?;
                 let box (scalar, _) = type_checker.resolve(expr)?;
                 let scalar_expr = scalar.as_expr()?;
@@ -609,10 +603,8 @@ impl Binder {
                 let mut type_checker = TypeChecker::try_create(
                     bind_context,
                     self.ctx.clone(),
-                    &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    false,
                 )?;
                 let box (scalar, _) = type_checker.resolve(expr)?;
                 let scalar_expr = scalar.as_expr()?;

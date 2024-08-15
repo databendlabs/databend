@@ -159,7 +159,7 @@ impl Binder {
                 )?;
 
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 return Ok((s_expr, bind_context));
             }
@@ -191,7 +191,7 @@ impl Binder {
             }
 
             if let Some(alias) = alias {
-                new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                new_bind_context.apply_table_alias(alias)?;
             } else {
                 for column in new_bind_context.columns.iter_mut() {
                     column.database_name = None;
@@ -241,7 +241,7 @@ impl Binder {
                         self.bind_query(&mut new_bind_context, query)?;
                     if let Some(alias) = alias {
                         // view maybe has alias, e.g. select v1.col1 from v as v1;
-                        new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                        new_bind_context.apply_table_alias(alias)?;
                     } else {
                         // e.g. select v0.c0 from v0;
                         for column in new_bind_context.columns.iter_mut() {
@@ -278,7 +278,7 @@ impl Binder {
                     sample,
                 )?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }

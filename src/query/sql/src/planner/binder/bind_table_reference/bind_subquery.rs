@@ -45,7 +45,7 @@ impl Binder {
         };
 
         if let Some(alias) = alias {
-            result_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            result_bind_context.apply_table_alias(alias)?;
             // Reset column name as alias column name
             for i in 0..alias.columns.len() {
                 let column = &result_bind_context.columns[i];

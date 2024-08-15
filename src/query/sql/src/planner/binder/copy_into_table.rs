@@ -524,13 +524,7 @@ impl<'a> Binder {
         let metadata = Arc::new(RwLock::new(Metadata::default()));
         let const_schema = Arc::new(DataSchema::new(const_fields));
         let const_values = bind_context
-            .exprs_to_scalar(
-                &exprs,
-                &const_schema,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                metadata,
-            )
+            .exprs_to_scalar(&exprs, &const_schema, self.ctx.clone(), false, metadata)
             .await?;
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
     }
@@ -543,7 +537,6 @@ impl<'a> Binder {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
-            &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             HashMap::new(),

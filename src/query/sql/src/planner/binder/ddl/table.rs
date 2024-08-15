@@ -86,7 +86,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use derive_visitor::DriveMut;
 use log::debug;
 
 use crate::binder::get_storage_params_from_options;
@@ -100,7 +99,6 @@ use crate::optimizer::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::resolve_type_name;
-use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
@@ -986,13 +984,12 @@ impl Binder {
                     let mut scalar_binder = ScalarBinder::new(
                         &mut context,
                         self.ctx.clone(),
-                        &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &[],
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
-                    );
-                    scalar_binder.forbid_udf();
+                    )
+                    .with_forbid_udf(true);
                     let (scalar, _) = scalar_binder.bind(expr)?;
 
                     // prepare the filter expression
@@ -1603,17 +1600,16 @@ impl Binder {
 
             bind_context.add_column_binding(column);
         }
+        // cluster keys cannot be a udf expression.
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
             self.ctx.clone(),
-            &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
-        );
-        // cluster keys cannot be a udf expression.
-        scalar_binder.forbid_udf();
+        )
+        .with_forbid_udf(true);
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
@@ -1641,9 +1637,6 @@ impl Binder {
                 )));
             }
 
-            let mut cluster_by = cluster_by.clone();
-            let mut normalizer = IdentifierNormalizer::new(&self.name_resolution_ctx);
-            cluster_by.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_by));
         }
 

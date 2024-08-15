@@ -251,11 +251,9 @@ impl Binder {
             }
         }
 
-        let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
             self.ctx.clone(),
-            &name_resolution_ctx,
             self.metadata.clone(),
             &[],
             HashMap::new(),

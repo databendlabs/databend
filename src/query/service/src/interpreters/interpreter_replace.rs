@@ -40,7 +40,6 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
-use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
@@ -205,12 +204,10 @@ impl ReplaceInterpreter {
                 ));
             }
             let mut bind_context = bind_context.unwrap();
-            let name_resolution_ctx = NameResolutionContext::try_from_context(self.ctx.clone())?;
             let metadata = Arc::new(RwLock::new(Metadata::default()));
             let mut scalar_binder = ScalarBinder::new(
                 &mut bind_context,
                 self.ctx.clone(),
-                &name_resolution_ctx,
                 metadata,
                 &[],
                 Default::default(),

@@ -89,7 +89,6 @@ impl Binder {
             let mut scalar_binder = ScalarBinder::new(
                 &mut source_bind_context,
                 self.ctx.clone(),
-                &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
                 self.m_cte_bound_ctx.clone(),
@@ -239,7 +238,6 @@ impl Binder {
                 let mut scalar_binder = ScalarBinder::new(
                     source_bind_context,
                     self.ctx.clone(),
-                    &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
                     self.m_cte_bound_ctx.clone(),

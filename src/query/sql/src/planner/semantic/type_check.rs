@@ -103,7 +103,6 @@ use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use simsearch::SimSearch;
 
-use super::name_resolution::NameResolutionContext;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::wrap_cast;
@@ -165,7 +164,6 @@ pub struct TypeChecker<'a> {
     ctx: Arc<dyn TableContext>,
     dialect: Dialect,
     func_ctx: FunctionContext,
-    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     ctes_map: Box<IndexMap<String, CteInfo>>,
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
@@ -180,16 +178,15 @@ pub struct TypeChecker<'a> {
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
     forbid_udf: bool,
+    deny_column_reference: bool,
 }
 
 impl<'a> TypeChecker<'a> {
     pub fn try_create(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
-        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
-        forbid_udf: bool,
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
         let dialect = ctx.get_settings().get_sql_dialect()?;
@@ -198,15 +195,25 @@ impl<'a> TypeChecker<'a> {
             ctx,
             dialect,
             func_ctx,
-            name_resolution_ctx,
             metadata,
             ctes_map: Box::default(),
             m_cte_bound_ctx: Default::default(),
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
-            forbid_udf,
+            forbid_udf: false,
+            deny_column_reference: false,
         })
+    }
+
+    pub fn with_deny_column_reference(mut self, deny_column_reference: bool) -> Self {
+        self.deny_column_reference = deny_column_reference;
+        self
+    }
+
+    pub fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
+        self.forbid_udf = forbid_udf;
+        self
     }
 
     pub fn set_m_cte_bound_ctx(&mut self, m_cte_bound_ctx: HashMap<IndexType, BindContext>) {
@@ -258,7 +265,7 @@ impl<'a> TypeChecker<'a> {
                         table.as_deref(),
                         ident,
                         self.aliases,
-                        self.name_resolution_ctx,
+                        self.deny_column_reference,
                     )?,
                     ColumnID::Position(pos) => self.bind_context.search_column_position(
                         pos.span,
@@ -2750,7 +2757,6 @@ impl<'a> TypeChecker<'a> {
         let mut binder = Binder::new(
             self.ctx.clone(),
             CatalogManager::instance(),
-            self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
         for (cte_idx, bound_ctx) in self.m_cte_bound_ctx.iter() {
@@ -3875,7 +3881,7 @@ impl<'a> TypeChecker<'a> {
             column.table_name.as_deref(),
             &inner_column_ident,
             self.aliases,
-            self.name_resolution_ctx,
+            self.deny_column_reference,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {
@@ -3918,7 +3924,6 @@ impl<'a> TypeChecker<'a> {
         }
         let (const_scan, ctx) = bind_values(
             self.ctx.clone(),
-            self.name_resolution_ctx,
             self.metadata.clone(),
             &mut bind_context,
             None,

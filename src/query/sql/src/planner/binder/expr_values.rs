@@ -38,7 +38,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::MetadataRef;
-use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 
@@ -101,7 +100,7 @@ impl BindContext {
         exprs: &[AExpr],
         schema: &DataSchemaRef,
         ctx: Arc<dyn TableContext>,
-        name_resolution_ctx: &NameResolutionContext,
+        deny_column_reference: bool,
         metadata: MetadataRef,
     ) -> Result<Vec<Scalar>> {
         let schema_fields_len = schema.fields().len();
@@ -115,12 +114,12 @@ impl BindContext {
         let mut scalar_binder = ScalarBinder::new(
             self,
             ctx.clone(),
-            name_resolution_ctx,
             metadata.clone(),
             &[],
             HashMap::new(),
             Box::new(IndexMap::new()),
-        );
+        )
+        .with_deny_column_reference(deny_column_reference);
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
 

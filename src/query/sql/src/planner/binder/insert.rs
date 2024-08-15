@@ -107,7 +107,7 @@ impl Binder {
                             &row,
                             &Arc::new(schema.clone().into()),
                             self.ctx.clone(),
-                            &self.name_resolution_ctx,
+                            false,
                             self.metadata.clone(),
                         )
                         .await?;

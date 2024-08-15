@@ -51,7 +51,6 @@ use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
-use crate::planner::semantic::compare_table_name;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -256,7 +255,6 @@ impl Binder {
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
                         self.ctx.clone(),
-                        &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &prev_aliases,
                         self.m_cte_bound_ctx.clone(),
@@ -312,7 +310,6 @@ impl Binder {
                 let mut scalar_binder = ScalarBinder::new(
                     &mut input_context,
                     self.ctx.clone(),
-                    &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
                     self.m_cte_bound_ctx.clone(),
@@ -403,7 +400,7 @@ impl Binder {
             match_database = true;
 
             match (&table, &column_binding.table_name) {
-                (Some(t1), Some(t2)) if !compare_table_name(t1, t2, &self.name_resolution_ctx) => {
+                (Some(t1), Some(t2)) if t1 != t2 => {
                     continue;
                 }
                 (Some(_), None) => continue,
@@ -500,11 +497,10 @@ impl Binder {
             let mut type_checker = TypeChecker::try_create(
                 &mut temp_ctx,
                 self.ctx.clone(),
-                &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
-                true,
-            )?;
+            )?
+            .with_forbid_udf(true);
             let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
             let (new_expr, _) =

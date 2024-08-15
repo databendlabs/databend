@@ -40,7 +40,6 @@ use crate::plans::Limit;
 use crate::BindContext;
 use crate::Binder;
 use crate::Metadata;
-use crate::NameResolutionContext;
 
 pub struct Dataframe {
     query_ctx: Arc<dyn TableContext>,
@@ -69,12 +68,10 @@ impl Dataframe {
         };
 
         let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let name_resolution_ctx = NameResolutionContext::try_from_context(query_ctx.clone())?;
 
         let mut binder = Binder::new(
             query_ctx.clone(),
             CatalogManager::instance(),
-            name_resolution_ctx,
             metadata.clone(),
         );
 

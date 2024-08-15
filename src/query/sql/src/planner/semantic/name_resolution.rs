@@ -26,7 +26,6 @@ use derive_visitor::VisitorMut;
 pub struct NameResolutionContext {
     pub unquoted_ident_case_sensitive: bool,
     pub quoted_ident_case_sensitive: bool,
-    pub deny_column_reference: bool,
     pub ctx: Option<Arc<dyn TableContext>>,
 }
 
@@ -41,7 +40,6 @@ impl NameResolutionContext {
         let s = Self {
             unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
-            deny_column_reference: false,
             ctx: Some(ctx),
         };
         Ok(s)
@@ -70,7 +68,6 @@ impl Default for NameResolutionContext {
         Self {
             unquoted_ident_case_sensitive: false,
             quoted_ident_case_sensitive: true,
-            deny_column_reference: false,
             ctx: None,
         }
     }
@@ -84,18 +81,6 @@ pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext)
         ident.clone()
     } else {
         Identifier::from_name(ident.span, ident.name.to_lowercase())
-    }
-}
-
-pub fn compare_table_name(
-    table_name1: &str,
-    table_name2: &str,
-    context: &NameResolutionContext,
-) -> bool {
-    if context.unquoted_ident_case_sensitive || !context.quoted_ident_case_sensitive {
-        table_name1 == table_name2
-    } else {
-        table_name1.to_lowercase() == table_name2.to_lowercase()
     }
 }
 

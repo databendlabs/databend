@@ -47,7 +47,6 @@ use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::NameResolutionContext;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
@@ -225,12 +224,8 @@ impl BindContext {
 
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
     /// This method will rename column bindings according to table alias.
-    pub fn apply_table_alias(
-        &mut self,
-        alias: &TableAlias,
-        name_resolution_ctx: &NameResolutionContext,
-    ) -> Result<()> {
-        apply_alias_for_columns(&mut self.columns, alias, name_resolution_ctx)
+    pub fn apply_table_alias(&mut self, alias: &TableAlias) -> Result<()> {
+        apply_alias_for_columns(&mut self.columns, alias)
     }
 
     /// Try to find a column binding with given table name and column name.
@@ -241,11 +236,11 @@ impl BindContext {
         table: Option<&str>,
         column: &Identifier,
         available_aliases: &[(String, ScalarExpr)],
-        name_resolution_ctx: &NameResolutionContext,
+        deny_column_reference: bool,
     ) -> Result<NameResolutionResult> {
         let name = &column.name;
 
-        if name_resolution_ctx.deny_column_reference {
+        if deny_column_reference {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(
                     "invalid identifier {name}, do you mean '{name}'?"
@@ -609,11 +604,7 @@ impl Default for BindContext {
     }
 }
 
-pub fn apply_alias_for_columns(
-    columns: &mut [ColumnBinding],
-    alias: &TableAlias,
-    _name_resolution_ctx: &NameResolutionContext,
-) -> Result<()> {
+pub fn apply_alias_for_columns(columns: &mut [ColumnBinding], alias: &TableAlias) -> Result<()> {
     for column in columns.iter_mut() {
         column.database_name = None;
         column.table_name = Some(alias.name.name());

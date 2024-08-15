@@ -31,7 +31,6 @@ use indexmap::IndexMap;
 use crate::binder::wrap_cast;
 use crate::binder::CteInfo;
 use crate::planner::binder::BindContext;
-use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
@@ -42,11 +41,11 @@ pub struct ScalarBinder<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
     dialect: Dialect,
-    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     ctes_map: Box<IndexMap<String, CteInfo>>,
     aliases: &'a [(String, ScalarExpr)],
+    deny_column_reference: bool,
     forbid_udf: bool,
 }
 
@@ -54,40 +53,44 @@ impl<'a> ScalarBinder<'a> {
     pub fn new(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
-        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
         m_cte_bound_ctx: HashMap<IndexType, BindContext>,
         ctes_map: Box<IndexMap<String, CteInfo>>,
     ) -> Self {
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-
         ScalarBinder {
             bind_context,
             ctx,
             dialect,
-            name_resolution_ctx,
             metadata,
             m_cte_bound_ctx,
             ctes_map,
             aliases,
+            deny_column_reference: false,
             forbid_udf: false,
         }
     }
 
-    pub fn forbid_udf(&mut self) {
-        self.forbid_udf = true;
+    pub fn with_deny_column_reference(mut self, deny_column_reference: bool) -> Self {
+        self.deny_column_reference = deny_column_reference;
+        self
+    }
+
+    pub fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
+        self.forbid_udf = forbid_udf;
+        self
     }
 
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::try_create(
             self.bind_context,
             self.ctx.clone(),
-            self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
-            self.forbid_udf,
-        )?;
+        )?
+        .with_forbid_udf(self.forbid_udf)
+        .with_deny_column_reference(self.deny_column_reference);
         type_checker.set_m_cte_bound_ctx(self.m_cte_bound_ctx.clone());
         type_checker.set_ctes_map(self.ctes_map.clone());
         Ok(*type_checker.resolve(expr)?)

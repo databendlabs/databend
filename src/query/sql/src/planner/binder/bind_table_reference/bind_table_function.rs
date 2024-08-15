@@ -114,7 +114,6 @@ impl Binder {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
-            &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
@@ -131,11 +130,7 @@ impl Binder {
                 .get_default_catalog(self.ctx.txn_mgr())?
                 .get_table_function(&func_name, table_args)?;
             let table = table_meta.as_table();
-            let table_alias_name = if let Some(table_alias) = alias {
-                Some(table_alias.name.name())
-            } else {
-                None
-            };
+            let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
@@ -150,7 +145,7 @@ impl Binder {
             let (s_expr, mut bind_context) =
                 self.bind_base_table(bind_context, "system", table_index, None, &None)?;
             if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                bind_context.apply_table_alias(alias)?;
             }
             Ok((s_expr, bind_context))
         }
@@ -198,11 +193,7 @@ impl Binder {
             };
             let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
 
-            let table_alias_name = if let Some(table_alias) = alias {
-                Some(table_alias.name.name())
-            } else {
-                None
-            };
+            let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
 
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
@@ -218,7 +209,7 @@ impl Binder {
             let (s_expr, mut bind_context) =
                 self.bind_base_table(bind_context, "system", table_index, None, &None)?;
             if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                bind_context.apply_table_alias(alias)?;
             }
             Ok((s_expr, bind_context))
         })
@@ -295,7 +286,7 @@ impl Binder {
                     SExpr::create_unary(Arc::new(eval_scalar.into()), srf_expr.children[0].clone());
 
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 return Ok((new_expr, bind_context.clone()));
             } else {
@@ -307,7 +298,7 @@ impl Binder {
         // Set name for srf result column
         bind_context.columns[0].column_name = "value".to_string();
         if let Some(alias) = alias {
-            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            bind_context.apply_table_alias(alias)?;
         }
         Ok((srf_expr, bind_context.clone()))
     }

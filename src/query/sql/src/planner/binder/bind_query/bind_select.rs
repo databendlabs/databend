@@ -95,10 +95,7 @@ impl Binder {
             self.bind_table_reference(bind_context, &cross_joins)?
         };
 
-        let mut rewriter = SelectRewriter::new(
-            from_context.all_column_bindings(),
-            self.name_resolution_ctx.unquoted_ident_case_sensitive,
-        );
+        let mut rewriter = SelectRewriter::new(from_context.all_column_bindings());
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
@@ -277,19 +274,10 @@ impl Binder {
 struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
-    is_unquoted_ident_case_sensitive: bool,
 }
 
 // helper functions to SelectRewriter
 impl<'a> SelectRewriter<'a> {
-    fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
-        if self.is_unquoted_ident_case_sensitive {
-            a == b
-        } else {
-            a.eq_ignore_ascii_case(b)
-        }
-    }
-
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
@@ -380,11 +368,10 @@ impl<'a> SelectRewriter<'a> {
 }
 
 impl<'a> SelectRewriter<'a> {
-    fn new(column_binding: &'a [ColumnBinding], is_unquoted_ident_case_sensitive: bool) -> Self {
+    fn new(column_binding: &'a [ColumnBinding]) -> Self {
         SelectRewriter {
             column_binding,
             new_stmt: None,
-            is_unquoted_ident_case_sensitive,
         }
     }
 
@@ -417,11 +404,10 @@ impl<'a> SelectRewriter<'a> {
                 self.column_binding
                     .iter()
                     .filter(|col_bind| {
-                        !self
-                            .compare_unquoted_ident(&col_bind.column_name, &pivot.value_column.name)
+                        col_bind.column_name != pivot.value_column.name
                             && !aggregate_column_names
                                 .iter()
-                                .any(|col| self.compare_unquoted_ident(col, &col_bind.column_name))
+                                .any(|col| col == &col_bind.column_name)
                     })
                     .map(|col| Expr::Literal {
                         span: Span::default(),

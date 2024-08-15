@@ -50,7 +50,6 @@ use crate::Binder;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::MetadataRef;
-use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -183,7 +182,6 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         bind_values(
             self.ctx.clone(),
-            &self.name_resolution_ctx,
             self.metadata.clone(),
             bind_context,
             span,
@@ -376,7 +374,6 @@ impl Binder {
 
 pub fn bind_values(
     ctx: Arc<dyn TableContext>,
-    name_resolution_ctx: &NameResolutionContext,
     metadata: MetadataRef,
     bind_context: &mut BindContext,
     span: Span,
@@ -389,7 +386,6 @@ pub fn bind_values(
     let mut scalar_binder = ScalarBinder::new(
         bind_context,
         ctx.clone(),
-        name_resolution_ctx,
         metadata.clone(),
         &[],
         HashMap::new(),

@@ -153,12 +153,9 @@ impl Planner {
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
-                let name_resolution_ctx =
-                    NameResolutionContext::try_from_context(self.ctx.clone())?;
                 let binder = Binder::new(
                     self.ctx.clone(),
                     CatalogManager::instance(),
-                    name_resolution_ctx,
                     metadata.clone(),
                 );
 

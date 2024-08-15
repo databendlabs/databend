@@ -114,12 +114,7 @@ impl TableIdentifier {
         table: &Identifier,
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
-        let Binder {
-            ctx,
-            name_resolution_ctx,
-            dialect,
-            ..
-        } = binder;
+        let Binder { ctx, dialect, .. } = binder;
         let catalog = catalog.to_owned().unwrap_or(Identifier {
             span: None,
             name: ctx.get_current_catalog(),
@@ -149,7 +144,7 @@ impl TableIdentifier {
             table,
             table_alias: table_alias.clone(),
             dialect: *dialect,
-            name_resolution_ctx: name_resolution_ctx.clone(),
+            name_resolution_ctx: binder.name_resolution_ctx.clone(),
         }
     }
 

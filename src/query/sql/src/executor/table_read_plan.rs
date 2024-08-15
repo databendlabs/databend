@@ -45,7 +45,6 @@ use crate::plans::BoundColumnRef;
 use crate::resolve_type_name_by_str;
 use crate::BindContext;
 use crate::Metadata;
-use crate::NameResolutionContext;
 use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
@@ -222,16 +221,12 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let ast_expr =
                                     parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
-                                let name_resolution_ctx =
-                                    NameResolutionContext::try_from_context(ctx.clone())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
                                 let mut type_checker = TypeChecker::try_create(
                                     &mut bind_context,
                                     ctx.clone(),
-                                    &name_resolution_ctx,
                                     metadata,
                                     &aliases,
-                                    false,
                                 )?;
 
                                 ctx.set_status_info(

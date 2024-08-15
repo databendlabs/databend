@@ -58,7 +58,6 @@ fn test_normalize_identifier_quoted_case_insensitive() {
     let ctx = NameResolutionContext {
         unquoted_ident_case_sensitive: false,
         quoted_ident_case_sensitive: false,
-        deny_column_reference: false,
         ctx: None,
     };
 
@@ -82,7 +81,6 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
     let ctx = NameResolutionContext {
         unquoted_ident_case_sensitive: true,
         quoted_ident_case_sensitive: true,
-        deny_column_reference: false,
         ctx: None,
     };
 

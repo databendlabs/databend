@@ -85,7 +85,6 @@ pub struct Binder {
     pub ctx: Arc<dyn TableContext>,
     pub dialect: Dialect,
     pub catalogs: Arc<CatalogManager>,
-    pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
@@ -99,27 +98,30 @@ pub struct Binder {
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+    pub name_resolution_ctx: NameResolutionContext,
 }
 
 impl<'a> Binder {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         catalogs: Arc<CatalogManager>,
-        name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
     ) -> Self {
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        let name_resolution_ctx =
+            NameResolutionContext::try_from_context(ctx.clone()).unwrap_or_default();
+
         Binder {
             ctx,
             dialect,
             catalogs,
-            name_resolution_ctx,
             metadata,
             m_cte_bound_ctx: Default::default(),
             m_cte_bound_s_expr: Default::default(),
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            name_resolution_ctx,
         }
     }
 
@@ -641,14 +643,8 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         hints: &Hint,
     ) -> Result<()> {
-        let mut type_checker = TypeChecker::try_create(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            false,
-        )?;
+        let mut type_checker =
+            TypeChecker::try_create(bind_context, self.ctx.clone(), self.metadata.clone(), &[])?;
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;

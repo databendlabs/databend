@@ -38,14 +38,8 @@ impl Binder {
         identities: &[Identifier],
         values: &SetValues,
     ) -> Result<Plan> {
-        let mut type_checker = TypeChecker::try_create(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            false,
-        )?;
+        let mut type_checker =
+            TypeChecker::try_create(bind_context, self.ctx.clone(), self.metadata.clone(), &[])?;
 
         let values = match values {
             SetValues::Expr(exprs) => {

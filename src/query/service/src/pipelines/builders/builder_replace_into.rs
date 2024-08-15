@@ -46,7 +46,6 @@ use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::NameResolutionContext;
 use databend_common_storages_fuse::operations::BroadcastProcessor;
 use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -74,24 +73,19 @@ impl PipelineBuilder {
         async_sourcer: &ReplaceAsyncSourcer,
     ) -> Result<()> {
         self.main_pipeline.add_source(
-            |output| {
-                let name_resolution_ctx =
-                    NameResolutionContext::try_from_context(self.ctx.clone())?;
-                match &async_sourcer.source {
-                    InsertValue::Values { rows } => {
-                        let inner = ValueSource::new(rows.clone(), async_sourcer.schema.clone());
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
-                    }
-                    InsertValue::RawValues { data, start } => {
-                        let inner = RawValueSource::new(
-                            data.clone(),
-                            self.ctx.clone(),
-                            name_resolution_ctx,
-                            async_sourcer.schema.clone(),
-                            *start,
-                        );
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
-                    }
+            |output| match &async_sourcer.source {
+                InsertValue::Values { rows } => {
+                    let inner = ValueSource::new(rows.clone(), async_sourcer.schema.clone());
+                    AsyncSourcer::create(self.ctx.clone(), output, inner)
+                }
+                InsertValue::RawValues { data, start } => {
+                    let inner = RawValueSource::new(
+                        data.clone(),
+                        self.ctx.clone(),
+                        async_sourcer.schema.clone(),
+                        *start,
+                    );
+                    AsyncSourcer::create(self.ctx.clone(), output, inner)
                 }
             },
             1,
@@ -442,7 +436,7 @@ impl AsyncSource for ValueSource {
 pub struct RawValueSource {
     data: String,
     ctx: Arc<dyn TableContext>,
-    name_resolution_ctx: NameResolutionContext,
+    deny_column_reference: bool,
     bind_context: BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
@@ -454,7 +448,6 @@ impl RawValueSource {
     pub fn new(
         data: String,
         ctx: Arc<dyn TableContext>,
-        name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
         start: usize,
     ) -> Self {
@@ -464,13 +457,18 @@ impl RawValueSource {
         Self {
             data,
             ctx,
-            name_resolution_ctx,
+            deny_column_reference: false,
             schema,
             bind_context,
             metadata,
             start,
             is_finished: false,
         }
+    }
+
+    pub fn with_deny_column_reference(mut self, deny_column_reference: bool) -> Self {
+        self.deny_column_reference = deny_column_reference;
+        self
     }
 }
 
@@ -534,7 +532,7 @@ impl FastValuesDecodeFallback for RawValueSource {
                     &exprs,
                     &self.schema,
                     self.ctx.clone(),
-                    &self.name_resolution_ctx,
+                    self.deny_column_reference,
                     metadata,
                 )
                 .await?

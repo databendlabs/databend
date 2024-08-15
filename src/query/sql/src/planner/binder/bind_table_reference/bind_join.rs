@@ -38,7 +38,6 @@ use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
-use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::HashJoinBuildCacheInfo;
@@ -182,7 +181,6 @@ impl Binder {
         let mut other_conditions: Vec<ScalarExpr> = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
-            &self.name_resolution_ctx,
             self.metadata.clone(),
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
@@ -513,7 +511,6 @@ pub fn check_duplicate_join_tables(
 
 struct JoinConditionResolver<'a> {
     ctx: Arc<dyn TableContext>,
-    name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     ctes_map: Box<IndexMap<String, CteInfo>>,
@@ -528,7 +525,6 @@ impl<'a> JoinConditionResolver<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<dyn TableContext>,
-        name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         m_cte_bound_ctx: HashMap<IndexType, BindContext>,
         ctes_map: Box<IndexMap<String, CteInfo>>,
@@ -540,7 +536,6 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Self {
         Self {
             ctx,
-            name_resolution_ctx,
             metadata,
             m_cte_bound_ctx,
             ctes_map,
@@ -681,7 +676,6 @@ impl<'a> JoinConditionResolver<'a> {
         let mut scalar_binder = ScalarBinder::new(
             &mut join_context,
             self.ctx.clone(),
-            self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
@@ -832,7 +826,6 @@ impl<'a> JoinConditionResolver<'a> {
         let mut scalar_binder = ScalarBinder::new(
             &mut join_context,
             self.ctx.clone(),
-            self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
             self.m_cte_bound_ctx.clone(),
