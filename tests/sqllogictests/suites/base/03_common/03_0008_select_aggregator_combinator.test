@@ -17,7 +17,7 @@ select approx_count_distinct(number), approx_count_distinct(0.2)(number), approx
 query I
 select approx_count_distinct(0.01625)(number) from ( select number % 100 as number from numbers(100000))
 ----
-98
+100
 
 query I
 select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000))
