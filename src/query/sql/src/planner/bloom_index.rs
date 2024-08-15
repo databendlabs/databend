@@ -50,14 +50,14 @@ impl FromStr for BloomIndexColumns {
 
         let sql_dialect = Dialect::default();
         let tokens = tokenize_sql(s)?;
-        let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
-
+        let mut idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
         let name_resolution_ctx = NameResolutionContext::default();
-
         let mut cols = Vec::with_capacity(idents.len());
-        idents
-            .into_iter()
-            .for_each(|ident| cols.push(normalize_identifier(&ident, &name_resolution_ctx).name));
+
+        for ident in idents.iter_mut() {
+            normalize_identifier(ident, &name_resolution_ctx);
+            cols.push(ident.normalized_name());
+        }
 
         Ok(BloomIndexColumns::Specify(cols))
     }
@@ -81,10 +81,11 @@ impl BloomIndexColumns {
 
         let sql_dialect = Dialect::default();
         let tokens = tokenize_sql(definition)?;
-        let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
-        for ident in idents.iter() {
-            let name = &normalize_identifier(ident, &name_resolution_ctx).name;
-            let field = schema.field_with_name(name)?;
+        let mut idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
+        for ident in idents.iter_mut() {
+            normalize_identifier(ident, &name_resolution_ctx);
+            let name = ident.normalized_name();
+            let field = schema.field_with_name(&name)?;
 
             if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
                 return Err(ErrorCode::TableOptionInvalid(format!(

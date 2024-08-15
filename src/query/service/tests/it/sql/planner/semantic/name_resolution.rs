@@ -27,27 +27,27 @@ fn test_normalize_identifier_default() {
 
     {
         // Unquoted
-        let ident = Identifier::from_name(
+        let mut ident = Identifier::from_name(
             None,
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
         );
-        let norm_name = normalize_identifier(&ident, &ctx).name;
+        normalize_identifier(&mut ident, &ctx);
         assert_eq!(
-            norm_name,
+            ident.normalized_name(),
             "foobar 这是一个标识符 これは識別子です это идентификатор dies ist eine kennung"
         );
     }
 
     {
         // Quoted
-        let ident = Identifier::from_name_with_quoted(
+        let mut ident = Identifier::from_name_with_quoted(
             None,
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
             Some('"'),
         );
-        let norm_name = normalize_identifier(&ident, &ctx).name;
+        normalize_identifier(&mut ident, &ctx);
         assert_eq!(
-            norm_name,
+            ident.normalized_name(),
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
         );
     }
@@ -63,14 +63,14 @@ fn test_normalize_identifier_quoted_case_insensitive() {
 
     {
         // Quoted
-        let ident = Identifier::from_name_with_quoted(
+        let mut ident = Identifier::from_name_with_quoted(
             None,
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
             Some('"'),
         );
-        let norm_name = normalize_identifier(&ident, &ctx).name;
+        normalize_identifier(&mut ident, &ctx);
         assert_eq!(
-            norm_name,
+            ident.normalized_name(),
             "foobar 这是一个标识符 これは識別子です это идентификатор dies ist eine kennung"
         );
     }
@@ -86,13 +86,13 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
 
     {
         // Unquoted
-        let ident = Identifier::from_name(
+        let mut ident = Identifier::from_name(
             None,
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
         );
-        let norm_name = normalize_identifier(&ident, &ctx).name;
+        normalize_identifier(&mut ident, &ctx);
         assert_eq!(
-            norm_name,
+            ident.normalized_name(),
             "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
         );
     }

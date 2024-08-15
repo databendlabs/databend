@@ -29,7 +29,8 @@ pub struct Identifier {
     pub span: Span,
     pub name: String,
     // name after normalization, default to none if not normalized, we used it for better error message
-    pub normalized_name: Option<String>,
+    // box to avoid large enum size in plan
+    pub normalized_name: Option<Box<String>>,
     pub quote: Option<char>,
     pub is_hole: bool,
     pub is_variable: bool,
@@ -53,7 +54,7 @@ impl Identifier {
 
     pub fn normalized_name(&self) -> String {
         self.normalized_name
-            .clone()
+            .map(|s| s.as_ref().to_owned())
             .unwrap_or_else(|| self.name.clone())
     }
 

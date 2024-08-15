@@ -74,15 +74,13 @@ impl Default for NameResolutionContext {
 }
 
 /// Normalize identifier with given `NameResolutionContext`
-pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext) -> Identifier {
-    if (ident.is_quoted() && context.quoted_ident_case_sensitive)
+pub fn normalize_identifier(ident: &mut Identifier, context: &NameResolutionContext) {
+    let no_need_normalize = (ident.is_quoted() && context.quoted_ident_case_sensitive)
         || (!ident.is_quoted() && context.unquoted_ident_case_sensitive)
-    {
-        ident.clone()
-    } else {
-        let mut ident = ident.clone();
-        ident.normalized_name = Some(ident.name.to_lowercase());
-        ident
+        || !ident.name.chars().any(|c| c.is_ascii_uppercase());
+
+    if !no_need_normalize {
+        ident.normalized_name = Some(Box::new(ident.name.to_lowercase()));
     }
 }
 
@@ -116,25 +114,24 @@ impl<'a> IdentifierNormalizer<'a> {
             return;
         }
 
-        let mut normalized_ident = normalize_identifier(ident, self.ctx);
+        normalize_identifier(ident, self.ctx);
         if ident.is_variable {
             let scalar = self
                 .ctx
                 .ctx
                 .as_ref()
-                .and_then(|c| c.get_variable(&normalized_ident.name));
+                .and_then(|c| c.get_variable(&ident.normalized_name()));
 
             if let Some(Scalar::String(s)) = scalar {
-                normalized_ident.name = s;
-                normalized_ident.is_variable = false;
+                ident.normalized_name = Some(s);
+                ident.is_variable = false;
             } else {
                 self.error = Some(ErrorCode::SemanticError(format!(
                     "invalid variable identifier {} in session",
-                    normalized_ident.name
+                    ident.name
                 )));
                 return;
             }
         }
-        *ident = normalized_ident;
     }
 }
