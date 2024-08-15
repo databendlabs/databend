@@ -5104,6 +5104,7 @@ dependencies = [
  "futures",
  "log",
  "rand 0.8.5",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "tokio",

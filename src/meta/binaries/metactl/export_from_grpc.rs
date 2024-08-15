@@ -25,22 +25,22 @@ use databend_common_meta_types::protobuf;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
 
-use crate::Config;
+use crate::ExportArgs;
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
-pub async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
+pub async fn export_from_running_node(addr: &str, args: &ExportArgs) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Export:");
-    eprintln!("    From: online meta-service: {}", config.grpc_api_address);
-    eprintln!("    Export To: {}", config.db);
-    eprintln!("    Export Chunk Size: {:?}", config.export_chunk_size);
+    eprintln!("    From: online meta-service: {}", addr);
+    eprintln!("    Export To: {}", args.db);
+    eprintln!("    Export Chunk Size: {:?}", args.export_chunk_size);
 
-    let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
+    let grpc_api_addr = get_available_socket_addr(addr).await?;
 
     export_from_grpc(
         grpc_api_addr.to_string().as_str(),
-        config.db.clone(),
-        config.export_chunk_size,
+        args.db.clone(),
+        args.export_chunk_size,
     )
     .await?;
     Ok(())
