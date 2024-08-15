@@ -21,7 +21,7 @@ use databend_meta::store::StoreInner;
 use futures::TryStreamExt;
 
 use crate::upgrade;
-use crate::Config;
+use crate::ExportArgs;
 
 /// Print the entire sled db.
 ///
@@ -29,22 +29,21 @@ use crate::Config;
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
 /// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-pub async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
-    upgrade::upgrade(config).await?;
+pub async fn export_from_dir(args: &ExportArgs) -> anyhow::Result<()> {
+    let raft_config: RaftConfig = args.clone().into();
+    upgrade::upgrade(&raft_config).await?;
 
     eprintln!();
     eprintln!("Export:");
-
-    let raft_config: RaftConfig = config.clone().into();
 
     let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
     let mut lines = Arc::new(sto_inn).export();
 
     eprintln!("    From: {}", raft_config.raft_dir);
 
-    let file: Option<File> = if !config.db.is_empty() {
-        eprintln!("    To:   File: {}", config.db);
-        Some((File::create(&config.db))?)
+    let file: Option<File> = if !args.db.is_empty() {
+        eprintln!("    To:   File: {}", args.db);
+        Some((File::create(&args.db))?)
     } else {
         eprintln!("    To:   <stdout>");
         None

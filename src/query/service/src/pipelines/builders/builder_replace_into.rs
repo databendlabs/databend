@@ -406,7 +406,6 @@ impl AsyncSource for ValueSource {
     const NAME: &'static str = "ValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
@@ -483,7 +482,6 @@ impl AsyncSource for RawValueSource {
     const NAME: &'static str = "RawValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {

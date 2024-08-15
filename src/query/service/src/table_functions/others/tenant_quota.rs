@@ -222,7 +222,6 @@ impl TenantQuotaSource {
 impl AsyncSource for TenantQuotaSource {
     const NAME: &'static str = "tenant_quota";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.done {
