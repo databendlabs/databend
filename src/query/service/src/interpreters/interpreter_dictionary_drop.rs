@@ -65,8 +65,8 @@ impl Interpreter for DropDictionaryInterpreter {
             if self.plan.if_exists {
                 return Ok(PipelineBuildResult::create());
             } else {
-                return Err(ErrorCode::DictionaryAlreadyExists(format!(
-                    "Dictionary {} already exists.",
+                return Err(ErrorCode::UnknownDictionary(format!(
+                    "Dictionary {} is unknown.",
                     dict_name.to_string(),
                 )));
             }

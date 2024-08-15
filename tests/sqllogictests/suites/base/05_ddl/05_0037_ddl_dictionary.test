@@ -1,0 +1,56 @@
+statement ok
+DROP DICTIONARY IF EXISTS d
+
+statement ok
+DROP DICTIONARY IF EXISTS d2
+
+statement ok
+DROP DICTIONARY IF EXISTS d3
+
+statement ok
+DROP DICTIONARY IF EXISTS d4
+
+statement ok
+CREATE DICTIONARY d(c1 int) SOURCE = mysql
+
+statement ok
+CREATE DICTIONARY IF NOT EXISTS d(c1 int) SOURCE = mysql
+
+statement error 3113
+CREATE DICTIONARY d(c1 int) SOURCE = mysql
+
+statement ok
+CREATE DICTIONARY d2(a int,b int) SOURCE = mysql
+
+statement 3113
+CREATE DICTIONARY d2(a int,b int) SOURCE = mysql
+
+statement ok
+create dictionary d3(`a` int) source = mysql
+
+statement ok
+create dictionary d4(a int) source = mysql
+
+statement ok
+DROP DICTIONARY IF EXISTS d
+
+statement ok
+DROP DICTIONARY IF EXISTS d2
+
+statement ok
+DROP DICTIONARY IF EXISTS d3
+
+statement ok
+DROP DICTIONARY IF EXISTS d4
+
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+DROP DATABASE IF EXISTS db2
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+CREATE DICTIONARY db1.test1(a int, b int) SOURCE = mysql

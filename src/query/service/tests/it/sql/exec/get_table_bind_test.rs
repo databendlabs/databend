@@ -59,6 +59,7 @@ use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
@@ -414,6 +415,35 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         self.cat.get_table_meta_by_id(table_id).await
+    }
+
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        todo!()
+    }
+
+    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        todo!()
+    }
+
+    async fn drop_dictionary(
+        &self,
+        dict_ident: TenantDictionaryIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        todo!()
+    }
+
+    async fn get_dictionary(
+        &self,
+        req: TenantDictionaryIdent,
+    ) -> Result<Option<GetDictionaryReply>> {
+        self.cat.get_dictionary(req).await
+    }
+
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
+        todo!()
     }
 }
 

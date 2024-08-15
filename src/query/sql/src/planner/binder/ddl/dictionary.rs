@@ -62,13 +62,12 @@ impl Binder {
         let source = self.normalize_object_identifier(source_name);
 
         if source.to_lowercase() != "mysql".to_string() {
-            return Err(ErrorCode::UnknownDictionary(
-                format!(
-                    "Source {} is not supported.",
-                    source.to_lowercase(),
-                )
-            ));
+            return Err(ErrorCode::UnsupportedDictionarySource(format!(
+                "Source {} is not supported.",
+                source.to_lowercase(),
+            )));
         }
+        // TODO:Authentication to connect to the MySQL database will be implemented later
 
         let options: BTreeMap<String, String> = source_options
             .into_iter()
@@ -77,27 +76,33 @@ impl Binder {
         let required_options = ["host", "port", "username", "password", "db"];
         for option in required_options {
             if !options.contains_key(&option.to_string()) {
-                return Err(ErrorCode::UnsupportedOption(
-                    "The required key is missing.".to_string()
+                return Err(ErrorCode::WrongDictionaryOption(
+                    "The required key is missing".to_string(),
                 ));
             }
         }
-
-        let mut field_comments = BTreeMap::new();
-        for (index, column) in columns.iter().enumerate() {
-            field_comments.insert(index as u32, column.comment.clone().unwrap_or_default());
+        if required_options.len() != options.len() {
+            return Err(ErrorCode::UnsupportedDictionaryOption(
+                format!("The option '{}' is not supported", key),
+            ));
         }
 
+        let mut field_comments = BTreeMap::new();
         let mut primary_column_ids = Vec::new();
-        for (index, column) in columns.into_iter().enumerate() {
-            if primary_keys.iter().any(|pk| pk.name == column.name.name) {
-                primary_column_ids.push(index as u32);
+
+        let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
+        for table_field in schema.fields.clone() {
+            if table_field.default_expr.is_none() && table_field.computed_expr.is_none() {
+                let comment_id = schema.column_id_of(table_field.name.as_str())?;
+                field_comments.insert(comment_id, columns[comment_id as usize].comment?);
+                primary_column_ids.push(schema.column_id_of_index(comment_id)?);
+            } else {
+                
+                // TODO: error
             }
         }
 
         let comment = comment.clone().unwrap_or("".to_string());
-        let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
-
         let meta = DictionaryMeta {
             source,
             options,
@@ -141,7 +146,7 @@ impl Binder {
             database_id = db.get_db_info().ident.db_id;
         }
         Ok(Plan::DropDictionary(Box::new(DropDictionaryPlan {
-            if_exists,
+            if_exists: *if_exists,
             tenant,
             catalog,
             database_id,

@@ -56,15 +56,12 @@ impl Interpreter for CreateDictionaryInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = &self.plan.tenant;
-        let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         let req = ListDictionaryReq {
             tenant: self.plan.tenant.clone(),
             db_id: self.plan.database_id,
         };
-        let dictionaries = catalog.list_dictionaries(req).await?;
 
         let dictionary_meta = self.plan.meta.clone();
         let dict_ident =
@@ -80,9 +77,9 @@ impl Interpreter for CreateDictionaryInterpreter {
         } else {
             match self.plan.create_option {
                 CreateOption::Create => {
-                    return Err(ErrorCode::TenantQuotaExceeded(format!(
-                        "Max dictionaries per database quota exceeded: {}",
-                        quota.max_dictionaries_per_database
+                    return Err(ErrorCode::DictionaryAlreadyExists(format!(
+                        "Dictionary {} already exists.",
+                        self.plan.dictionary,
                     )));
                 }
                 CreateOption::CreateIfNotExists => {

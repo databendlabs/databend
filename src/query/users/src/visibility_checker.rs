@@ -324,31 +324,4 @@ impl GrantObjectVisibilityChecker {
 
         false
     }
-
-    pub fn check_dictionary_visibility(
-        &self,
-        catalog: &str,
-        database: &str,
-        _dict: &str,
-        db_id: u64,
-        _dict_id: u64,
-    ) -> bool {
-        if database.to_lowercase() == "information_schema" || database.to_lowercase() == "system" {
-            return true;
-        }
-        if self
-            .granted_databases
-            .contains(&(catalog.to_string(), database.to_string()))
-        {
-            return true;
-        }
-
-        if self
-            .granted_databases_id
-            .contains(&(catalog.to_string(), db_id))
-        {
-            return true;
-        }
-        false
-    }
 }

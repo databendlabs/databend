@@ -145,14 +145,15 @@ impl ShowCreateDictionaryInterpreter {
                     _ => "".to_string(),
                 };
                 // compatibility: creating table in the old planner will not have `fields_comments`
-                let comment =
-                    if field_comments.len() == n_fields && !field_comments[&(idx as u32)].is_empty() {
-                        // make the display more readable.
-                        // can not use debug print, will add double quote
-                        format!(" COMMENT '{}'", comment.as_str(),)
-                    } else {
-                        "".to_string()
-                    };
+                let comment = if field_comments.len() == n_fields
+                    && !field_comments[&(idx as u32)].is_empty()
+                {
+                    // make the display more readable.
+                    // can not use debug print, will add double quote
+                    format!(" COMMENT '{}'", comment.as_str(),)
+                } else {
+                    "".to_string()
+                };
                 let column_str = format!(
                     "  {} {}{}{}{}{}",
                     display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
