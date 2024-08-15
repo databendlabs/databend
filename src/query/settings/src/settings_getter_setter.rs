@@ -355,6 +355,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_planner_cache")? != 0)
     }
 
+    pub fn get_enable_experimental_procedure(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_procedure")? != 0)
+    }
+
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_query_result_cache")? != 0)
     }

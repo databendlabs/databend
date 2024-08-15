@@ -841,6 +841,28 @@ fn test_statement() {
             PRIMARY KEY username
             SOURCE (mysql(host='localhost' username='root' password='1234'))
             COMMENT 'This is a comment';"#,
+        // Stored Procedure
+        r#"describe PROCEDURE p1()"#,
+        r#"drop PROCEDURE p1()"#,
+        r#"show PROCEDURES like 'p1%'"#,
+        r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE p1() returns table(a string not null, b int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
     ];
 
     for case in cases {
@@ -959,6 +981,18 @@ fn test_statement_error() {
         PRIMARY KEY username
         SOURCE ()
         COMMENT 'This is a comment';"#,
+        // Stored Procedure
+        r#"desc procedure p1"#,
+        r#"drop procedure p1"#,
+        r#"create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
     ];
 
     for case in cases {

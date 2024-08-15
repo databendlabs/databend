@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::CreateProcedureStmt;
+use databend_common_ast::ast::DescProcedureStmt;
+use databend_common_ast::ast::DropProcedureStmt;
 use databend_common_ast::ast::ExecuteImmediateStmt;
+use databend_common_ast::ast::ShowOptions;
 use databend_common_exception::Result;
 
 use crate::plans::ExecuteImmediatePlan;
@@ -29,5 +33,35 @@ impl Binder {
         Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
             script: script.clone(),
         })))
+    }
+
+    pub async fn bind_create_procedure(&mut self, stmt: &CreateProcedureStmt) -> Result<Plan> {
+        let CreateProcedureStmt {
+            create_option,
+            name,
+            language,
+            args,
+            return_type,
+            comment,
+            script,
+        } = stmt;
+
+        todo!()
+    }
+
+    pub async fn bind_drop_procedure(&mut self, stmt: &DropProcedureStmt) -> Result<Plan> {
+        let DropProcedureStmt { name, args } = stmt;
+
+        todo!()
+    }
+
+    pub async fn bind_desc_procedure(&mut self, stmt: &DescProcedureStmt) -> Result<Plan> {
+        let DescProcedureStmt { name, args } = stmt;
+
+        todo!()
+    }
+
+    pub async fn show_procedures(&mut self, show_options: &Option<ShowOptions>) -> Result<Plan> {
+        todo!()
     }
 }
