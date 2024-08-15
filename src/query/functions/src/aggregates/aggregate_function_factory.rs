@@ -177,6 +177,7 @@ impl AggregateFunctionFactory {
         if name == "array_agg"
             || name == "list"
             || name == "json_array_agg"
+            || name == "json_object_agg"
             || name == "group_array_moving_avg"
             || name == "group_array_moving_sum"
         {

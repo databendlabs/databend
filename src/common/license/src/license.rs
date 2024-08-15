@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
+use std::fmt;
 
+use databend_common_base::display::display_option::DisplayOptionExt;
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -75,8 +76,8 @@ pub enum Feature {
     Unknown,
 }
 
-impl Display for Feature {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+impl fmt::Display for Feature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Feature::LicenseInfo => write!(f, "license_info"),
             Feature::Vacuum => write!(f, "vacuum"),
@@ -93,23 +94,28 @@ impl Display for Feature {
             Feature::ComputeQuota(v) => {
                 write!(f, "compute_quota(")?;
 
+                write!(f, "threads_num: ")?;
                 match &v.threads_num {
-                    None => write!(f, "threads_num: unlimited,")?,
-                    Some(threads_num) => write!(f, "threads_num: {}", *threads_num)?,
+                    None => write!(f, "unlimited,")?,
+                    Some(threads_num) => write!(f, "{}", *threads_num)?,
                 };
 
+                write!(f, ", memory_usage: ")?;
                 match v.memory_usage {
-                    None => write!(f, "memory_usage: unlimited,"),
-                    Some(memory_usage) => write!(f, "memory_usage: {}", memory_usage),
+                    None => write!(f, "unlimited,")?,
+                    Some(memory_usage) => write!(f, "{}", memory_usage)?,
                 }
+                write!(f, ")")
             }
             Feature::StorageQuota(v) => {
                 write!(f, "storage_quota(")?;
 
+                write!(f, "storage_usage: ")?;
                 match v.storage_usage {
-                    None => write!(f, "storage_usage: unlimited,"),
-                    Some(storage_usage) => write!(f, "storage_usage: {}", storage_usage),
+                    None => write!(f, "unlimited,")?,
+                    Some(storage_usage) => write!(f, "{}", storage_usage)?,
                 }
+                write!(f, ")")
             }
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::Unknown => write!(f, "unknown"),
@@ -170,23 +176,53 @@ pub struct LicenseInfo {
     pub features: Option<Vec<Feature>>,
 }
 
-impl LicenseInfo {
-    pub fn display_features(&self) -> String {
-        // sort all features in alphabet order and ignore test feature
-        let mut features = self.features.clone().unwrap_or_default();
+impl fmt::Display for LicenseInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "LicenseInfo{{ type: {}, org: {}, tenants: {}, features: [{}] }}",
+            self.r#type.display(),
+            self.org.display(),
+            self.tenants
+                .as_ref()
+                .map(|x| x.as_slice().display())
+                .display(),
+            self.display_features()
+        )
+    }
+}
 
-        if features.is_empty() {
-            return String::from("Unlimited");
+impl LicenseInfo {
+    pub fn display_features(&self) -> impl fmt::Display + '_ {
+        /// sort all features in alphabet order and ignore test feature
+        struct DisplayFeatures<'a>(&'a LicenseInfo);
+
+        impl<'a> fmt::Display for DisplayFeatures<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let Some(features) = self.0.features.clone() else {
+                    return write!(f, "Unlimited");
+                };
+
+                let mut features = features
+                    .into_iter()
+                    .filter(|f| f != &Feature::Test)
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>();
+
+                features.sort();
+
+                for (i, feat) in features.into_iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+
+                    write!(f, "{}", feat)?;
+                }
+                Ok(())
+            }
         }
 
-        features.sort();
-
-        features
-            .iter()
-            .filter(|f| **f != Feature::Test)
-            .map(|f| f.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
+        DisplayFeatures(self)
     }
 
     /// Get Storage Quota from given license info.
@@ -296,6 +332,42 @@ mod tests {
         assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_display_license_info() {
+        let license_info = LicenseInfo {
+            r#type: Some("enterprise".to_string()),
+            org: Some("databend".to_string()),
+            tenants: Some(vec!["databend_tenant".to_string(), "foo".to_string()]),
+            features: Some(vec![
+                Feature::LicenseInfo,
+                Feature::Vacuum,
+                Feature::Test,
+                Feature::VirtualColumn,
+                Feature::BackgroundService,
+                Feature::DataMask,
+                Feature::AggregateIndex,
+                Feature::InvertedIndex,
+                Feature::ComputedColumn,
+                Feature::StorageEncryption,
+                Feature::Stream,
+                Feature::AttacheTable,
+                Feature::ComputeQuota(ComputeQuota {
+                    threads_num: Some(1),
+                    memory_usage: Some(1),
+                }),
+                Feature::StorageQuota(StorageQuota {
+                    storage_usage: Some(1),
+                }),
+                Feature::AmendTable,
+            ]),
+        };
+
+        assert_eq!(
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,background_service,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,inverted_index,license_info,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
+            license_info.to_string()
         );
     }
 }
