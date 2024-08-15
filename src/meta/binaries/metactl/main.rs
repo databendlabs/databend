@@ -215,7 +215,6 @@ impl App {
 
     pub async fn show_status(&self) -> anyhow::Result<()> {
         let addr = self.globals.grpc_api_address.clone();
-
         let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
 
         let res = client.get_cluster_status().await?;
