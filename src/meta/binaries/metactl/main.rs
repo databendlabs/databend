@@ -293,7 +293,12 @@ impl App {
 
     async fn transfer_leader(&self, args: &TransferLeaderArgs) -> anyhow::Result<()> {
         let client = MetaAdminClient::new(args.admin_api_address.as_str());
-        client.transfer_leader(args.to).await?;
+        let result = client.transfer_leader(args.to).await?;
+        println!(
+            "triggered leader transfer from {} to {}.\n
+            voter list: {:?}",
+            result.from, result.to, result.voter_ids
+        );
         Ok(())
     }
 

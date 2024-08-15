@@ -86,7 +86,7 @@ pub struct AdminStatusResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct AdminTransferLeaderResponse {
-    from: u64,
-    to: u64,
-    voter_ids: Vec<u64>,
+    pub from: u64,
+    pub to: u64,
+    pub voter_ids: Vec<u64>,
 }
