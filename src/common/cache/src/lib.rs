@@ -17,11 +17,8 @@
 
 mod cache;
 mod mem_sized;
-mod meter;
 
 pub use cache::lru::LruCache;
 pub use cache::Cache;
 pub use hashbrown::hash_map::DefaultHashBuilder;
 pub use mem_sized::MemSized;
-pub use meter::file_meter::FileSize;
-pub use meter::Meter;

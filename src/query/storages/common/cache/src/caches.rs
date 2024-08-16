@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_arrow::parquet::metadata::FileMetaData;
-use databend_common_cache::FileSize;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -261,6 +260,8 @@ impl From<SizedColumnArray> for CacheValue<SizedColumnArray> {
         }
     }
 }
+
+pub struct FileSize(pub u64);
 
 impl From<FileSize> for CacheValue<FileSize> {
     fn from(value: FileSize) -> Self {

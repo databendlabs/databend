@@ -24,7 +24,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_cache::Cache;
-use databend_common_cache::FileSize;
 use databend_common_cache::LruCache;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
@@ -409,3 +408,5 @@ pub mod io_result {
 }
 
 use io_result::*;
+
+use crate::caches::FileSize;
