@@ -1,0 +1,11 @@
+statement ok
+drop table if exists test_table_double
+
+statement ok
+CREATE TABLE IF NOT EXISTS test_table_double (ID INT, Name VARCHAR(50), Age INT, City VARCHAR(50), Score DOUBLE)
+
+statement ok
+INSERT INTO test_table_double (ID, Name, Age, City, Score) VALUES (1, 'Alice', 25, 'Toroto', 'inf')
+
+statement ok
+SELECT * FROM test_table_double
