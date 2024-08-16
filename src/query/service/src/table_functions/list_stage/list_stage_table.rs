@@ -247,7 +247,6 @@ fn make_block(files: &[StageFileInfo]) -> DataBlock {
 impl AsyncSource for ListStagesSource {
     const NAME: &'static str = LIST_STAGE;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match &self.state {

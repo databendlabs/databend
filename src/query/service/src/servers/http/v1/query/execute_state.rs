@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -22,6 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManagerRef;
@@ -147,6 +149,7 @@ pub struct ExecutorSessionState {
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Arc<Settings>,
     pub txn_manager: TxnManagerRef,
+    pub variables: HashMap<String, Scalar>,
 }
 
 impl ExecutorSessionState {
@@ -157,6 +160,7 @@ impl ExecutorSessionState {
             secondary_roles: session.get_secondary_roles(),
             settings: session.get_settings(),
             txn_manager: session.txn_mgr(),
+            variables: session.get_all_variables(),
         }
     }
 }

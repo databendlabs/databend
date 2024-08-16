@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -29,6 +30,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
@@ -39,7 +41,9 @@ use log::warn;
 use poem::web::Json;
 use poem::IntoResponse;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
 use super::HttpQueryContext;
 use super::RemoveReason;
@@ -182,6 +186,75 @@ pub struct ServerInfo {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct HttpSessionStateInternal {
+    /// value is JSON of Scalar
+    variables: Vec<(String, String)>,
+}
+
+impl HttpSessionStateInternal {
+    fn new(variables: &HashMap<String, Scalar>) -> Self {
+        let variables = variables
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    serde_json::to_string(&v).expect("fail to serialize Scalar"),
+                )
+            })
+            .collect();
+        Self { variables }
+    }
+
+    pub fn get_variables(&self) -> Result<HashMap<String, Scalar>> {
+        let mut vars = HashMap::with_capacity(self.variables.len());
+        for (k, v) in self.variables.iter() {
+            match serde_json::from_str::<Scalar>(v) {
+                Ok(s) => {
+                    vars.insert(k.to_string(), s);
+                }
+                Err(e) => {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "fail decode scalar from string '{v}', error: {e}"
+                    )));
+                }
+            }
+        }
+        Ok(vars)
+    }
+}
+
+fn serialize_as_json_string<S>(
+    value: &Option<HttpSessionStateInternal>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(complex_value) => {
+            let json_string =
+                serde_json::to_string(complex_value).map_err(serde::ser::Error::custom)?;
+            serializer.serialize_some(&json_string)
+        }
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_from_json_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<HttpSessionStateInternal>, D::Error>
+where D: Deserializer<'de> {
+    let json_string: Option<String> = Option::deserialize(deserializer)?;
+    match json_string {
+        Some(s) => {
+            let complex_value = serde_json::from_str(&s).map_err(serde::de::Error::custom)?;
+            Ok(Some(complex_value))
+        }
+        None => Ok(None),
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
@@ -189,6 +262,7 @@ pub struct HttpSessionConf {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_roles: Option<Vec<String>>,
+    // todo: remove this later
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -198,9 +272,19 @@ pub struct HttpSessionConf {
     // used to check if the session is still on the same server
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_server_info: Option<ServerInfo>,
-    // last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
+    /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
     #[serde(default)]
     pub last_query_ids: Vec<String>,
+    /// hide state not useful to clients
+    /// so client only need to know there is a String field `internal`,
+    /// which need to carry with session/conn
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        serialize_with = "serialize_as_json_string",
+        deserialize_with = "deserialize_from_json_string"
+    )]
+    pub internal: Option<HttpSessionStateInternal>,
 }
 
 impl HttpSessionConf {}
@@ -358,6 +442,11 @@ impl HttpQuery {
                                 Err(e)
                             }
                         })?;
+                }
+            }
+            if let Some(state) = &session_conf.internal {
+                if !state.variables.is_empty() {
+                    session.set_all_variables(state.get_variables()?)
                 }
             }
             try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
@@ -548,6 +637,11 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
+        let internal = if !session_state.variables.is_empty() {
+            Some(HttpSessionStateInternal::new(&session_state.variables))
+        } else {
+            None
+        };
         if txn_state != TxnState::AutoCommit
             && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && matches!(executor.state, ExecuteState::Stopped(_))
@@ -573,6 +667,7 @@ impl HttpQuery {
             txn_state: Some(txn_state),
             last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
             last_query_ids: vec![self.id.clone()],
+            internal,
         }
     }
 
