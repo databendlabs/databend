@@ -77,14 +77,14 @@ impl Binder {
         for option in required_options {
             if !options.contains_key(&option.to_string()) {
                 return Err(ErrorCode::MissingDictionaryOption(
-                   "The configuration is missing one or more required options. " +
-                   "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.".to_string(),
+                   "The configuration is missing one or more required options. ".to_owned() +
+                   &"Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.".to_string(),
                 ));
             }
         }
         if required_options.len() != options.len() {
             return Err(ErrorCode::UnsupportedDictionaryOption(
-                format!("The provided option '{}' is not recognized.", key),
+                format!("The provided options are not recognized."),
             ));
         }
 
@@ -95,15 +95,15 @@ impl Binder {
         for table_field in schema.fields.clone() {
             if !table_field.default_expr.is_none() || !table_field.computed_expr.is_none() {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
-                    "The table field configuration is invalid." +
-                    "Default expressions and computed expressions for the table fields should not be set.".to_string(),
+                    "The table field configuration is invalid. ".to_owned() +
+                    &"Default expressions and computed expressions for the table fields should not be set.".to_string(),
                 ));
             }
         }
         for column in columns {
             if column.comment.is_some() {
                 let column_id = schema.column_id_of(column.name.name.as_str())?;
-                field_comments.insert(column_id, column.comment?);
+                field_comments.insert(column_id, column.comment.unwrap_or_default());
             }
         }
         for primary_key in primary_keys {
