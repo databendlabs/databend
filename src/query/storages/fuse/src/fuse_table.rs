@@ -84,6 +84,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
+use log::info;
 use log::warn;
 use opendal::Operator;
 use uuid::Uuid;
@@ -147,6 +148,7 @@ impl FuseTable {
         };
 
         if need_refresh_schema {
+            info!("refreshing table schema {}", table_info.desc);
             let table = Self::do_create(table_info.as_ref().clone())?;
             let snapshot = table.read_table_snapshot().await?;
             let schema = snapshot
@@ -760,6 +762,10 @@ impl Table for FuseTable {
 
         let stats = match self.table_type {
             FuseTableType::Attached if require_fresh => {
+                info!(
+                    "refresh table statistics of attached table {}",
+                    self.table_info.desc
+                );
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
