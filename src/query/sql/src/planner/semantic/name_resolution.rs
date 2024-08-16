@@ -111,7 +111,6 @@ impl<'a> IdentifierNormalizer<'a> {
                 "invalid hole identifier {}, maybe you want to use ${}",
                 ident.name, ident.name,
             )));
-            return;
         }
 
         normalize_identifier(ident, self.ctx);
@@ -130,7 +129,6 @@ impl<'a> IdentifierNormalizer<'a> {
                     "invalid variable identifier {} in session",
                     ident.name
                 )));
-                return;
             }
         }
     }
