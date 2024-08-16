@@ -61,14 +61,16 @@ pub fn bind_table_args(
     let named_args: HashMap<String, Scalar> = named_args
         .into_iter()
         .map(|(name, scalar)| match scalar {
-            ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => Ok((name.name.clone(), value)),
+            ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
+                Ok((name.normalized_name(), value))
+            }
             _ => {
                 let expr = scalar.as_expr()?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
                 match expr {
                     databend_common_expression::Expr::Constant { scalar, .. } => {
-                        Ok((name.name.clone(), scalar))
+                        Ok((name.normalized_name(), scalar))
                     }
                     _ => Err(ErrorCode::Unimplemented(format!(
                         "Unsupported table argument type: {:?}",

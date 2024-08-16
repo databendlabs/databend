@@ -206,6 +206,7 @@ impl Binder {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { value, .. },
                     } => value.clone(),
+                    // use the original name for the key
                     MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                     MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {

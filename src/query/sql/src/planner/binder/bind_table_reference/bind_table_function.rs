@@ -458,7 +458,7 @@ fn parse_table_function_args(
         if !named_params.is_empty() {
             let invalid_names = named_params
                 .iter()
-                .map(|(name, _)| name.name.clone())
+                .map(|(name, _)| name.normalized_name())
                 .collect::<Vec<String>>()
                 .join(", ");
             return Err(ErrorCode::InvalidArgument(format!(

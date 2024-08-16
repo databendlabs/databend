@@ -110,6 +110,6 @@ fn test_normalize_identifiers_in_expr() {
 
     assert_eq!(
         format!("{:#}", expr),
-        "EXISTS (SELECT func(\"T\".a + 1) AS b)".to_string()
+        "EXISTS (SELECT func(\"T\".A + 1) AS B)".to_string()
     );
 }

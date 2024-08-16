@@ -51,7 +51,7 @@ impl UDFValidator {
 
     fn enter_lambda(&mut self, lambda: &Lambda) {
         self.lambda_parameters
-            .extend(lambda.params.iter().map(|v| v.name.clone()));
+            .extend(lambda.params.iter().map(|v| v.normalized_name()));
     }
 
     pub fn verify_definition_expr(&mut self, definition_expr: &Expr) -> Result<()> {

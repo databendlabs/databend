@@ -167,9 +167,9 @@ impl Binder {
         let mut window_specs = HashMap::new();
         let mut resolved_window_specs = HashMap::new();
         for window in window_list {
-            window_specs.insert(window.name.name.clone(), window.spec.clone());
+            window_specs.insert(window.name.normalized_name(), window.spec.clone());
             if window.spec.existing_window_name.is_none() {
-                resolved_window_specs.insert(window.name.name.clone(), window.spec.clone());
+                resolved_window_specs.insert(window.name.normalized_name(), window.spec.clone());
             }
         }
         Ok((window_specs, resolved_window_specs))

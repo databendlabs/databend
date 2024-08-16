@@ -238,7 +238,8 @@ impl BindContext {
         available_aliases: &[(String, ScalarExpr)],
         deny_column_reference: bool,
     ) -> Result<NameResolutionResult> {
-        let name = &column.name;
+        let normalized_name = column.normalized_name();
+        let name = &normalized_name;
 
         if deny_column_reference {
             let err = if column.is_quoted() {

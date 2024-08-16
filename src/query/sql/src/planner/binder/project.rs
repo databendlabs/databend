@@ -274,8 +274,8 @@ impl Binder {
                                 ..
                             },
                             None,
-                        ) => column.name.clone(),
-                        (_, Some(alias)) => alias.name.clone(),
+                        ) => column.normalized_name(),
+                        (_, Some(alias)) => alias.normalized_name(),
                         _ => {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
@@ -347,7 +347,7 @@ impl Binder {
         let mut to_exclude_columns = HashSet::new();
         if let Some(excludes) = excludes {
             for ex in excludes.iter() {
-                let exclude = ex.name.clone();
+                let exclude = ex.normalized_name();
                 if to_exclude_columns.contains(&exclude) {
                     return Err(ErrorCode::SemanticError(format!(
                         "Duplicate entry `{exclude}` in EXCLUDE list"
@@ -365,14 +365,14 @@ impl Binder {
         let mut table = None;
         if names.len() == 2 {
             if let Indirection::Identifier(ident) = &names[0] {
-                table = Some(ident.name.clone());
+                table = Some(ident.normalized_name());
             }
         } else if names.len() == 3 {
             if let Indirection::Identifier(ident) = &names[0] {
-                database = Some(ident.name.clone());
+                database = Some(ident.normalized_name());
             }
             if let Indirection::Identifier(ident) = &names[1] {
-                table = Some(ident.name.clone());
+                table = Some(ident.normalized_name());
             }
         }
 

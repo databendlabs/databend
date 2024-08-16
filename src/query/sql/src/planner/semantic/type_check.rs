@@ -1024,6 +1024,7 @@ impl<'a> TypeChecker<'a> {
                             }
                             value.clone()
                         }
+                        // use the original name for the key
                         MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                         _ => {
@@ -4411,16 +4412,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
                 None => (0..fields_type.len())
                     .map(|i| (i + 1).to_string())
                     .collect(),
-                Some(names) => names
-                    .iter()
-                    .map(|i| {
-                        if i.is_quoted() {
-                            i.name.clone()
-                        } else {
-                            i.name.to_lowercase()
-                        }
-                    })
-                    .collect(),
+                Some(names) => names.iter().map(|i| i.normalized_name()).collect(),
             },
             fields_type: fields_type
                 .iter()

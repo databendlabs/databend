@@ -219,9 +219,9 @@ impl Binder {
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
                 if idx < cte_info.columns_alias.len() {
-                    cols_alias[idx] = col_alias.name.clone();
+                    cols_alias[idx] = col_alias.normalized_name();
                 } else {
-                    cols_alias.push(col_alias.name.clone());
+                    cols_alias.push(col_alias.normalized_name());
                 }
             }
         }

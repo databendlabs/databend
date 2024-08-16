@@ -242,7 +242,7 @@ impl<'a> Binder {
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } => {
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
-                    database: database.name.clone(),
+                    database: database.normalized_name(),
                 }))
             }
             // Columns
@@ -731,13 +731,13 @@ impl<'a> Binder {
     ) -> (String, String, String) {
         let catalog_name = catalog
             .as_ref()
-            .map(|ident| ident.name.clone())
+            .map(|ident| ident.normalized_name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database_name = database
             .as_ref()
-            .map(|ident| ident.name.clone())
+            .map(|ident| ident.normalized_name())
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let object_name = object.name.clone();
+        let object_name = object.normalized_name();
         (catalog_name, database_name, object_name)
     }
 
