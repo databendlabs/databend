@@ -187,11 +187,11 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
     /// assert_eq!(cache.get(&2), Some(&"b"));
     /// ```
     fn insert(&mut self, k: K, v: V) -> Option<V> {
-        self.bytes += k.mem_bytes();
+        // self.bytes += k.mem_bytes();
         self.bytes += v.mem_bytes();
 
         if let Some(old) = self.map.get(&k) {
-            self.bytes -= k.mem_bytes();
+            // self.bytes -= k.mem_bytes();
             self.bytes -= old.mem_bytes();
         }
 
@@ -223,8 +223,8 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.map.remove_entry(k).map(|(k, v)| {
-            self.bytes -= k.mem_bytes();
+        self.map.remove_entry(k).map(|(_k, v)| {
+            // self.bytes -= k.mem_bytes();
             self.bytes -= v.mem_bytes();
             v
         })
@@ -248,7 +248,7 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
     #[inline]
     fn pop_by_policy(&mut self) -> Option<(K, V)> {
         self.map.pop_front().map(|(k, v)| {
-            self.bytes -= k.mem_bytes();
+            // self.bytes -= k.mem_bytes();
             self.bytes -= v.mem_bytes();
             (k, v)
         })

@@ -266,8 +266,8 @@ pub struct FileSize(pub u64);
 impl From<FileSize> for CacheValue<FileSize> {
     fn from(value: FileSize) -> Self {
         CacheValue {
+            mem_bytes: value.0 as usize,
             inner: Arc::new(value),
-            mem_bytes: 0,
         }
     }
 }

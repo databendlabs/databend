@@ -258,7 +258,7 @@ impl CacheManager {
     ) -> Option<InMemoryLruCache<V>> {
         match capacity {
             0 => None,
-            _ => Some(InMemoryLruCache::with_items_capacity(name.into(), 1)),
+            _ => Some(InMemoryLruCache::with_items_capacity(name.into(), capacity)),
         }
     }
 

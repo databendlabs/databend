@@ -197,8 +197,17 @@ impl CachesTable {
         columns.names.push(cache.name().to_string());
         columns.num_items.push(cache.len() as u64);
         columns.size.push(cache.bytes_size());
-        columns.capacity.push(cache.items_capacity());
-        columns.unit.push(cache.unit().to_string());
+
+        match cache.unit() {
+            Unit::Bytes => {
+                columns.unit.push(cache.unit().to_string());
+                columns.capacity.push(cache.bytes_capacity());
+            }
+            Unit::Count => {
+                columns.unit.push(cache.unit().to_string());
+                columns.capacity.push(cache.items_capacity());
+            }
+        }
 
         let access = get_cache_access_count(cache.name());
         let hit = get_cache_hit_count(cache.name());

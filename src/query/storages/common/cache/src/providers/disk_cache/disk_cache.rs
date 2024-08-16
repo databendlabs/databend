@@ -293,6 +293,7 @@ impl DiskCache {
                 });
             }
         }
+
         debug_assert!(self.cache.bytes_size() <= self.cache.bytes_capacity());
 
         let cache_key = self.cache_key(key.as_ref());

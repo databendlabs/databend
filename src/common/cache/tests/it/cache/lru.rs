@@ -39,7 +39,7 @@ struct TestValue(pub i32);
 
 impl MemSized for TestValue {
     fn mem_bytes(&self) -> usize {
-        0
+        1
     }
 }
 
