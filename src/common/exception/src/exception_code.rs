@@ -390,7 +390,8 @@ build_exceptions! {
     UnknownDictionaryId(3115),
     UnsupportedDictionaryOption(3116),
     UnsupportedDictionarySource(3117),
-    WrongDictionaryOption(3118),
+    MissingDictionaryOption(3118),
+    WrongDictionaryFieldExpr(3119),
 }
 
 // Storage errors [3001, 4000].

@@ -63,11 +63,11 @@ impl Binder {
 
         if source.to_lowercase() != "mysql".to_string() {
             return Err(ErrorCode::UnsupportedDictionarySource(format!(
-                "Source {} is not supported.",
+                "The specified source '{}' is not currently supported.",
                 source.to_lowercase(),
             )));
         }
-        // TODO:Authentication to connect to the MySQL database will be implemented later
+        // TODO: Authentication to connect to MySQL database will be implemented later
 
         let options: BTreeMap<String, String> = source_options
             .into_iter()
@@ -76,14 +76,15 @@ impl Binder {
         let required_options = ["host", "port", "username", "password", "db"];
         for option in required_options {
             if !options.contains_key(&option.to_string()) {
-                return Err(ErrorCode::WrongDictionaryOption(
-                    "The required key is missing".to_string(),
+                return Err(ErrorCode::MissingDictionaryOption(
+                   "The configuration is missing one or more required options. " +
+                   "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.".to_string(),
                 ));
             }
         }
         if required_options.len() != options.len() {
             return Err(ErrorCode::UnsupportedDictionaryOption(
-                format!("The option '{}' is not supported", key),
+                format!("The provided option '{}' is not recognized.", key),
             ));
         }
 
@@ -92,14 +93,22 @@ impl Binder {
 
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
         for table_field in schema.fields.clone() {
-            if table_field.default_expr.is_none() && table_field.computed_expr.is_none() {
-                let comment_id = schema.column_id_of(table_field.name.as_str())?;
-                field_comments.insert(comment_id, columns[comment_id as usize].comment?);
-                primary_column_ids.push(schema.column_id_of_index(comment_id)?);
-            } else {
-                
-                // TODO: error
+            if !table_field.default_expr.is_none() || !table_field.computed_expr.is_none() {
+                return Err(ErrorCode::WrongDictionaryFieldExpr(
+                    "The table field configuration is invalid." +
+                    "Default expressions and computed expressions for the table fields should not be set.".to_string(),
+                ));
             }
+        }
+        for column in columns {
+            if column.comment.is_some() {
+                let column_id = schema.column_id_of(column.name.name.as_str())?;
+                field_comments.insert(column_id, column.comment?);
+            }
+        }
+        for primary_key in primary_keys {
+            let pk_id = schema.column_id_of(primary_key.name.as_str())?;
+            primary_column_ids.push(pk_id);
         }
 
         let comment = comment.clone().unwrap_or("".to_string());
