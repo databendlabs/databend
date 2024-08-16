@@ -16608,7 +16608,7 @@ Query(
                                 column: Name(
                                     Identifier {
                                         span: Some(
-                                            18..22,
+                                            7..23,
                                         ),
                                         name: "abc",
                                         quote: None,

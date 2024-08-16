@@ -182,7 +182,7 @@ pub enum ExprElement {
     UnaryOp {
         op: UnaryOperator,
     },
-    VariableAccess(Identifier),
+    VariableAccess(String),
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
@@ -650,7 +650,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     name: Identifier::from_name(transform_span(elem.span.tokens), "getvariable"),
                     args: vec![Expr::Literal {
                         span: transform_span(elem.span.tokens),
-                        value: Literal::String(name.to_string()),
+                        value: Literal::String(name),
                     }],
                     params: vec![],
                     window: None,

@@ -168,9 +168,9 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
 fn identifier_hole(i: Input) -> IResult<Identifier> {
     check_template_mode(map(
         consumed(rule! {
-            IDENTIFIER ~ ^"(" ~ ^#template_hole ~ ^")"
+            IDENTIFIER ~ ^"(" ~ #template_hole ~ ^")"
         }),
-        |(span, (_, _, (_, name), _))| Identifier {
+        |(span, (_, _, name, _))| Identifier {
             span: transform_span(span.tokens),
             name,
             quote: None,
@@ -182,13 +182,13 @@ fn identifier_hole(i: Input) -> IResult<Identifier> {
 
 fn identifier_variable(i: Input) -> IResult<Identifier> {
     map(
-        rule! {
+        consumed(rule! {
             IDENTIFIER ~ ^"(" ~ ^#variable_ident ~ ^")"
-        },
-        |(_, _, t, _)| Identifier {
-            span: t.span,
-            name: t.name,
-            quote: t.quote,
+        }),
+        |(span, (_, _, name, _))| Identifier {
+            span: transform_span(span.tokens),
+            name,
+            quote: None,
             is_hole: false,
             is_variable: true,
         },
@@ -202,8 +202,8 @@ fn non_reserved_identifier(
         rule!(
             #plain_identifier(is_reserved_keyword)
             | #quoted_identifier
-            | #identifier_variable
             | #identifier_hole
+            | #identifier_variable
         )(i)
     }
 }
@@ -296,11 +296,11 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
     ))(i)
 }
 
-pub fn variable_ident(i: Input) -> IResult<Identifier> {
-    map(rule! { VariableAccess }, |token| {
-        let name = token.text().to_string();
-        Identifier::from_name(Some(token.span), &name[1..])
-    })(i)
+pub fn variable_ident(i: Input) -> IResult<String> {
+    map(
+        rule! { "$" ~ ^#plain_identifier(|token| token.is_reserved_ident(false)) },
+        |(_, name)| name.name,
+    )(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -583,12 +583,12 @@ where F: nom::Parser<Input<'a>, O, Error<'a>> {
     }
 }
 
-pub fn template_hole(i: Input) -> IResult<(Span, String)> {
+pub fn template_hole(i: Input) -> IResult<String> {
     check_template_mode(map(
-        consumed(rule! {
+        rule! {
             ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
-        }),
-        |(span, (_, ident))| (transform_span(span.tokens), ident.name),
+        },
+        |(_, name)| name.name,
     ))(i)
 }
 
