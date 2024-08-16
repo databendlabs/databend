@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -27,6 +29,8 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::Bound;
+use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
@@ -61,6 +65,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -79,6 +84,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
+use log::info;
 use log::warn;
 use opendal::Operator;
 use uuid::Uuid;
@@ -86,11 +92,14 @@ use uuid::Uuid;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
+use crate::statistics::reduce_block_statistics;
+use crate::statistics::Trim;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
@@ -139,6 +148,7 @@ impl FuseTable {
         };
 
         if need_refresh_schema {
+            info!("refreshing table schema {}", table_info.desc);
             let table = Self::do_create(table_info.as_ref().clone())?;
             let snapshot = table.read_table_snapshot().await?;
             let schema = snapshot
@@ -752,6 +762,10 @@ impl Table for FuseTable {
 
         let stats = match self.table_type {
             FuseTableType::Attached if require_fresh => {
+                info!(
+                    "refresh table statistics of attached table {}",
+                    self.table_info.desc
+                );
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
@@ -810,6 +824,83 @@ impl Table for FuseTable {
             FuseTableColumnStatisticsProvider::default()
         };
         Ok(Box::new(provider))
+    }
+
+    #[async_backtrace::framed]
+    async fn accurate_columns_ranges(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        column_ids: &[ColumnId],
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
+        if column_ids.is_empty() {
+            return Ok(Some(HashMap::new()));
+        }
+
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some(HashMap::new()));
+        };
+
+        let segment_locations = &snapshot.segments;
+        let num_segments = snapshot.segments.len();
+
+        if num_segments == 0 {
+            return Ok(Some(HashMap::new()));
+        }
+
+        let column_ids: HashSet<&ColumnId, RandomState> = HashSet::from_iter(column_ids);
+
+        let schema = self.schema();
+        let num_fields = schema.fields.len();
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema);
+        let chunk_size = std::cmp::min(
+            ctx.get_settings().get_max_threads()? as usize * 4,
+            num_segments,
+        )
+        .max(1);
+
+        ctx.set_status_info(&format!(
+            "processing {} segments, chunk size {}",
+            num_segments, chunk_size
+        ));
+
+        // Fold column ranges of segments chunk by chunk
+        let mut reduced = HashMap::with_capacity(num_fields);
+
+        for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
+            let segments = segments_io
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .await?;
+            let mut partial_col_stats = Vec::with_capacity(chunk_size);
+            // 1. Carry the previously reduced ranges
+            partial_col_stats.push(reduced);
+            // 2. Append ranges of this chunk
+            for compacted_seg in segments.into_iter() {
+                let segment = compacted_seg?;
+                let mut cols_stats = segment.summary.col_stats.clone();
+                cols_stats.retain(|k, _| column_ids.contains(k));
+                partial_col_stats.push(cols_stats);
+            }
+            // 3. Reduces them
+            reduced = reduce_block_statistics(&partial_col_stats);
+            ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
+        }
+
+        let r = reduced
+            .into_iter()
+            .map(|(k, v)| {
+                (k, ColumnRange {
+                    min: Bound {
+                        may_be_truncated: v.min.may_be_trimmed(),
+                        value: v.min,
+                    },
+                    max: Bound {
+                        may_be_truncated: v.max.may_be_trimmed(),
+                        value: v.max,
+                    },
+                })
+            })
+            .collect();
+        Ok(Some(r))
     }
 
     #[fastrace::trace]
@@ -943,5 +1034,9 @@ impl Table for FuseTable {
 
     fn is_read_only(&self) -> bool {
         self.table_type.is_readonly()
+    }
+
+    fn use_own_sample_block(&self) -> bool {
+        true
     }
 }
