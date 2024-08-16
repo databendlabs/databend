@@ -40,7 +40,7 @@ use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
-    desc_to_id: HashMap<String, u64>,
+    name_to_id: HashMap<String, u64>,
     id_to_table: HashMap<u64, TempTable>,
     next_id: u64,
 }
@@ -56,7 +56,7 @@ pub struct TempTable {
 impl TempTblMgr {
     pub fn init() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(TempTblMgr {
-            desc_to_id: HashMap::new(),
+            name_to_id: HashMap::new(),
             id_to_table: HashMap::new(),
             next_id: 0,
         }))
@@ -65,17 +65,11 @@ impl TempTblMgr {
     pub fn create_table(&mut self, req: CreateTableReq) -> Result<CreateTableReply> {
         let CreateTableReq {
             create_option,
-            mut name_ident,
+            name_ident,
             table_meta,
             as_dropped,
         } = req;
-        let orphan_table_name = match as_dropped {
-            true => {
-                name_ident.table_name = format!("orphan@{}", name_ident.table_name);
-                Some(name_ident.table_name.clone())
-            }
-            false => None,
-        };
+        let orphan_table_name = as_dropped.then(|| format!("orphan@{}", name_ident.table_name));
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
             return Err(ErrorCode::Internal(format!(
                 "Database id not set in table options"
@@ -83,32 +77,24 @@ impl TempTblMgr {
         };
         let db_id = db_id.parse::<u64>()?;
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
-        let new_table = match (self.desc_to_id.entry(desc.clone()), create_option) {
-            (Entry::Occupied(_), CreateOption::Create) => {
+        let table_id = self.next_id;
+        let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
+            (true, CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
                     desc
                 )));
             }
-            (Entry::Occupied(mut e), CreateOption::CreateOrReplace) => {
-                let table_id = self.next_id;
-                e.insert(table_id);
+            (true, CreateOption::CreateIfNotExists) => false,
+            _ => {
+                let desc = orphan_table_name
+                    .as_ref()
+                    .map(|o| format!("{}.{}", name_ident.db_name, o))
+                    .unwrap_or(desc);
+                self.name_to_id.insert(desc, table_id);
                 self.id_to_table.insert(table_id, TempTable {
                     db_name: name_ident.db_name,
-                    table_name: name_ident.table_name,
-                    meta: table_meta,
-                    _copied_files: BTreeMap::new(),
-                });
-                self.next_id += 1;
-                true
-            }
-            (Entry::Occupied(_), CreateOption::CreateIfNotExists) => false,
-            (Entry::Vacant(e), _) => {
-                let table_id = self.next_id;
-                e.insert(table_id);
-                self.id_to_table.insert(table_id, TempTable {
-                    db_name: name_ident.db_name,
-                    table_name: name_ident.table_name,
+                    table_name: orphan_table_name.clone().unwrap_or(name_ident.table_name),
                     meta: table_meta,
                     _copied_files: BTreeMap::new(),
                 });
@@ -117,7 +103,7 @@ impl TempTblMgr {
             }
         };
         Ok(CreateTableReply {
-            table_id: 0,
+            table_id,
             table_id_seq: Some(0),
             db_id,
             new_table,
@@ -137,9 +123,12 @@ impl TempTblMgr {
             req.orphan_table_name.as_ref().unwrap()
         );
         let desc = format!("{}.{}", req.name_ident.db_name, req.name_ident.table_name);
-        match self.desc_to_id.remove(&orphan_desc) {
+        match self.name_to_id.remove(&orphan_desc) {
             Some(id) => {
-                self.desc_to_id.insert(desc, id);
+                self.name_to_id.insert(desc, id);
+                let table = self.id_to_table.get_mut(&id).unwrap();
+                table.db_name = req.name_ident.db_name.clone();
+                table.table_name = req.name_ident.table_name.clone();
                 Ok(Some(CommitTableMetaReply {}))
             }
             None => Ok(None),
@@ -154,10 +143,10 @@ impl TempTblMgr {
             new_table_name,
         } = req;
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
-        match self.desc_to_id.remove(&desc) {
+        match self.name_to_id.remove(&desc) {
             Some(id) => {
                 let new_desc = format!("{}.{}", new_db_name, new_table_name);
-                self.desc_to_id.insert(new_desc, id);
+                self.name_to_id.insert(new_desc, id);
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = new_db_name.clone();
                 table.table_name = new_table_name.clone();
@@ -180,12 +169,12 @@ impl TempTblMgr {
 
     pub fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool {
         let desc = format!("{}.{}", database_name, table_name);
-        self.desc_to_id.contains_key(&desc)
+        self.name_to_id.contains_key(&desc)
     }
 
     pub fn get_table(&self, database_name: &str, table_name: &str) -> Result<Option<TableInfo>> {
         let desc = format!("{}.{}", database_name, table_name);
-        let id = self.desc_to_id.get(&desc);
+        let id = self.name_to_id.get(&desc);
         let Some(id) = id else {
             return Ok(None);
         };
@@ -230,7 +219,7 @@ pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Resu
                 let dir = parse_storage_prefix(&e.get().meta.options, tb_id)?;
                 let table = e.remove();
                 let desc = format!("{}.{}", table.db_name, table.table_name);
-                guard.desc_to_id.remove(&desc).ok_or_else(|| {
+                guard.name_to_id.remove(&desc).ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "Table not found in temp table manager {:?}, drop table request: {:?}",
                         guard, req

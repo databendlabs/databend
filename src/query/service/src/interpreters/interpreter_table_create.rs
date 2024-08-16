@@ -194,6 +194,8 @@ impl CreateTableInterpreter {
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
         let reply = catalog.create_table(req.clone()).await?;
+        println!("create table as select");
+        println!("{:?}", self.ctx.session_state().temp_tbl_mgr);
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
@@ -288,9 +290,11 @@ impl CreateTableInterpreter {
         //
         // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
+        let ctx = self.ctx.clone();
         pipeline
             .main_pipeline
             .lift_on_finished(move |info: &ExecutionInfo| {
+                println!("{:?}", ctx.session_state().temp_tbl_mgr);
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
                 if info.res.is_ok() {
@@ -317,6 +321,7 @@ impl CreateTableInterpreter {
                         info!("create {} as select failed. {:?}", qualified_table_name, e);
                         e
                     })?;
+                    println!("{:?}", ctx.session_state().temp_tbl_mgr);
                 }
 
                 Ok(())

@@ -1317,6 +1317,10 @@ impl TableContext for QueryContext {
             return Ok(None);
         }
 
+        if tbl.is_temp() {
+            return Ok(None);
+        }
+
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         match lock_opt {
