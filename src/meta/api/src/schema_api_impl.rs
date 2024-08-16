@@ -5234,7 +5234,7 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     TxnOp::put_with_ttl(
         deduplicated_label,
         1_i8.to_le_bytes().to_vec(),
-        Some(86400_000),
+        Some(86400 * 1000),
     )
 }
 
