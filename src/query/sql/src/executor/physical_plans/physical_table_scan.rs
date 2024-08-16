@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::SampleLevel;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
@@ -40,6 +41,9 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
+use rand::thread_rng;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
@@ -234,6 +238,28 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
+        if let Some(sample) = scan.sample
+            && !table.use_own_sample_block()
+        {
+            match sample.sample_level {
+                SampleLevel::ROW => {}
+                SampleLevel::BLOCK => {
+                    let probability = sample.sample_probability(None);
+                    if let Some(probability) = probability {
+                        let original_parts = source.parts.partitions.len();
+                        let mut sample_parts = Vec::with_capacity(original_parts);
+                        let mut rng = thread_rng();
+                        let bernoulli = Bernoulli::new(probability).unwrap();
+                        for part in source.parts.partitions.iter() {
+                            if bernoulli.sample(&mut rng) {
+                                sample_parts.push(part.clone());
+                            }
+                        }
+                        source.parts.partitions = sample_parts;
+                    }
+                }
+            }
+        }
         source.table_index = scan.table_index;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
@@ -504,6 +530,7 @@ impl PhysicalPlanBuilder {
             agg_index: None,
             change_type: scan.change_type.clone(),
             inverted_index: scan.inverted_index.clone(),
+            sample: scan.sample.clone(),
         })
     }
 

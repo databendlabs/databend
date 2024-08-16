@@ -380,6 +380,7 @@ impl Compiler {
                     }],
                     named_params: vec![],
                     alias: None,
+                    sample: None,
                 }],
                 selection: None,
                 group_by: None,

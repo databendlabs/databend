@@ -413,6 +413,10 @@ pub trait Table: Sync + Send {
     fn is_read_only(&self) -> bool {
         false
     }
+
+    fn use_own_sample_block(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
