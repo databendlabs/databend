@@ -93,18 +93,6 @@ impl DiskCache {
         self.cache.capacity()
     }
 
-    pub fn set_capacity(&mut self, capacity: u64) {
-        if capacity <= self.cache.capacity() {
-            info!(
-                "shrinking disk cache capacity: current {}, new capacity {}, ignored",
-                capacity,
-                self.cache.capacity()
-            );
-        } else {
-            self.cache.set_capacity(capacity)
-        }
-    }
-
     /// Return the path in which the cache is stored.
     pub fn path(&self) -> &Path {
         self.root.as_path()
@@ -194,7 +182,7 @@ impl DiskCache {
                                 disk_cache_opt
                                     .expect("unreachable, disk cache should be there")
                                     .cache
-                                    .put(cache_key, size);
+                                    .insert(cache_key, size);
                             }
                             let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
                             if count % 1000 == 0 {
@@ -314,7 +302,7 @@ impl DiskCache {
             bufs.push(IoSlice::new(slick));
         }
         f.write_all_vectored(&mut bufs)?;
-        self.cache.put(cache_key.0, bytes_len);
+        self.cache.insert(cache_key.0, bytes_len);
         if self.sync_data {
             f.sync_data()?;
         }

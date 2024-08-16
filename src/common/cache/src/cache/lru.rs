@@ -65,6 +65,7 @@ pub struct LruCache<K: Eq + Hash, V, M: CountableMeter<K, V> = Count> {
     map: LinkedHashMap<K, V>,
     current_measure: M::Measure,
     max_capacity: u64,
+    max_items: usize,
     // weight: usize,
     meter: M,
 }
@@ -83,6 +84,7 @@ impl<K: Eq + Hash, V> LruCache<K, V> {
             map: LinkedHashMap::new(),
             current_measure: (),
             max_capacity: capacity,
+            max_items: usize::MAX,
             meter: Count,
         }
     }
@@ -127,6 +129,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> LruCache<K, V, M> {
             map: LinkedHashMap::new(),
             current_measure: Default::default(),
             max_capacity: capacity,
+            max_items: usize::MAX,
             meter,
         }
     }
@@ -184,7 +187,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
     /// assert_eq!(cache.peek(&1), Some(&"a"));
     /// assert_eq!(cache.peek(&2), Some(&"b"));
     /// ```
-    fn peek<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
+    fn peek<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
@@ -226,7 +229,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
     /// assert_eq!(cache.get(&1), Some(&"a"));
     /// assert_eq!(cache.get(&2), Some(&"b"));
     /// ```
-    fn put(&mut self, k: K, v: V) -> Option<V> {
+    fn insert(&mut self, k: K, v: V) -> Option<V> {
         let new_size = self.meter.measure(&k, &v);
         self.current_measure = self.meter.add(self.current_measure, new_size);
         if let Some(old) = self.map.get(&k) {
@@ -235,7 +238,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
                 .sub(self.current_measure, self.meter.measure(&k, old));
         }
         let old_val = self.map.insert(k, v);
-        while self.size() > self.capacity() {
+        while self.size() > self.capacity() || self.map.len() > self.max_items {
             self.pop_by_policy();
         }
         old_val
@@ -338,47 +341,6 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
         self.max_capacity
     }
 
-    /// Sets the size of the key-value pairs the cache can hold, as measured by the `Meter` used by
-    /// the cache.
-    ///
-    /// Removes least-recently-used key-value pairs if necessary.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache};
-    ///
-    /// let mut cache = LruCache::new(2);
-    ///
-    /// cache.put(1, "a");
-    /// cache.put(2, "b");
-    /// cache.put(3, "c");
-    ///
-    /// assert_eq!(cache.get(&1), None);
-    /// assert_eq!(cache.get(&2), Some(&"b"));
-    /// assert_eq!(cache.get(&3), Some(&"c"));
-    ///
-    /// cache.set_capacity(3);
-    /// cache.put(1, "a");
-    /// cache.put(2, "b");
-    ///
-    /// assert_eq!(cache.get(&1), Some(&"a"));
-    /// assert_eq!(cache.get(&2), Some(&"b"));
-    /// assert_eq!(cache.get(&3), Some(&"c"));
-    ///
-    /// cache.set_capacity(1);
-    ///
-    /// assert_eq!(cache.get(&1), None);
-    /// assert_eq!(cache.get(&2), None);
-    /// assert_eq!(cache.get(&3), Some(&"c"));
-    /// ```
-    fn set_capacity(&mut self, capacity: u64) {
-        while self.size() > capacity {
-            self.pop_by_policy();
-        }
-        self.max_capacity = capacity;
-    }
-
     /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
     /// by the cache.
     fn size(&self) -> u64 {
@@ -456,7 +418,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> LruCache<K, V, M> {
 impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Extend<(K, V)> for LruCache<K, V, M> {
     fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
         for (k, v) in iter {
-            self.put(k, v);
+            self.insert(k, v);
         }
     }
 }

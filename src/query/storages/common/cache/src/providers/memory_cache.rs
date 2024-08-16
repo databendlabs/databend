@@ -22,13 +22,13 @@ use parking_lot::RwLock;
 
 use crate::Unit;
 
-pub struct InMemoryItemCacheHolder<V, M: CountableMeter<String, Arc<V>> = Count> {
+pub struct InMemoryLruCache<V, M: CountableMeter<String, Arc<V>> = Count> {
     unit: Unit,
     name: String,
     inner: Arc<RwLock<LruCache<String, Arc<V>, M>>>,
 }
 
-impl<V, M: CountableMeter<String, Arc<V>>> Clone for InMemoryItemCacheHolder<V, M> {
+impl<V, M: CountableMeter<String, Arc<V>>> Clone for InMemoryLruCache<V, M> {
     fn clone(&self) -> Self {
         Self {
             unit: self.unit,
@@ -38,7 +38,7 @@ impl<V, M: CountableMeter<String, Arc<V>>> Clone for InMemoryItemCacheHolder<V, 
     }
 }
 
-impl<V, M: CountableMeter<String, Arc<V>>> InMemoryItemCacheHolder<V, M> {
+impl<V, M: CountableMeter<String, Arc<V>>> InMemoryLruCache<V, M> {
     pub fn create(name: String, unit: Unit, cache: LruCache<String, Arc<V>, M>) -> Self {
         Self {
             unit,
@@ -69,7 +69,7 @@ mod impls {
     use crate::cache::CacheAccessor;
 
     // Wrap a Cache with RwLock, and impl CacheAccessor for it
-    impl<V, M: CountableMeter<String, Arc<V>>> CacheAccessor for InMemoryItemCacheHolder<V, M> {
+    impl<V, M: CountableMeter<String, Arc<V>>> CacheAccessor for InMemoryLruCache<V, M> {
         type V = V;
         type M = M;
 
@@ -103,7 +103,7 @@ mod impls {
 
         fn put(&self, k: String, v: Arc<V>) {
             let mut guard = self.inner.write();
-            guard.put(k, v);
+            guard.insert(k, v);
         }
 
         fn evict(&self, k: &str) -> bool {

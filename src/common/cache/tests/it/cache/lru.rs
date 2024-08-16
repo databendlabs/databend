@@ -21,8 +21,8 @@ use databend_common_cache::Meter;
 #[test]
 fn test_put_and_get() {
     let mut cache = LruCache::new(2);
-    cache.put(1, 10);
-    cache.put(2, 20);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
     assert_eq!(cache.get(&1), Some(&10));
     assert_eq!(cache.get(&2), Some(&20));
     assert_eq!(cache.len(), 2);
@@ -32,8 +32,8 @@ fn test_put_and_get() {
 #[test]
 fn test_put_update() {
     let mut cache = LruCache::new(1);
-    cache.put("1", 10);
-    cache.put("1", 19);
+    cache.insert("1", 10);
+    cache.insert("1", 19);
     assert_eq!(cache.get("1"), Some(&19));
     assert_eq!(cache.len(), 1);
 }
@@ -41,27 +41,27 @@ fn test_put_update() {
 #[test]
 fn test_contains() {
     let mut cache = LruCache::new(1);
-    cache.put("1", 10);
+    cache.insert("1", 10);
     assert!(cache.contains("1"));
 }
 
 #[test]
 fn test_expire_lru() {
     let mut cache = LruCache::new(2);
-    cache.put("foo1", "bar1");
-    cache.put("foo2", "bar2");
-    cache.put("foo3", "bar3");
+    cache.insert("foo1", "bar1");
+    cache.insert("foo2", "bar2");
+    cache.insert("foo3", "bar3");
     assert!(cache.get("foo1").is_none());
-    cache.put("foo2", "bar2update");
-    cache.put("foo4", "bar4");
+    cache.insert("foo2", "bar2update");
+    cache.insert("foo4", "bar4");
     assert!(cache.get("foo3").is_none());
 }
 
 #[test]
 fn test_pop() {
     let mut cache = LruCache::new(2);
-    cache.put(1, 10);
-    cache.put(2, 20);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
     assert_eq!(cache.len(), 2);
     let opt1 = cache.pop(&1);
     assert!(opt1.is_some());
@@ -74,8 +74,8 @@ fn test_pop() {
 fn test_change_capacity() {
     let mut cache = LruCache::new(2);
     assert_eq!(cache.capacity(), 2);
-    cache.put(1, 10);
-    cache.put(2, 20);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
     cache.set_capacity(1);
     assert!(cache.get(&1).is_none());
     assert_eq!(cache.capacity(), 1);
@@ -84,13 +84,13 @@ fn test_change_capacity() {
 #[test]
 fn test_debug() {
     let mut cache = LruCache::new(3);
-    cache.put(1, 10);
-    cache.put(2, 20);
-    cache.put(3, 30);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
+    cache.insert(3, 30);
     assert_eq!(format!("{:?}", cache), "{3: 30, 2: 20, 1: 10}");
-    cache.put(2, 22);
+    cache.insert(2, 22);
     assert_eq!(format!("{:?}", cache), "{2: 22, 3: 30, 1: 10}");
-    cache.put(6, 60);
+    cache.insert(6, 60);
     assert_eq!(format!("{:?}", cache), "{6: 60, 2: 22, 3: 30}");
     cache.get(&3);
     assert_eq!(format!("{:?}", cache), "{3: 30, 6: 60, 2: 22}");
@@ -101,18 +101,18 @@ fn test_debug() {
 #[test]
 fn test_remove() {
     let mut cache = LruCache::new(3);
-    cache.put(1, 10);
-    cache.put(2, 20);
-    cache.put(3, 30);
-    cache.put(4, 40);
-    cache.put(5, 50);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
+    cache.insert(3, 30);
+    cache.insert(4, 40);
+    cache.insert(5, 50);
     cache.pop(&3);
     cache.pop(&4);
     assert!(cache.get(&3).is_none());
     assert!(cache.get(&4).is_none());
-    cache.put(6, 60);
-    cache.put(7, 70);
-    cache.put(8, 80);
+    cache.insert(6, 60);
+    cache.insert(7, 70);
+    cache.insert(8, 80);
     assert!(cache.get(&5).is_none());
     assert_eq!(cache.get(&6), Some(&60));
     assert_eq!(cache.get(&7), Some(&70));
@@ -122,8 +122,8 @@ fn test_remove() {
 #[test]
 fn test_clear() {
     let mut cache = LruCache::new(2);
-    cache.put(1, 10);
-    cache.put(2, 20);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
     cache.clear();
     assert!(cache.get(&1).is_none());
     assert!(cache.get(&2).is_none());
@@ -133,11 +133,11 @@ fn test_clear() {
 #[test]
 fn test_iter() {
     let mut cache = LruCache::new(3);
-    cache.put(1, 10);
-    cache.put(2, 20);
-    cache.put(3, 30);
-    cache.put(4, 40);
-    cache.put(5, 50);
+    cache.insert(1, 10);
+    cache.insert(2, 20);
+    cache.insert(3, 30);
+    cache.insert(4, 40);
+    cache.insert(5, 50);
     assert_eq!(cache.iter().collect::<Vec<_>>(), [
         (&3, &30),
         (&4, &40),
@@ -173,14 +173,14 @@ impl<K, T> Meter<K, Vec<T>> for VecLen {
 #[test]
 fn test_metered_cache() {
     let mut cache = LruCache::with_meter(5, VecLen);
-    cache.put("foo1", vec![1, 2]);
+    cache.insert("foo1", vec![1, 2]);
     assert_eq!(cache.size(), 2);
-    cache.put("foo2", vec![3, 4]);
-    cache.put("foo3", vec![5, 6]);
+    cache.insert("foo2", vec![3, 4]);
+    cache.insert("foo3", vec![5, 6]);
     assert_eq!(cache.size(), 4);
     assert!(!cache.contains("foo1"));
-    cache.put("foo2", vec![7, 8]);
-    cache.put("foo4", vec![9, 10]);
+    cache.insert("foo2", vec![7, 8]);
+    cache.insert("foo4", vec![9, 10]);
     assert_eq!(cache.size(), 4);
     assert!(!cache.contains("foo3"));
     assert_eq!(cache.get("foo2"), Some(&vec![7, 8]));
@@ -189,10 +189,10 @@ fn test_metered_cache() {
 #[test]
 fn test_metered_cache_reinsert_larger() {
     let mut cache = LruCache::with_meter(5, VecLen);
-    cache.put("foo1", vec![1, 2]);
-    cache.put("foo2", vec![3, 4]);
+    cache.insert("foo1", vec![1, 2]);
+    cache.insert("foo2", vec![3, 4]);
     assert_eq!(cache.size(), 4);
-    cache.put("foo2", vec![5, 6, 7, 8]);
+    cache.insert("foo2", vec![5, 6, 7, 8]);
     assert_eq!(cache.size(), 4);
     assert!(!cache.contains("foo1"));
 }
@@ -200,8 +200,8 @@ fn test_metered_cache_reinsert_larger() {
 #[test]
 fn test_metered_cache_oversize() {
     let mut cache = LruCache::with_meter(2, VecLen);
-    cache.put("foo1", vec![1, 2]);
-    cache.put("foo2", vec![3, 4, 5, 6]);
+    cache.insert("foo1", vec![1, 2]);
+    cache.insert("foo2", vec![3, 4, 5, 6]);
     assert_eq!(cache.size(), 0);
     assert!(!cache.contains("foo1"));
     assert!(!cache.contains("foo2"));

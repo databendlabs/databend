@@ -21,7 +21,7 @@ use databend_common_metrics::cache::*;
 
 use super::loader::LoadParams;
 use crate::CacheAccessor;
-use crate::InMemoryItemCacheHolder;
+use crate::InMemoryLruCache;
 use crate::Loader;
 
 /// A cache-aware reader
@@ -30,12 +30,12 @@ pub struct CachedReader<L, C> {
     loader: L,
 }
 
-impl<V, L, M> CachedReader<L, InMemoryItemCacheHolder<V, M>>
+impl<V, L, M> CachedReader<L, InMemoryLruCache<V, M>>
 where
     L: Loader<V> + Sync,
     M: CountableMeter<String, Arc<V>>,
 {
-    pub fn new(cache: Option<InMemoryItemCacheHolder<V, M>>, loader: L) -> Self {
+    pub fn new(cache: Option<InMemoryLruCache<V, M>>, loader: L) -> Self {
         Self { cache, loader }
     }
 

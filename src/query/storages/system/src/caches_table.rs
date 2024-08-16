@@ -33,7 +33,7 @@ use databend_common_metrics::cache::get_cache_miss_count;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CountableMeter;
-use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::Unit;
 use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
 use databend_storages_common_cache_manager::CacheManager;
@@ -189,7 +189,7 @@ impl CachesTable {
     }
 
     fn append_row<V, M: CountableMeter<String, Arc<V>>>(
-        cache: &InMemoryItemCacheHolder<V, M>,
+        cache: &InMemoryLruCache<V, M>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {

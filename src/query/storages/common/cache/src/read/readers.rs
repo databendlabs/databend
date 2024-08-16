@@ -15,7 +15,7 @@
 use databend_common_cache::Count;
 
 use crate::read::cached_reader::CachedReader;
-use crate::InMemoryItemCacheHolder;
+use crate::InMemoryLruCache;
 
-pub type InMemoryItemCacheReader<T, L, M = Count> = CachedReader<L, InMemoryItemCacheHolder<T, M>>;
-pub type InMemoryCacheReader<T, L, M> = CachedReader<L, InMemoryItemCacheHolder<T, M>>;
+pub type InMemoryItemCacheReader<T, L, M = Count> = CachedReader<L, InMemoryLruCache<T, M>>;
+pub type InMemoryCacheReader<T, L, M> = CachedReader<L, InMemoryLruCache<T, M>>;

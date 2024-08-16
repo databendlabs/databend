@@ -22,8 +22,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::InMemoryItemCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
-use databend_storages_common_cache_manager::CacheManager;
-use databend_storages_common_cache_manager::CompactSegmentInfoMeter;
+use databend_storages_common_cache_manager::{CacheManager, MemSizedMeter};
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -50,7 +49,7 @@ pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrap
 pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     CompactSegmentInfo,
     LoaderWrapper<(Operator, TableSchemaRef)>,
-    CompactSegmentInfoMeter,
+    MemSizedMeter,
 >;
 pub type InvertedIndexMetaReader =
     InMemoryItemCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;

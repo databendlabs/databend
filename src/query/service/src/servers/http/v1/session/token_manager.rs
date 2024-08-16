@@ -142,7 +142,7 @@ impl TokenManager {
         };
         self.refresh_tokens
             .write()
-            .put(refresh_token_hash.clone(), ());
+            .insert(refresh_token_hash.clone(), ());
 
         claim.expire_at_in_secs = (now + SESSION_TOKEN_VALIDITY).as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
@@ -161,7 +161,7 @@ impl TokenManager {
                 false,
             )
             .await?;
-        self.session_tokens.write().put(session_token_hash, ());
+        self.session_tokens.write().insert(session_token_hash, ());
 
         Ok((client_session_id, TokenPair {
             refresh: refresh_token,
@@ -196,7 +196,7 @@ impl TokenManager {
                 .get_token(&hash)
                 .await?
             {
-                Some(info) if info.token_type == token_type => cache.write().put(hash, ()),
+                Some(info) if info.token_type == token_type => cache.write().insert(hash, ()),
                 _ => {
                     return match token_type {
                         TokenType::Refresh => {

@@ -35,7 +35,7 @@ use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::Unit;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -177,7 +177,7 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryItemCacheHolder::create(
+    let cache = InMemoryLruCache::create(
         String::from(""),
         Unit::Count,
         LruCache::new(cache_number as u64),
@@ -224,7 +224,7 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryItemCacheHolder::create(
+    let cache = InMemoryLruCache::create(
         String::from(""),
         Unit::Count,
         LruCache::new(cache_number as u64),
@@ -272,7 +272,7 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryItemCacheHolder::create(
+    let cache = InMemoryLruCache::create(
         String::from(""),
         Unit::Count,
         LruCache::new(cache_number as u64),
@@ -370,7 +370,7 @@ fn build_test_segment_info(
 }
 
 #[allow(dead_code)]
-fn populate_cache<T>(cache: &InMemoryItemCacheHolder<T>, item: T, num_cache: usize)
+fn populate_cache<T>(cache: &InMemoryLruCache<T>, item: T, num_cache: usize)
 where T: Clone {
     for _ in 0..num_cache {
         let uuid = Uuid::new_v4();

@@ -22,7 +22,7 @@ use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
-use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::TableDataCacheBuilder;
 use databend_storages_common_cache::Unit;
@@ -37,11 +37,7 @@ use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-use crate::BlockMetaCache;
-use crate::BloomIndexFilterMeter;
-use crate::ColumnArrayMeter;
-use crate::CompactSegmentInfoMeter;
-use crate::InvertedIndexFileMeter;
+use crate::{BlockMetaCache, MemSizedMeter};
 use crate::PrunePartitionsCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
@@ -115,7 +111,7 @@ impl CacheManager {
         // Cache of deserialized table data
         let in_memory_table_data_cache = Self::new_named_cache_with_meter(
             memory_cache_capacity,
-            ColumnArrayMeter,
+            MemSizedMeter,
             MEMORY_CACHE_TABLE_DATA,
             Unit::Bytes,
         );
@@ -147,13 +143,13 @@ impl CacheManager {
             );
             let compact_segment_info_cache = Self::new_named_cache_with_meter(
                 config.table_meta_segment_bytes,
-                CompactSegmentInfoMeter {},
+                MemSizedMeter,
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
                 Unit::Bytes,
             );
             let bloom_index_filter_cache = Self::new_named_cache_with_meter(
                 config.table_bloom_index_filter_size,
-                BloomIndexFilterMeter {},
+                MemSizedMeter,
                 MEMORY_CACHE_BLOOM_INDEX_FILTER,
                 Unit::Bytes,
             );
@@ -174,7 +170,7 @@ impl CacheManager {
             };
             let inverted_index_file_cache = Self::new_named_cache_with_meter(
                 inverted_index_file_size,
-                InvertedIndexFileMeter {},
+                MemSizedMeter,
                 MEMORY_CACHE_INVERTED_INDEX_FILE,
                 Unit::Bytes,
             );
@@ -265,9 +261,9 @@ impl CacheManager {
     pub fn new_named_cache<V>(
         capacity: u64,
         name: impl Into<String>,
-    ) -> Option<InMemoryItemCacheHolder<V>> {
+    ) -> Option<InMemoryLruCache<V>> {
         if capacity > 0 {
-            Some(InMemoryItemCacheHolder::create(
+            Some(InMemoryLruCache::create(
                 name.into(),
                 Unit::Count,
                 LruCache::new(capacity),
@@ -282,12 +278,12 @@ impl CacheManager {
         meter: M,
         name: impl Into<String>,
         unit: Unit,
-    ) -> Option<InMemoryItemCacheHolder<V, M>>
+    ) -> Option<InMemoryLruCache<V, M>>
     where
         M: CountableMeter<String, Arc<V>>,
     {
         if capacity > 0 {
-            Some(InMemoryItemCacheHolder::create(
+            Some(InMemoryLruCache::create(
                 name.into(),
                 unit,
                 LruCache::with_meter(capacity, meter),

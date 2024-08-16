@@ -44,7 +44,7 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
 
     /// Inserts a key-value pair into the cache. If the key already existed, the old value is
     /// returned.
-    fn put(&mut self, k: K, v: V) -> Option<V>;
+    fn insert(&mut self, k: K, v: V) -> Option<V>;
 
     /// Removes the given key from the cache and returns its corresponding value.
     fn pop<Q>(&mut self, k: &Q) -> Option<V>
@@ -70,10 +70,6 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
     /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
     /// `Meter` used by the cache.
     fn capacity(&self) -> u64;
-
-    /// Sets the size of the key-value pairs the cache can hold, as measured by the `Meter` used by
-    /// the cache.
-    fn set_capacity(&mut self, cap: u64);
 
     /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
     /// by the cache.

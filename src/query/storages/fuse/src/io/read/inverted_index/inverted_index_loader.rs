@@ -26,8 +26,7 @@ use databend_storages_common_cache::CacheKey;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
-use databend_storages_common_cache_manager::CachedObject;
-use databend_storages_common_cache_manager::InvertedIndexFileMeter;
+use databend_storages_common_cache_manager::{CachedObject, MemSizedMeter};
 use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -38,7 +37,7 @@ use crate::index::InvertedIndexFile;
 use crate::io::MetaReaders;
 
 type CachedReader =
-    InMemoryCacheReader<InvertedIndexFile, InvertedIndexFileLoader, InvertedIndexFileMeter>;
+    InMemoryCacheReader<InvertedIndexFile, InvertedIndexFileLoader, MemSizedMeter>;
 
 const INDEX_COLUMN_NAMES: [&str; 8] = [
     "fast",
