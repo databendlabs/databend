@@ -694,6 +694,7 @@ pub enum TableReferenceElement {
         name: Identifier,
         params: Vec<TableFunctionParam>,
         alias: Option<TableAlias>,
+        sample: Option<Sample>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -755,30 +756,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             level,
             sample_conf,
         )| {
-            let mut table_sample = None;
-            if sample.is_some() {
-                let sample_level = match level {
-                    // If the sample level is not specified, it defaults to ROW
-                    Some(level) => match level.kind {
-                        ROW => SampleLevel::ROW,
-                        BLOCK => SampleLevel::BLOCK,
-                        _ => unreachable!(),
-                    },
-                    None => SampleLevel::ROW,
-                };
-                let mut default_sample_conf = SampleConfig::Probability(Literal::Float64(100.0));
-                if let Some((_, Expr::Literal { value, .. }, rows, _)) = sample_conf {
-                    default_sample_conf = if rows.is_some() {
-                        SampleConfig::RowsNum(value)
-                    } else {
-                        SampleConfig::Probability(value)
-                    };
-                }
-                table_sample = Some(Sample {
-                    sample_level,
-                    sample_conf: default_sample_conf,
-                })
-            };
+            let table_sample = get_table_sample(sample, level, sample_conf);
             TableReferenceElement::Table {
                 catalog,
                 database,
@@ -815,13 +793,17 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let table_function = map(
         rule! {
-            LATERAL? ~ #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+            LATERAL? ~ #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
-        |(lateral, name, _, params, _, alias)| TableReferenceElement::TableFunction {
-            lateral: lateral.is_some(),
-            name,
-            params,
-            alias,
+        |(lateral, name, _, params, _, alias, sample, level, sample_conf)| {
+            let table_sample = get_table_sample(sample, level, sample_conf);
+            TableReferenceElement::TableFunction {
+                lateral: lateral.is_some(),
+                name,
+                params,
+                alias,
+                sample: table_sample,
+            }
         },
     );
     let subquery = map(
@@ -868,6 +850,38 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         | #join_condition_using
     })(i)?;
     Ok((rest, WithSpan { span, elem }))
+}
+
+fn get_table_sample(
+    sample: Option<&Token>,
+    level: Option<&Token>,
+    sample_conf: Option<(&Token, Expr, Option<&Token>, &Token)>,
+) -> Option<Sample> {
+    let mut table_sample = None;
+    if sample.is_some() {
+        let sample_level = match level {
+            // If the sample level is not specified, it defaults to ROW
+            Some(level) => match level.kind {
+                ROW => SampleLevel::ROW,
+                BLOCK => SampleLevel::BLOCK,
+                _ => unreachable!(),
+            },
+            None => SampleLevel::ROW,
+        };
+        let mut default_sample_conf = SampleConfig::Probability(100.0);
+        if let Some((_, Expr::Literal { value, .. }, rows, _)) = sample_conf {
+            default_sample_conf = if rows.is_some() {
+                SampleConfig::RowsNum(value.as_double().unwrap_or_default())
+            } else {
+                SampleConfig::Probability(value.as_double().unwrap_or_default())
+            };
+        }
+        table_sample = Some(Sample {
+            sample_level,
+            sample_conf: default_sample_conf,
+        })
+    };
+    table_sample
 }
 
 struct TableReferenceParser;
@@ -918,6 +932,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 name,
                 params,
                 alias,
+                sample,
             } => {
                 let normal_params = params
                     .iter()
@@ -940,6 +955,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     params: normal_params,
                     named_params,
                     alias,
+                    sample,
                 }
             }
             TableReferenceElement::Subquery {
