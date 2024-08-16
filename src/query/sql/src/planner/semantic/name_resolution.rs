@@ -123,7 +123,7 @@ impl<'a> IdentifierNormalizer<'a> {
                 .and_then(|c| c.get_variable(&ident.normalized_name()));
 
             if let Some(Scalar::String(s)) = scalar {
-                ident.normalized_name = Some(s);
+                ident.normalized_name = Some(Box::new(s));
                 ident.is_variable = false;
             } else {
                 self.error = Some(ErrorCode::SemanticError(format!(
