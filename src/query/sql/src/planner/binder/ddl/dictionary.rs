@@ -83,9 +83,9 @@ impl Binder {
             }
         }
         if required_options.len() != options.len() {
-            return Err(ErrorCode::UnsupportedDictionaryOption(
-                format!("The provided options are not recognized."),
-            ));
+            return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                "The provided options are not recognized."
+            )));
         }
 
         let mut field_comments = BTreeMap::new();
@@ -103,7 +103,7 @@ impl Binder {
         for column in columns {
             if column.comment.is_some() {
                 let column_id = schema.column_id_of(column.name.name.as_str())?;
-                field_comments.insert(column_id, column.comment.unwrap_or_default());
+                field_comments.insert(column_id, column.comment.clone().unwrap_or_default());
             }
         }
         for primary_key in primary_keys {

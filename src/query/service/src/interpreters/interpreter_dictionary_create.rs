@@ -22,9 +22,7 @@ use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateDictionaryPlan;
-use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -58,7 +56,7 @@ impl Interpreter for CreateDictionaryInterpreter {
         let tenant = &self.plan.tenant;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        let req = ListDictionaryReq {
+        let _req = ListDictionaryReq {
             tenant: self.plan.tenant.clone(),
             db_id: self.plan.database_id,
         };
