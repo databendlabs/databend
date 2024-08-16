@@ -42,7 +42,8 @@ pub trait CacheAccessor {
     fn evict(&self, k: &str) -> bool;
     fn contains_key(&self, k: &str) -> bool;
     fn bytes_size(&self) -> u64;
-    fn capacity(&self) -> u64;
+    fn items_capacity(&self) -> u64;
+    fn bytes_capacity(&self) -> u64;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

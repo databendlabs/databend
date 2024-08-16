@@ -99,9 +99,6 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
     ///
-    /// Note that this method is not available for cache objects using `Meter` implementations
-    /// other than `Count`.
-    ///
     /// # Examples
     ///
     /// ```rust,ignore
@@ -287,8 +284,7 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
         self.map.is_empty()
     }
 
-    /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
-    /// `Meter` used by the cache.
+    /// Returns the maximum bytes size of the key-value pairs the cache can hold.
     ///
     /// # Examples
     ///
@@ -297,12 +293,15 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
     /// let mut cache: LruCache<i32, &str> = LruCache::new(2);
     /// assert_eq!(cache.capacity(), 2);
     /// ```
-    fn capacity(&self) -> u64 {
+    fn bytes_capacity(&self) -> u64 {
+        self.max_bytes as u64
+    }
+
+    fn items_capacity(&self) -> u64 {
         self.max_items as u64
     }
 
-    /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
-    /// by the cache.
+    /// Returns the bytes size of all the key-value pairs in the cache.
     fn bytes_size(&self) -> u64 {
         self.bytes as u64
     }

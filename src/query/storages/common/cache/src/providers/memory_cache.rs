@@ -121,9 +121,14 @@ mod impls {
             guard.contains(k)
         }
 
-        fn capacity(&self) -> u64 {
+        fn items_capacity(&self) -> u64 {
             let guard = self.inner.read();
-            guard.capacity()
+            guard.items_capacity()
+        }
+
+        fn bytes_capacity(&self) -> u64 {
+            let guard = self.inner.read();
+            guard.bytes_capacity()
         }
 
         fn len(&self) -> usize {
@@ -205,11 +210,10 @@ mod impls {
             }
         }
 
-        fn capacity(&self) -> u64 {
-            if let Some(cache) = self {
-                cache.capacity()
-            } else {
-                0
+        fn items_capacity(&self) -> u64 {
+            match self.as_ref() {
+                None => 0,
+                Some(cache) => cache.items_capacity(),
             }
         }
 
@@ -217,6 +221,13 @@ mod impls {
             match self.as_ref() {
                 None => 0,
                 Some(cache) => cache.len(),
+            }
+        }
+
+        fn bytes_capacity(&self) -> u64 {
+            match self.as_ref() {
+                None => 0,
+                Some(cache) => cache.bytes_capacity(),
             }
         }
     }

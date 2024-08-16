@@ -131,7 +131,7 @@ impl SyncSystemTable for CachesTable {
             columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
             columns.num_items.push(cache.len() as u64);
             columns.size.push(cache.bytes_size());
-            columns.capacity.push(cache.capacity());
+            columns.capacity.push(cache.bytes_capacity());
             columns.unit.push(Unit::Bytes.to_string());
             let access = get_cache_access_count(DISK_TABLE_DATA_CACHE_NAME);
             let hit = get_cache_hit_count(DISK_TABLE_DATA_CACHE_NAME);
@@ -197,7 +197,7 @@ impl CachesTable {
         columns.names.push(cache.name().to_string());
         columns.num_items.push(cache.len() as u64);
         columns.size.push(cache.bytes_size());
-        columns.capacity.push(cache.capacity());
+        columns.capacity.push(cache.items_capacity());
         columns.unit.push(cache.unit().to_string());
 
         let access = get_cache_access_count(cache.name());

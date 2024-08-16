@@ -161,8 +161,12 @@ impl CacheAccessor for TableDataCache {
         self.external_cache.bytes_size()
     }
 
-    fn capacity(&self) -> u64 {
-        self.external_cache.capacity()
+    fn items_capacity(&self) -> u64 {
+        self.external_cache.items_capacity()
+    }
+
+    fn bytes_capacity(&self) -> u64 {
+        self.external_cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {

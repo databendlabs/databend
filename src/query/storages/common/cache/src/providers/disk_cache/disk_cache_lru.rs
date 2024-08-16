@@ -123,9 +123,14 @@ impl CacheAccessor for LruDiskCacheHolder {
         cache.size()
     }
 
-    fn capacity(&self) -> u64 {
+    fn items_capacity(&self) -> u64 {
         let cache = self.read();
-        cache.capacity()
+        cache.items_capacity()
+    }
+
+    fn bytes_capacity(&self) -> u64 {
+        let cache = self.read();
+        cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {

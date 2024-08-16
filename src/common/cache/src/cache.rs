@@ -67,12 +67,12 @@ pub trait Cache<K: Eq + Hash + MemSized, V: MemSized> {
     /// Returns `true` if the cache contains no key-value pairs.
     fn is_empty(&self) -> bool;
 
-    /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
-    /// `Meter` used by the cache.
-    fn capacity(&self) -> u64;
+    /// Returns the maximum bytes size of the key-value pairs the cache can hold.
+    fn bytes_capacity(&self) -> u64;
 
-    /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
-    /// by the cache.
+    fn items_capacity(&self) -> u64;
+
+    /// Returns the bytes size of all the key-value pairs in the cache.
     fn bytes_size(&self) -> u64;
 
     /// Removes all key-value pairs from the cache.

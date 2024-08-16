@@ -89,8 +89,12 @@ impl DiskCache {
     }
 
     /// Return the maximum size of the cache.
-    pub fn capacity(&self) -> u64 {
-        self.cache.capacity()
+    pub fn items_capacity(&self) -> u64 {
+        self.cache.items_capacity()
+    }
+
+    pub fn bytes_capacity(&self) -> u64 {
+        self.cache.bytes_capacity()
     }
 
     /// Return the path in which the cache is stored.
@@ -258,7 +262,7 @@ impl DiskCache {
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
-        size <= self.cache.capacity()
+        size <= self.cache.bytes_capacity()
     }
 
     fn cache_key(&self, key: &str) -> DiskCacheKey {
@@ -278,7 +282,7 @@ impl DiskCache {
         }
 
         // check eviction
-        while self.cache.bytes_size() + bytes_len > self.cache.capacity() {
+        while self.cache.bytes_size() + bytes_len > self.cache.bytes_capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
                 let cached_item_path = self.abs_path_of_cache_key(&DiskCacheKey(rel_path));
                 fs::remove_file(&cached_item_path).unwrap_or_else(|e| {
@@ -289,7 +293,7 @@ impl DiskCache {
                 });
             }
         }
-        debug_assert!(self.cache.bytes_size() <= self.cache.capacity());
+        debug_assert!(self.cache.bytes_size() <= self.cache.bytes_capacity());
 
         let cache_key = self.cache_key(key.as_ref());
         let path = self.abs_path_of_cache_key(&cache_key);
