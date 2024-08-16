@@ -115,18 +115,25 @@ impl TableIdentifier {
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
         let Binder { ctx, dialect, .. } = binder;
-        let catalog = catalog
-            .to_owned()
-            .unwrap_or(Identifier::from_name(None, ctx.get_current_catalog()));
-        let database = database
-            .to_owned()
-            .unwrap_or(Identifier::from_name(None, ctx.get_current_database()));
+        let catalog = catalog.to_owned().unwrap_or(Identifier {
+            span: None,
+            name: ctx.get_current_catalog(),
+            quote: Some(dialect.default_ident_quote()),
+            is_hole: false,
+            normalized_name: None,
+            is_variable: false,
+        });
 
-        let database = Identifier {
-            span: merge_span(catalog.span, database.span),
-            ..database
-        };
+        let mut database = database.to_owned().unwrap_or(Identifier {
+            span: None,
+            name: ctx.get_current_database(),
+            quote: Some(dialect.default_ident_quote()),
+            is_hole: false,
+            normalized_name: None,
+            is_variable: false,
+        });
 
+        database.span = merge_span(catalog.span, database.span);
         let table = Identifier {
             span: merge_span(database.span, table.span),
             name: table.name.clone(),
