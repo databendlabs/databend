@@ -219,7 +219,7 @@ impl Binder {
                     .options()
                     .get(QUERY)
                     .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
-                let stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(&query)?;
+                let stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(query)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 new_bind_context.share_paramas = share_paramas;
