@@ -10,26 +10,53 @@ DROP DICTIONARY IF EXISTS d3
 statement ok
 DROP DICTIONARY IF EXISTS d4
 
-statement ok
-CREATE DICTIONARY d(c1 int) SOURCE = mysql
+statement error 3117
+CREATE DICTIONARY d(c1 int) SOURCE(postgresql(host='localhost',port='3306',username='root',password='1234',db='db1'))
 
 statement ok
-CREATE DICTIONARY IF NOT EXISTS d(c1 int) SOURCE = mysql
+CREATE DICTIONARY d(c1 int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
+
+statement ok
+CREATE DICTIONARY IF NOT EXISTS d(c1 int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
 
 statement error 3113
-CREATE DICTIONARY d(c1 int) SOURCE = mysql
+CREATE DICTIONARY d(c1 int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
 
 statement ok
-CREATE DICTIONARY d2(a int,b int) SOURCE = mysql
+CREATE DICTIONARY d2(a int,b int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
 
-statement 3113
-CREATE DICTIONARY d2(a int,b int) SOURCE = mysql
+statement error 3113
+CREATE DICTIONARY d2(a int,b int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
+
+statement error 3118
+create dictionary d3(`a` int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234'))
 
 statement ok
-create dictionary d3(`a` int) source = mysql
+create dictionary d3(`a` int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
 
 statement ok
-create dictionary d4(a int) source = mysql
+create or replace dictionary d3(a int,b Varchar) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
+
+statement error 3116
+create dictionary d4(a int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1',name='dummy'))
+
+statement ok
+create or replace d4(a Varchar) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
+
+statement ok
+show create dictionary d
+
+statement ok
+show create dictionary d2
+
+statement ok
+show create dictionary d3
+
+statement ok
+show create dictionary d4
+
+statement error 3114
+show create dictionary test
 
 statement ok
 DROP DICTIONARY IF EXISTS d
@@ -43,6 +70,9 @@ DROP DICTIONARY IF EXISTS d3
 statement ok
 DROP DICTIONARY IF EXISTS d4
 
+statement error 3114
+drop dictionary test
+
 statement ok
 DROP DATABASE IF EXISTS db1
 
@@ -53,4 +83,4 @@ statement ok
 CREATE DATABASE db1
 
 statement ok
-CREATE DICTIONARY db1.test1(a int, b int) SOURCE = mysql
+CREATE DICTIONARY db1.test1(a int, b int) SOURCE(mysql(host='localhost',port='3306',username='root',password='1234',db='db1'))
