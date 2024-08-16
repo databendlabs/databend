@@ -61,7 +61,7 @@ impl Binder {
 
         let source = self.normalize_object_identifier(source_name);
 
-        if source.to_lowercase() != "mysql".to_string() {
+        if source.to_lowercase() != *"mysql" {
             return Err(ErrorCode::UnsupportedDictionarySource(format!(
                 "The specified source '{}' is not currently supported.",
                 source.to_lowercase(),
@@ -70,15 +70,15 @@ impl Binder {
         // TODO: Authentication to connect to MySQL database will be implemented later
 
         let options: BTreeMap<String, String> = source_options
-            .into_iter()
+            .iter()
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
         let required_options = ["host", "port", "username", "password", "db"];
         for option in required_options {
-            if !options.contains_key(&option.to_string()) {
+            if !options.contains_key(option) {
                 return Err(ErrorCode::MissingDictionaryOption(
-                   "The configuration is missing one or more required options. ".to_owned() +
-                   &"Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.".to_string(),
+                    "The configuration is missing one or more required options. ".to_owned()
+                        + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
                 ));
             }
         }
@@ -93,10 +93,10 @@ impl Binder {
 
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
         for table_field in schema.fields.clone() {
-            if !table_field.default_expr.is_none() || !table_field.computed_expr.is_none() {
+            if table_field.default_expr.is_some() || table_field.computed_expr.is_some() {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
-                    "The table field configuration is invalid. ".to_owned() +
-                    &"Default expressions and computed expressions for the table fields should not be set.".to_string(),
+                    "The table field configuration is invalid. ".to_owned()
+                        + "Default expressions and computed expressions for the table fields should not be set.",
                 ));
             }
         }
@@ -123,7 +123,7 @@ impl Binder {
         };
 
         Ok(Plan::CreateDictionary(Box::new(CreateDictionaryPlan {
-            create_option: create_option.clone().into(),
+            create_option: create_option.clone(),
             tenant,
             catalog,
             database_id,

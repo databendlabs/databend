@@ -428,13 +428,13 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
         todo!()
     }
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        _dict_ident: TenantDictionaryIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         todo!()
     }
@@ -448,7 +448,7 @@ impl Catalog for FakedCatalog {
 
     async fn list_dictionaries(
         &self,
-        req: ListDictionaryReq,
+        _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         todo!()
     }
