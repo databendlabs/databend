@@ -944,4 +944,8 @@ impl Table for FuseTable {
     fn is_read_only(&self) -> bool {
         self.table_type.is_readonly()
     }
+
+    fn use_own_sample_block(&self) -> bool {
+        true
+    }
 }

@@ -689,6 +689,7 @@ pub enum TableReference {
         params: Vec<Expr>,
         named_params: Vec<(Identifier, Expr)>,
         alias: Option<TableAlias>,
+        sample: Option<Sample>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -790,6 +791,7 @@ impl Display for TableReference {
                 params,
                 named_params,
                 alias,
+                sample,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -808,6 +810,9 @@ impl Display for TableReference {
                 write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
                 }
             }
             TableReference::Subquery {

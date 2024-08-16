@@ -51,3 +51,44 @@ select count(distinct a) < 10000000 from t sample block(50);
 
 statement ok
 drop table t;
+
+query T
+explain select * from numbers(10000000) as t sample row(90);
+----
+Filter
+├── output columns: [t.number (#0)]
+├── filters: [rand() <= 0.9]
+├── estimated rows: 2000000.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 10000000
+    ├── read size: 76.29 MiB
+    ├── partitions total: 153
+    ├── partitions scanned: 153
+    ├── push downs: [filters: [rand() <= 0.9], limit: NONE]
+    └── estimated rows: 10000000.00
+
+query T
+explain select * from numbers(10000000) as t sample row(90 rows);
+----
+Filter
+├── output columns: [t.number (#0)]
+├── filters: [rand() <= 0.000009]
+├── estimated rows: 2000000.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 10000000
+    ├── read size: 76.29 MiB
+    ├── partitions total: 153
+    ├── partitions scanned: 153
+    ├── push downs: [filters: [rand() <= 0.000009], limit: NONE]
+    └── estimated rows: 10000000.00
+
+
+
+query 
+select count(distinct number) < 10000000 from numbers(10000000) sample block(50);
+----
+1
