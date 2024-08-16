@@ -29,6 +29,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde_json::Value;
 
 use super::decimal::DecimalSize;
 use crate::property::Domain;
@@ -1426,50 +1427,72 @@ impl Number for F64 {
 }
 fn serialize_f32<S>(value: &F32, serializer: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    if value.is_infinite() {
-        if value.is_sign_positive() {
-            serializer.serialize_str("Infinity")
+    if serializer.is_human_readable() {
+        if value.is_infinite() {
+            if value.is_sign_positive() {
+                serializer.serialize_str("Infinity")
+            } else {
+                serializer.serialize_str("-Infinity")
+            }
+        } else if value.is_nan() {
+            serializer.serialize_str("Nan")
         } else {
-            serializer.serialize_str("-Infinity")
+            serde::Serialize::serialize(&value, serializer)
         }
     } else {
-        Serialize::serialize(&value, serializer)
+        serde::Serialize::serialize(&value, serializer)
     }
 }
 
 fn deserialize_f32<'de, D>(deserializer: D) -> Result<F32, D::Error>
 where D: Deserializer<'de> {
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::String(s) if s == "Infinity" => Ok(F32::infinity()),
-        serde_json::Value::String(s) if s == "-Infinity" => Ok(F32::neg_infinity()),
-        _ => <f32 as Deserialize>::deserialize(value)
-            .map(<OrderedFloat<f32> as From<f32>>::from)
-            .map_err(|e| serde::de::Error::custom(e.to_string())),
+    if deserializer.is_human_readable() {
+        let value = Value::deserialize(deserializer)?;
+        match value {
+            Value::String(s) if s == "Infinity" => Ok(F32::infinity()),
+            Value::String(s) if s == "-Infinity" => Ok(F32::neg_infinity()),
+            Value::String(s) if s == "Nan" => Ok(F32::nan()),
+            _ => <f32 as Deserialize>::deserialize(value)
+                .map(<OrderedFloat<f32> as From<f32>>::from)
+                .map_err(|e| serde::de::Error::custom(e.to_string())),
+        }
+    } else {
+        serde::Deserialize::deserialize(deserializer)
     }
 }
 
 fn serialize_f64<S>(value: &F64, serializer: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    if value.is_infinite() {
-        if value.is_sign_positive() {
-            serializer.serialize_str("Infinity")
+    if serializer.is_human_readable() {
+        if value.is_infinite() {
+            if value.is_sign_positive() {
+                serializer.serialize_str("Infinity")
+            } else {
+                serializer.serialize_str("-Infinity")
+            }
+        } else if value.is_nan() {
+            serializer.serialize_str("Nan")
         } else {
-            serializer.serialize_str("-Infinity")
+            serde::Serialize::serialize(&value, serializer)
         }
     } else {
-        Serialize::serialize(&value, serializer)
+        serde::Serialize::serialize(&value, serializer)
     }
 }
 
 fn deserialize_f64<'de, D>(deserializer: D) -> Result<F64, D::Error>
 where D: Deserializer<'de> {
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::String(s) if s == "Infinity" => Ok(F64::infinity()),
-        serde_json::Value::String(s) if s == "-Infinity" => Ok(F64::neg_infinity()),
-        _ => <f64 as Deserialize>::deserialize(value)
-            .map(<OrderedFloat<f64> as From<f64>>::from)
-            .map_err(|e| serde::de::Error::custom(e.to_string())),
+    if deserializer.is_human_readable() {
+        let value = Value::deserialize(deserializer)?;
+        match value {
+            Value::String(s) if s == "Infinity" => Ok(F64::infinity()),
+            Value::String(s) if s == "-Infinity" => Ok(F64::neg_infinity()),
+            Value::String(s) if s == "Nan" => Ok(F64::nan()),
+            _ => <f64 as Deserialize>::deserialize(value)
+                .map(<OrderedFloat<f64> as From<f64>>::from)
+                .map_err(|e| serde::de::Error::custom(e.to_string())),
+        }
+    } else {
+        serde::Deserialize::deserialize(deserializer)
     }
 }
