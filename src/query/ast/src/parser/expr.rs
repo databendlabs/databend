@@ -104,7 +104,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     ExprElement::MapAccess {
                         accessor: MapAccessor::Colon { key },
                     } => {
-                        if !key.is_quoted() && !key.is_hole {
+                        if !key.is_quoted() && !key.is_hole() {
                             *elem = ExprElement::Hole {
                                 name: key.to_string(),
                             };

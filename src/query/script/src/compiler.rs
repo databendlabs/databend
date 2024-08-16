@@ -23,6 +23,7 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
@@ -768,12 +769,12 @@ impl Compiler {
             }
 
             fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole {
+                if ident.is_hole() {
                     let index = self.compiler.lookup_var(ident);
                     match index {
                         Ok(index) => {
                             *ident = Identifier::from_name(ident.span, index.to_string());
-                            ident.is_hole = true;
+                            ident.ident_type = IdentifierType::Hole;
                         }
                         Err(e) => {
                             self.error = Some(e.set_span(ident.span));
@@ -1031,7 +1032,7 @@ impl Compiler {
             }
 
             fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole {
+                if ident.is_hole() {
                     self.error = Some(
                         ErrorCode::ScriptSemanticError(
                             "variable is not allowed in this context".to_string(),

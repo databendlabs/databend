@@ -140,13 +140,13 @@ impl<'a> VariableNormalizer<'a> {
     }
 
     fn enter_identifier(&mut self, ident: &mut Identifier) {
-        if ident.is_variable {
+        if ident.is_variable() {
             let mut normalized_ident = normalize_identifier(ident, self.ctx);
 
             let scalar = self.table_ctx.get_variable(&normalized_ident.name);
             if let Some(Scalar::String(s)) = scalar {
                 normalized_ident.name = s;
-                normalized_ident.is_variable = false;
+                normalized_ident.ident_type = IdentifierType::None;
             } else {
                 self.error = Some(ErrorCode::SemanticError(format!(
                     "invalid variable identifier {} in session",
@@ -154,7 +154,7 @@ impl<'a> VariableNormalizer<'a> {
                 )));
             }
             *ident = normalized_ident;
-        } else if ident.is_hole {
+        } else if ident.is_hole() {
             self.error = Some(ErrorCode::SemanticError(format!(
                 "invalid hole identifier {}, maybe you want to use ${}",
                 ident.name, ident.name,

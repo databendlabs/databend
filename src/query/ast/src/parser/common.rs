@@ -27,6 +27,7 @@ use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::IdentifierType;
 use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
@@ -127,8 +128,7 @@ fn plain_identifier(
                 span: transform_span(&[token.clone()]),
                 name: token.text().to_string(),
                 quote: None,
-                is_hole: false,
-                is_variable: false,
+                ident_type: IdentifierType::None,
             },
         )(i)
     }
@@ -153,8 +153,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 span: transform_span(&[token.clone()]),
                 name: ident,
                 quote: Some(quote),
-                is_hole: false,
-                is_variable: false,
+                ident_type: IdentifierType::None,
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -174,8 +173,7 @@ fn identifier_hole(i: Input) -> IResult<Identifier> {
             span: transform_span(span.tokens),
             name,
             quote: None,
-            is_hole: true,
-            is_variable: false,
+            ident_type: IdentifierType::Hole,
         },
     ))(i)
 }
@@ -189,8 +187,7 @@ fn identifier_variable(i: Input) -> IResult<Identifier> {
             span: transform_span(span.tokens),
             name,
             quote: None,
-            is_hole: false,
-            is_variable: true,
+            ident_type: IdentifierType::Variable,
         },
     )(i)
 }
