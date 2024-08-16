@@ -59,17 +59,13 @@ impl Interpreter for DropDictionaryInterpreter {
         );
         let reply = catalog.drop_dictionary(dict_ident.clone()).await;
 
-        if reply.is_ok() {
+        if reply.is_ok() || (reply.is_err() && self.plan.if_exists) {
             return Ok(PipelineBuildResult::create());
         } else {
-            if self.plan.if_exists {
-                return Ok(PipelineBuildResult::create());
-            } else {
-                return Err(ErrorCode::UnknownDictionary(format!(
-                    "Dictionary {} is unknown.",
-                    dict_name.to_string(),
-                )));
-            }
+            return Err(ErrorCode::UnknownDictionary(format!(
+                "Dictionary {} is unknown.",
+                dict_name,
+            )));
         }
     }
 }
