@@ -126,12 +126,14 @@ impl TableIdentifier {
             name: ctx.get_current_catalog(),
             quote: Some(dialect.default_ident_quote()),
             is_hole: false,
+            is_variable: false,
         });
         let database = database.to_owned().unwrap_or(Identifier {
             span: None,
             name: ctx.get_current_database(),
             quote: Some(dialect.default_ident_quote()),
             is_hole: false,
+            is_variable: false,
         });
         let database = Identifier {
             span: merge_span(catalog.span, database.span),

@@ -15,6 +15,7 @@ LetVar {
             name: "cost",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
         default: Literal {
             span: Some(
@@ -47,6 +48,7 @@ LetStatement {
             name: "t1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
         stmt: Query(
             Query {
@@ -87,6 +89,7 @@ LetStatement {
                                     name: "numbers",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                                 params: [
                                     Literal {
@@ -135,6 +138,7 @@ Assign {
         name: "profit",
         quote: None,
         is_hole: false,
+        is_variable: false,
     },
     value: BinaryOp {
         span: Some(
@@ -156,6 +160,7 @@ Assign {
                         name: "revenue",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -175,6 +180,7 @@ Assign {
                         name: "cost",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -222,6 +228,7 @@ Return {
                             name: "profit",
                             quote: None,
                             is_hole: false,
+                            is_variable: false,
                         },
                     ),
                 },
@@ -249,6 +256,7 @@ Return {
                 name: "t1",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
         ),
     ),
@@ -305,6 +313,7 @@ Return {
                                         name: "t1",
                                         quote: None,
                                         is_hole: false,
+                                        is_variable: false,
                                     },
                                     alias: None,
                                     temporal: None,
@@ -352,6 +361,7 @@ ForLoop {
         name: "i",
         quote: None,
         is_hole: false,
+        is_variable: false,
     },
     is_reverse: true,
     lower_bound: Literal {
@@ -377,6 +387,7 @@ ForLoop {
                     name: "maximum_count",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
             ),
         },
@@ -393,6 +404,7 @@ ForLoop {
                 name: "counter",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
             value: BinaryOp {
                 span: Some(
@@ -414,6 +426,7 @@ ForLoop {
                                 name: "counter",
                                 quote: None,
                                 is_hole: false,
+                                is_variable: false,
                             },
                         ),
                     },
@@ -437,6 +450,7 @@ ForLoop {
             name: "label1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
     ),
 }
@@ -462,6 +476,7 @@ ForInSet {
         name: "rec",
         quote: None,
         is_hole: false,
+        is_variable: false,
     },
     resultset: Identifier {
         span: Some(
@@ -470,6 +485,7 @@ ForInSet {
         name: "resultset",
         quote: None,
         is_hole: false,
+        is_variable: false,
     },
     body: [
         Continue {
@@ -487,6 +503,7 @@ ForInSet {
             name: "label1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
     ),
 }
@@ -514,6 +531,7 @@ ForInStatement {
         name: "rec",
         quote: None,
         is_hole: false,
+        is_variable: false,
     },
     stmt: Query(
         Query {
@@ -554,6 +572,7 @@ ForInStatement {
                                 name: "numbers",
                                 quote: None,
                                 is_hole: false,
+                                is_variable: false,
                             },
                             params: [
                                 Literal {
@@ -598,6 +617,7 @@ ForInStatement {
             name: "label1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
     ),
 }
@@ -636,6 +656,7 @@ WhileLoop {
                         name: "counter",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -655,6 +676,7 @@ WhileLoop {
                         name: "maximum_count",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -673,6 +695,7 @@ WhileLoop {
                     name: "label1",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
             ),
         },
@@ -685,6 +708,7 @@ WhileLoop {
             name: "label1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
     ),
 }
@@ -733,6 +757,7 @@ RepeatLoop {
                         name: "counter",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -752,6 +777,7 @@ RepeatLoop {
                         name: "maximum_count",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -765,6 +791,7 @@ RepeatLoop {
             name: "label1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
     ),
 }
@@ -796,6 +823,7 @@ Loop {
                     name: "label1",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
             ),
         },
@@ -808,6 +836,7 @@ Loop {
             name: "label1",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
     ),
 }
@@ -858,6 +887,7 @@ Case {
                             name: "counter",
                             quote: None,
                             is_hole: false,
+                            is_variable: false,
                         },
                     ),
                 },
@@ -891,6 +921,7 @@ Case {
                             name: "counter",
                             quote: None,
                             is_hole: false,
+                            is_variable: false,
                         },
                     ),
                 },
@@ -918,6 +949,7 @@ Case {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -939,6 +971,7 @@ Case {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -966,6 +999,7 @@ Case {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -987,6 +1021,7 @@ Case {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1016,6 +1051,7 @@ Case {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1037,6 +1073,7 @@ Case {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1095,6 +1132,7 @@ Case {
                         name: "counter",
                         quote: None,
                         is_hole: false,
+                        is_variable: false,
                     },
                 ),
             },
@@ -1131,6 +1169,7 @@ Case {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1152,6 +1191,7 @@ Case {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1179,6 +1219,7 @@ Case {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1200,6 +1241,7 @@ Case {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1229,6 +1271,7 @@ Case {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1250,6 +1293,7 @@ Case {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1311,6 +1355,7 @@ If {
                             name: "counter",
                             quote: None,
                             is_hole: false,
+                            is_variable: false,
                         },
                     ),
                 },
@@ -1344,6 +1389,7 @@ If {
                             name: "counter",
                             quote: None,
                             is_hole: false,
+                            is_variable: false,
                         },
                     ),
                 },
@@ -1371,6 +1417,7 @@ If {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1392,6 +1439,7 @@ If {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1419,6 +1467,7 @@ If {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1440,6 +1489,7 @@ If {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1469,6 +1519,7 @@ If {
                     name: "counter",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 value: BinaryOp {
                     span: Some(
@@ -1490,6 +1541,7 @@ If {
                                     name: "counter",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                             ),
                         },
@@ -1558,6 +1610,7 @@ Loop {
                                                     name: "c1",
                                                     quote: None,
                                                     is_hole: false,
+                                                    is_variable: false,
                                                 },
                                             ),
                                         },
@@ -1580,6 +1633,7 @@ Loop {
                                                     name: "c2",
                                                     quote: None,
                                                     is_hole: false,
+                                                    is_variable: false,
                                                 },
                                             ),
                                         },
@@ -1601,6 +1655,7 @@ Loop {
                                         name: "t",
                                         quote: None,
                                         is_hole: false,
+                                        is_variable: false,
                                     },
                                     alias: None,
                                     temporal: None,
@@ -1631,6 +1686,7 @@ Loop {
                                                     name: "c1",
                                                     quote: None,
                                                     is_hole: false,
+                                                    is_variable: false,
                                                 },
                                             ),
                                         },
@@ -1731,180 +1787,25 @@ RunStatement {
 ---------- Input ----------
 select IDENTIFIER(:b)
 ---------- Output ---------
-SELECT IDENTIFIER(:b)
----------- AST ------------
-RunStatement {
-    span: Some(
-        0..21,
-    ),
-    stmt: Query(
-        Query {
-            span: Some(
-                0..21,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        0..21,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    7..21,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                7..21,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            is_hole: true,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-    ),
-}
+error: 
+  --> SQL:1:19
+  |
+1 | select IDENTIFIER(:b)
+  | ------            ^ unexpected `:`, expecting `VariableAccess`
+  | |                  
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------
 select a.IDENTIFIER(:b).c + minus(:d)
 ---------- Output ---------
-SELECT a.IDENTIFIER(:b).c + minus(:d)
----------- AST ------------
-RunStatement {
-    span: Some(
-        0..37,
-    ),
-    stmt: Query(
-        Query {
-            span: Some(
-                0..37,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        0..37,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: BinaryOp {
-                                span: Some(
-                                    26..27,
-                                ),
-                                op: Plus,
-                                left: ColumnRef {
-                                    span: Some(
-                                        7..8,
-                                    ),
-                                    column: ColumnRef {
-                                        database: Some(
-                                            Identifier {
-                                                span: Some(
-                                                    7..8,
-                                                ),
-                                                name: "a",
-                                                quote: None,
-                                                is_hole: false,
-                                            },
-                                        ),
-                                        table: Some(
-                                            Identifier {
-                                                span: Some(
-                                                    9..23,
-                                                ),
-                                                name: "b",
-                                                quote: None,
-                                                is_hole: true,
-                                            },
-                                        ),
-                                        column: Name(
-                                            Identifier {
-                                                span: Some(
-                                                    24..25,
-                                                ),
-                                                name: "c",
-                                                quote: None,
-                                                is_hole: false,
-                                            },
-                                        ),
-                                    },
-                                },
-                                right: FunctionCall {
-                                    span: Some(
-                                        28..37,
-                                    ),
-                                    func: FunctionCall {
-                                        distinct: false,
-                                        name: Identifier {
-                                            span: Some(
-                                                28..33,
-                                            ),
-                                            name: "minus",
-                                            quote: None,
-                                            is_hole: false,
-                                        },
-                                        args: [
-                                            Hole {
-                                                span: Some(
-                                                    34..36,
-                                                ),
-                                                name: "d",
-                                            },
-                                        ],
-                                        params: [],
-                                        window: None,
-                                        lambda: None,
-                                    },
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-    ),
-}
+error: 
+  --> SQL:1:21
+  |
+1 | select a.IDENTIFIER(:b).c + minus(:d)
+  | ------              ^ unexpected `:`, expecting `VariableAccess`
+  | |                    
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------
@@ -1981,6 +1882,7 @@ ScriptBlock {
                     name: "x",
                     quote: None,
                     is_hole: false,
+                    is_variable: false,
                 },
                 default: Literal {
                     span: Some(
@@ -2005,6 +1907,7 @@ ScriptBlock {
                 name: "y",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
             is_reverse: false,
             lower_bound: ColumnRef {
@@ -2022,6 +1925,7 @@ ScriptBlock {
                             name: "x",
                             quote: None,
                             is_hole: false,
+                            is_variable: false,
                         },
                     ),
                 },

@@ -16,6 +16,7 @@ Insert(
             name: "t",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
         columns: [
             Identifier {
@@ -25,6 +26,7 @@ Insert(
                 name: "c1",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
             Identifier {
                 span: Some(
@@ -33,6 +35,7 @@ Insert(
                 name: "c2",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
         ],
         source: RawValues {
@@ -62,6 +65,7 @@ Insert(
             name: "t",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
         columns: [
             Identifier {
@@ -71,6 +75,7 @@ Insert(
                 name: "c1",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
             Identifier {
                 span: Some(
@@ -79,6 +84,7 @@ Insert(
                 name: "c2",
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
         ],
         source: RawValues {
@@ -108,6 +114,7 @@ Insert(
             name: "t",
             quote: None,
             is_hole: false,
+            is_variable: false,
         },
         columns: [],
         source: Select {
@@ -150,6 +157,7 @@ Insert(
                                     name: "t2",
                                     quote: None,
                                     is_hole: false,
+                                    is_variable: false,
                                 },
                                 alias: None,
                                 temporal: None,

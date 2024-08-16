@@ -128,6 +128,7 @@ fn plain_identifier(
                 name: token.text().to_string(),
                 quote: None,
                 is_hole: false,
+                is_variable: false,
             },
         )(i)
     }
@@ -153,6 +154,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 name: ident,
                 quote: Some(quote),
                 is_hole: false,
+                is_variable: false,
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -173,8 +175,24 @@ fn identifier_hole(i: Input) -> IResult<Identifier> {
             name,
             quote: None,
             is_hole: true,
+            is_variable: false,
         },
     ))(i)
+}
+
+fn identifier_variable(i: Input) -> IResult<Identifier> {
+    map(
+        rule! {
+            IDENTIFIER ~ ^"(" ~ ^#variable_ident ~ ^")"
+        },
+        |(_, _, t, _)| Identifier {
+            span: t.span,
+            name: t.name,
+            quote: t.quote,
+            is_hole: false,
+            is_variable: true,
+        },
+    )(i)
 }
 
 fn non_reserved_identifier(
@@ -184,6 +202,7 @@ fn non_reserved_identifier(
         rule!(
             #plain_identifier(is_reserved_keyword)
             | #quoted_identifier
+            | #identifier_variable
             | #identifier_hole
         )(i)
     }
