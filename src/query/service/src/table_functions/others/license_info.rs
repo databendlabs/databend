@@ -205,7 +205,6 @@ impl LicenseInfoSource {
 impl AsyncSource for LicenseInfoSource {
     const NAME: &'static str = "license_info";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.done {

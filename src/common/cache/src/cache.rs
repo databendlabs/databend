@@ -23,7 +23,7 @@ use crate::Meter;
 pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
-    fn get<'a, Q>(&'a mut self, k: &Q) -> Option<&'a V>
+    fn get<Q>(&mut self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;
@@ -31,7 +31,7 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
     /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
     /// not present in the cache. Unlike `get`, `peek` does not update the Cache state so the key's
     /// position will be unchanged.
-    fn peek<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
+    fn peek<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;

@@ -200,7 +200,6 @@ impl InspectParquetSource {
 impl AsyncSource for InspectParquetSource {
     const NAME: &'static str = INSPECT_PARQUET;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {

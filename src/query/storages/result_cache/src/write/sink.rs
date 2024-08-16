@@ -56,7 +56,6 @@ pub struct WriteResultCacheSink {
 impl AsyncMpscSink for WriteResultCacheSink {
     const NAME: &'static str = "WriteResultCacheSink";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, block: DataBlock) -> Result<bool> {
         if self.terminated {

@@ -18,13 +18,11 @@ use std::time::Instant;
 use databend_common_cache::CountableMeter;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
-use parking_lot::RwLock;
 
 use super::loader::LoadParams;
-use crate::providers::InMemoryCache;
 use crate::CacheAccessor;
+use crate::InMemoryItemCacheHolder;
 use crate::Loader;
-use crate::NamedCache;
 
 /// A cache-aware reader
 pub struct CachedReader<L, C> {
@@ -32,14 +30,12 @@ pub struct CachedReader<L, C> {
     loader: L,
 }
 
-pub type CacheHolder<V, M> = Arc<RwLock<InMemoryCache<V, M>>>;
-
-impl<V, L, M> CachedReader<L, NamedCache<CacheHolder<V, M>>>
+impl<V, L, M> CachedReader<L, InMemoryItemCacheHolder<V, M>>
 where
     L: Loader<V> + Sync,
     M: CountableMeter<String, Arc<V>>,
 {
-    pub fn new(cache: Option<NamedCache<CacheHolder<V, M>>>, loader: L) -> Self {
+    pub fn new(cache: Option<InMemoryItemCacheHolder<V, M>>, loader: L) -> Self {
         Self { cache, loader }
     }
 
