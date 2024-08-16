@@ -184,7 +184,6 @@ impl TaskHistorySource {
 impl AsyncSource for TaskHistorySource {
     const NAME: &'static str = "task_history";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {

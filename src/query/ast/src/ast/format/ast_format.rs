@@ -3408,6 +3408,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 params,
                 named_params,
                 alias,
+                ..
             } => {
                 let mut children = Vec::with_capacity(params.len());
                 for param in params.iter() {

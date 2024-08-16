@@ -210,7 +210,6 @@ impl StreamStatusDataSource {
 impl AsyncSource for StreamStatusDataSource {
     const NAME: &'static str = "stream_status";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {

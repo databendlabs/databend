@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -218,7 +217,6 @@ impl InvertedIndexSource {
 impl AsyncSource for InvertedIndexSource {
     const NAME: &'static str = "InvertedIndexSource";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
@@ -328,7 +326,6 @@ impl InvertedIndexSink {
 impl AsyncSink for InvertedIndexSink {
     const NAME: &'static str = "InvertedIndexSink";
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
         let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);

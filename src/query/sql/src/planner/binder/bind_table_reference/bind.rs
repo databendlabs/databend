@@ -54,8 +54,17 @@ impl Binder {
                 params,
                 named_params,
                 alias,
+                sample,
                 ..
-            } => self.bind_table_function(bind_context, span, name, params, named_params, alias),
+            } => self.bind_table_function(
+                bind_context,
+                span,
+                name,
+                params,
+                named_params,
+                alias,
+                sample,
+            ),
             TableReference::Subquery {
                 span: _,
                 lateral,

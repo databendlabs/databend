@@ -321,7 +321,6 @@ where Self: AsyncSource
 impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<TTable> {
     const NAME: &'static str = TTable::NAME;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {

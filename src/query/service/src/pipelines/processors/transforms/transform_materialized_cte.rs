@@ -161,7 +161,6 @@ impl MaterializedCteSource {
 impl AsyncSource for MaterializedCteSource {
     const NAME: &'static str = "MaterializedCteSource";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         self.cte_state.wait_sink_finished().await?;

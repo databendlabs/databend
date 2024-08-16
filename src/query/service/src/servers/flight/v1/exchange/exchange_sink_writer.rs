@@ -66,7 +66,6 @@ impl AsyncSink for ExchangeWriterSink {
         Ok(())
     }
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
         let serialize_meta = match data_block.take_meta() {

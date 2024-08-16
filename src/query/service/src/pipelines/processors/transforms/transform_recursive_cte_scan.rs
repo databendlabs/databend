@@ -50,7 +50,6 @@ impl TransformRecursiveCteScan {
 impl AsyncSource for TransformRecursiveCteScan {
     const NAME: &'static str = "RecursiveCteScan";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.table.is_none() {

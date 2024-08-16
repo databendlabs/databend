@@ -43,7 +43,10 @@ def do_renew(_case_id, refresh_token, session_token):
     payload = {"session_token": session_token}
     response = requests.post(
         renew_url,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {refresh_token}"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {refresh_token}",
+        },
         json=payload,
     )
     return response.json()
@@ -54,15 +57,26 @@ def do_query(query, session_token):
     query_payload = {"sql": query, "pagination": {"wait_time_secs": 11}}
     response = requests.post(
         query_url,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {session_token}"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {session_token}",
+        },
         json=query_payload,
     )
     return response.json()
 
 
 def fake_expired_token():
-    expired_claim = {"exp": int(time.time()) - 10, "tenant": "", "user": "", "nonce": "", "sid": ""}
-    return "bend-v1-" + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
+    expired_claim = {
+        "exp": int(time.time()) - 10,
+        "tenant": "",
+        "user": "",
+        "nonce": "",
+        "sid": "",
+    }
+    return "bend-v1-" + base64.b64encode(
+        json.dumps(expired_claim).encode("utf-8")
+    ).decode("utf-8")
 
 
 def main():

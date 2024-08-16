@@ -17,14 +17,12 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_cache::CountableMeter;
+use databend_common_cache::LruCache;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
-use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
-use databend_storages_common_cache::Named;
-use databend_storages_common_cache::NamedCache;
 use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::TableDataCacheBuilder;
 use databend_storages_common_cache::Unit;
@@ -267,9 +265,13 @@ impl CacheManager {
     pub fn new_named_cache<V>(
         capacity: u64,
         name: impl Into<String>,
-    ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
+    ) -> Option<InMemoryItemCacheHolder<V>> {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into(), Unit::Count))
+            Some(InMemoryItemCacheHolder::create(
+                name.into(),
+                Unit::Count,
+                LruCache::new(capacity),
+            ))
         } else {
             None
         }
@@ -280,15 +282,16 @@ impl CacheManager {
         meter: M,
         name: impl Into<String>,
         unit: Unit,
-    ) -> Option<NamedCache<InMemoryItemCacheHolder<V, M>>>
+    ) -> Option<InMemoryItemCacheHolder<V, M>>
     where
         M: CountableMeter<String, Arc<V>>,
     {
         if capacity > 0 {
-            Some(
-                InMemoryCacheBuilder::new_in_memory_cache(capacity, meter)
-                    .name_with(name.into(), unit),
-            )
+            Some(InMemoryItemCacheHolder::create(
+                name.into(),
+                unit,
+                LruCache::with_meter(capacity, meter),
+            ))
         } else {
             None
         }
