@@ -237,7 +237,7 @@ impl HashJoinState {
     }
 
     pub fn can_probe_first_round(&self) -> bool {
-        !matches!(
+        matches!(
             self.hash_join_desc.join_type,
             JoinType::Left | JoinType::LeftSingle | JoinType::LeftAnti | JoinType::Full
         )
