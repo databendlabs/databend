@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
@@ -104,7 +103,7 @@ impl BlockReader {
                             let (offset, len) = meta.offset_length();
                             let key =
                                 TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.put(key.into(), Arc::new((arrow2_array.clone(), data.len())))
+                            cache.insert(key.into(), (arrow2_array.clone(), data.len()));
                         }
                     }
                     Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)

@@ -35,10 +35,11 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 
+use crate::CacheValue;
 use crate::DiskCacheKey;
 
 pub struct DiskCache {
-    cache: LruCache<String, u64, FileSize>,
+    cache: LruCache<String, CacheValue<FileSize>>,
     root: PathBuf,
     sync_data: bool,
 }
@@ -55,7 +56,7 @@ impl DiskCache {
     /// expects to have sole maintenance of the contents.
     pub fn new<T>(
         path: T,
-        size: u64,
+        size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> self::io_result::Result<Self>
@@ -63,7 +64,7 @@ impl DiskCache {
         PathBuf: From<T>,
     {
         DiskCache {
-            cache: LruCache::with_meter(size, FileSize),
+            cache: LruCache::<String, CacheValue<FileSize>>::with_bytes_capacity(size),
             root: PathBuf::from(path),
             sync_data,
         }
@@ -76,7 +77,7 @@ type CacheHolder = Arc<RwLock<Option<DiskCache>>>;
 impl DiskCache {
     /// Return the current size of all the files in the cache.
     pub fn size(&self) -> u64 {
-        self.cache.size()
+        self.cache.bytes_size()
     }
 
     /// Return the count of entries in the cache.
@@ -182,7 +183,7 @@ impl DiskCache {
                                 disk_cache_opt
                                     .expect("unreachable, disk cache should be there")
                                     .cache
-                                    .insert(cache_key, size);
+                                    .insert(cache_key, Into::into(FileSize(size)));
                             }
                             let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
                             if count % 1000 == 0 {
@@ -278,7 +279,7 @@ impl DiskCache {
         }
 
         // check eviction
-        while self.cache.size() + bytes_len > self.cache.capacity() {
+        while self.cache.bytes_size() + bytes_len > self.cache.capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
                 let cached_item_path = self.abs_path_of_cache_key(&DiskCacheKey(rel_path));
                 fs::remove_file(&cached_item_path).unwrap_or_else(|e| {
@@ -289,7 +290,7 @@ impl DiskCache {
                 });
             }
         }
-        debug_assert!(self.cache.size() <= self.cache.capacity());
+        debug_assert!(self.cache.bytes_size() <= self.cache.capacity());
 
         let cache_key = self.cache_key(key.as_ref());
         let path = self.abs_path_of_cache_key(&cache_key);
@@ -302,7 +303,8 @@ impl DiskCache {
             bufs.push(IoSlice::new(slick));
         }
         f.write_all_vectored(&mut bufs)?;
-        self.cache.insert(cache_key.0, bytes_len);
+        self.cache
+            .insert(cache_key.0, Into::into(FileSize(bytes_len)));
         if self.sync_data {
             f.sync_data()?;
         }

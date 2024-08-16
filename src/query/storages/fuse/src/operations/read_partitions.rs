@@ -236,7 +236,7 @@ impl FuseTable {
 
         if let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
-                cache.put(cache_key, Arc::new(result.clone()));
+                cache.insert(cache_key, result.clone());
             }
         }
         Ok(result)

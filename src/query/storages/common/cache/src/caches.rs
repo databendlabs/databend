@@ -15,9 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_arrow::parquet::metadata::FileMetaData;
-use databend_common_cache::Count;
-use databend_common_cache::CountableMeter;
-use databend_common_cache::Meter;
+use databend_common_cache::FileSize;
+use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_storages_common_index::filters::Xor8Filter;
@@ -35,7 +34,7 @@ use crate::CacheAccessor;
 use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
-pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo, MemSizedMeter>;
+pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 
 pub type BlockMetaCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
 
@@ -45,12 +44,12 @@ pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = InMemoryLruCache<Xor8Filter, MemSizedMeter>;
+pub type BloomIndexFilterCache = InMemoryLruCache<Xor8Filter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
-pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile, MemSizedMeter>;
+pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = InMemoryLruCache<FileMetaData>;
@@ -58,7 +57,7 @@ pub type FileMetaDataCache = InMemoryLruCache<FileMetaData>;
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
 /// In memory object cache of table column array
-pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray, MemSizedMeter>;
+pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
 pub type ArrayRawDataUncompressedSize = usize;
 pub type SizedColumnArray = (
     Box<dyn databend_common_arrow::arrow::array::Array>,
@@ -70,21 +69,19 @@ pub type SizedColumnArray = (
 // The `Cache` should return
 // - cache item of Type `T`
 // - and implement `CacheAccessor` properly
-pub trait CachedObject<T, M = Count>
-where M: CountableMeter<String, Arc<T>>
-{
-    type Cache: CacheAccessor<V = T, M = M>;
+pub trait CachedObject<T> {
+    type Cache: CacheAccessor<V = T>;
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<CompactSegmentInfo, MemSizedMeter> for CompactSegmentInfo {
+impl CachedObject<CompactSegmentInfo> for CompactSegmentInfo {
     type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
     }
 }
 
-impl CachedObject<CompactSegmentInfo, MemSizedMeter> for SegmentInfo {
+impl CachedObject<CompactSegmentInfo> for SegmentInfo {
     type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
@@ -126,7 +123,7 @@ impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions)
     }
 }
 
-impl CachedObject<Xor8Filter, MemSizedMeter> for Xor8Filter {
+impl CachedObject<Xor8Filter> for Xor8Filter {
     type Cache = BloomIndexFilterCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_filter_cache()
@@ -140,7 +137,7 @@ impl CachedObject<FileMetaData> for FileMetaData {
     }
 }
 
-impl CachedObject<InvertedIndexFile, MemSizedMeter> for InvertedIndexFile {
+impl CachedObject<InvertedIndexFile> for InvertedIndexFile {
     type Cache = InvertedIndexFileCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_file_cache()
@@ -154,40 +151,128 @@ impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
     }
 }
 
-pub trait MemSized {
-    fn mem_bytes(&self) -> usize;
+pub struct CacheValue<T> {
+    inner: Arc<T>,
+    mem_bytes: usize,
 }
 
-impl MemSized for Xor8Filter {
-    fn mem_bytes(&self) -> usize {
-        std::mem::size_of::<Xor8Filter>() + self.filter.finger_prints.len()
+impl<T> CacheValue<T> {
+    pub fn get_inner(&self) -> Arc<T> {
+        self.inner.clone()
     }
 }
 
-impl<V> MemSized for (V, usize) {
-    fn mem_bytes(&self) -> usize {
-        self.1
+impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
+    fn from(value: CompactSegmentInfo) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<CompactSegmentInfo>()
+                + value.raw_block_metas.bytes.len(),
+            inner: Arc::new(value),
+        }
     }
 }
 
-impl MemSized for InvertedIndexFile {
-    fn mem_bytes(&self) -> usize {
-        std::mem::size_of::<InvertedIndexFile>() + self.data.len()
+impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
+    fn from(value: Vec<Arc<BlockMeta>>) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
     }
 }
 
-impl MemSized for CompactSegmentInfo {
-    fn mem_bytes(&self) -> usize {
-        std::mem::size_of::<CompactSegmentInfo>() + self.raw_block_metas.bytes.len()
+impl From<TableSnapshot> for CacheValue<TableSnapshot> {
+    fn from(value: TableSnapshot) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
     }
 }
 
-pub struct MemSizedMeter;
+impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
+    fn from(value: TableSnapshotStatistics) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
 
-impl<T: MemSized> Meter<String, Arc<T>> for MemSizedMeter {
-    type Measure = usize;
+impl From<Xor8Filter> for CacheValue<Xor8Filter> {
+    fn from(value: Xor8Filter) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<Xor8Filter>() + value.filter.finger_prints.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
 
-    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<T>) -> Self::Measure {
-        value.mem_bytes()
+impl From<BloomIndexMeta> for CacheValue<BloomIndexMeta> {
+    fn from(value: BloomIndexMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<InvertedIndexMeta> for CacheValue<InvertedIndexMeta> {
+    fn from(value: InvertedIndexMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
+    fn from(value: InvertedIndexFile) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<InvertedIndexFile>() + value.data.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<FileMetaData> for CacheValue<FileMetaData> {
+    fn from(value: FileMetaData) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<(PartStatistics, Partitions)> for CacheValue<(PartStatistics, Partitions)> {
+    fn from(value: (PartStatistics, Partitions)) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<SizedColumnArray> for CacheValue<SizedColumnArray> {
+    fn from(value: SizedColumnArray) -> Self {
+        CacheValue {
+            mem_bytes: value.1,
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<FileSize> for CacheValue<FileSize> {
+    fn from(value: FileSize) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl<T> MemSized for CacheValue<T> {
+    fn mem_bytes(&self) -> usize {
+        self.mem_bytes
     }
 }

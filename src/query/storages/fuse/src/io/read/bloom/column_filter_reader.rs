@@ -23,7 +23,6 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
-use databend_storages_common_cache::MemSizedMeter;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -36,7 +35,7 @@ use parquet::schema::types::SchemaDescPtr;
 
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 
-type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader, MemSizedMeter>;
+type CachedReader = InMemoryCacheReader<Xor8Filter, Xor8FilterLoader>;
 
 /// Load the filter of a given bloom index column. Also
 /// - generates the proper cache key

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod bytes_meter;
-pub mod count_meter;
 pub mod file_meter;
 
 use std::borrow::Borrow;

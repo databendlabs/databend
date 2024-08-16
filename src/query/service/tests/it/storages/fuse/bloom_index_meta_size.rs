@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
-use databend_common_cache::LruCache;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -35,8 +34,8 @@ use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::Unit;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -177,11 +176,7 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryLruCache::create(
-        String::from(""),
-        Unit::Count,
-        LruCache::new(cache_number as u64),
-    );
+    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
     {
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
@@ -192,7 +187,10 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
                 .collect::<Vec<_>>();
             let statistics = segment_info.summary.clone();
             let segment_info = SegmentInfo::new(block_metas, statistics);
-            cache.put(format!("{}", uuid.simple()), Arc::new(segment_info));
+            cache.insert(
+                format!("{}", uuid.simple()),
+                CompactSegmentInfo::try_from(segment_info)?,
+            );
         }
     }
     show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
@@ -208,7 +206,7 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
     let num_block_per_seg = 1000;
 
     let segment_info = build_test_segment_info(num_block_per_seg)?;
-    let segment_info_bytes = segment_info.to_bytes()?;
+    let segment_info_bytes = CompactSegmentInfo::try_from(segment_info)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -224,18 +222,11 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryLruCache::create(
-        String::from(""),
-        Unit::Count,
-        LruCache::new(cache_number as u64),
-    );
+    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
 
     for _ in 0..cache_number {
         let uuid = Uuid::new_v4();
-        cache.put(
-            format!("{}", uuid.simple()),
-            Arc::new(segment_info_bytes.clone()),
-        );
+        cache.insert(format!("{}", uuid.simple()), segment_info_bytes.clone());
     }
 
     show_memory_usage(
@@ -272,15 +263,11 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryLruCache::create(
-        String::from(""),
-        Unit::Count,
-        LruCache::new(cache_number as u64),
-    );
+    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
 
     for _ in 0..cache_number {
         let uuid = Uuid::new_v4();
-        cache.put(format!("{}", uuid.simple()), Arc::new(segment_raw.clone()));
+        cache.insert(format!("{}", uuid.simple()), segment_raw.clone());
     }
     show_memory_usage(
         "SegmentInfoCache (compact repr)",
@@ -371,13 +358,10 @@ fn build_test_segment_info(
 
 #[allow(dead_code)]
 fn populate_cache<T>(cache: &InMemoryLruCache<T>, item: T, num_cache: usize)
-where T: Clone {
+where T: Clone + Into<CacheValue<T>> {
     for _ in 0..num_cache {
         let uuid = Uuid::new_v4();
-        cache.put(
-            format!("{}", uuid.simple()),
-            std::sync::Arc::new(item.clone()),
-        );
+        cache.insert(format!("{}", uuid.simple()), item.clone());
     }
 }
 

@@ -16,9 +16,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_cache::Count;
-use databend_common_cache::CountableMeter;
-
 #[derive(Copy, Clone, Debug)]
 pub enum Unit {
     Bytes,
@@ -37,15 +34,14 @@ impl Display for Unit {
 // The cache accessor, crate users usually working on this interface while manipulating caches
 pub trait CacheAccessor {
     type V;
-    type M: CountableMeter<String, Arc<Self::V>> = Count;
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>>;
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>>;
 
-    fn put(&self, key: String, value: Arc<Self::V>);
+    fn insert(&self, key: String, value: Self::V) -> Arc<Self::V>;
     fn evict(&self, k: &str) -> bool;
     fn contains_key(&self, k: &str) -> bool;
-    fn size(&self) -> u64;
+    fn bytes_size(&self) -> u64;
     fn capacity(&self) -> u64;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {

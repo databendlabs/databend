@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_arrow::arrow::array::Array;
@@ -168,7 +167,7 @@ impl BlockReader {
                         let meta = column_metas.get(&column_id).unwrap();
                         let (offset, len) = meta.offset_length();
                         let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                        cache.put(key.into(), Arc::new((array, size)))
+                        cache.insert(key.into(), (array, size));
                     }
                 }
             }

@@ -147,7 +147,7 @@ impl MergeIOReadResult {
                     column_range.end - column_range.start,
                 );
                 let data = chunk_data.slice(range.clone());
-                table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data));
+                table_data_cache.insert(cache_key.as_ref().to_owned(), data);
             }
         }
         self.columns_chunk_offsets

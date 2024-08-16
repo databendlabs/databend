@@ -91,13 +91,14 @@ impl CacheAccessor for LruDiskCacheHolder {
         Some(cached_value)
     }
 
-    fn put(&self, key: String, value: Arc<Bytes>) {
+    fn insert(&self, key: String, value: Bytes) -> Arc<Bytes> {
         let crc = crc32fast::hash(value.as_ref());
         let crc_bytes = crc.to_le_bytes();
         let mut cache = self.write();
         if let Err(e) = cache.insert_bytes(&key, &[value.as_ref(), &crc_bytes]) {
             error!("put disk cache item failed {}", e);
         }
+        Arc::new(value)
     }
 
     fn evict(&self, k: &str) -> bool {
@@ -117,7 +118,7 @@ impl CacheAccessor for LruDiskCacheHolder {
         cache.contains_key(k)
     }
 
-    fn size(&self) -> u64 {
+    fn bytes_size(&self) -> u64 {
         let cache = self.read();
         cache.size()
     }
@@ -164,7 +165,7 @@ pub struct LruDiskCacheBuilder;
 impl LruDiskCacheBuilder {
     pub fn new_disk_cache(
         path: &PathBuf,
-        disk_cache_bytes_size: u64,
+        disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<LruDiskCacheHolder> {

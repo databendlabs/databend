@@ -33,7 +33,7 @@ use databend_common_metrics::cache::get_cache_miss_count;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::CountableMeter;
+use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::Unit;
 use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
@@ -130,7 +130,7 @@ impl SyncSystemTable for CachesTable {
             columns.nodes.push(local_node.clone());
             columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
             columns.num_items.push(cache.len() as u64);
-            columns.size.push(cache.size());
+            columns.size.push(cache.bytes_size());
             columns.capacity.push(cache.capacity());
             columns.unit.push(Unit::Bytes.to_string());
             let access = get_cache_access_count(DISK_TABLE_DATA_CACHE_NAME);
@@ -188,15 +188,15 @@ impl CachesTable {
         SyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    fn append_row<V, M: CountableMeter<String, Arc<V>>>(
-        cache: &InMemoryLruCache<V, M>,
+    fn append_row<V: Into<CacheValue<V>>>(
+        cache: &InMemoryLruCache<V>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {
         columns.nodes.push(local_node.to_string());
         columns.names.push(cache.name().to_string());
         columns.num_items.push(cache.len() as u64);
-        columns.size.push(cache.size());
+        columns.size.push(cache.bytes_size());
         columns.capacity.push(cache.capacity());
         columns.unit.push(cache.unit().to_string());
 

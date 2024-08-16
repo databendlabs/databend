@@ -127,7 +127,7 @@ impl SegmentsIO {
         let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
         dal.write(&serialized_segment.path, raw_bytes).await?;
         if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.put(serialized_segment.path, Arc::new(compact_segment_info));
+            segment_cache.insert(serialized_segment.path, compact_segment_info);
         }
         Ok(())
     }

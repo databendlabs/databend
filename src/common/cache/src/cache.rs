@@ -17,10 +17,10 @@ pub mod lru;
 use std::borrow::Borrow;
 use std::hash::Hash;
 
-use crate::Meter;
+use crate::mem_sized::MemSized;
 
 /// A trait for a cache.
-pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
+pub trait Cache<K: Eq + Hash + MemSized, V: MemSized> {
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
     fn get<Q>(&mut self, k: &Q) -> Option<&V>
@@ -73,7 +73,7 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
 
     /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
     /// by the cache.
-    fn size(&self) -> u64;
+    fn bytes_size(&self) -> u64;
 
     /// Removes all key-value pairs from the cache.
     fn clear(&mut self);

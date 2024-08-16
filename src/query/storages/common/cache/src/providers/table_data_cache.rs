@@ -33,7 +33,7 @@ use crate::LruDiskCacheBuilder;
 
 struct CacheItem {
     key: String,
-    value: Arc<Bytes>,
+    value: Bytes,
 }
 
 #[derive(Clone)]
@@ -76,7 +76,7 @@ impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
         path: &PathBuf,
         population_queue_size: u32,
-        disk_cache_bytes_size: u64,
+        disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
@@ -125,11 +125,14 @@ impl CacheAccessor for TableDataCache {
         Some(cached_value)
     }
 
-    fn put(&self, k: String, v: Arc<Bytes>) {
+    fn insert(&self, k: String, v: Bytes) -> Arc<Bytes> {
         // check if already cached
         if !self.external_cache.contains_key(&k) {
             // populate the cache is necessary
-            let msg = CacheItem { key: k, value: v };
+            let msg = CacheItem {
+                key: k,
+                value: v.clone(),
+            };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
                     metrics_inc_cache_population_pending_count(1, DISK_TABLE_DATA_CACHE_NAME);
@@ -143,6 +146,7 @@ impl CacheAccessor for TableDataCache {
                 }
             }
         }
+        Arc::new(v)
     }
 
     fn evict(&self, k: &str) -> bool {
@@ -153,8 +157,8 @@ impl CacheAccessor for TableDataCache {
         self.external_cache.contains_key(k)
     }
 
-    fn size(&self) -> u64 {
-        self.external_cache.size()
+    fn bytes_size(&self) -> u64 {
+        self.external_cache.bytes_size()
     }
 
     fn capacity(&self) -> u64 {
@@ -181,7 +185,7 @@ impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<
                             continue;
                         }
                     }
-                    self.cache.put(key, value);
+                    self.cache.insert(key, value);
                     metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(_) => {

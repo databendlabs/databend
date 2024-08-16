@@ -68,8 +68,8 @@ impl TokenManager {
     #[async_backtrace::framed]
     pub async fn init(_cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(Self {
-            session_tokens: RwLock::new(LruCache::new(1024)),
-            refresh_tokens: RwLock::new(LruCache::new(1024)),
+            session_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
+            refresh_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
         }));
 
         Ok(())

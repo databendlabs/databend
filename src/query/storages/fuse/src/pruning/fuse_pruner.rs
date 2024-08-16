@@ -395,11 +395,10 @@ impl FusePruner {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {
-                let block_metas = Arc::new(segment.block_metas()?);
-                if populate_cache {
-                    cache.put(segment_path.to_string(), block_metas.clone());
+                match populate_cache {
+                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
+                    false => Ok(Arc::new(segment.block_metas()?)),
                 }
-                Ok(block_metas)
             }
         } else {
             Ok(Arc::new(segment.block_metas()?))
