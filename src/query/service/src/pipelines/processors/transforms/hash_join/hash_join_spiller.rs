@@ -91,15 +91,17 @@ impl HashJoinSpiller {
 
     // Just add datablocks to SpillBuffer without spilling.
     pub(crate) fn buffer(&mut self, data_blocks: &[DataBlock]) -> Result<()> {
+        if data_blocks.is_empty() {
+            return Ok(());
+        }
         let join_type = self.join_type.clone();
-        for data_block in data_blocks {
-            let partition_data_blocks =
-                self.partition_data_block(data_block, &join_type, self.spill_partition_bits)?;
-            for (partition_id, data_block) in partition_data_blocks.into_iter().enumerate() {
-                if !data_block.is_empty() {
-                    self.spill_buffer
-                        .add_partition_data(partition_id, data_block);
-                }
+        let data_block = DataBlock::concat(data_blocks)?;
+        let partition_data_blocks =
+            self.partition_data_block(&data_block, &join_type, self.spill_partition_bits)?;
+        for (partition_id, data_block) in partition_data_blocks.into_iter().enumerate() {
+            if !data_block.is_empty() {
+                self.spill_buffer
+                    .add_partition_data(partition_id, data_block);
             }
         }
         Ok(())
@@ -113,26 +115,25 @@ impl HashJoinSpiller {
     ) -> Result<Vec<DataBlock>> {
         let join_type = self.join_type.clone();
         let mut unspilled_data_blocks = vec![];
-        for data_block in data_blocks {
-            for (partition_id, data_block) in self
-                .partition_data_block(data_block, &join_type, self.spill_partition_bits)?
-                .into_iter()
-                .enumerate()
-            {
-                if !data_block.is_empty() {
-                    if let Some(partition_need_to_spill) = partition_need_to_spill
-                        && !partition_need_to_spill.contains(&(partition_id as u8))
-                    {
-                        unspilled_data_blocks.push(data_block);
-                        continue;
-                    }
-                    self.spill_buffer
-                        .add_partition_data(partition_id, data_block);
-                    if let Some(data_block) = self.spill_buffer.pick_data_to_spill(partition_id)? {
-                        self.spiller
-                            .spill_with_partition(partition_id as u8, data_block)
-                            .await?;
-                    }
+        let data_block = DataBlock::concat(data_blocks)?;
+        for (partition_id, data_block) in self
+            .partition_data_block(&data_block, &join_type, self.spill_partition_bits)?
+            .into_iter()
+            .enumerate()
+        {
+            if !data_block.is_empty() {
+                if let Some(partition_need_to_spill) = partition_need_to_spill
+                    && !partition_need_to_spill.contains(&(partition_id as u8))
+                {
+                    unspilled_data_blocks.push(data_block);
+                    continue;
+                }
+                self.spill_buffer
+                    .add_partition_data(partition_id, data_block);
+                if let Some(data_block) = self.spill_buffer.pick_data_to_spill(partition_id)? {
+                    self.spiller
+                        .spill_with_partition(partition_id as u8, data_block)
+                        .await?;
                 }
             }
         }

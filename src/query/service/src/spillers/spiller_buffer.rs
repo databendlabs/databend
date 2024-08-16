@@ -26,9 +26,8 @@ pub struct SpillBuffer {
 impl SpillBuffer {
     pub fn create(num_partitions: usize, buffer_threshold: usize) -> Self {
         // The threshold of each partition, we will spill the partition data if the
-        // size exceeds the threshold, the minimum threshold is 2MB.
-        let partition_threshold =
-            std::cmp::max(buffer_threshold / num_partitions, 2) * 1000 * 1000;
+        // size exceeds the threshold, the minimum threshold is 1MB.
+        let partition_threshold = std::cmp::max(buffer_threshold / num_partitions, 1) * 1000 * 1000;
         SpillBuffer {
             partition_data: vec![Vec::new(); num_partitions],
             partition_size: vec![0; num_partitions],
