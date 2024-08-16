@@ -52,7 +52,7 @@ statement ok
 unset variable (a, b, c)
 
 statement ok
-CREATE TABLE monthly_sales(empid INT, amount INT, month TEXT) as select 1,2,'3';
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT) as select 1,2,'3';
 
 statement ok
 set variable t = 'monthly_sales';
