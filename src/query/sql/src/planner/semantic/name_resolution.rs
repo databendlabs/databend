@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IdentifierType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
