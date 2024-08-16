@@ -73,11 +73,14 @@ LET x := 'min';
 LET y := IDENTIFIER(:x)([1,2]);
 ---------- Output ----------
 error: 
-  --> SQL:2:10
+  --> SQL:2:21
   |
 1 | LET x := 'min';
 2 | LET y := IDENTIFIER(:x)([1,2]);
-  |          ^^^^^^^^^^^^^^ variable is not allowed in this context
+  |          ---------- ^ unexpected `:`, expecting `VariableAccess`
+  |          |           
+  |          while parsing `function(..., x -> ...)`
+  |          while parsing expression
 
 
 ---------- Input ----------
