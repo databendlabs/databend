@@ -29,8 +29,6 @@ use databend_common_ast::ast::RefreshInvertedIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -59,6 +57,7 @@ use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::MetadataRef;
+use crate::Planner;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
@@ -165,8 +164,9 @@ impl Binder {
 
                     let mut s_exprs = Vec::with_capacity(indexes.len());
                     for (index_id, _, index_meta) in indexes {
-                        let tokens = tokenize_sql(&index_meta.query)?;
-                        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                        let stmt = Planner::new(self.ctx.clone())
+                            .normalize_parse_sql(&index_meta.query)?;
+
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
@@ -338,8 +338,7 @@ impl Binder {
         limit: Option<u64>,
         segment_locs: Option<Vec<Location>>,
     ) -> Result<RefreshIndexPlan> {
-        let tokens = tokenize_sql(&index_meta.query)?;
-        let (mut stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let mut stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(&index_meta.query)?;
 
         // The file name and block only correspond to each other at the time of table_scan,
         // after multiple transformations, this correspondence does not exist,

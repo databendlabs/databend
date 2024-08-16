@@ -51,8 +51,6 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
@@ -316,8 +314,7 @@ impl Binder {
             ),
         };
 
-        let tokens = tokenize_sql(query.as_str())?;
-        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(&query)?;
         self.bind_statement(bind_context, &stmt).await
     }
 

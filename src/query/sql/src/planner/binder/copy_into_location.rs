@@ -15,8 +15,6 @@
 use databend_common_ast::ast::CopyIntoLocationSource;
 use databend_common_ast::ast::CopyIntoLocationStmt;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
@@ -26,6 +24,7 @@ use crate::binder::Binder;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::Planner;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -43,9 +42,7 @@ impl<'a> Binder {
                         &table.table,
                     );
                 let subquery = format!("SELECT * FROM {catalog_name}.{database_name}.{table_name}");
-                let tokens = tokenize_sql(&subquery)?;
-                let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;
-                let sub_stmt = sub_stmt_msg.0;
+                let sub_stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(&subquery)?;
                 match &sub_stmt {
                     Statement::Query(query) => {
                         self.bind_statement(bind_context, &Statement::Query(query.clone()))

@@ -24,6 +24,7 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::token::Token;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::token::Tokenizer;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
@@ -149,7 +150,7 @@ impl Planner {
                     return Err(ErrorCode::SyntaxException("convert prql to sql failed."));
                 }
 
-                self.replace_stmt(&mut stmt)?;
+                self.replace_stmt(&mut stmt, true)?;
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -239,7 +240,7 @@ impl Planner {
         }
     }
 
-    fn replace_stmt(&self, stmt: &mut Statement) -> Result<()> {
+    fn replace_stmt(&self, stmt: &mut Statement, limit_row: bool) -> Result<()> {
         let name_resolution_ctx = NameResolutionContext::try_from_context(self.ctx.clone())?;
         let mut identifier_normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
         stmt.drive_mut(&mut identifier_normalizer);
@@ -256,9 +257,18 @@ impl Planner {
                 set_ops_counter.count, max_set_ops
             )));
         }
-
-        self.add_max_rows_limit(stmt);
+        if limit_row {
+            self.add_max_rows_limit(stmt);
+        }
         Ok(())
+    }
+
+    pub fn normalize_parse_sql(&self, sql: &str) -> Result<Statement> {
+        let tokens: Vec<Token> = tokenize_sql(sql)?;
+        let sql_dialect = self.ctx.get_settings().get_sql_dialect()?;
+        let (mut stmt, _) = parse_sql(&tokens, sql_dialect)?;
+        self.replace_stmt(&mut stmt, false)?;
+        Ok(stmt)
     }
 }
 

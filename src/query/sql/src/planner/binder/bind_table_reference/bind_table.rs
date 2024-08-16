@@ -17,8 +17,6 @@ use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
@@ -31,6 +29,7 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
 use crate::BindContext;
+use crate::Planner;
 
 impl Binder {
     /// Bind a base table.
@@ -173,8 +172,8 @@ impl Binder {
                 ))?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-            let tokens = tokenize_sql(query.as_str())?;
-            let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+
+            let stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(&query)?;
             let Statement::Query(query) = &stmt else {
                 unreachable!()
             };
@@ -220,8 +219,7 @@ impl Binder {
                     .options()
                     .get(QUERY)
                     .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
-                let tokens = tokenize_sql(query.as_str())?;
-                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                let stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(&query)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 new_bind_context.share_paramas = share_paramas;

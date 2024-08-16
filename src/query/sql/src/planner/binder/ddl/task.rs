@@ -41,18 +41,14 @@ use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
 fn verify_single_statement(sql: &String) -> Result<()> {
-    let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
-        ErrorCode::SyntaxException(format!(
-            "syntax error for task formatted sql: {}, error: {:?}",
-            sql, e
-        ))
-    })?;
-    parse_sql(&tokens, Dialect::PostgreSQL).map_err(|e| {
-        ErrorCode::SyntaxException(format!(
-            "syntax error for task formatted sql: {}, error: {:?}",
-            sql, e
-        ))
-    })?;
+    let _ = tokenize_sql(sql.as_str())
+        .and_then(|tokens| parse_sql(&tokens, Dialect::PostgreSQL))
+        .map_err(|e| {
+            ErrorCode::SyntaxException(format!(
+                "syntax error for task formatted sql: {}, error: {:?}",
+                sql, e
+            ))
+        })?;
     Ok(())
 }
 fn verify_task_sql(sql: &TaskSql) -> Result<()> {

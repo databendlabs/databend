@@ -22,8 +22,6 @@ use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
@@ -69,6 +67,7 @@ use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::Planner;
 use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
@@ -695,10 +694,8 @@ impl<'a> Binder {
         query: &str,
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
-        let tokens = tokenize_sql(query)?;
-        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let stmt = Planner::new(self.ctx.clone()).normalize_parse_sql(query)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
-
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
             *rewrite_kind = Some(rewrite_kind_r)
         }
