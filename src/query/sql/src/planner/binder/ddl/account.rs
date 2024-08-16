@@ -302,23 +302,25 @@ impl Binder {
                 .await?
         };
 
+        // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
         for option in user_options {
             user_option.apply(option);
         }
 
-        // None means no change to make
+        // If `must_change_password` is set, user need to change password first when login.
+        let need_change = user_option
+            .must_change_password()
+            .cloned()
+            .unwrap_or_default();
+
+        // None means auth info is not changed.
         let new_auth_info = if let Some(auth_option) = &auth_option {
-            // if `must_change_password` is set, user need to change password first,
-            // unless user is changing self password
-            let need_change = if user.is_none() {
-                false
-            } else {
-                user_option
-                    .must_change_password()
-                    .cloned()
-                    .unwrap_or_default()
-            };
+            // If user is changing self password, always set `need_change` as false,
+            // because after this operation, the password is changed.
+            // And if user is changing other user's password,
+            // set `need_change` same as `must_change_password` option.
+            let need_change = if user.is_none() { false } else { need_change };
             let auth_info = user_info.auth_info.alter2(
                 &auth_option.auth_type.clone().map(Into::into),
                 &auth_option.password,
@@ -339,6 +341,10 @@ impl Binder {
             } else {
                 Some(auth_info)
             }
+        } else if need_change != user_info.auth_info.get_need_change() {
+            // If password is not changed, set `need_change` same as `must_change_password` option.
+            let new_auth_info = user_info.auth_info.create_with_need_change(need_change);
+            Some(new_auth_info)
         } else {
             None
         };
