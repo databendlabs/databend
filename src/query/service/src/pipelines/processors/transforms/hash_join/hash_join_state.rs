@@ -111,6 +111,8 @@ pub struct HashJoinState {
     pub(crate) spilled_partitions: RwLock<HashSet<u8>>,
     /// Spill partition bits, it is used to calculate the number of partitions.
     pub(crate) spill_partition_bits: usize,
+    /// Spill buffer size threshold.
+    pub(crate) spill_buffer_threshold: usize,
     /// The next partition id to be restored.
     pub(crate) partition_id: AtomicU8,
     /// Whether need next round, if it is true, restore data from spilled data and start next round.
@@ -156,6 +158,7 @@ impl HashJoinState {
             _enable_spill = true;
         }
         let spill_partition_bits = settings.get_join_spilling_partition_bits()?;
+        let spill_buffer_threshold = settings.get_join_spilling_buffer_threshold_per_proc()?;
 
         let column_map = if let Some((_, column_map)) = build_side_cache_info {
             column_map
@@ -180,6 +183,7 @@ impl HashJoinState {
             is_spill_happened: AtomicBool::new(false),
             _enable_spill,
             spill_partition_bits,
+            spill_buffer_threshold,
             merge_into_state: match enable_merge_into_optimization {
                 false => None,
                 true => Some(MergeIntoState::create_merge_into_state(

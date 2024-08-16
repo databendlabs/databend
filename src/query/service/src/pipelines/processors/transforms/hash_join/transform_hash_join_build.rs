@@ -37,10 +37,10 @@ use crate::pipelines::processors::Processor;
 /// 3. Empty: the hash table is empty.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HashTableType {
-    UnFinished,
     FirstRound,
     Restored,
     Empty,
+    UnFinished,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -52,9 +52,9 @@ pub enum Step {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SyncStep {
-    // Collect DataBlocks to BuildState.
+    // Collect data blocks to BuildState.
     Collect,
-    // Build hash table.
+    // Build the hash table.
     Finalize,
 }
 
@@ -82,7 +82,7 @@ pub struct TransformHashJoinBuild {
     build_state: Arc<HashJoinBuildState>,
     hash_table_type: HashTableType,
 
-    // States for different steps.
+    // States for various steps.
     // Whether we have checked if spill happens.
     is_spill_happen_checked: bool,
     // Whether spill has happened.
@@ -93,7 +93,7 @@ pub struct TransformHashJoinBuild {
     is_spilled_partitions_added: bool,
     // Whether the finalize step is finished.
     is_finalize_finished: bool,
-    // Whether the data blocks comes from restore.
+    // Whether the data blocks are restored from spilled data.
     is_from_restore: bool,
 
     // Spill related states.
@@ -114,6 +114,7 @@ impl TransformHashJoinBuild {
         build_state: Arc<HashJoinBuildState>,
     ) -> Result<Box<dyn Processor>> {
         build_state.build_attach();
+
         // Create a hash join spiller.
         let hash_join_state = build_state.hash_join_state.clone();
         let hash_keys = hash_join_state.hash_join_desc.build_keys.clone();
@@ -124,29 +125,31 @@ impl TransformHashJoinBuild {
             hash_keys,
             hash_method,
             build_state.hash_join_state.spill_partition_bits,
+            build_state.hash_join_state.spill_buffer_threshold,
             true,
         )?;
+
         // Spill settings
         let global_memory_threshold = build_state.global_memory_threshold;
         let processor_memory_threshold = build_state.processor_memory_threshold;
+
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
-            step: Step::Sync(SyncStep::Collect),
-            step_logs: vec![Step::Sync(SyncStep::Collect)],
-            build_state,
-            is_finalize_finished: false,
-            // processor_id,
             data_blocks: vec![],
             data_blocks_memory_size: 0,
+            build_state,
             hash_table_type: HashTableType::FirstRound,
             is_spill_happen_checked: false,
             is_spill_happened: false,
             is_collect_finished: false,
             is_spilled_partitions_added: false,
+            is_finalize_finished: false,
             is_from_restore: false,
             spiller,
             global_memory_threshold,
             processor_memory_threshold,
+            step: Step::Sync(SyncStep::Collect),
+            step_logs: vec![Step::Sync(SyncStep::Collect)],
         }))
     }
 
@@ -219,7 +222,7 @@ impl Processor for TransformHashJoinBuild {
             Step::Async(step) => {
                 match step {
                     AsyncStep::CheckSpillHappen | AsyncStep::Spill | AsyncStep::NextRound => {
-                        // After spill, the processor should continue to collect incoming data.
+                        // Continue to collect data to BuildState.
                         self.collect()
                     }
                     AsyncStep::WaitCollect => {
@@ -250,8 +253,9 @@ impl Processor for TransformHashJoinBuild {
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Collect) => {
-                // The processor has accepted all data from downstream
-                // If there is still pending spill data, add to row space.
+                // If spill happens, we buffer data blocks to SpillBuffer, but there are two exceptions:
+                // 1. If we can probe the first round, we can build the hash table directly.
+                // 2. If the data blocks are restored from spilled partitions, we can build the hash table directly.
                 if self.is_spill_happened()
                     && !self.can_probe_first_round()
                     && !self.is_from_restore()
@@ -343,8 +347,77 @@ impl Processor for TransformHashJoinBuild {
 }
 
 impl TransformHashJoinBuild {
-    // Called after processor read spilled data
-    // It means next round build will start, need to reset some variables.
+    fn add_data_block(&mut self, data_block: DataBlock) {
+        self.data_blocks_memory_size += data_block.memory_size();
+        self.data_blocks.push(data_block);
+    }
+
+    fn need_check_spill_happen(&self) -> bool {
+        !self.is_spill_happen_checked
+    }
+
+    fn can_probe_first_round(&self) -> bool {
+        self.build_state.hash_join_state.can_probe_first_round()
+    }
+
+    fn need_collect_data_block(&self) -> bool {
+        !self.is_collect_finished
+    }
+
+    fn can_fast_return(&self) -> bool {
+        self.build_state
+            .hash_join_state
+            .fast_return
+            .load(Ordering::Relaxed)
+    }
+
+    fn is_finalize_finished(&self) -> bool {
+        self.is_finalize_finished
+    }
+
+    fn is_spill_happened(&self) -> bool {
+        self.is_spill_happened
+    }
+
+    fn partition_to_restore(&self) -> u8 {
+        self.build_state
+            .hash_join_state
+            .partition_id
+            .load(Ordering::Relaxed)
+    }
+
+    fn set_need_next_round(&self) {
+        self.build_state
+            .hash_join_state
+            .need_next_round
+            .store(true, Ordering::Relaxed);
+    }
+
+    fn need_next_round(&self) -> bool {
+        self.build_state
+            .hash_join_state
+            .need_next_round
+            .load(Ordering::Relaxed)
+    }
+
+    fn has_unrestored_data(&self) -> bool {
+        if self.build_state.join_type() == JoinType::Cross {
+            self.spiller.has_next_restore_file()
+        } else {
+            !self
+                .build_state
+                .hash_join_state
+                .spilled_partitions
+                .read()
+                .is_empty()
+        }
+    }
+
+    fn is_from_restore(&self) -> bool {
+        self.is_from_restore
+    }
+
+    // Reset variables for the next round build.
     fn reset_for_next_round(&mut self) {
         self.is_from_restore = true;
         self.is_collect_finished = false;
@@ -352,8 +425,7 @@ impl TransformHashJoinBuild {
         self.hash_table_type = HashTableType::Restored;
     }
 
-    // Called after processor read spilled data
-    // It means next round build will start, need to reset some variables.
+    // Reset build state for the next round.
     fn reset_build_state(&mut self) -> Result<()> {
         // Only need to reset the following variables once
         if self
@@ -388,47 +460,6 @@ impl TransformHashJoinBuild {
         Ok(())
     }
 
-    fn add_data_block(&mut self, data_block: DataBlock) {
-        self.data_blocks_memory_size += data_block.memory_size();
-        self.data_blocks.push(data_block);
-    }
-
-    fn need_check_spill_happen(&self) -> bool {
-        !self.is_spill_happen_checked
-    }
-
-    fn can_probe_first_round(&self) -> bool {
-        self.build_state.hash_join_state.can_probe_first_round()
-    }
-
-    fn need_collect_data_block(&self) -> bool {
-        !self.is_collect_finished
-    }
-
-    fn can_fast_return(&self) -> bool {
-        self.build_state
-            .hash_join_state
-            .fast_return
-            .load(Ordering::Relaxed)
-    }
-
-    fn is_finalize_finished(&self) -> bool {
-        self.is_finalize_finished
-    }
-
-    fn is_spill_happened(&self) -> bool {
-        self.is_spill_happened
-    }
-
-    fn partition_to_restore(&self) -> u8 {
-        // If there is no partition to restore, probe will send `-1` to build
-        // Which means it's time to finish.
-        self.build_state
-            .hash_join_state
-            .partition_id
-            .load(Ordering::Relaxed)
-    }
-
     fn need_spill(&mut self) -> bool {
         if self.data_blocks_memory_size > self.processor_memory_threshold {
             info!(
@@ -445,9 +476,9 @@ impl TransformHashJoinBuild {
             global_used = 0;
         }
         let global_memory_threshold = self.global_memory_threshold;
-        let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
-        let total_gb = byte.get_appropriate_unit(false).format(3);
         if global_used as usize > global_memory_threshold {
+            let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
+            let total_gb = byte.get_appropriate_unit(false).format(3);
             let spill_threshold_gb = Byte::from_unit(global_memory_threshold as f64, ByteUnit::B)
                 .unwrap()
                 .get_appropriate_unit(false)
@@ -460,36 +491,5 @@ impl TransformHashJoinBuild {
         } else {
             false
         }
-    }
-
-    fn set_need_next_round(&self) {
-        self.build_state
-            .hash_join_state
-            .need_next_round
-            .store(true, Ordering::Relaxed);
-    }
-
-    fn need_next_round(&self) -> bool {
-        self.build_state
-            .hash_join_state
-            .need_next_round
-            .load(Ordering::Relaxed)
-    }
-
-    fn has_unrestored_data(&self) -> bool {
-        if self.build_state.join_type() == JoinType::Cross {
-            self.spiller.has_next_restore_file()
-        } else {
-            !self
-                .build_state
-                .hash_join_state
-                .spilled_partitions
-                .read()
-                .is_empty()
-        }
-    }
-
-    fn is_from_restore(&self) -> bool {
-        self.is_from_restore
     }
 }

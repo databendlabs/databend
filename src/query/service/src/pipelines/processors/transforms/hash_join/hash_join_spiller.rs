@@ -56,6 +56,7 @@ impl HashJoinSpiller {
         hash_keys: Vec<Expr>,
         hash_method: HashMethodKind,
         spill_partition_bits: usize,
+        spill_buffer_threshold: usize,
         is_build_side: bool,
     ) -> Result<Self> {
         // Create a Spiller for spilling build side data.
@@ -72,7 +73,7 @@ impl HashJoinSpiller {
         let spiller = Spiller::create(ctx.clone(), operator, spill_config, spiller_type)?;
 
         // Create a SpillBuffer to buffer data before spilling.
-        let spill_buffer = SpillBuffer::create(1 << spill_partition_bits);
+        let spill_buffer = SpillBuffer::create(1 << spill_partition_bits, spill_buffer_threshold);
 
         let join_type = join_state.join_type();
         Ok(Self {
@@ -97,7 +98,7 @@ impl HashJoinSpiller {
             for (partition_id, data_block) in partition_data_blocks.into_iter().enumerate() {
                 if !data_block.is_empty() {
                     self.spill_buffer
-                        .add_partition_data(partition_id as u8, data_block);
+                        .add_partition_data(partition_id, data_block);
                 }
             }
         }
@@ -126,12 +127,10 @@ impl HashJoinSpiller {
                         continue;
                     }
                     self.spill_buffer
-                        .add_partition_data(partition_id as u8, data_block);
-                    if let Some((partition_id, data_blocks)) =
-                        self.spill_buffer.pick_unspilled_partition_data()?
-                    {
+                        .add_partition_data(partition_id, data_block);
+                    if let Some(data_block) = self.spill_buffer.pick_data_to_spill(partition_id)? {
                         self.spiller
-                            .spill_with_partition(partition_id, data_blocks)
+                            .spill_with_partition(partition_id as u8, data_block)
                             .await?;
                     }
                 }

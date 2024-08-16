@@ -47,7 +47,7 @@ pub enum Step {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SyncStep {
-    // Probe hash table.
+    // Probe the hash table.
     Probe,
     // Final scan for right-related join or merge into.
     FinalScan,
@@ -55,9 +55,9 @@ pub enum SyncStep {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AsyncStep {
-    // Wait build side hash table to finish.
+    // Wait the build side hash table to finish.
     WaitBuild,
-    // Wait probe side to finish.
+    // Wait the probe phase to finish.
     WaitProbe,
     // Spill data blocks.
     Spill,
@@ -97,7 +97,7 @@ pub struct TransformHashJoinProbe {
     // 2. MergeInto: the final scan for merge into.
     final_scan_type: FinalScanType,
 
-    // States for different steps.
+    // States for various steps.
     // Whether spill has happened.
     is_spill_happened: bool,
     // Whether the hash table build phase is finished.
@@ -110,7 +110,7 @@ pub struct TransformHashJoinProbe {
     // Spill related states.
     // The spiller is used to spill/restore data blocks.
     spiller: HashJoinSpiller,
-    // The next partition id to be restored.
+    // The next partition id to restore.
     partition_id_to_restore: u8,
 
     step: Step,
@@ -141,6 +141,7 @@ impl TransformHashJoinProbe {
             hash_keys,
             hash_method,
             join_probe_state.hash_join_state.spill_partition_bits,
+            join_probe_state.hash_join_state.spill_buffer_threshold,
             false,
         )?;
 
@@ -149,6 +150,15 @@ impl TransformHashJoinProbe {
             .hash_join_desc
             .other_predicate
             .clone();
+
+        let probe_state = ProbeState::create(
+            max_block_size,
+            join_type,
+            with_conjunct,
+            has_string_column,
+            func_ctx,
+            other_predicate,
+        );
 
         let can_probe_first_round = join_probe_state.hash_join_state.can_probe_first_round();
         Ok(Box::new(TransformHashJoinProbe {
@@ -160,27 +170,19 @@ impl TransformHashJoinProbe {
             unspilled_data_blocks_need_to_probe: VecDeque::new(),
             restored_data_blocks: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
+            join_probe_state,
+            probe_state,
+            max_block_size,
+            hash_table_type: HashTableType::Empty,
+            final_scan_type: FinalScanType::HashJoin,
+            is_spill_happened: false,
+            is_build_finished: false,
+            is_final_scan_finished: false,
+            can_probe_first_round,
+            spiller,
+            partition_id_to_restore: 0,
             step: Step::Async(AsyncStep::WaitBuild),
             step_logs: vec![Step::Async(AsyncStep::WaitBuild)],
-            join_probe_state,
-            probe_state: ProbeState::create(
-                max_block_size,
-                join_type,
-                with_conjunct,
-                has_string_column,
-                func_ctx,
-                other_predicate,
-            ),
-            max_block_size,
-            is_spill_happened: false,
-            is_final_scan_finished: false,
-            // processor_id,
-            is_build_finished: false,
-            final_scan_type: FinalScanType::HashJoin,
-            can_probe_first_round,
-            hash_table_type: HashTableType::Empty,
-            partition_id_to_restore: 0,
-            spiller,
         }))
     }
 
@@ -243,14 +245,14 @@ impl TransformHashJoinProbe {
             return Ok(Event::NeedData);
         }
 
-        // Input port is finished
+        // Input port is finished.
         if !self.restored_data_blocks.is_empty() {
             return self.next_step(Step::Sync(SyncStep::Probe));
         }
 
-        // If there is no Datablocks which need to probe, go to final scan.
+        // If there are no data blocks to probe, go to the final scan.
         if let Some(final_scan_type) = self.final_scan_type() {
-            if !self.is_first_round() || !self.is_spill_happened || self.can_probe_first_round() {
+            if !self.is_spill_happened || !self.is_first_round() || self.can_probe_first_round() {
                 self.final_scan_type = final_scan_type;
                 return self.next_step(Step::Async(AsyncStep::WaitProbe));
             }
@@ -543,7 +545,7 @@ impl TransformHashJoinProbe {
         if self.is_spill_happened() && !self.can_probe_first_round() {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
-            // Split data to `block_size` rows per sub block.
+            // Split data block by max_block_size.
             Self::add_split_data_blocks(
                 &mut self.input_data_blocks,
                 vec![data_block],
@@ -552,14 +554,13 @@ impl TransformHashJoinProbe {
         }
     }
 
+    // Split data block by max_block_size.
     fn add_split_data_blocks(
         data_blocks: &mut VecDeque<DataBlock>,
         data_blocks_to_split: Vec<DataBlock>,
         max_block_size: usize,
     ) {
-        // Split data to `block_size` rows per sub block.
         for data_block in data_blocks_to_split {
-            // Split data to `block_size` rows per sub block.
             let (sub_blocks, remain_block) = data_block.split_by_rows(max_block_size);
             data_blocks.extend(sub_blocks);
             if let Some(remain) = remain_block {
@@ -594,7 +595,7 @@ impl TransformHashJoinProbe {
         self.spiller.reset_next_restore_file();
     }
 
-    // Go to next round hash join if still has the partition in `spill_partitions`
+    // If there are still partitions in spill_partitions, go to the next round of hash join.
     fn next_round(&mut self) -> Result<Event> {
         if self
             .join_probe_state
