@@ -52,7 +52,7 @@ pub struct TokenPair {
 fn hash_token(token: &[u8]) -> String {
     hex::encode_upper(Sha256::digest(token))
 }
-pub struct TokenManager {
+pub struct ClientSessionManager {
     /// store hash only for hit ratio with limited memory, feasible because:
     /// - token contain all info in itself.
     /// - for eviction, LRU itself is enough, no need to check expired tokens specifically.
@@ -60,8 +60,8 @@ pub struct TokenManager {
     refresh_tokens: RwLock<LruCache<String, ()>>,
 }
 
-impl TokenManager {
-    pub fn instance() -> Arc<TokenManager> {
+impl ClientSessionManager {
+    pub fn instance() -> Arc<ClientSessionManager> {
         GlobalInstance::get()
     }
 

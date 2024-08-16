@@ -28,7 +28,7 @@ use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
 
-use crate::servers::http::v1::TokenManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
@@ -80,7 +80,7 @@ impl AuthMgr {
                 set_user,
                 token_type,
             } => {
-                let claim = TokenManager::instance()
+                let claim = ClientSessionManager::instance()
                     .verify_token(token, token_type.clone())
                     .await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;

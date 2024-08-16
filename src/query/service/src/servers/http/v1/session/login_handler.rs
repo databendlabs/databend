@@ -22,8 +22,8 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
 
-use crate::servers::http::v1::session::token_manager::TokenManager;
-use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
+use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
+use crate::servers::http::v1::session::client_session_manager::REFRESH_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::QueryError;
 
@@ -100,7 +100,7 @@ pub async fn login_handler(
         }));
     }
 
-    match TokenManager::instance()
+    match ClientSessionManager::instance()
         .new_token_pair(&ctx.session, None)
         .await
     {
