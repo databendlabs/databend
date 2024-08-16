@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
@@ -26,6 +27,7 @@ use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
@@ -42,12 +44,14 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_settings::Settings;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -448,6 +452,8 @@ impl CreateTableInterpreter {
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
         is_valid_random_seed(&table_meta.options)?;
+        // check table level data_retention_period_in_hours
+        is_valid_data_retention_period(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -498,6 +504,7 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
@@ -556,6 +563,32 @@ pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> 
         if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
             error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_data_retention_period(options: &BTreeMap<String, String>) -> Result<()> {
+    if let Some(value) = options.get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS) {
+        let new_duration_in_hours = value.parse::<u64>()?;
+
+        if new_duration_in_hours < DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid data_retention_period_in_hours {:?}, it should not be lesser than {:?}",
+                new_duration_in_hours, DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS
+            )));
+        }
+
+        let default_max_period_in_days = Settings::get_max_data_retention_period_in_days();
+
+        let default_max_duration = Duration::days(default_max_period_in_days as i64);
+        let setting_duration = Duration::hours(new_duration_in_hours as i64);
+
+        if setting_duration > default_max_duration {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid data_retention_period_in_hours {:?}, it should not be larger than {:?}",
+                setting_duration, default_max_duration
+            )));
         }
     }
     Ok(())
