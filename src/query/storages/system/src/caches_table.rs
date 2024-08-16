@@ -32,11 +32,11 @@ use databend_common_metrics::cache::get_cache_hit_count;
 use databend_common_metrics::cache::get_cache_miss_count;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CountableMeter;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::Unit;
 use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
-use databend_storages_common_cache_manager::CacheManager;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;

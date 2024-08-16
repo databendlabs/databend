@@ -22,12 +22,9 @@ use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
-use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::TableDataCache;
-use databend_storages_common_cache::TableDataCacheBuilder;
-use databend_storages_common_cache::Unit;
 use log::info;
 
+use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::ColumnArrayCache;
@@ -35,10 +32,14 @@ use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
+use crate::caches::MemSizedMeter;
+use crate::caches::PrunePartitionsCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-use crate::{BlockMetaCache, MemSizedMeter};
-use crate::PrunePartitionsCache;
+use crate::InMemoryLruCache;
+use crate::TableDataCache;
+use crate::TableDataCacheBuilder;
+use crate::Unit;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 

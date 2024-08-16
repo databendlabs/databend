@@ -38,7 +38,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;

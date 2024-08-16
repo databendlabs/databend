@@ -5327,16 +5327,21 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",
  "crc32fast",
  "crossbeam-channel",
+ "databend-common-arrow",
  "databend-common-base",
  "databend-common-cache",
+ "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-metrics",
+ "databend-storages-common-index",
+ "databend-storages-common-table-meta",
  "hex",
  "log",
  "parking_lot 0.12.3",

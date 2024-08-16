@@ -39,8 +39,8 @@ use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
-use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::block_reader_deserialize::DeserializedArray;

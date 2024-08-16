@@ -23,10 +23,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
 use databend_storages_common_cache::CacheKey;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
-use databend_storages_common_cache_manager::{CachedObject, MemSizedMeter};
+use databend_storages_common_cache::MemSizedMeter;
 use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -36,8 +37,7 @@ use opendal::Operator;
 use crate::index::InvertedIndexFile;
 use crate::io::MetaReaders;
 
-type CachedReader =
-    InMemoryCacheReader<InvertedIndexFile, InvertedIndexFileLoader, MemSizedMeter>;
+type CachedReader = InMemoryCacheReader<InvertedIndexFile, InvertedIndexFileLoader, MemSizedMeter>;
 
 const INDEX_COLUMN_NAMES: [&str; 8] = [
     "fast",

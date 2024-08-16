@@ -28,8 +28,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
-use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 

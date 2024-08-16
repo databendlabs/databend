@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;

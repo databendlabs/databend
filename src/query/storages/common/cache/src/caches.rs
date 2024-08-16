@@ -20,8 +20,6 @@ use databend_common_cache::CountableMeter;
 use databend_common_cache::Meter;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
@@ -32,7 +30,9 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
-use crate::cache_manager::CacheManager;
+use crate::manager::CacheManager;
+use crate::CacheAccessor;
+use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo, MemSizedMeter>;
@@ -71,9 +71,9 @@ pub type SizedColumnArray = (
 // - cache item of Type `T`
 // - and implement `CacheAccessor` properly
 pub trait CachedObject<T, M = Count>
-    where M: CountableMeter<String, Arc<T>>
+where M: CountableMeter<String, Arc<T>>
 {
-    type Cache: CacheAccessor<V=T, M=M>;
+    type Cache: CacheAccessor<V = T, M = M>;
     fn cache() -> Option<Self::Cache>;
 }
 

@@ -32,7 +32,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;

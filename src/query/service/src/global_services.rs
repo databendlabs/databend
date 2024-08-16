@@ -36,7 +36,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_cache::CacheManager;
 
 use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
