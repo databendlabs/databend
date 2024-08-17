@@ -91,7 +91,7 @@ fn run_parser_with_dialect<P, O>(
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("statement.txt").unwrap();
+    let file = &mut mint.new_goldenfile("stmt.txt").unwrap();
     let cases = &[
         r#"show databases"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
@@ -862,7 +862,7 @@ fn test_statement() {
 #[test]
 fn test_statement_error() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("statement-error.txt").unwrap();
+    let file = &mut mint.new_goldenfile("stmt-error.txt").unwrap();
 
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
