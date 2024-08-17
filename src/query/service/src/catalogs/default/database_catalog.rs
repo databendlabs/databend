@@ -742,4 +742,13 @@ impl Catalog for DatabaseCatalog {
             table_function_factory: self.table_function_factory.clone(),
         })
     }
+
+    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+        self.session_catalog.get_stream_source_table(_stream_desc)
+    }
+
+    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+        self.session_catalog
+            .cache_stream_source_table(_stream, _source)
+    }
 }
