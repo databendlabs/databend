@@ -5225,7 +5225,7 @@ fn build_upsert_table_copied_file_info_conditions(
             // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
         }
-        set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
+        set_update_expire_operation(&key, &file_info, req.ttl, &mut if_then)?;
     }
     Ok((condition, if_then))
 }
@@ -5241,15 +5241,15 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
 fn set_update_expire_operation(
     key: &TableCopiedFileNameIdent,
     file_info: &TableCopiedFileInfo,
-    expire_at_opt: &Option<u64>,
+    ttl: Option<std::time::Duration>,
     then_branch: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    match expire_at_opt {
-        Some(expire_at) => {
+    match ttl {
+        Some(ttl) => {
             then_branch.push(TxnOp::put_with_ttl(
                 key.to_string_key(),
                 serialize_struct(file_info)?,
-                Some((*expire_at) * 1000),
+                Some(ttl.as_millis() as u64),
             ));
         }
         None => {
