@@ -10180,7 +10180,7 @@ Query(
                             ),
                             name: "numbers",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                         params: [
                             Literal {
@@ -10262,7 +10262,7 @@ Query(
                             ),
                             name: "numbers",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                         params: [
                             Literal {
@@ -10344,7 +10344,7 @@ Query(
                             ),
                             name: "numbers",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                         params: [
                             Literal {
