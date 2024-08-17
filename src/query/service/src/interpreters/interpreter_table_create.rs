@@ -582,12 +582,12 @@ pub fn is_valid_data_retention_period(options: &BTreeMap<String, String>) -> Res
         let default_max_period_in_days = Settings::get_max_data_retention_period_in_days();
 
         let default_max_duration = Duration::days(default_max_period_in_days as i64);
-        let setting_duration = Duration::hours(new_duration_in_hours as i64);
+        let new_duration = Duration::hours(new_duration_in_hours as i64);
 
-        if setting_duration > default_max_duration {
+        if new_duration > default_max_duration {
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "Invalid data_retention_period_in_hours {:?}, it should not be larger than {:?}",
-                setting_duration, default_max_duration
+                new_duration, default_max_duration
             )));
         }
     }

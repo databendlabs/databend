@@ -477,7 +477,7 @@ impl FuseTable {
             .options
             .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
         {
-            let retention_period = v.parse::<u32>()?;
+            let retention_period = v.parse::<u64>()?;
             Duration::hours(retention_period as i64)
         } else {
             Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64)
