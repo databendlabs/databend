@@ -213,12 +213,8 @@ impl Catalog for FakedCatalog {
         self.cat.mget_database_names_by_ids(tenant, db_ids).await
     }
 
-    async fn get_table_name_by_id(
-        &self,
-        table_id: MetaId,
-        is_temp: bool,
-    ) -> Result<Option<String>> {
-        self.cat.get_table_name_by_id(table_id, is_temp).await
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.cat.get_table_name_by_id(table_id).await
     }
 
     async fn get_table(
@@ -417,12 +413,8 @@ impl Catalog for FakedCatalog {
         unimplemented!()
     }
 
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-        is_temp: bool,
-    ) -> Result<Option<SeqV<TableMeta>>> {
-        self.cat.get_table_meta_by_id(table_id, is_temp).await
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+        self.cat.get_table_meta_by_id(table_id).await
     }
 }
 

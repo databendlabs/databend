@@ -24,6 +24,7 @@ pub const SYS_TBL_FUNC_ID_BEGIN: u64 = SYS_TBL_ID_END;
 // max id for table tables (exclusive)
 pub const SYS_TBL_FUC_ID_END: u64 = SYS_TBL_FUNC_ID_BEGIN + 10000;
 
-// min id for system tables (inclusive)
-// max id for local tables is u64:MAX
-pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
+// min id for temp tables (inclusive)
+pub const TEMP_TBL_ID_BEGIN: u64 = SYS_TBL_FUC_ID_END;
+// max id for temp tables (exclusive)
+pub const TEMP_TBL_ID_END: u64 = TEMP_TBL_ID_BEGIN + 10000;

@@ -288,7 +288,6 @@ where F: SnapshotGenerator + Send + 'static
                     Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
                     table_info.ident.table_id,
-                    self.table.is_temp(),
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {

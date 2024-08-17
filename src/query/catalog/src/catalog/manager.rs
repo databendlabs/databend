@@ -41,7 +41,6 @@ use databend_storages_common_session::SessionState;
 
 use super::Catalog;
 use super::CatalogCreator;
-use crate::catalog::session_catalog::SessionCatalog;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
@@ -133,10 +132,7 @@ impl CatalogManager {
     /// There are some place that we don't have async context, so we provide
     /// `get_default_catalog` to allow users fetch default catalog without async.
     pub fn get_default_catalog(&self, session_state: SessionState) -> Result<Arc<dyn Catalog>> {
-        Ok(Arc::new(SessionCatalog::create(
-            self.default_catalog.clone(),
-            session_state,
-        )))
+        Ok(self.default_catalog.set_session_state(session_state))
     }
 
     /// build_catalog builds a catalog from catalog info.

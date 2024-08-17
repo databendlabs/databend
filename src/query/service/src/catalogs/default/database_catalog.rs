@@ -104,13 +104,14 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_session::SessionState;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
+use crate::catalogs::default::SessionCatalog;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
-
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)
@@ -120,7 +121,7 @@ pub struct DatabaseCatalog {
     /// the upper layer, read only
     immutable_catalog: Arc<ImmutableCatalog>,
     /// bottom layer, writing goes here
-    mutable_catalog: Arc<MutableCatalog>,
+    session_catalog: Arc<SessionCatalog>,
     /// table function engine factories
     table_function_factory: Arc<TableFunctionFactory>,
 }
@@ -136,10 +137,11 @@ impl DatabaseCatalog {
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
+        let session_catalog = SessionCatalog::create(mutable_catalog, SessionState::default());
         let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog {
             immutable_catalog: Arc::new(immutable_catalog),
-            mutable_catalog: Arc::new(mutable_catalog),
+            session_catalog: Arc::new(session_catalog),
             table_function_factory: Arc::new(table_function_factory),
         };
         Ok(res)
@@ -162,9 +164,9 @@ impl Catalog for DatabaseCatalog {
 
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         let mut me = self.as_ref().clone();
-        let mut mutable_catalog = me.mutable_catalog.as_ref().clone();
-        mutable_catalog.disable_table_info_refresh();
-        me.mutable_catalog = Arc::new(mutable_catalog);
+        let mut session_catalog = me.session_catalog.as_ref().clone();
+        session_catalog.disable_table_info_refresh();
+        me.session_catalog = Arc::new(session_catalog);
         Ok(Arc::new(me))
     }
 
@@ -174,7 +176,7 @@ impl Catalog for DatabaseCatalog {
         match r {
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog.get_database(tenant, db_name).await
+                    self.session_catalog.get_database(tenant, db_name).await
                 } else {
                     Err(e)
                 }
@@ -186,7 +188,7 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
-        let mut other = self.mutable_catalog.list_databases(tenant).await?;
+        let mut other = self.session_catalog.list_databases(tenant).await?;
         dbs.append(&mut other);
         Ok(dbs)
     }
@@ -206,7 +208,7 @@ impl Catalog for DatabaseCatalog {
             )));
         }
         // create db in BOTTOM layer only
-        self.mutable_catalog.create_database(req).await
+        self.session_catalog.create_database(req).await
     }
 
     #[async_backtrace::framed]
@@ -221,7 +223,7 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.drop_database(req).await;
         }
-        self.mutable_catalog.drop_database(req).await
+        self.session_catalog.drop_database(req).await
     }
 
     #[async_backtrace::framed]
@@ -240,7 +242,7 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.rename_database(req).await;
         }
 
-        self.mutable_catalog.rename_database(req).await
+        self.session_catalog.rename_database(req).await
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
@@ -249,7 +251,7 @@ impl Catalog for DatabaseCatalog {
             Ok(t) => Ok(t),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    self.mutable_catalog.get_table_by_info(table_info)
+                    self.session_catalog.get_table_by_info(table_info)
                 } else {
                     Err(e)
                 }
@@ -258,22 +260,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-        is_temp: bool,
-    ) -> Result<Option<SeqV<TableMeta>>> {
-        let res = self
-            .immutable_catalog
-            .get_table_meta_by_id(table_id, is_temp)
-            .await;
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+        let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
 
         if let Ok(x) = res {
             Ok(x)
         } else {
-            self.mutable_catalog
-                .get_table_meta_by_id(table_id, is_temp)
-                .await
+            self.session_catalog.get_table_meta_by_id(table_id).await
         }
     }
 
@@ -313,7 +306,7 @@ impl Catalog for DatabaseCatalog {
 
         // Fetching table names for remaining system table IDs
         let other = self
-            .mutable_catalog
+            .session_catalog
             .mget_table_names_by_ids(tenant, &mut_table_ids)
             .await?;
 
@@ -324,23 +317,12 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_name_by_id(
-        &self,
-        table_id: MetaId,
-        is_temp: bool,
-    ) -> Result<Option<String>> {
-        let res = self
-            .immutable_catalog
-            .get_table_name_by_id(table_id, is_temp)
-            .await;
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
 
         match res {
             Ok(Some(x)) => Ok(Some(x)),
-            Ok(None) | Err(_) => {
-                self.mutable_catalog
-                    .get_table_name_by_id(table_id, is_temp)
-                    .await
-            }
+            Ok(None) | Err(_) => self.session_catalog.get_table_name_by_id(table_id).await,
         }
     }
 
@@ -351,7 +333,7 @@ impl Catalog for DatabaseCatalog {
         if let Ok(x) = res {
             Ok(x)
         } else {
-            self.mutable_catalog.get_db_name_by_id(db_id).await
+            self.session_catalog.get_db_name_by_id(db_id).await
         }
     }
 
@@ -381,7 +363,7 @@ impl Catalog for DatabaseCatalog {
             .await?;
 
         let other = self
-            .mutable_catalog
+            .session_catalog
             .mget_database_names_by_ids(tenant, &mut_db_ids)
             .await?;
 
@@ -405,7 +387,7 @@ impl Catalog for DatabaseCatalog {
             Ok(v) => Ok(v),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog
+                    self.session_catalog
                         .get_table(tenant, db_name, table_name)
                         .await
                 } else {
@@ -422,7 +404,7 @@ impl Catalog for DatabaseCatalog {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog.list_tables(tenant, db_name).await
+                    self.session_catalog.list_tables(tenant, db_name).await
                 } else {
                     Err(e)
                 }
@@ -444,7 +426,7 @@ impl Catalog for DatabaseCatalog {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog
+                    self.session_catalog
                         .list_tables_history(tenant, db_name)
                         .await
                 } else {
@@ -465,12 +447,12 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.create_table(req).await;
         }
-        self.mutable_catalog.create_table(req).await
+        self.session_catalog.create_table(req).await
     }
 
     #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        let res = self.mutable_catalog.drop_table_by_id(req).await?;
+        let res = self.session_catalog.drop_table_by_id(req).await?;
         Ok(res)
     }
 
@@ -485,7 +467,7 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.undrop_table(req).await;
         }
-        self.mutable_catalog.undrop_table(req).await
+        self.session_catalog.undrop_table(req).await
     }
 
     #[async_backtrace::framed]
@@ -499,7 +481,7 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.undrop_table_by_id(req).await;
         }
-        self.mutable_catalog.undrop_table_by_id(req).await
+        self.session_catalog.undrop_table_by_id(req).await
     }
 
     #[async_backtrace::framed]
@@ -513,13 +495,13 @@ impl Catalog for DatabaseCatalog {
         {
             return self.immutable_catalog.undrop_database(req).await;
         }
-        self.mutable_catalog.undrop_database(req).await
+        self.session_catalog.undrop_database(req).await
     }
 
     async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         info!("commit_table_meta from req:{:?}", req);
 
-        self.mutable_catalog.commit_table_meta(req).await
+        self.session_catalog.commit_table_meta(req).await
     }
 
     #[async_backtrace::framed]
@@ -540,17 +522,17 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        self.mutable_catalog.rename_table(req).await
+        self.session_catalog.rename_table(req).await
     }
 
     #[async_backtrace::framed]
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
-        self.mutable_catalog.create_table_index(req).await
+        self.session_catalog.create_table_index(req).await
     }
 
     #[async_backtrace::framed]
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
-        self.mutable_catalog.drop_table_index(req).await
+        self.session_catalog.drop_table_index(req).await
     }
 
     #[async_backtrace::framed]
@@ -560,7 +542,7 @@ impl Catalog for DatabaseCatalog {
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        self.mutable_catalog
+        self.session_catalog
             .get_table_copied_file_info(tenant, db_name, req)
             .await
     }
@@ -571,7 +553,7 @@ impl Catalog for DatabaseCatalog {
         table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        self.mutable_catalog.truncate_table(table_info, req).await
+        self.session_catalog.truncate_table(table_info, req).await
     }
 
     #[async_backtrace::framed]
@@ -581,7 +563,7 @@ impl Catalog for DatabaseCatalog {
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.mutable_catalog
+        self.session_catalog
             .upsert_table_option(tenant, db_name, req)
             .await
     }
@@ -591,7 +573,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.mutable_catalog
+        self.session_catalog
             .retryable_update_multi_table_meta(reqs)
             .await
     }
@@ -601,39 +583,39 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
-        self.mutable_catalog.set_table_column_mask_policy(req).await
+        self.session_catalog.set_table_column_mask_policy(req).await
     }
 
     // Table index
 
     #[async_backtrace::framed]
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
-        self.mutable_catalog.create_index(req).await
+        self.session_catalog.create_index(req).await
     }
 
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
-        self.mutable_catalog.drop_index(req).await
+        self.session_catalog.drop_index(req).await
     }
 
     #[async_backtrace::framed]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
-        self.mutable_catalog.get_index(req).await
+        self.session_catalog.get_index(req).await
     }
 
     #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        self.mutable_catalog.update_index(req).await
+        self.session_catalog.update_index(req).await
     }
 
     #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        self.mutable_catalog.list_indexes(req).await
+        self.session_catalog.list_indexes(req).await
     }
 
     #[async_backtrace::framed]
     async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        self.mutable_catalog.list_index_ids_by_table_id(req).await
+        self.session_catalog.list_index_ids_by_table_id(req).await
     }
 
     #[async_backtrace::framed]
@@ -641,7 +623,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        self.mutable_catalog.list_indexes_by_table_id(req).await
+        self.session_catalog.list_indexes_by_table_id(req).await
     }
 
     // Virtual column
@@ -651,7 +633,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply> {
-        self.mutable_catalog.create_virtual_column(req).await
+        self.session_catalog.create_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
@@ -659,7 +641,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: UpdateVirtualColumnReq,
     ) -> Result<UpdateVirtualColumnReply> {
-        self.mutable_catalog.update_virtual_column(req).await
+        self.session_catalog.update_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
@@ -667,7 +649,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: DropVirtualColumnReq,
     ) -> Result<DropVirtualColumnReply> {
-        self.mutable_catalog.drop_virtual_column(req).await
+        self.session_catalog.drop_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
@@ -675,7 +657,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: ListVirtualColumnsReq,
     ) -> Result<Vec<VirtualColumnMeta>> {
-        self.mutable_catalog.list_virtual_columns(req).await
+        self.session_catalog.list_virtual_columns(req).await
     }
 
     fn get_table_function(
@@ -696,60 +678,68 @@ impl Catalog for DatabaseCatalog {
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         // only return mutable_catalog storage table engines
-        self.mutable_catalog.get_table_engines()
+        self.session_catalog.get_table_engines()
     }
 
     #[async_backtrace::framed]
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        self.mutable_catalog.list_lock_revisions(req).await
+        self.session_catalog.list_lock_revisions(req).await
     }
 
     #[async_backtrace::framed]
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        self.mutable_catalog.create_lock_revision(req).await
+        self.session_catalog.create_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
-        self.mutable_catalog.extend_lock_revision(req).await
+        self.session_catalog.extend_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
-        self.mutable_catalog.delete_lock_revision(req).await
+        self.session_catalog.delete_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>> {
-        self.mutable_catalog.list_locks(req).await
+        self.session_catalog.list_locks(req).await
     }
 
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
     ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
-        self.mutable_catalog.get_drop_table_infos(req).await
+        self.session_catalog.get_drop_table_infos(req).await
     }
 
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
-        self.mutable_catalog.gc_drop_tables(req).await
+        self.session_catalog.gc_drop_tables(req).await
     }
 
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
-        self.mutable_catalog.create_sequence(req).await
+        self.session_catalog.create_sequence(req).await
     }
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
-        self.mutable_catalog.get_sequence(req).await
+        self.session_catalog.get_sequence(req).await
     }
 
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
     ) -> Result<GetSequenceNextValueReply> {
-        self.mutable_catalog.get_sequence_next_value(req).await
+        self.session_catalog.get_sequence_next_value(req).await
     }
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
-        self.mutable_catalog.drop_sequence(req).await
+        self.session_catalog.drop_sequence(req).await
+    }
+
+    fn set_session_state(&self, state: SessionState) -> Arc<dyn Catalog> {
+        Arc::new(DatabaseCatalog {
+            session_catalog: Arc::new(SessionCatalog::create(self.session_catalog.inner(), state)),
+            immutable_catalog: self.immutable_catalog.clone(),
+            table_function_factory: self.table_function_factory.clone(),
+        })
     }
 }

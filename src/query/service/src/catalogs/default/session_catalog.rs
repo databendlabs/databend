@@ -16,6 +16,11 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::database::Database;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -101,22 +106,17 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::TxnState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
-use crate::catalog::Catalog;
-use crate::catalog::StorageDescription;
-use crate::database::Database;
-use crate::table::Table;
-use crate::table_args::TableArgs;
-use crate::table_function::TableFunction;
-
+use crate::catalogs::default::MutableCatalog;
+use crate::catalogs::Catalog;
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
-    inner: Arc<dyn Catalog>,
+    inner: MutableCatalog,
     txn_mgr: TxnManagerRef,
     temp_tbl_mgr: TempTblMgrRef,
 }
 
 impl SessionCatalog {
-    pub fn create(inner: Arc<dyn Catalog>, session_state: SessionState) -> Self {
+    pub fn create(inner: MutableCatalog, session_state: SessionState) -> Self {
         let SessionState {
             txn_mgr,
             temp_tbl_mgr,
@@ -140,10 +140,6 @@ impl Catalog for SessionCatalog {
     // Get the info of the catalog.
     fn info(&self) -> Arc<CatalogInfo> {
         self.inner.info()
-    }
-
-    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
-        self.inner.clone().disable_table_info_refresh()
     }
 
     /// Database.
@@ -241,31 +237,24 @@ impl Catalog for SessionCatalog {
         self.inner.get_table_by_info(table_info)
     }
 
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: u64,
-        is_temp: bool,
-    ) -> Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>> {
         if let Some(t) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
-                guard.get_table_from_buffer_by_id(table_id, is_temp)
+                guard.get_table_from_buffer_by_id(table_id)
             } else {
                 None
             }
         } {
             return Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())));
         }
-        match is_temp {
-            true => Ok(self
-                .temp_tbl_mgr
-                .lock()
-                .get_table_meta_by_id(table_id)
-                .map(|m| SeqV::new(0, m))),
-            false => self.inner.get_table_meta_by_id(table_id, is_temp).await,
+        if let Some(meta) = self.temp_tbl_mgr.lock().get_table_meta_by_id(table_id) {
+            return Ok(Some(SeqV::new(0, meta)));
         }
+        self.inner.get_table_meta_by_id(table_id).await
     }
 
+    // TODO: implement this
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -274,11 +263,11 @@ impl Catalog for SessionCatalog {
         self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
-    async fn get_table_name_by_id(&self, table_id: u64, is_temp: bool) -> Result<Option<String>> {
-        match is_temp {
-            true => Ok(self.temp_tbl_mgr.lock().get_table_name_by_id(table_id)),
-            false => self.inner.get_table_name_by_id(table_id, is_temp).await,
+    async fn get_table_name_by_id(&self, table_id: u64) -> Result<Option<String>> {
+        if let Some(name) = self.temp_tbl_mgr.lock().get_table_name_by_id(table_id) {
+            return Ok(Some(name));
         }
+        self.inner.get_table_name_by_id(table_id).await
     }
 
     // Get the db name by meta id.
@@ -330,9 +319,12 @@ impl Catalog for SessionCatalog {
         Ok(table)
     }
 
+    // TODO: implement this
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables(tenant, db_name).await
     }
+
+    // TODO: implement this
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
@@ -341,6 +333,7 @@ impl Catalog for SessionCatalog {
         self.inner.list_tables_history(tenant, db_name).await
     }
 
+    // TODO: implement this
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
@@ -348,6 +341,7 @@ impl Catalog for SessionCatalog {
         self.inner.get_drop_table_infos(req).await
     }
 
+    // TODO: implement this
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
         self.inner.gc_drop_tables(req).await
     }
@@ -360,19 +354,23 @@ impl Catalog for SessionCatalog {
     }
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        match req.is_temp {
-            true => {
-                databend_storages_common_session::drop_table_by_id(self.temp_tbl_mgr.clone(), req)
-                    .await
-            }
-            false => self.inner.drop_table_by_id(req).await,
+        if let Some(reply) = databend_storages_common_session::drop_table_by_id(
+            self.temp_tbl_mgr.clone(),
+            req.clone(),
+        )
+        .await?
+        {
+            return Ok(reply);
         }
+        self.inner.drop_table_by_id(req).await
     }
 
+    // TODO: implement this
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         self.inner.undrop_table(req).await
     }
 
+    // TODO: implement this
     async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
         self.inner.undrop_table_by_id(req).await
     }
@@ -399,6 +397,9 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
+        if let Some(reply) = self.temp_tbl_mgr.lock().upsert_table_option(req.clone())? {
+            return Ok(reply);
+        }
         self.inner.upsert_table_option(tenant, db_name, req).await
     }
 
@@ -440,6 +441,7 @@ impl Catalog for SessionCatalog {
         self.inner.drop_table_index(req).await
     }
 
+    // TODO: implement this
     async fn get_table_copied_file_info(
         &self,
         tenant: &Tenant,
@@ -457,6 +459,7 @@ impl Catalog for SessionCatalog {
         Ok(reply)
     }
 
+    // TODO: implement this
     async fn truncate_table(
         &self,
         table_info: &TableInfo,
@@ -552,5 +555,15 @@ impl Catalog for SessionCatalog {
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
         self.inner.drop_sequence(req).await
+    }
+}
+
+impl SessionCatalog {
+    pub fn disable_table_info_refresh(&mut self) {
+        self.inner.disable_table_info_refresh();
+    }
+
+    pub fn inner(&self) -> MutableCatalog {
+        self.inner.clone()
     }
 }

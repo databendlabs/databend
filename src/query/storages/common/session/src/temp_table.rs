@@ -33,9 +33,13 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTempTableReq;
+use databend_common_meta_app::schema::UpsertTableOptionReply;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_storage::DataOperator;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
+use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_END;
 use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
@@ -58,8 +62,15 @@ impl TempTblMgr {
         Arc::new(Mutex::new(TempTblMgr {
             name_to_id: HashMap::new(),
             id_to_table: HashMap::new(),
-            next_id: 0,
+            next_id: TEMP_TBL_ID_BEGIN,
         }))
+    }
+
+    fn inc_next_id(&mut self) {
+        self.next_id += 1;
+        if self.next_id > TEMP_TBL_ID_END {
+            panic!("Temp table id used up");
+        }
     }
 
     pub fn create_table(&mut self, req: CreateTableReq) -> Result<CreateTableReply> {
@@ -98,7 +109,7 @@ impl TempTblMgr {
                     meta: table_meta,
                     _copied_files: BTreeMap::new(),
                 });
-                self.next_id += 1;
+                self.inc_next_id();
                 true
             }
         };
@@ -205,17 +216,41 @@ impl TempTblMgr {
             table._copied_files = copied_files;
         }
     }
+
+    pub fn upsert_table_option(
+        &mut self,
+        req: UpsertTableOptionReq,
+    ) -> Result<Option<UpsertTableOptionReply>> {
+        let UpsertTableOptionReq {
+            table_id, options, ..
+        } = req;
+        let table = self.id_to_table.get_mut(&table_id);
+        let Some(table) = table else {
+            return Ok(None);
+        };
+        for (k, v) in options {
+            if let Some(v) = v {
+                table.meta.options.insert(k, v);
+            } else {
+                table.meta.options.remove(&k);
+            }
+        }
+        Ok(Some(UpsertTableOptionReply {
+            share_vec_table_info: None,
+        }))
+    }
 }
 
-pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Result<DropTableReply> {
-    let DropTableByIdReq {
-        if_exists, tb_id, ..
-    } = req;
+pub async fn drop_table_by_id(
+    mgr: TempTblMgrRef,
+    req: DropTableByIdReq,
+) -> Result<Option<DropTableReply>> {
+    let DropTableByIdReq { tb_id, .. } = req;
     let dir = {
         let mut guard = mgr.lock();
         let entry = guard.id_to_table.entry(tb_id);
-        match (entry, if_exists) {
-            (Entry::Occupied(e), _) => {
+        match entry {
+            Entry::Occupied(e) => {
                 let dir = parse_storage_prefix(&e.get().meta.options, tb_id)?;
                 let table = e.remove();
                 let desc = format!("{}.{}", table.db_name, table.table_name);
@@ -227,20 +262,14 @@ pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Resu
                 })?;
                 dir
             }
-            (Entry::Vacant(_), true) => {
-                return Err(ErrorCode::UnknownTable(format!(
-                    "Table not found in temp table manager {:?}, drop table request: {:?}",
-                    *guard, req
-                )));
-            }
-            (Entry::Vacant(_), false) => {
-                return Ok(Default::default());
+            Entry::Vacant(_) => {
+                return Ok(None);
             }
         }
     };
     let op = DataOperator::instance().operator();
     op.remove_all(&dir).await?;
-    Ok(Default::default())
+    Ok(Some(DropTableReply { spec_vec: None }))
 }
 
 pub type TempTblMgrRef = Arc<Mutex<TempTblMgr>>;

@@ -238,7 +238,6 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             db_id,
             table_name: table_name(),
             tb_id: t.ident.table_id,
-            is_temp: false,
         })
         .await;
 

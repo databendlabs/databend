@@ -257,7 +257,6 @@ async fn build_update_table_meta_req(
         Some(fuse_table.table_info.ident.seq),
         txn_mgr,
         table.get_id(),
-        table.is_temp(),
     )?;
 
     // write snapshot

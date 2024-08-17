@@ -177,7 +177,6 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
-
 [dev-dependencies]
 arrow-cast = { workspace = true }
 criterion = { workspace = true }

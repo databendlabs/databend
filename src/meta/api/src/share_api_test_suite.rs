@@ -362,7 +362,6 @@ impl ShareApiTestSuite {
                 table_name: table_name.to_string(),
                 tb_id: table_id,
                 db_id,
-                is_temp: false,
             };
             let res = mt.drop_table_by_id(plan).await?;
             let (share_db_id, share_specs) = res.spec_vec.unwrap();
@@ -2467,7 +2466,6 @@ impl ShareApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id: table_id,
                 db_id,
-                is_temp: false,
             };
             let _res = mt.drop_table_by_id(plan).await;
 

@@ -65,7 +65,6 @@ fn test_unresolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
-        false,
     );
     assert!(result.is_err());
 }
@@ -157,7 +156,6 @@ fn test_resolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
-        false,
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -265,7 +263,6 @@ fn test_resolvable_replace_conflict() {
         None,
         TxnManager::init(),
         0,
-        false,
     );
     let snapshot = result.unwrap();
     let expected = vec![

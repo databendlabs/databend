@@ -919,12 +919,8 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_by_info(table_info)
     }
 
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-        is_temp: bool,
-    ) -> Result<Option<SeqV<TableMeta>>> {
-        self.cat.get_table_meta_by_id(table_id, is_temp).await
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+        self.cat.get_table_meta_by_id(table_id).await
     }
 
     #[async_backtrace::framed]
@@ -936,12 +932,8 @@ impl Catalog for FakedCatalog {
         self.cat.mget_table_names_by_ids(tenant, table_id).await
     }
 
-    async fn get_table_name_by_id(
-        &self,
-        table_id: MetaId,
-        is_temp: bool,
-    ) -> Result<Option<String>> {
-        self.cat.get_table_name_by_id(table_id, is_temp).await
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.cat.get_table_name_by_id(table_id).await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {

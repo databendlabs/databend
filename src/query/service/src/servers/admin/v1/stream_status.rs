@@ -53,7 +53,7 @@ async fn check_stream_status(
 
     let table_id = stream.source_table_id()?;
     let seqv = catalog
-        .get_table_meta_by_id(table_id, false)
+        .get_table_meta_by_id(table_id)
         .await?
         .ok_or_else(|| {
             let err = UnknownTableId::new(table_id, "check_stream_status");

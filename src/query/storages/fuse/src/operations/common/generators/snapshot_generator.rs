@@ -46,7 +46,6 @@ pub trait SnapshotGenerator {
         prev_table_seq: Option<u64>,
         txn_mgr: TxnManagerRef,
         table_id: u64,
-        is_temp: bool,
     ) -> Result<TableSnapshot> {
         let mut snapshot =
             self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
@@ -56,10 +55,7 @@ pub trait SnapshotGenerator {
             // NOTE:
             // When generating a new snapshot for a mutation of table for the first time,
             // there is no buffered table ID inside txn_mgr for this table.
-            guard.is_active()
-                && guard
-                    .get_table_from_buffer_by_id(table_id, is_temp)
-                    .is_some()
+            guard.is_active() && guard.get_table_from_buffer_by_id(table_id).is_some()
         };
 
         if has_pending_transactional_mutations {

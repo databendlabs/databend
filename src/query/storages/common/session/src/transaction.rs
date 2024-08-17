@@ -226,9 +226,11 @@ impl TxnManager {
             .cloned()
     }
 
-    pub fn get_table_from_buffer_by_id(&self, table_id: u64, is_temp: bool) -> Option<TableInfo> {
-        if is_temp {
-            self.txn_buffer.mutated_temp_tables.get(&table_id).map(|t| {
+    pub fn get_table_from_buffer_by_id(&self, table_id: u64) -> Option<TableInfo> {
+        self.txn_buffer
+            .mutated_temp_tables
+            .get(&table_id)
+            .map(|t| {
                 TableInfo::new(
                     &t.db_name,
                     &t.table_name,
@@ -236,18 +238,18 @@ impl TxnManager {
                     t.meta.clone(),
                 )
             })
-        } else {
-            self.txn_buffer
-                .mutated_tables
-                .get(&table_id)
-                .cloned()
-                .or_else(|| {
-                    self.txn_buffer
-                        .stream_tables
-                        .get(&table_id)
-                        .map(|snapshot| snapshot.stream.clone())
-                })
-        }
+            .or_else(|| {
+                self.txn_buffer
+                    .mutated_tables
+                    .get(&table_id)
+                    .cloned()
+                    .or_else(|| {
+                        self.txn_buffer
+                            .stream_tables
+                            .get(&table_id)
+                            .map(|snapshot| snapshot.stream.clone())
+                    })
+            })
     }
 
     pub fn req(&self) -> UpdateMultiTableMetaReq {

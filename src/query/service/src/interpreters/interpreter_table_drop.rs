@@ -125,7 +125,6 @@ impl Interpreter for DropTableInterpreter {
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().ident.db_id,
-                is_temp,
             })
             .await?;
 

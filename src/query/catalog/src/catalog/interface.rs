@@ -103,6 +103,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
 
@@ -217,13 +218,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
     /// Get the table meta by table id.
-    ///
-    /// `table_id` can be a temp table id or a meta id as long as `is_temp` is set properly.
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: u64,
-        is_temp: bool,
-    ) -> Result<Option<SeqV<TableMeta>>>;
+    async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
     /// List the tables name by meta ids.
     ///
@@ -245,9 +240,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Vec<Option<String>>>;
 
     /// Get the table name by meta id.
-    ///
-    /// `table_id` can be a temp table id or a meta id as long as `is_temp` is set properly.
-    async fn get_table_name_by_id(&self, table_id: u64, is_temp: bool) -> Result<Option<String>>;
+    async fn get_table_name_by_id(&self, table_id: u64) -> Result<Option<String>>;
 
     // Get one table by db and table name.
     async fn get_table(
@@ -401,6 +394,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 
+    // TODO: implement lock related functions
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>>;
 
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply>;
@@ -459,4 +453,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
+
+    fn set_session_state(&self, _state: SessionState) -> Arc<dyn Catalog> {
+        unimplemented!()
+    }
 }

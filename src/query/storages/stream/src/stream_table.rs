@@ -153,7 +153,7 @@ impl StreamTable {
     pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
         let source_table_id = self.source_table_id()?;
         catalog
-            .get_table_name_by_id(source_table_id, false)
+            .get_table_name_by_id(source_table_id)
             .await
             .and_then(|opt| {
                 opt.ok_or(ErrorCode::UnknownTable(format!(
@@ -176,7 +176,7 @@ impl StreamTable {
             None => {
                 let source_table_id = self.source_table_id()?;
                 let source_table_meta = catalog
-                    .get_table_meta_by_id(source_table_id, false)
+                    .get_table_meta_by_id(source_table_id)
                     .await?
                     .ok_or(ErrorCode::Internal("source database id must be set"))?;
                 source_table_meta

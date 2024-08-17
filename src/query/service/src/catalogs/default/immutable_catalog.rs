@@ -93,10 +93,10 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
 use crate::catalogs::InMemoryMetas;
-use crate::catalogs::SYS_DB_ID_BEGIN;
-use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
@@ -193,11 +193,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-        _is_temp: bool,
-    ) -> Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let table = self
             .sys_db_meta
             .get_by_id(&table_id)
@@ -250,11 +246,7 @@ impl Catalog for ImmutableCatalog {
         Ok(res)
     }
 
-    async fn get_table_name_by_id(
-        &self,
-        table_id: MetaId,
-        _is_temp: bool,
-    ) -> Result<Option<String>> {
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
         let table_name = self
             .sys_db_meta
             .get_by_id(&table_id)

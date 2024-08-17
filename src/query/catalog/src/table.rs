@@ -430,13 +430,10 @@ pub trait TableExt: Table {
         let tid = table_info.ident.table_id;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
 
-        let seqv = catalog
-            .get_table_meta_by_id(tid, self.is_temp())
-            .await?
-            .ok_or_else(|| {
-                let err = UnknownTableId::new(tid, "TableExt::refresh");
-                AppError::from(err)
-            })?;
+        let seqv = catalog.get_table_meta_by_id(tid).await?.ok_or_else(|| {
+            let err = UnknownTableId::new(tid, "TableExt::refresh");
+            AppError::from(err)
+        })?;
 
         self.refresh_with_seq_meta(ctx, seqv.seq, seqv.data).await
     }

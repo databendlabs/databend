@@ -564,8 +564,6 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
-
-    pub is_temp: bool,
 }
 
 impl DropTableByIdReq {
