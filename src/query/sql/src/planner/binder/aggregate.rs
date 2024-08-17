@@ -443,9 +443,11 @@ impl Binder {
         let agg_info = &bind_context.aggregate_info;
         let mut scalar_items: Vec<ScalarItem> =
             Vec::with_capacity(agg_info.aggregate_arguments.len() + agg_info.group_items.len());
+
         for arg in agg_info.aggregate_arguments.iter() {
             scalar_items.push(arg.clone());
         }
+
         for item in agg_info.group_items.iter() {
             if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
                 if col.column.column_name.eq("_grouping_id") {
