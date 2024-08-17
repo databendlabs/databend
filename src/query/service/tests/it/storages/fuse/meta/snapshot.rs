@@ -112,6 +112,14 @@ fn test_snapshot_v1_to_v4() {
 
 #[test]
 fn test_snapshot_reader() {
-    let meta = include_bytes!("legacy_tpch_v4.mpk");
-    TableSnapshot::from_slice(meta).unwrap();
+    let meta = include_bytes!("c_sn_v4.mpk");
+    let sn = TableSnapshot::from_slice(meta).unwrap();
+    println!("{}", serde_json::to_string(&sn).unwrap());
+}
+
+#[test]
+fn test_seg_reader() {
+    let meta = include_bytes!("c_seg_v4.mpk");
+    let seg = databend_storages_common_table_meta::meta::SegmentInfo::from_slice(meta).unwrap();
+    println!("{}", serde_json::to_string(&seg).unwrap());
 }
