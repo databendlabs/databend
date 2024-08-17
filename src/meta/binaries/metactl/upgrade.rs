@@ -16,15 +16,11 @@ use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_sled_store::get_sled_db;
 
-use crate::Config;
-
 /// Upgrade the data in raft_dir to the latest version.
-pub async fn upgrade(config: &Config) -> anyhow::Result<()> {
-    let raft_config: RaftConfig = config.clone().into();
-
+pub async fn upgrade(raft_config: &RaftConfig) -> anyhow::Result<()> {
     let db = get_sled_db();
 
-    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
+    let mut on_disk = OnDisk::open(&db, raft_config).await?;
     on_disk.log_stderr(true);
     on_disk.upgrade().await?;
 

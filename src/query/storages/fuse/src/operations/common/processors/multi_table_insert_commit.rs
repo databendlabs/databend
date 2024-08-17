@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use backoff::backoff::Backoff;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -215,7 +214,6 @@ impl AsyncSink for CommitMultiTableInsert {
         }
     }
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         let input_meta = data_block

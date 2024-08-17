@@ -3553,11 +3553,11 @@ Functions overloads:
 1 st_aswkb(Geometry NULL) :: Binary NULL
 0 st_aswkt(Geometry) :: String
 1 st_aswkt(Geometry NULL) :: String NULL
-0 st_contains(Geometry, Geometry) :: Boolean NULL
+0 st_contains(Geometry, Geometry) :: Boolean
 1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
-0 st_distance(Geometry, Geometry) :: Float64 NULL
+0 st_distance(Geometry, Geometry) :: Float64
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry
 1 st_endpoint(Geometry NULL) :: Geometry NULL
@@ -3581,7 +3581,7 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
-0 st_length(Geometry) :: Float64 NULL
+0 st_length(Geometry) :: Float64
 1 st_length(Geometry NULL) :: Float64 NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
@@ -3589,13 +3589,13 @@ Functions overloads:
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
-0 st_npoints(Geometry) :: UInt32 NULL
+0 st_npoints(Geometry) :: UInt32
 1 st_npoints(Geometry NULL) :: UInt32 NULL
 0 st_pointn(Geometry, Int32) :: Geometry
 1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
-0 st_setsrid(Geometry, Int32) :: Geometry NULL
+0 st_setsrid(Geometry, Int32) :: Geometry
 1 st_setsrid(Geometry NULL, Int32 NULL) :: Geometry NULL
-0 st_srid(Geometry) :: Int32 NULL
+0 st_srid(Geometry) :: Int32
 1 st_srid(Geometry NULL) :: Int32 NULL
 0 st_startpoint(Geometry) :: Geometry
 1 st_startpoint(Geometry NULL) :: Geometry NULL
@@ -3603,13 +3603,13 @@ Functions overloads:
 1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
 2 st_transform(Geometry, Int32, Int32) :: Geometry
 3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
-0 st_x(Geometry) :: Float64 NULL
+0 st_x(Geometry) :: Float64
 1 st_x(Geometry NULL) :: Float64 NULL
 0 st_xmax(Geometry) :: Float64 NULL
 1 st_xmax(Geometry NULL) :: Float64 NULL
 0 st_xmin(Geometry) :: Float64 NULL
 1 st_xmin(Geometry NULL) :: Float64 NULL
-0 st_y(Geometry) :: Float64 NULL
+0 st_y(Geometry) :: Float64
 1 st_y(Geometry NULL) :: Float64 NULL
 0 st_ymax(Geometry) :: Float64 NULL
 1 st_ymax(Geometry NULL) :: Float64 NULL

@@ -12,8 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::IdentifierType;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
 
@@ -106,5 +113,53 @@ impl<'a> IdentifierNormalizer<'a> {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
         let normalized_ident = normalize_identifier(ident, self.ctx);
         *ident = normalized_ident;
+    }
+}
+
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
+pub struct VariableNormalizer<'a> {
+    pub ctx: &'a NameResolutionContext,
+    pub table_ctx: Arc<dyn TableContext>,
+    error: Option<ErrorCode>,
+}
+
+impl<'a> VariableNormalizer<'a> {
+    pub fn new(ctx: &'a NameResolutionContext, table_ctx: Arc<dyn TableContext>) -> Self {
+        Self {
+            ctx,
+            table_ctx,
+            error: None,
+        }
+    }
+
+    pub fn render_error(&self) -> Result<()> {
+        match &self.error {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
+        }
+    }
+
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
+        if ident.is_variable() {
+            let mut normalized_ident = normalize_identifier(ident, self.ctx);
+
+            let scalar = self.table_ctx.get_variable(&normalized_ident.name);
+            if let Some(Scalar::String(s)) = scalar {
+                normalized_ident.name = s;
+                normalized_ident.ident_type = IdentifierType::None;
+            } else {
+                self.error = Some(ErrorCode::SemanticError(format!(
+                    "invalid variable identifier {} in session",
+                    normalized_ident.name
+                )));
+            }
+            *ident = normalized_ident;
+        } else if ident.is_hole() {
+            self.error = Some(ErrorCode::SemanticError(format!(
+                "invalid hole identifier {}, maybe you want to use ${}",
+                ident.name, ident.name,
+            )));
+        }
     }
 }

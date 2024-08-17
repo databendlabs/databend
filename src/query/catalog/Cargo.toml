@@ -17,6 +17,7 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }

@@ -32,7 +32,7 @@ metactl_import_export () {
 
     echo " === import into $meta_dir"
     cat $src |
-        ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"
+        ./target/${BUILD_PROFILE}/databend-metactl import --raft-dir "$meta_dir"
 
     sleep 1
 
@@ -53,7 +53,7 @@ metactl_import_export () {
     echo " === "
 
     echo " === export from $meta_dir"
-    ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
+    ./target/${BUILD_PROFILE}/databend-metactl export --raft-dir "$meta_dir" >$exported
 
     echo " === check backup date: $want_exported and exported: $exported"
     diff $want_exported $exported
@@ -72,7 +72,7 @@ metactl_import_export () {
     sleep 10
 
     echo " === export from running databend-meta to $grpc_exported"
-    ./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$grpc_exported
+    ./target/${BUILD_PROFILE}/databend-metactl export --grpc-api-address "localhost:9191" >$grpc_exported
 
     echo " === grpc_exported file data start..."
     cat $grpc_exported
@@ -101,7 +101,7 @@ echo $METASRV_PID
 sleep 10
 
 echo " === export data from a running databend-meta to $grpc_exported"
-./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$grpc_exported
+./target/${BUILD_PROFILE}/databend-metactl export --grpc-api-address "localhost:9191" >$grpc_exported
 
 echo " === grpc_exported file data start..."
 cat $grpc_exported
@@ -137,6 +137,6 @@ echo '["header",{"DataHeader":{"key":"header","value":{"version":"V100","upgradi
 
 echo " === import into $meta_dir"
 cat $grpc_exported |
-    ./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir "$meta_dir"  \
+    ./target/${BUILD_PROFILE}/databend-metactl import --raft-dir "$meta_dir"  \
     && { echo " === expect error when importing incompatible header"; exit 1; } \
     || echo " === error is expected. OK";

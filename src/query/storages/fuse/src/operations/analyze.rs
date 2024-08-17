@@ -20,7 +20,6 @@ use std::time::Instant;
 use async_channel::Receiver;
 use async_channel::Sender;
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -150,7 +149,6 @@ impl SinkAnalyzeState {
         Ok(table)
     }
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     pub async fn merge_analyze_states(&mut self, data_block: DataBlock) -> Result<()> {
         if data_block.num_rows() == 0 {
@@ -206,7 +204,6 @@ impl SinkAnalyzeState {
         Ok(())
     }
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn create_histogram(&mut self, col_id: u32, data_block: DataBlock) -> Result<()> {
         if data_block.num_rows() == 0 {
@@ -444,7 +441,6 @@ impl AsyncSink for HistogramInfoSink {
         Ok(())
     }
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         if let Some(sender) = self.sender.as_ref() {

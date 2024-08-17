@@ -23,7 +23,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
-use databend_storages_common_cache::NamedCache;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
@@ -38,32 +37,31 @@ use crate::cache_manager::CacheManager;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache =
-    NamedCache<InMemoryItemCacheHolder<CompactSegmentInfo, CompactSegmentInfoMeter>>;
+    InMemoryItemCacheHolder<CompactSegmentInfo, CompactSegmentInfoMeter>;
 
-pub type BlockMetaCache = NamedCache<InMemoryItemCacheHolder<Vec<Arc<BlockMeta>>>>;
+pub type BlockMetaCache = InMemoryItemCacheHolder<Vec<Arc<BlockMeta>>>;
 
 /// In memory object cache of TableSnapshot
-pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
+pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
 /// In memory object cache of TableSnapshotStatistics
-pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableSnapshotStatistics>>;
+pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache =
-    NamedCache<InMemoryItemCacheHolder<Xor8Filter, BloomIndexFilterMeter>>;
+pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter, BloomIndexFilterMeter>;
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
+pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 
-pub type InvertedIndexMetaCache = NamedCache<InMemoryItemCacheHolder<InvertedIndexMeta>>;
+pub type InvertedIndexMetaCache = InMemoryItemCacheHolder<InvertedIndexMeta>;
 pub type InvertedIndexFileCache =
-    NamedCache<InMemoryItemCacheHolder<InvertedIndexFile, InvertedIndexFileMeter>>;
+    InMemoryItemCacheHolder<InvertedIndexFile, InvertedIndexFileMeter>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
+pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
-pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
+pub type PrunePartitionsCache = InMemoryItemCacheHolder<(PartStatistics, Partitions)>;
 
 /// In memory object cache of table column array
-pub type ColumnArrayCache = NamedCache<InMemoryItemCacheHolder<SizedColumnArray, ColumnArrayMeter>>;
+pub type ColumnArrayCache = InMemoryItemCacheHolder<SizedColumnArray, ColumnArrayMeter>;
 pub type ArrayRawDataUncompressedSize = usize;
 pub type SizedColumnArray = (
     Box<dyn databend_common_arrow::arrow::array::Array>,
@@ -78,7 +76,7 @@ pub type SizedColumnArray = (
 pub trait CachedObject<T, M = Count>
 where M: CountableMeter<String, Arc<T>>
 {
-    type Cache: CacheAccessor<String, T, M>;
+    type Cache: CacheAccessor<V = T, M = M>;
     fn cache() -> Option<Self::Cache>;
 }
 

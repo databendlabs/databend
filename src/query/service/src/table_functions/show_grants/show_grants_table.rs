@@ -226,7 +226,6 @@ impl ShowGrantsSource {
 impl AsyncSource for ShowGrantsSource {
     const NAME: &'static str = "show_grants";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {

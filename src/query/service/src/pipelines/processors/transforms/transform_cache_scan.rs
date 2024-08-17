@@ -124,7 +124,6 @@ impl TransformCacheScan {
 impl AsyncSource for TransformCacheScan {
     const NAME: &'static str = "TransformCacheScan";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let data_block = self.cache_source_state.next_data_block();

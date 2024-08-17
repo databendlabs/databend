@@ -48,6 +48,9 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
+use rand::thread_rng;
 
 use crate::io::BloomIndexBuilder;
 use crate::operations::DeletedSegmentInfo;
@@ -311,6 +314,7 @@ impl FusePruner {
                 let block_pruner = block_pruner.clone();
                 let segment_pruner = segment_pruner.clone();
                 let pruning_ctx = self.pruning_ctx.clone();
+                let push_down = self.push_down.clone();
 
                 async move {
                     // Build pruning tasks.
@@ -357,9 +361,21 @@ impl FusePruner {
                             );
                         }
                     } else {
+                        let sample_probability = table_sample(&push_down);
                         for (location, info) in pruned_segments {
-                            let block_metas =
+                            let mut block_metas =
                                 Self::extract_block_metas(&location.location.0, &info, true)?;
+                            if let Some(probability) = sample_probability {
+                                let mut sample_block_metas = Vec::with_capacity(block_metas.len());
+                                let mut rng = thread_rng();
+                                let bernoulli = Bernoulli::new(probability).unwrap();
+                                for block in block_metas.iter() {
+                                    if bernoulli.sample(&mut rng) {
+                                        sample_block_metas.push(block.clone());
+                                    }
+                                }
+                                block_metas = Arc::new(sample_block_metas);
+                            }
                             res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
                     }
@@ -516,5 +532,16 @@ impl FusePruner {
 
     pub fn get_inverse_range_index(&self) -> Option<RangeIndex> {
         self.inverse_range_index.clone()
+    }
+}
+
+fn table_sample(push_down_info: &Option<PushDownInfo>) -> Option<f64> {
+    if let Some(sample) = push_down_info
+        .as_ref()
+        .and_then(|info| info.sample.as_ref())
+    {
+        sample.sample_probability(None)
+    } else {
+        None
     }
 }
