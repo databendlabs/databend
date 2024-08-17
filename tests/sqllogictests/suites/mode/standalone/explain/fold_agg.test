@@ -52,15 +52,16 @@ EvalScalar
 └── DummyTableScan
 
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): TableSchemaMismatch\. Code: 1303, Text = Table columns count is not match, expect 5, input: 1, expr: \[Literal \{ span: Some\(1\.\.2\), value: UInt64\(1\) \}\]\.'
-insert into t values(1)
+statement ok
+insert into t select number, number::string, number, '2024-01-01'::Date + number, '2024-01-01'::Timestamp + number * 1e6 from numbers(2000);
+
 
 query T
 explain select count(*) from t
 ----
 EvalScalar
 ├── output columns: [COUNT(*) (#5)]
-├── expressions: [1000]
+├── expressions: [3000]
 ├── estimated rows: 1.00
 └── DummyTableScan
 
@@ -79,17 +80,17 @@ AggregateFinal
     └── Filter
         ├── output columns: []
         ├── filters: [is_true(t.number (#0) > 10)]
-        ├── estimated rows: 989.00
+        ├── estimated rows: 2983.50
         └── TableScan
             ├── table: default.default.t
             ├── output columns: [number (#0)]
-            ├── read rows: 1000
-            ├── read size: 1.88 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── read rows: 3000
+            ├── read size: 5.89 KiB
+            ├── partitions total: 2
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
             ├── push downs: [filters: [is_true(t.number (#0) > 10)], limit: NONE]
-            └── estimated rows: 1000.00
+            └── estimated rows: 3000.00
 
 query T
 explain select count(*) from t group by number
@@ -98,106 +99,106 @@ AggregateFinal
 ├── output columns: [COUNT(*) (#5), t.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: [count()]
-├── estimated rows: 1000.00
+├── estimated rows: 2000.00
 └── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: [count()]
-    ├── estimated rows: 1000.00
+    ├── estimated rows: 2000.00
     └── TableScan
         ├── table: default.default.t
         ├── output columns: [number (#0)]
-        ├── read rows: 1000
-        ├── read size: 1.88 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── read rows: 3000
+        ├── read size: 5.89 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
         ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 1000.00
+        └── estimated rows: 3000.00
 
 query T
-explain select max(number) + 3, min(day) from t;
+explain select count(), max(number) + 3, min(day) from t;
 ----
 EvalScalar
-├── output columns: [min(day) (#6), max(number) + 3 (#7)]
-├── expressions: [max(number) (#5) + 3]
+├── output columns: [min(day) (#7), count() (#5), max(number) + 3 (#8)]
+├── expressions: [max(number) (#6) + 3]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [max(number) (#5), min(day) (#6)]
-    ├── expressions: [999, '2024-01-01']
+    ├── output columns: [max(number) (#6), min(day) (#7), count() (#5)]
+    ├── expressions: [1999, '2024-01-01', 3000]
     ├── estimated rows: 1.00
     └── DummyTableScan
 
 query T
-explain select max(number) + 4,  sum(number), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
+explain select  count(), max(number) + 4,  sum(number), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
 ----
 EvalScalar
-├── output columns: [sum(number) (#6), sum(money) (#11), min(day) (#7), max(ts) (#8), min(money) (#9), min(ts) (#10), max(number) + 4 (#12), 8 (#13)]
-├── expressions: [max(number) (#5) + 4, 8]
+├── output columns: [count() (#5), sum(number) (#7), sum(money) (#12), min(day) (#8), max(ts) (#9), min(money) (#10), min(ts) (#11), max(number) + 4 (#13), 8 (#14)]
+├── expressions: [max(number) (#6) + 4, 8]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [sum(number) (#6), sum(money) (#11), max(number) (#5), min(day) (#7), max(ts) (#8), min(money) (#9), min(ts) (#10)]
-    ├── expressions: [999, '2024-01-01', '2024-01-01 00:16:39.000000', 0.00, '2024-01-01 00:00:00.000000']
+    ├── output columns: [count() (#5), sum(number) (#7), sum(money) (#12), max(number) (#6), min(day) (#8), max(ts) (#9), min(money) (#10), min(ts) (#11)]
+    ├── expressions: [1999, '2024-01-01', '2024-01-01 00:33:19.000000', 0.00, '2024-01-01 00:00:00.000000']
     ├── estimated rows: 1.00
     └── AggregateFinal
-        ├── output columns: [sum(number) (#6), sum(money) (#11)]
+        ├── output columns: [count() (#5), sum(number) (#7), sum(money) (#12)]
         ├── group by: []
-        ├── aggregate functions: [sum(number), sum(money)]
+        ├── aggregate functions: [count(), sum(number), sum(money)]
         ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: []
-            ├── aggregate functions: [sum(number), sum(money)]
+            ├── aggregate functions: [count(), sum(number), sum(money)]
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t
                 ├── output columns: [number (#0), money (#2)]
-                ├── read rows: 1000
-                ├── read size: 3.46 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── read rows: 3000
+                ├── read size: 10.51 KiB
+                ├── partitions total: 2
+                ├── partitions scanned: 2
+                ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
                 ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 1000.00
+                └── estimated rows: 3000.00
 
 query T
-explain select 5,  min(number), max(ts), min(money), 4 from t;
+explain select 5, count(), min(number), max(ts), min(money), 4 from t;
 ----
 EvalScalar
-├── output columns: [min(number) (#5), max(ts) (#6), min(money) (#7), 5 (#8), 4 (#9)]
+├── output columns: [min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5), 5 (#9), 4 (#10)]
 ├── expressions: [5, 4]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [min(number) (#5), max(ts) (#6), min(money) (#7)]
-    ├── expressions: [0, '2024-01-01 00:16:39.000000', 0.00]
+    ├── output columns: [min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5)]
+    ├── expressions: [0, '2024-01-01 00:33:19.000000', 0.00, 3000]
     ├── estimated rows: 1.00
     └── DummyTableScan
 
 query T
 ----
-explain select 5,  sum(number), sum(money), 4 from t;
+explain select 5,  count(), sum(number), sum(money), 4 from t;
 ----
 EvalScalar
-├── output columns: [sum(number) (#5), sum(money) (#6), 5 (#7), 4 (#8)]
+├── output columns: [count() (#5), sum(number) (#6), sum(money) (#7), 5 (#8), 4 (#9)]
 ├── expressions: [5, 4]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── output columns: [sum(number) (#5), sum(money) (#6)]
+    ├── output columns: [count() (#5), sum(number) (#6), sum(money) (#7)]
     ├── group by: []
-    ├── aggregate functions: [sum(number), sum(money)]
+    ├── aggregate functions: [count(), sum(number), sum(money)]
     ├── estimated rows: 1.00
     └── AggregatePartial
         ├── group by: []
-        ├── aggregate functions: [sum(number), sum(money)]
+        ├── aggregate functions: [count(), sum(number), sum(money)]
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.default.t
             ├── output columns: [number (#0), money (#2)]
-            ├── read rows: 1000
-            ├── read size: 3.46 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── read rows: 3000
+            ├── read size: 10.51 KiB
+            ├── partitions total: 2
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
             ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 1000.00
+            └── estimated rows: 3000.00
 
 statement ok
 drop table t
