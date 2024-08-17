@@ -73,6 +73,12 @@ pub struct SessionContext {
     variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
+    /// The uniq id for session from the perspective of client.
+    /// for HTTP handler, client session lives longer then the `Session` object. the uniq id is
+    /// http handler: should set the id in session token, if token is not used, session id is not available,
+    ///
+    /// for mysql handler: simple use set id of `Session`
+    client_session_id: RwLock<Option<String>>,
 }
 
 impl SessionContext {
@@ -94,6 +100,7 @@ impl SessionContext {
             variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
+            client_session_id: None,
         })
     }
 
@@ -321,5 +328,13 @@ impl SessionContext {
     }
     pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
         *self.variables.write() = variables
+    }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.client_session_id.read().clone()
+    }
+
+    pub fn set_client_session_id(&self, id: String) {
+        *self.client_session_id.write() = Some(id);
     }
 }
