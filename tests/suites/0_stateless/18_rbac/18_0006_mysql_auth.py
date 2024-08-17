@@ -39,12 +39,8 @@ try:
     cursor.execute(
         "create user u4 identified by 'abc123' with must_change_password = true;"
     )
-    cursor.execute(
-        "create user u5 identified by 'abc123';"
-    )
-    cursor.execute(
-        "alter user u5 with must_change_password = true;"
-    )
+    cursor.execute("create user u5 identified by 'abc123';")
+    cursor.execute("alter user u5 with must_change_password = true;")
 except mysql.connector.errors.OperationalError:
     print("root@127.0.0.1 is timeout")
 

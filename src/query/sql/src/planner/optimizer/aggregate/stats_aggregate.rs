@@ -86,18 +86,17 @@ impl RuleStatsAggregateOptimizer {
                         if ["min", "max"].contains(&function.func_name.as_str())
                             && function.args.len() == 1
                             && !function.distinct
+                            && Self::supported_stat_type(&function.args[0].data_type()?)
                         {
-                            if Self::supported_stat_type(&function.args[0].data_type()?) {
-                                if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
-                                    if let Ok(col_id) =
-                                        schema.column_id_of(b.column.column_name.as_str())
-                                    {
-                                        column_ids.push(col_id);
-                                        need_rewrite_aggs
-                                            .push(Some((col_id, function.func_name.clone())));
+                            if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
+                                if let Ok(col_id) =
+                                    schema.column_id_of(b.column.column_name.as_str())
+                                {
+                                    column_ids.push(col_id);
+                                    need_rewrite_aggs
+                                        .push(Some((col_id, function.func_name.clone())));
 
-                                        continue;
-                                    }
+                                    continue;
                                 }
                             }
                         }
