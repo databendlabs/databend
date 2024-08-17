@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -77,10 +78,8 @@ impl RuleStatsAggregateOptimizer {
                 let table = self.metadata.read().table(scan.table_index).table();
                 let schema = table.schema();
 
-                let mut results = Vec::with_capacity(agg.aggregate_functions.len());
-
                 let mut column_ids = Vec::with_capacity(agg.aggregate_functions.len());
-                let mut agg_functions = Vec::with_capacity(agg.aggregate_functions.len());
+                let mut need_rewrite_aggs = Vec::with_capacity(agg.aggregate_functions.len());
 
                 for item in agg.aggregate_functions.iter() {
                     if let ScalarExpr::AggregateFunction(function) = &item.scalar {
@@ -88,62 +87,104 @@ impl RuleStatsAggregateOptimizer {
                             && function.args.len() == 1
                             && !function.distinct
                         {
-                            if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
-                                if let Ok(col_id) =
-                                    schema.column_id_of(b.column.column_name.as_str())
-                                {
-                                    column_ids.push(col_id);
-                                    agg_functions.push(function.func_name.clone());
+                            if Self::supported_stat_type(&function.args[0].data_type()?) {
+                                if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
+                                    if let Ok(col_id) =
+                                        schema.column_id_of(b.column.column_name.as_str())
+                                    {
+                                        column_ids.push(col_id);
+                                        need_rewrite_aggs
+                                            .push(Some((col_id, function.func_name.clone())));
+
+                                        continue;
+                                    }
                                 }
                             }
                         }
                     }
+                    need_rewrite_aggs.push(None);
                 }
 
-                if column_ids.len() != agg.aggregate_functions.len() {
+                if column_ids.is_empty() {
                     return Ok(s_expr.clone());
                 }
+
+                let mut eval_scalar_results = Vec::with_capacity(agg.aggregate_functions.len());
+                let mut agg_results = Vec::with_capacity(agg.aggregate_functions.len());
 
                 if let Some(stats) = table
                     .accurate_columns_ranges(self.ctx.clone(), &column_ids)
                     .await?
                 {
-                    for (i, (id, name)) in column_ids.iter().zip(agg_functions.iter()).enumerate() {
-                        let index = agg.aggregate_functions[i].index;
-                        if let Some(stat) = stats.get(id) {
-                            if name.eq_ignore_ascii_case("min") && !stat.min.may_be_truncated {
-                                results.push(ScalarItem {
-                                    index,
-
-                                    scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                        value: stat.min.value.clone(),
-                                        span: None,
-                                    }),
-                                });
-                            } else if !stat.max.may_be_truncated {
-                                results.push(ScalarItem {
-                                    index,
-                                    scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                        value: stat.max.value.clone(),
-                                        span: None,
-                                    }),
-                                });
+                    for (need_rewrite_agg, agg) in
+                        need_rewrite_aggs.iter().zip(agg.aggregate_functions.iter())
+                    {
+                        if let Some((col_id, name)) = need_rewrite_agg {
+                            if let Some(stat) = stats.get(col_id) {
+                                if name.eq_ignore_ascii_case("min") && !stat.min.may_be_truncated {
+                                    eval_scalar_results.push(ScalarItem {
+                                        index: agg.index,
+                                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                                            value: stat.min.value.clone(),
+                                            span: None,
+                                        }),
+                                    });
+                                    continue;
+                                } else if !stat.max.may_be_truncated {
+                                    eval_scalar_results.push(ScalarItem {
+                                        index: agg.index,
+                                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                                            value: stat.max.value.clone(),
+                                            span: None,
+                                        }),
+                                    });
+                                    continue;
+                                }
                             }
                         }
+                        agg_results.push(agg.clone());
                     }
                 }
-                if results.len() != agg.aggregate_functions.len() {
+                if eval_scalar_results.is_empty() {
                     return Ok(s_expr.clone());
                 }
 
-                let eval_scalar = EvalScalar { items: results };
-                let leaf = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
-                return Ok(SExpr::create_unary(
-                    Arc::new(eval_scalar.into()),
-                    Arc::new(leaf),
-                ));
+                let eval_scalar = EvalScalar {
+                    items: eval_scalar_results,
+                };
+
+                if agg_results.is_empty() {
+                    let leaf = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
+                    return Ok(SExpr::create_unary(
+                        Arc::new(eval_scalar.into()),
+                        Arc::new(leaf),
+                    ));
+                } else {
+                    let agg = Aggregate {
+                        aggregate_functions: agg_results,
+                        ..agg.clone()
+                    };
+                    let child = SExpr::create_unary(Arc::new(agg.into()), Arc::new(child.clone()));
+                    return Ok(SExpr::create_unary(
+                        Arc::new(eval_scalar.into()),
+                        Arc::new(child),
+                    ));
+                }
             }
         }
         Ok(s_expr.clone())
+    }
+
+    fn supported_stat_type(data_type: &DataType) -> bool {
+        // we support nullable column but Nulls are not added into the bloom filter.
+        let inner_type = data_type.remove_nullable();
+        matches!(
+            inner_type,
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
+        )
     }
 }
