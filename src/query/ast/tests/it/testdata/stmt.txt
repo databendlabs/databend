@@ -3435,6 +3435,7 @@ CreateView(
                             ],
                             named_params: [],
                             alias: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -3557,6 +3558,7 @@ AlterView(
                             ],
                             named_params: [],
                             alias: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -3711,6 +3713,7 @@ CreateView(
                             ],
                             named_params: [],
                             alias: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -3843,6 +3846,7 @@ CreateView(
                             ],
                             named_params: [],
                             alias: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -3974,6 +3978,7 @@ AlterView(
                             ],
                             named_params: [],
                             alias: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -9067,6 +9072,7 @@ Query(
                         ],
                         named_params: [],
                         alias: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -9231,6 +9237,7 @@ Query(
                             ),
                         ],
                         alias: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -9881,9 +9888,7 @@ Query(
                             Sample {
                                 sample_level: ROW,
                                 sample_conf: Probability(
-                                    UInt64(
-                                        99,
-                                    ),
+                                    99.0,
                                 ),
                             },
                         ),
@@ -9959,9 +9964,7 @@ Query(
                             Sample {
                                 sample_level: BLOCK,
                                 sample_conf: Probability(
-                                    UInt64(
-                                        99,
-                                    ),
+                                    99.0,
                                 ),
                             },
                         ),
@@ -10037,9 +10040,7 @@ Query(
                             Sample {
                                 sample_level: ROW,
                                 sample_conf: RowsNum(
-                                    UInt64(
-                                        10,
-                                    ),
+                                    10.0,
                                 ),
                             },
                         ),
@@ -10115,9 +10116,253 @@ Query(
                             Sample {
                                 sample_level: BLOCK,
                                 sample_conf: RowsNum(
-                                    UInt64(
-                                        10,
-                                    ),
+                                    10.0,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample row (99);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE ROW (99)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..43,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..43,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..43,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: ROW,
+                                sample_conf: Probability(
+                                    99.0,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample block (99);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..45,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..45,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..45,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: BLOCK,
+                                sample_conf: Probability(
+                                    99.0,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample row (10 rows);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE ROW (10 ROWS)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..48,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..48,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..48,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: ROW,
+                                sample_conf: RowsNum(
+                                    10.0,
                                 ),
                             },
                         ),
@@ -16599,6 +16844,7 @@ SetStmt {
                                     ],
                                     named_params: [],
                                     alias: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
