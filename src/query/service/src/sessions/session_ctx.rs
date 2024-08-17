@@ -100,7 +100,7 @@ impl SessionContext {
             variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
-            client_session_id: None,
+            client_session_id: Default::default(),
         })
     }
 

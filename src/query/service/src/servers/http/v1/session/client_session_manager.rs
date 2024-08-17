@@ -21,6 +21,7 @@ use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
@@ -52,12 +53,13 @@ pub struct TokenPair {
 fn hash_token(token: &[u8]) -> String {
     hex::encode_upper(Sha256::digest(token))
 }
+
 pub struct ClientSessionManager {
     /// store hash only for hit ratio with limited memory, feasible because:
     /// - token contain all info in itself.
     /// - for eviction, LRU itself is enough, no need to check expired tokens specifically.
-    session_tokens: RwLock<LruCache<String, ()>>,
-    refresh_tokens: RwLock<LruCache<String, ()>>,
+    session_tokens: RwLock<LruCache<String, Option<String>>>,
+    refresh_tokens: RwLock<LruCache<String, Option<String>>>,
 }
 
 impl ClientSessionManager {
@@ -99,7 +101,7 @@ impl ClientSessionManager {
             uuid::Uuid::new_v4().to_string()
         };
 
-        let token_api = UserApiProvider::instance().token_api(&tenant);
+        let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
 
         let now = unix_ts();
         let mut claim = SessionClaim::new(
@@ -122,7 +124,7 @@ impl ClientSessionManager {
 
         // by adding SESSION_TOKEN_VALIDITY_IN_SECS, avoid touch refresh token for each request.
         // note the ttl is not accurate, the TTL is in fact longer (by 0 to 1 hour) then expected.
-        token_api
+        client_session_api
             .upsert_token(
                 &refresh_token_hash,
                 token_info.clone(),
@@ -130,8 +132,17 @@ impl ClientSessionManager {
                 false,
             )
             .await?;
+        client_session_api
+            .upsert_client_session_id(
+                &client_session_id,
+                ClientSession {
+                    user_name: claim.user.clone(),
+                },
+                REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY,
+            )
+            .await?;
         if let Some(old) = old_token_pair {
-            token_api
+            client_session_api
                 .upsert_token(
                     &old.refresh,
                     token_info,
@@ -153,7 +164,7 @@ impl ClientSessionManager {
             token_type: TokenType::Session,
             parent: Some(refresh_token_hash.clone()),
         };
-        token_api
+        client_session_api
             .upsert_token(
                 &session_token_hash,
                 token_info,
@@ -161,7 +172,9 @@ impl ClientSessionManager {
                 false,
             )
             .await?;
-        self.session_tokens.write().insert(session_token_hash, ());
+        self.session_tokens
+            .write()
+            .insert(session_token_hash, Some(refresh_token_hash));
 
         Ok((client_session_id, TokenPair {
             refresh: refresh_token,
@@ -192,7 +205,7 @@ impl ClientSessionManager {
         if !cache.read().contains(&hash) {
             let tenant = Tenant::new_literal(&claim.tenant);
             match UserApiProvider::instance()
-                .token_api(&tenant)
+                .client_session_api(&tenant)
                 .get_token(&hash)
                 .await?
             {
@@ -210,5 +223,30 @@ impl ClientSessionManager {
             };
         };
         Ok(claim)
+    }
+    async fn drop_client_session(self: &Arc<Self>, session_token: &str) -> Result<()> {
+        let claim = SessionClaim::decode(&session_token)?;
+        let now = unix_ts().as_secs();
+
+        let client_session_api =
+            UserApiProvider::instance().client_session_api(&Tenant::new_literal(&claim.tenant));
+
+        if now < claim.expire_at_in_secs {
+            let session_token_hash = hash_token(session_token.as_bytes());
+            // should exist when `verify_token`
+            if let Some(Some(hash)) = self.session_tokens.write().pop(&session_token_hash) {
+                self.refresh_tokens.write().pop(&hash);
+                client_session_api.drop_token(&hash).await.ok();
+            }
+            client_session_api
+                .drop_token(&session_token_hash)
+                .await
+                .ok();
+            client_session_api
+                .drop_client_session_id(&claim.session_id)
+                .await
+                .ok();
+        };
+        Ok(())
     }
 }
