@@ -47,8 +47,8 @@ databend-storages-common-cache-manager = { workspace = true }
 databend-storages-common-index = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
-databend-storages-common-table-meta = { workspace = true }
 databend-storages-common-session = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = "0.5"
 fastrace = { workspace = true }
 futures = { workspace = true }
