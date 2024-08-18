@@ -70,14 +70,14 @@ SELECT id, score(), content FROM t WHERE match(content, 'box', 'fuzziness=1')
 1 1.0 The quick brown fox jumps over the lazy dog
 
 query IFT
-SELECT id, score(), content FROM t WHERE match(content, 'action words', 'fuzziness=1')
+SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1')
 ----
 2 1.0 A picture is worth a thousand words
 3 1.0 The early bird catches the worm
 4 2.0 Actions speak louder than words
 
 query IFT
-SELECT id, score(), content FROM t WHERE match(content, 'action words', 'fuzziness=1;operator=AND')
+SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1;operator=AND')
 ----
 4 2.0 Actions speak louder than words
 
@@ -158,6 +158,14 @@ SELECT id, score(), content FROM t WHERE match(content, '。') ORDER BY score()
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY score()
+----
+
+
+statement error 1903
+SELECT id, score(), content FROM t WHERE match(content, '()')
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 ----
 
 
@@ -288,6 +296,15 @@ SELECT id, score(), title FROM books WHERE query('title:python') ORDER BY score(
 11 1.0526798 OpenAI GPT For Python Developers, 2nd Edition
 6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
 13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:pyth', 'fuzziness=2') ORDER BY id
+----
+2 1.0 Python深度学习（第2版）
+6 1.0 Flask Web开发：基于Python的Web应用开发实战（第2版）
+11 1.0 OpenAI GPT For Python Developers, 2nd Edition
+13 1.0 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+14 1.0 Building Recommendation Systems in Python and JAX
 
 query IFT
 SELECT id, score(), title FROM books WHERE query('title:python OR rust') ORDER BY score() DESC
