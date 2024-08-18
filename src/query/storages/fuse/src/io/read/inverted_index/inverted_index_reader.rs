@@ -14,7 +14,6 @@
 
 use std::time::Instant;
 
-use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
@@ -22,11 +21,9 @@ use databend_storages_common_index::InvertedIndexDirectory;
 use opendal::Operator;
 use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
-use tantivy::query::QueryParser;
-use tantivy::schema::Field;
+use tantivy::query::Query;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy::Index;
-use tantivy::Score;
 
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
 use crate::io::read::inverted_index::inverted_index_loader::InvertedIndexFileReader;
@@ -55,12 +52,9 @@ impl InvertedIndexReader {
     #[allow(clippy::type_complexity)]
     pub fn do_filter(
         self,
-        query_text: &str,
         has_score: bool,
-        query_fields: &Vec<Field>,
-        query_field_boosts: &Vec<(Field, Score)>,
+        query: &dyn Query,
         tokenizer_manager: TokenizerManager,
-        inverted_index_option: &Option<InvertedIndexOption>,
         row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let start = Instant::now();
@@ -69,44 +63,9 @@ impl InvertedIndexReader {
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let mut query_parser = QueryParser::for_index(&index, query_fields.clone());
-        // set optional boost value for the field
-        for (field, boost) in query_field_boosts {
-            query_parser.set_field_boost(*field, *boost);
-        }
-        let fuzziness = inverted_index_option
-            .as_ref()
-            .and_then(|o| o.fuzziness.as_ref());
-        if let Some(fuzziness) = fuzziness {
-            // Fuzzy query matches rows containing a specific term that is within Levenshtein distance.
-            for field in query_fields {
-                query_parser.set_field_fuzzy(*field, false, *fuzziness, true);
-            }
-        }
-        let operator = inverted_index_option
-            .as_ref()
-            .map(|o| o.operator)
-            .unwrap_or_default();
-        if operator {
-            // Operator if TRUE means operator is `AND`,
-            // set compose queries to a conjunction.
-            query_parser.set_conjunction_by_default();
-        }
-        let lenient = inverted_index_option
-            .as_ref()
-            .map(|o| o.lenient)
-            .unwrap_or_default();
-        let query = if lenient {
-            // If lenient is TRUE, invalid query text will not report an error.
-            let (query, _) = query_parser.parse_query_lenient(query_text);
-            query
-        } else {
-            query_parser.parse_query(query_text)?
-        };
-
         let matched_rows = if has_score {
             let collector = TopDocs::with_limit(row_count as usize);
-            let docs = searcher.search(&query, &collector)?;
+            let docs = searcher.search(query, &collector)?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
             for (score, doc_addr) in docs {
@@ -117,7 +76,7 @@ impl InvertedIndexReader {
             matched_rows
         } else {
             let collector = DocSetCollector;
-            let docs = searcher.search(&query, &collector)?;
+            let docs = searcher.search(query, &collector)?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
             for doc_addr in docs {
