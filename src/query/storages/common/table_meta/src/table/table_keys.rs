@@ -65,6 +65,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_ENGINE_META);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
+    r.insert(OPT_KEY_TEMP_PREFIX);
     r
 });
 

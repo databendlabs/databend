@@ -217,7 +217,7 @@ select name, comment from system.tables where name='t' and database='default';
 t s1
 
 query TT
-show create temp table t;
+show create table t;
 ----
 t CREATE TEMP TABLE t ( c1 VARCHAR NULL COMMENT 'c1-column', c2 INT NULL COMMENT 'test' ) ENGINE=FUSE COMMENT = 's1'
 
@@ -228,7 +228,7 @@ statement ok
 create temp table t1(id int) comment ='t1-comment';
 
 query TT
-show create temp table t1;
+show create table t1;
 ----
 t1 CREATE TEMP TABLE t1 ( id INT NULL ) ENGINE=FUSE COMMENT = 't1-comment'
 
@@ -241,7 +241,7 @@ statement ok
 alter table t1 comment='t1-new-comment';
 
 query TT
-show create temp table t1;
+show create table t1;
 ----
 t1 CREATE TEMP TABLE t1 ( id INT NULL ) ENGINE=FUSE COMMENT = 't1-new-comment'
 
