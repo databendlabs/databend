@@ -55,7 +55,7 @@ impl InvertedIndexReader {
     #[allow(clippy::type_complexity)]
     pub fn do_filter(
         self,
-        query: &str,
+        query_text: &str,
         has_score: bool,
         query_fields: &Vec<Field>,
         query_field_boosts: &Vec<(Field, Score)>,
@@ -78,8 +78,9 @@ impl InvertedIndexReader {
             .as_ref()
             .and_then(|o| o.fuzziness.as_ref());
         if let Some(fuzziness) = fuzziness {
+            // Fuzzy query matches rows containing a specific term that is within Levenshtein distance.
             for field in query_fields {
-                query_parser.set_field_fuzzy(*field, true, *fuzziness, true);
+                query_parser.set_field_fuzzy(*field, false, *fuzziness, true);
             }
         }
         let operator = inverted_index_option
@@ -87,6 +88,8 @@ impl InvertedIndexReader {
             .map(|o| o.operator)
             .unwrap_or_default();
         if operator {
+            // Operator if TRUE means operator is `AND`,
+            // set compose queries to a conjunction.
             query_parser.set_conjunction_by_default();
         }
         let lenient = inverted_index_option
@@ -94,10 +97,11 @@ impl InvertedIndexReader {
             .map(|o| o.lenient)
             .unwrap_or_default();
         let query = if lenient {
-            let (query, _) = query_parser.parse_query_lenient(query);
+            // If lenient is TRUE, invalid query text will not report an error.
+            let (query, _) = query_parser.parse_query_lenient(query_text);
             query
         } else {
-            query_parser.parse_query(query)?
+            query_parser.parse_query(query_text)?
         };
 
         let matched_rows = if has_score {

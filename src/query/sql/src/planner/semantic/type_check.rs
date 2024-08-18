@@ -2108,7 +2108,7 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        // The optional third argument is search option.
+        // The optional third argument is additional configuration option.
         if args.len() != 2 && args.len() != 3 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, {} expects 2 or 3 arguments, but got {}",
@@ -2238,7 +2238,7 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        // The optional second argument is search option.
+        // The optional second argument is additional configuration option.
         if args.len() != 1 && args.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, {} expects 1 argument, but got {}",
@@ -2330,6 +2330,7 @@ impl<'a> TypeChecker<'a> {
             let mut operator = None;
             let mut fuzziness = None;
 
+            // additional configuration options are separated by semicolon `;`
             let option_strs: Vec<&str> = option_text.split(';').collect();
             for option_str in option_strs {
                 if option_str.trim().is_empty() {
@@ -2347,6 +2348,7 @@ impl<'a> TypeChecker<'a> {
                 let option_val = option_vals[1].trim().to_lowercase();
                 match option_key.as_str() {
                     "fuzziness" => {
+                        // fuzziness is only support 1 and 2 currently.
                         if fuzziness.is_none() {
                             if option_val == "1" {
                                 fuzziness = Some(1);
