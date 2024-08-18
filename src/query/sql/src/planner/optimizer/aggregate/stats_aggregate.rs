@@ -179,8 +179,8 @@ impl RuleStatsAggregateOptimizer {
         Ok(s_expr.clone())
     }
 
+    // from RangeIndex::supported_stat_type
     fn supported_stat_type(data_type: &DataType) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
         let inner_type = data_type.remove_nullable();
         matches!(
             inner_type,
