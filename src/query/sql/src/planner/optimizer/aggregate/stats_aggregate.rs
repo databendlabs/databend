@@ -63,12 +63,14 @@ impl RuleStatsAggregateOptimizer {
         }
 
         // agg --> eval scalar --> scan
-        let child = s_expr.child(0)?;
-        if child.arity() != 1 || child.plan.as_ref().rel_op() != RelOp::EvalScalar {
+        let arg_eval_scalar = s_expr.child(0)?;
+        if arg_eval_scalar.arity() != 1
+            || arg_eval_scalar.plan.as_ref().rel_op() != RelOp::EvalScalar
+        {
             return Ok(s_expr.clone());
         }
 
-        let child = child.child(0)?;
+        let child = arg_eval_scalar.child(0)?;
         if child.arity() != 0 {
             return Ok(s_expr.clone());
         }
@@ -163,7 +165,10 @@ impl RuleStatsAggregateOptimizer {
                         aggregate_functions: agg_results,
                         ..agg.clone()
                     };
-                    let child = SExpr::create_unary(Arc::new(agg.into()), Arc::new(child.clone()));
+                    let child = SExpr::create_unary(
+                        Arc::new(agg.into()),
+                        Arc::new(arg_eval_scalar.clone()),
+                    );
                     return Ok(SExpr::create_unary(
                         Arc::new(eval_scalar.into()),
                         Arc::new(child),

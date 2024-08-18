@@ -129,35 +129,39 @@ EvalScalar
     └── DummyTableScan
 
 query T
-explain select  count(), max(number) + 4,  sum(number), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
+explain select  count(), max(number) + 4, sum_if(number + 4 , number > 3 ), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
 ----
 EvalScalar
-├── output columns: [count() (#5), sum(number) (#7), sum(money) (#12), min(day) (#8), max(ts) (#9), min(money) (#10), min(ts) (#11), max(number) + 4 (#13), 8 (#14)]
+├── output columns: [count() (#5), sum_if(number + 4, number > 3) (#9), sum(money) (#14), min(day) (#10), max(ts) (#11), min(money) (#12), min(ts) (#13), max(number) + 4 (#15), 8 (#16)]
 ├── expressions: [max(number) (#6) + 4, 8]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [count() (#5), sum(number) (#7), sum(money) (#12), max(number) (#6), min(day) (#8), max(ts) (#9), min(money) (#10), min(ts) (#11)]
+    ├── output columns: [count() (#5), sum_if(number + 4, number > 3) (#9), sum(money) (#14), max(number) (#6), min(day) (#10), max(ts) (#11), min(money) (#12), min(ts) (#13)]
     ├── expressions: [1999, '2024-01-01', '2024-01-01 00:33:19.000000', 0.00, '2024-01-01 00:00:00.000000']
     ├── estimated rows: 1.00
     └── AggregateFinal
-        ├── output columns: [count() (#5), sum(number) (#7), sum(money) (#12)]
+        ├── output columns: [count() (#5), sum_if(number + 4, number > 3) (#9), sum(money) (#14)]
         ├── group by: []
-        ├── aggregate functions: [count(), sum(number), sum(money)]
+        ├── aggregate functions: [count(), sum_if(sum_if_arg_0, sum_if_arg_1), sum(money)]
         ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: []
-            ├── aggregate functions: [count(), sum(number), sum(money)]
+            ├── aggregate functions: [count(), sum_if(sum_if_arg_0, sum_if_arg_1), sum(money)]
             ├── estimated rows: 1.00
-            └── TableScan
-                ├── table: default.default.t
-                ├── output columns: [number (#0), money (#2)]
-                ├── read rows: 3000
-                ├── read size: 10.51 KiB
-                ├── partitions total: 2
-                ├── partitions scanned: 2
-                ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 3000.00
+            └── EvalScalar
+                ├── output columns: [t.money (#2), sum_if_arg_0 (#7), sum_if_arg_1 (#8)]
+                ├── expressions: [t.number (#0) + 4, t.number (#0) > 3]
+                ├── estimated rows: 3000.00
+                └── TableScan
+                    ├── table: default.default.t
+                    ├── output columns: [number (#0), money (#2)]
+                    ├── read rows: 3000
+                    ├── read size: 10.51 KiB
+                    ├── partitions total: 2
+                    ├── partitions scanned: 2
+                    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 3000.00
 
 query T
 explain select 5, count(), min(number), max(ts), min(money), 4 from t;
