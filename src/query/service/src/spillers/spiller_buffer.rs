@@ -28,7 +28,7 @@ impl SpillBuffer {
         // The threshold of each partition, we will spill the partition data if the
         // size exceeds the threshold.
         let partition_threshold =
-            (buffer_threshold as f64 / num_partitions as f64 * 1024 * 1024) as usize;
+            (buffer_threshold as f64 / num_partitions as f64 * 1024.0 * 1024.0) as usize;
         SpillBuffer {
             partition_data: vec![Vec::new(); num_partitions],
             partition_size: vec![0; num_partitions],

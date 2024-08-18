@@ -253,13 +253,9 @@ impl Processor for TransformHashJoinBuild {
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Collect) => {
-                // If spill happens, we buffer data blocks to SpillBuffer, but there are two exceptions:
-                // 1. If we can probe the first round, we can build the hash table directly.
-                // 2. If the data blocks are restored from spilled partitions, we can build the hash table directly.
-                if self.is_spill_happened()
-                    && !self.can_probe_first_round()
-                    && !self.is_from_restore()
-                {
+                // If spill happens, we buffer data blocks to SpillBuffer, but if the data blocks
+                // are restored from spilled partitions, we can build the hash table directly.
+                if self.is_spill_happened() && !self.is_from_restore() {
                     self.spiller.buffer(&self.data_blocks)?;
                 } else {
                     for data_block in self.data_blocks.iter() {
@@ -354,10 +350,6 @@ impl TransformHashJoinBuild {
 
     fn need_check_spill_happen(&self) -> bool {
         !self.is_spill_happen_checked
-    }
-
-    fn can_probe_first_round(&self) -> bool {
-        self.build_state.hash_join_state.can_probe_first_round()
     }
 
     fn need_collect_data_block(&self) -> bool {

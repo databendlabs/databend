@@ -236,13 +236,6 @@ impl HashJoinState {
         self.need_outer_scan() || self.need_mark_scan()
     }
 
-    pub fn can_probe_first_round(&self) -> bool {
-        matches!(
-            self.hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAnti | JoinType::Full
-        )
-    }
-
     pub fn add_spilled_partitions(&self, partitions: &HashSet<u8>) {
         let mut spilled_partitions = self.spilled_partitions.write();
         spilled_partitions.extend(partitions);

@@ -104,8 +104,6 @@ pub struct TransformHashJoinProbe {
     is_build_finished: bool,
     // Whether the final scan step is finished.
     is_final_scan_finished: bool,
-    // Whether the join type can probe first round if spill happened.
-    can_probe_first_round: bool,
 
     // Spill related states.
     // The spiller is used to spill/restore data blocks.
@@ -160,7 +158,6 @@ impl TransformHashJoinProbe {
             other_predicate,
         );
 
-        let can_probe_first_round = join_probe_state.hash_join_state.can_probe_first_round();
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -178,7 +175,6 @@ impl TransformHashJoinProbe {
             is_spill_happened: false,
             is_build_finished: false,
             is_final_scan_finished: false,
-            can_probe_first_round,
             spiller,
             partition_id_to_restore: 0,
             step: Step::Async(AsyncStep::WaitBuild),
@@ -252,7 +248,9 @@ impl TransformHashJoinProbe {
 
         // If there are no data blocks to probe, go to the final scan.
         if let Some(final_scan_type) = self.final_scan_type() {
-            if !self.is_spill_happened || !self.is_first_round() || self.can_probe_first_round() {
+            // If spill does not happen or spill happened but it is not the first round,
+            // go to the final scan.
+            if !self.is_spill_happened || !self.is_first_round() {
                 self.final_scan_type = final_scan_type;
                 return self.next_step(Step::Async(AsyncStep::WaitProbe));
             }
@@ -474,10 +472,6 @@ impl TransformHashJoinProbe {
         self.is_build_finished
     }
 
-    fn can_probe_first_round(&self) -> bool {
-        self.can_probe_first_round
-    }
-
     fn is_first_round(&self) -> bool {
         self.hash_table_type == HashTableType::FirstRound
     }
@@ -542,7 +536,7 @@ impl TransformHashJoinProbe {
     }
 
     fn add_data_block(&mut self, data_block: DataBlock) {
-        if self.is_spill_happened() && !self.can_probe_first_round() {
+        if self.is_spill_happened() {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
             // Split data block by max_block_size.
