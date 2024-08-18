@@ -40,7 +40,7 @@ echo " ==="
 echo " === 2. Export meta node data"
 echo " ==="
 
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir ./.databend/meta1 --db meta.db
+./target/${BUILD_PROFILE}/databend-metactl export --raft-dir ./.databend/meta1 --db meta.db
 
 
 echo " === Exported meta data. start"
@@ -56,27 +56,27 @@ echo " ==="
 echo " === 3. Import old meta node data to new cluster"
 echo " ==="
 
-./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=4 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 --initial-cluster 5=localhost:29203,127.0.0.1:29191 --initial-cluster 6=localhost:29303,127.0.0.1:39191
-./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=5 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 --initial-cluster 5=localhost:29203,127.0.0.1:29191 --initial-cluster 6=localhost:29303,127.0.0.1:39191
+./target/${BUILD_PROFILE}/databend-metactl import --raft-dir ./.databend/new_meta1 --id=4 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 --initial-cluster 5=localhost:29203,127.0.0.1:29191 --initial-cluster 6=localhost:29303,127.0.0.1:39191
+./target/${BUILD_PROFILE}/databend-metactl import --raft-dir ./.databend/new_meta2 --id=5 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 --initial-cluster 5=localhost:29203,127.0.0.1:29191 --initial-cluster 6=localhost:29303,127.0.0.1:39191
 # test cluster config without grpc address
-./target/${BUILD_PROFILE}/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103 --initial-cluster 5=localhost:29203 --initial-cluster 6=localhost:29303
+./target/${BUILD_PROFILE}/databend-metactl import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103 --initial-cluster 5=localhost:29203 --initial-cluster 6=localhost:29303
 
 
 echo " === Export meta-1 start"
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir ./.databend/new_meta1
+./target/${BUILD_PROFILE}/databend-metactl export --raft-dir ./.databend/new_meta1
 echo " === Export meta-1 end"
 
 echo " === Export meta-2 start"
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir ./.databend/new_meta2
+./target/${BUILD_PROFILE}/databend-metactl export --raft-dir ./.databend/new_meta2
 echo " === Export meta-2 end"
 
 echo " === Export meta-3 start"
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir ./.databend/new_meta3
+./target/${BUILD_PROFILE}/databend-metactl export --raft-dir ./.databend/new_meta3
 echo " === Export meta-3 end"
 
 
 echo " === 3.1. Check if state machine is complete by checking key 'LastMembership'"
-if ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir ./.databend/new_meta1 | grep LastMembership; then
+if ./target/${BUILD_PROFILE}/databend-metactl export --raft-dir ./.databend/new_meta1 | grep LastMembership; then
     echo "=== Good:  'LastMembership' is found"
 else
     echo "=== Error: 'LastMembership' is not found"

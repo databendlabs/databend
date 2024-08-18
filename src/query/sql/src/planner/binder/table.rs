@@ -476,7 +476,7 @@ impl Binder {
                     columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Arc::new(Statistics::default()),
                     change_type,
-                    sample_conf: table_sample(sample)?,
+                    sample: table_sample(sample)?,
                     ..Default::default()
                 }
                 .into(),
@@ -692,14 +692,15 @@ impl Binder {
     }
 }
 
-fn table_sample(sample: &Option<Sample>) -> Result<Option<SampleConfig>> {
+fn table_sample(sample: &Option<Sample>) -> Result<Option<Sample>> {
     if let Some(sample) = sample {
         if sample.sample_level == SampleLevel::BLOCK {
-            return Err(ErrorCode::SyntaxException(
-                "BLOCK sampling is not supported.".to_string(),
-            ));
+            if let SampleConfig::RowsNum(_) = sample.sample_conf {
+                return Err(ErrorCode::SyntaxException(
+                    "BLOCK sampling doesn't support fixed rows.".to_string(),
+                ));
+            }
         }
-        return Ok(Some(sample.sample_conf.clone()));
     }
-    Ok(None)
+    Ok(sample.clone())
 }
