@@ -67,6 +67,7 @@ SELECT id, score(), content FROM t WHERE match(content, 'box')
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'box', 'fuzziness=1')
+----
 1 1.0 The quick brown fox jumps over the lazy dog
 
 query IFT
