@@ -135,7 +135,7 @@ impl PageManager {
         };
         let rows = block_to_strings(&block, &format_settings)?;
         let mut i = 0;
-        while *remain_rows > 0 && *remain_size > 0 {
+        while *remain_rows > 0 && *remain_size > 0 && i < rows.len() {
             let size = row_size(&rows[i]);
             if *remain_size > size {
                 *remain_size -= size;
@@ -165,6 +165,8 @@ impl PageManager {
                 } else {
                     remain_size = 0;
                 }
+            } else {
+                break;
             }
         }
 
