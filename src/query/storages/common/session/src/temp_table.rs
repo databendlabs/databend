@@ -32,14 +32,16 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_types::SeqV;
 use databend_common_storage::DataOperator;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
-use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_END;
 use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
@@ -54,7 +56,7 @@ pub struct TempTable {
     pub db_name: String,
     pub table_name: String,
     pub meta: TableMeta,
-    pub _copied_files: BTreeMap<String, TableCopiedFileInfo>,
+    pub copied_files: BTreeMap<String, TableCopiedFileInfo>,
 }
 
 impl TempTblMgr {
@@ -68,7 +70,7 @@ impl TempTblMgr {
 
     fn inc_next_id(&mut self) {
         self.next_id += 1;
-        if self.next_id > TEMP_TBL_ID_END {
+        if !is_temp_table_id(self.next_id) {
             panic!("Temp table id used up");
         }
     }
@@ -107,7 +109,7 @@ impl TempTblMgr {
                     db_name: name_ident.db_name,
                     table_name: orphan_table_name.clone().unwrap_or(name_ident.table_name),
                     meta: table_meta,
-                    _copied_files: BTreeMap::new(),
+                    copied_files: BTreeMap::new(),
                 });
                 self.inc_next_id();
                 true
@@ -124,10 +126,7 @@ impl TempTblMgr {
         })
     }
 
-    pub fn commit_table_meta(
-        &mut self,
-        req: &CommitTableMetaReq,
-    ) -> Result<Option<CommitTableMetaReply>> {
+    pub fn commit_table_meta(&mut self, req: &CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         let orphan_desc = format!(
             "{}.{}",
             req.name_ident.db_name,
@@ -140,9 +139,12 @@ impl TempTblMgr {
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = req.name_ident.db_name.clone();
                 table.table_name = req.name_ident.table_name.clone();
-                Ok(Some(CommitTableMetaReply {}))
+                Ok(CommitTableMetaReply {})
             }
-            None => Ok(None),
+            None => Err(ErrorCode::UnknownTable(format!(
+                "Temporary table {}.{} not found",
+                req.name_ident.db_name, req.name_ident.table_name
+            ))),
         }
     }
 
@@ -170,8 +172,11 @@ impl TempTblMgr {
         }
     }
 
-    pub fn get_table_meta_by_id(&self, id: u64) -> Option<TableMeta> {
-        self.id_to_table.get(&id).map(|t| t.meta.clone())
+    pub fn get_table_meta_by_id(&self, id: u64) -> Result<Option<SeqV<TableMeta>>> {
+        Ok(self
+            .id_to_table
+            .get(&id)
+            .map(|t| SeqV::new(0, t.meta.clone())))
     }
 
     pub fn get_table_name_by_id(&self, id: u64) -> Option<String> {
@@ -213,20 +218,23 @@ impl TempTblMgr {
             } = r;
             let table = self.id_to_table.get_mut(&table_id).unwrap();
             table.meta = new_table_meta;
-            table._copied_files = copied_files;
+            table.copied_files = copied_files;
         }
     }
 
     pub fn upsert_table_option(
         &mut self,
         req: UpsertTableOptionReq,
-    ) -> Result<Option<UpsertTableOptionReply>> {
+    ) -> Result<UpsertTableOptionReply> {
         let UpsertTableOptionReq {
             table_id, options, ..
         } = req;
         let table = self.id_to_table.get_mut(&table_id);
         let Some(table) = table else {
-            return Ok(None);
+            return Err(ErrorCode::UnknownTable(format!(
+                "Temporary table id {} not found",
+                table_id
+            )));
         };
         for (k, v) in options {
             if let Some(v) = v {
@@ -235,9 +243,21 @@ impl TempTblMgr {
                 table.meta.options.remove(&k);
             }
         }
-        Ok(Some(UpsertTableOptionReply {
+        Ok(UpsertTableOptionReply {
             share_vec_table_info: None,
-        }))
+        })
+    }
+
+    pub fn truncate_table(&mut self, id: u64) -> Result<TruncateTableReply> {
+        let table = self.id_to_table.get_mut(&id);
+        let Some(table) = table else {
+            return Err(ErrorCode::UnknownTable(format!(
+                "Temporary table id {} not found",
+                id
+            )));
+        };
+        table.copied_files.clear();
+        Ok(TruncateTableReply {})
     }
 }
 

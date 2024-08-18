@@ -105,6 +105,7 @@ use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::TxnState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::Catalog;
@@ -248,10 +249,11 @@ impl Catalog for SessionCatalog {
         } {
             return Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())));
         }
-        if let Some(meta) = self.temp_tbl_mgr.lock().get_table_meta_by_id(table_id) {
-            return Ok(Some(SeqV::new(0, meta)));
+        if is_temp_table_id(table_id) {
+            self.temp_tbl_mgr.lock().get_table_meta_by_id(table_id)
+        } else {
+            self.inner.get_table_meta_by_id(table_id).await
         }
-        self.inner.get_table_meta_by_id(table_id).await
     }
 
     // TODO: implement this
@@ -376,10 +378,10 @@ impl Catalog for SessionCatalog {
     }
 
     async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        let reply = self.temp_tbl_mgr.lock().commit_table_meta(&req)?;
-        match reply {
-            Some(r) => Ok(r),
-            None => self.inner.commit_table_meta(req).await,
+        if is_temp_table_id(req.table_id) {
+            self.temp_tbl_mgr.lock().commit_table_meta(&req)
+        } else {
+            self.inner.commit_table_meta(req).await
         }
     }
 
@@ -397,10 +399,11 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        if let Some(reply) = self.temp_tbl_mgr.lock().upsert_table_option(req.clone())? {
-            return Ok(reply);
+        if is_temp_table_id(req.table_id) {
+            self.temp_tbl_mgr.lock().upsert_table_option(req)
+        } else {
+            self.inner.upsert_table_option(tenant, db_name, req).await
         }
-        self.inner.upsert_table_option(tenant, db_name, req).await
     }
 
     async fn retryable_update_multi_table_meta(
@@ -459,13 +462,16 @@ impl Catalog for SessionCatalog {
         Ok(reply)
     }
 
-    // TODO: implement this
     async fn truncate_table(
         &self,
         table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        self.inner.truncate_table(table_info, req).await
+        if is_temp_table_id(req.table_id) {
+            self.temp_tbl_mgr.lock().truncate_table(req.table_id)
+        } else {
+            self.inner.truncate_table(table_info, req).await
+        }
     }
 
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {

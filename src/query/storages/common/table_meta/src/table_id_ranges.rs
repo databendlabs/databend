@@ -28,3 +28,7 @@ pub const SYS_TBL_FUC_ID_END: u64 = SYS_TBL_FUNC_ID_BEGIN + 10000;
 pub const TEMP_TBL_ID_BEGIN: u64 = SYS_TBL_FUC_ID_END;
 // max id for temp tables (exclusive)
 pub const TEMP_TBL_ID_END: u64 = TEMP_TBL_ID_BEGIN + 10000;
+
+pub fn is_temp_table_id(id: u64) -> bool {
+    (TEMP_TBL_ID_BEGIN..TEMP_TBL_ID_END).contains(&id)
+}

@@ -103,7 +103,7 @@ impl TxnBuffer {
                 db_name: db_name.to_string(),
                 table_name: table_name.to_string(),
                 meta: req.new_table_meta.clone(),
-                _copied_files: req.copied_files.clone(),
+                copied_files: req.copied_files.clone(),
             });
         }
     }
@@ -295,7 +295,7 @@ impl TxnManager {
                 .map(|(id, t)| UpdateTempTableReq {
                     table_id: *id,
                     new_table_meta: t.meta.clone(),
-                    copied_files: t._copied_files.clone(),
+                    copied_files: t.copied_files.clone(),
                     desc: format!("'{}'.'{}'", t.db_name, t.table_name),
                 })
                 .collect(),
