@@ -29,10 +29,9 @@ use crate::ObjectKind;
 use crate::Visitor;
 
 #[derive(Default)]
-pub struct GeometryBuilder<'fbb> {
+pub struct Builder<'fbb, C: Coords> {
     fbb: flatbuffers::FlatBufferBuilder<'fbb>,
-    column_x: Vec<f64>,
-    column_y: Vec<f64>,
+    coords: C,
     point_offsets: Vec<u32>,
     ring_offsets: Vec<u32>,
     properties: Option<Vec<u8>>,
@@ -44,31 +43,18 @@ pub struct GeometryBuilder<'fbb> {
     object: Option<WIPOffset<Object<'fbb>>>,
 }
 
-impl<'fbb> GeometryBuilder<'fbb> {
-    pub fn new() -> Self {
-        Self {
-            fbb: FlatBufferBuilder::new(),
-            column_x: Vec::new(),
-            column_y: Vec::new(),
-            point_offsets: Vec::new(),
-            ring_offsets: Vec::new(),
-            properties: None,
-            temp_kind: None,
-            srid: 0,
+pub trait Coords {
+    fn push(&mut self, x: f64, y: f64);
+    fn len(&self) -> usize;
+}
 
-            kind: None,
-            stack: Vec::new(),
-            object: None,
-        }
-    }
-
+impl<'fbb, C: Coords> Builder<'fbb, C> {
     pub fn point_len(&self) -> usize {
-        self.column_x.len()
+        self.coords.len()
     }
 
     fn push_point(&mut self, x: f64, y: f64) {
-        self.column_x.push(x);
-        self.column_y.push(y);
+        self.coords.push(x, y)
     }
 
     fn create_point_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
@@ -98,11 +84,24 @@ impl<'fbb> GeometryBuilder<'fbb> {
             .map(|data| self.fbb.create_vector(data))
     }
 
-    pub fn build(self) -> Geometry {
-        let GeometryBuilder {
+    fn may_init_multi_ring(&mut self, must: bool) {
+        if (must || !self.stack.is_empty()) && self.point_offsets.is_empty() {
+            self.point_offsets.push(self.point_len() as u32)
+        }
+    }
+
+    pub fn set_srid(&mut self, srid: Option<i32>) {
+        if let Some(srid) = srid {
+            if srid != 0 {
+                self.srid = srid;
+            }
+        }
+    }
+
+    fn build_tuple(self) -> (Vec<u8>, C) {
+        let Self {
             mut fbb,
-            column_x,
-            column_y,
+            coords,
             kind,
             object,
             ..
@@ -124,23 +123,11 @@ impl<'fbb> GeometryBuilder<'fbb> {
             vec![kind]
         };
 
-        Geometry {
-            buf,
-            column_x: Buffer::from(column_x),
-            column_y: Buffer::from(column_y),
-        }
-    }
-
-    pub fn set_srid(&mut self, srid: Option<i32>) {
-        if let Some(srid) = srid {
-            if srid != 0 {
-                self.srid = srid;
-            }
-        }
+        (buf, coords)
     }
 }
 
-impl<'fbb> Visitor for GeometryBuilder<'fbb> {
+impl<'fbb, C: Coords> Visitor for Builder<'fbb, C> {
     fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> GeoResult<()> {
         if self.stack.is_empty() {
             self.push_point(x, y);
@@ -161,9 +148,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
     }
 
     fn visit_points_start(&mut self, _: usize) -> GeoResult<()> {
-        if !self.stack.is_empty() && self.point_offsets.is_empty() {
-            self.point_offsets.push(self.point_len() as u32)
-        }
+        self.may_init_multi_ring(false);
         Ok(())
     }
 
@@ -175,9 +160,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
     }
 
     fn visit_lines_start(&mut self, _: usize) -> GeoResult<()> {
-        if self.point_offsets.is_empty() {
-            self.point_offsets.push(self.point_len() as u32)
-        }
+        self.may_init_multi_ring(true);
         Ok(())
     }
 
@@ -189,9 +172,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
     }
 
     fn visit_polygon_start(&mut self, _: usize) -> GeoResult<()> {
-        if self.point_offsets.is_empty() {
-            self.point_offsets.push(self.point_len() as u32)
-        }
+        self.may_init_multi_ring(true);
         Ok(())
     }
 
@@ -346,7 +327,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
     }
 }
 
-impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
+impl<'fbb, C: Coords> geozero::GeomProcessor for Builder<'fbb, C> {
     fn multi_dim(&self) -> bool {
         false
     }
@@ -458,5 +439,99 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn geometrycollection_end(&mut self, _: usize) -> GeoResult<()> {
         self.visit_collection_end()?;
         self.finish(FeatureKind::Geometry(ObjectKind::GeometryCollection))
+    }
+}
+
+pub struct CoordVec {
+    x: Vec<f64>,
+    y: Vec<f64>,
+}
+
+impl Coords for CoordVec {
+    fn push(&mut self, x: f64, y: f64) {
+        self.x.push(x);
+        self.y.push(y);
+    }
+
+    fn len(&self) -> usize {
+        self.x.len()
+    }
+}
+
+pub type GeometryBuilder<'fbb> = Builder<'fbb, CoordVec>;
+
+impl<'fbb> GeometryBuilder<'fbb> {
+    pub fn new() -> Self {
+        Self {
+            fbb: FlatBufferBuilder::new(),
+            coords: CoordVec {
+                x: Vec::new(),
+                y: Vec::new(),
+            },
+            point_offsets: Vec::new(),
+            ring_offsets: Vec::new(),
+            properties: None,
+            temp_kind: None,
+            srid: 0,
+
+            kind: None,
+            stack: Vec::new(),
+            object: None,
+        }
+    }
+
+    pub fn build(self) -> Geometry {
+        let (buf, coords) = self.build_tuple();
+        let CoordVec { x, y } = coords;
+        Geometry {
+            buf,
+            x: Buffer::from(x),
+            y: Buffer::from(y),
+        }
+    }
+}
+
+pub struct CoordRef<'a> {
+    x: &'a mut Vec<f64>,
+    y: &'a mut Vec<f64>,
+    offset: usize,
+}
+
+impl Coords for CoordRef<'_> {
+    fn push(&mut self, x: f64, y: f64) {
+        self.x.push(x);
+        self.y.push(y);
+    }
+
+    fn len(&self) -> usize {
+        self.x.len() - self.offset
+    }
+}
+
+pub type GeometryColumnBuilder<'fbb, 'a> = Builder<'fbb, CoordRef<'a>>;
+
+impl<'fbb, 'a> GeometryColumnBuilder<'fbb, 'a> {
+    pub fn new_with_column(x: &'a mut Vec<f64>, y: &'a mut Vec<f64>) -> Self {
+        debug_assert_eq!(x.len(), y.len());
+        let offset = x.len();
+        Self {
+            // todo: make a Allocator pool
+            fbb: FlatBufferBuilder::new(),
+            coords: CoordRef { x, y, offset },
+            point_offsets: Vec::new(),
+            ring_offsets: Vec::new(),
+            properties: None,
+            temp_kind: None,
+            srid: 0,
+
+            kind: None,
+            stack: Vec::new(),
+            object: None,
+        }
+    }
+
+    pub fn build_buf(self) -> Vec<u8> {
+        let (buf, _) = self.build_tuple();
+        buf
     }
 }

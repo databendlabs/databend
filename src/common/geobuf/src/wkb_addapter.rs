@@ -15,6 +15,7 @@
 use geozero::error::GeozeroError;
 use geozero::GeozeroGeometry;
 
+use crate::builder::GeometryColumnBuilder;
 use crate::Geometry;
 use crate::GeometryBuilder;
 use crate::GeometryRef;
@@ -75,4 +76,17 @@ impl<'a> TryInto<Ewkb<Vec<u8>>> for GeometryRef<'a> {
         let data = geozero::ToWkb::to_ewkb(&self, geozero::CoordDimensions::xy(), self.srid())?;
         Ok(Ewkb(data))
     }
+}
+
+pub fn append_ewkb_to_column<B>(
+    ewkb: Ewkb<B>,
+    x: &mut Vec<f64>,
+    y: &mut Vec<f64>,
+) -> Result<Vec<u8>, GeozeroError>
+where
+    B: AsRef<[u8]>,
+{
+    let mut builder = GeometryColumnBuilder::new_with_column(x, y);
+    geozero::wkb::Ewkb(ewkb.0.as_ref()).process_geom(&mut builder)?;
+    Ok(builder.build_buf())
 }

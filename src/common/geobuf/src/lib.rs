@@ -29,6 +29,7 @@ pub use geojson_adapter::GeoJson;
 use geojson_adapter::JsonObject;
 pub use geometry::BoundingBox;
 use geozero::error::Result as GeoResult;
+pub use wkb_addapter::append_ewkb_to_column;
 pub use wkb_addapter::Ewkb;
 pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Ewkt;
@@ -37,16 +38,16 @@ pub use wkt_adapter::Wkt;
 #[derive(Clone)]
 pub struct Geometry {
     buf: Vec<u8>,
-    column_x: Buffer<f64>,
-    column_y: Buffer<f64>,
+    x: Buffer<f64>,
+    y: Buffer<f64>,
 }
 
 impl Geometry {
     pub fn as_ref(&self) -> GeometryRef<'_> {
         GeometryRef {
             buf: &self.buf,
-            column_x: self.column_x.as_slice(),
-            column_y: self.column_y.as_slice(),
+            x: self.x.as_slice(),
+            y: self.y.as_slice(),
         }
     }
 }
@@ -54,18 +55,14 @@ impl Geometry {
 #[derive(Clone, Copy)]
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
-    column_x: &'a [f64],
-    column_y: &'a [f64],
+    x: &'a [f64],
+    y: &'a [f64],
 }
 
 impl<'a> GeometryRef<'a> {
     pub fn new(buf: &'a [u8], x: &'a [f64], y: &'a [f64]) -> Self {
         debug_assert_eq!(x.len(), y.len());
-        GeometryRef {
-            buf,
-            column_x: x,
-            column_y: y,
-        }
+        GeometryRef { buf, x, y }
     }
 
     pub fn buf(&self) -> &[u8] {
@@ -73,11 +70,11 @@ impl<'a> GeometryRef<'a> {
     }
 
     pub fn x(&self) -> &[f64] {
-        self.column_x
+        self.x
     }
 
     pub fn y(&self) -> &[f64] {
-        self.column_y
+        self.y
     }
 }
 
@@ -85,8 +82,8 @@ impl<'a> GeometryRef<'a> {
     pub fn to_owned(&self) -> Geometry {
         Geometry {
             buf: self.buf.to_vec(),
-            column_x: Buffer::from(self.column_x.to_vec()),
-            column_y: Buffer::from(self.column_y.to_vec()),
+            x: Buffer::from(self.x.to_vec()),
+            y: Buffer::from(self.y.to_vec()),
         }
     }
 }

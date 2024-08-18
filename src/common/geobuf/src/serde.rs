@@ -36,13 +36,13 @@ struct De(Vec<u8>, Vec<f64>, Vec<f64>);
 impl Serialize for GeometryRef<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        Serialize::serialize(&Ser(self.buf, self.column_x, self.column_y), serializer)
+        Serialize::serialize(&Ser(self.buf, self.x, self.y), serializer)
     }
 }
 
 impl BorshSerialize for GeometryRef<'_> {
     fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        BorshSerialize::serialize(&Ser(self.buf, self.column_x, self.column_y), writer)
+        BorshSerialize::serialize(&Ser(self.buf, self.x, self.y), writer)
     }
 }
 
@@ -53,8 +53,8 @@ impl<'de> Deserialize<'de> for Geometry {
 
         Ok(Geometry {
             buf,
-            column_x: Buffer::from(x),
-            column_y: Buffer::from(y),
+            x: Buffer::from(x),
+            y: Buffer::from(y),
         })
     }
 }
@@ -65,8 +65,8 @@ impl BorshDeserialize for Geometry {
 
         Ok(Geometry {
             buf,
-            column_x: Buffer::from(x),
-            column_y: Buffer::from(y),
+            x: Buffer::from(x),
+            y: Buffer::from(y),
         })
     }
 }

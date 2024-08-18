@@ -21,6 +21,8 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+use databend_common_geobuf::append_ewkb_to_column;
+use databend_common_geobuf::Ewkb;
 use databend_common_geobuf::FeatureKind;
 use databend_common_geobuf::Geometry;
 use databend_common_geobuf::GeometryRef;
@@ -554,5 +556,12 @@ impl GeographyColumnBuilder {
         let offsets = self.offsets.as_slice();
         let len = offsets.len();
         self.buf.memory_size() + len * 8 + (offsets[len - 1] - offsets[0]) as usize * 16
+    }
+
+    pub fn push_ewkb(&mut self, data: &[u8]) {
+        let buf = append_ewkb_to_column(Ewkb(data), &mut self.lon, &mut self.lat).unwrap();
+        self.offsets.push(self.lon.len() as u64);
+        self.buf.put_slice(&buf);
+        self.buf.commit_row()
     }
 }

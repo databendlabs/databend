@@ -45,7 +45,7 @@ impl<'a> TryInto<geo::Geometry<f64>> for GeometryRef<'a> {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<geo::Geometry<f64>, Self::Error> {
-        debug_assert!(self.column_x.len() == self.column_y.len());
+        debug_assert!(self.x.len() == self.y.len());
         geozero::ToGeo::to_geo(&self)
     }
 }
@@ -60,12 +60,12 @@ impl<'a> geozero::GeozeroGeometry for GeometryRef<'a> {
         P: geozero::GeomProcessor,
         Self: Sized,
     {
-        debug_assert!(self.column_x.len() == self.column_y.len());
+        debug_assert!(self.x.len() == self.y.len());
         processor.srid(self.srid())?;
         match self.kind()?.object_kind() {
             ObjectKind::Point => {
-                debug_assert!(self.column_x.len() == 1);
-                let (x, y) = (self.column_x[0], self.column_y[0]);
+                debug_assert!(self.x.len() == 1);
+                let (x, y) = (self.x[0], self.y[0]);
                 if x.is_nan() && y.is_nan() {
                     processor.empty_point(0)
                 } else {
@@ -75,12 +75,12 @@ impl<'a> geozero::GeozeroGeometry for GeometryRef<'a> {
                 }
             }
             ObjectKind::MultiPoint => {
-                processor.multipoint_begin(self.column_x.len(), 0)?;
+                processor.multipoint_begin(self.x.len(), 0)?;
                 self.process_points(processor)?;
                 processor.multipoint_end(0)
             }
             ObjectKind::LineString => {
-                processor.linestring_begin(true, self.column_x.len(), 0)?;
+                processor.linestring_begin(true, self.x.len(), 0)?;
                 self.process_points(processor)?;
                 processor.linestring_end(true, 0)
             }
@@ -172,12 +172,12 @@ impl<'a> GeometryRef<'a> {
     where
         P: geozero::GeomProcessor,
     {
-        processor.xy(self.column_x[pos], self.column_y[pos], idx)
+        processor.xy(self.x[pos], self.y[pos], idx)
     }
 
     fn process_points<P>(&self, processor: &mut P) -> geozero::error::Result<()>
     where P: geozero::GeomProcessor {
-        for pos in 0..self.column_x.len() {
+        for pos in 0..self.x.len() {
             self.process_point(processor, pos, pos)?;
         }
         Ok(())

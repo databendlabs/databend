@@ -43,25 +43,25 @@ impl<'a> GeometryRef<'a> {
         }
         BoundingBox {
             xmin: self
-                .column_x
+                .x
                 .iter()
                 .copied()
                 .min_by(cmp)
                 .unwrap_or(f64::NAN),
             xmax: self
-                .column_x
+                .x
                 .iter()
                 .copied()
                 .max_by(cmp)
                 .unwrap_or(f64::NAN),
             ymin: self
-                .column_y
+                .y
                 .iter()
                 .copied()
                 .min_by(cmp)
                 .unwrap_or(f64::NAN),
             ymax: self
-                .column_y
+                .y
                 .iter()
                 .copied()
                 .max_by(cmp)
@@ -70,7 +70,7 @@ impl<'a> GeometryRef<'a> {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.buf.len() + self.column_x.len() * 16
+        self.buf.len() + self.x.len() * 16
     }
 
     pub fn srid(&self) -> Option<i32> {
@@ -99,7 +99,7 @@ impl<'a> GeometryRef<'a> {
     }
 
     pub fn points_len(&self) -> usize {
-        self.column_x.len()
+        self.x.len()
     }
 
     // Returns the first Point in a LineString.
@@ -111,22 +111,22 @@ impl<'a> GeometryRef<'a> {
 
         let mut builder = GeometryBuilder::new();
         builder.set_srid(self.srid());
-        builder.visit_point(self.column_x[0], self.column_x[1], false)?;
+        builder.visit_point(self.x[0], self.x[1], false)?;
         builder.finish(FeatureKind::Geometry(ObjectKind::Point))?;
         Ok(builder.build())
     }
 
     pub fn is_empty_point(&self) -> Result<bool, GeozeroError> {
         Ok(self.kind()?.object_kind() == ObjectKind::Point
-            && self.column_x[0].is_nan()
-            && self.column_y[0].is_nan())
+            && self.x[0].is_nan()
+            && self.y[0].is_nan())
     }
 }
 
 impl<'a> Hash for GeometryRef<'a> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write(self.buf);
-        for (x, y) in self.column_x.iter().zip(self.column_y.iter()) {
+        for (x, y) in self.x.iter().zip(self.y.iter()) {
             state.write_u64(x.to_bits());
             state.write_u64(y.to_bits());
         }
@@ -135,15 +135,15 @@ impl<'a> Hash for GeometryRef<'a> {
 
 impl<'a> PartialEq for GeometryRef<'a> {
     fn eq(&self, other: &Self) -> bool {
-        if self.column_x.len() != other.column_x.len() {
+        if self.x.len() != other.x.len() {
             return false;
         }
         if self.buf != other.buf {
             return false;
         }
 
-        let left = self.column_x.iter().zip(self.column_y.iter());
-        let right = other.column_x.iter().zip(other.column_y.iter());
+        let left = self.x.iter().zip(self.y.iter());
+        let right = other.x.iter().zip(other.y.iter());
         left.zip(right)
             .all(|((x1, y1), (x2, y2))| eq_f64(*x1, *x2) && eq_f64(*y1, *y2))
     }
@@ -182,8 +182,8 @@ impl Geometry {
     pub fn new(buf: Vec<u8>, x: Vec<f64>, y: Vec<f64>) -> Self {
         Geometry {
             buf,
-            column_x: Buffer::from(x),
-            column_y: Buffer::from(y),
+            x: Buffer::from(x),
+            y: Buffer::from(y),
         }
     }
 
@@ -200,8 +200,8 @@ impl Default for Geometry {
     fn default() -> Self {
         Self {
             buf: vec![FeatureKind::Geometry(ObjectKind::GeometryCollection).as_u8()],
-            column_x: Buffer::default(),
-            column_y: Buffer::default(),
+            x: Buffer::default(),
+            y: Buffer::default(),
         }
     }
 }
@@ -212,7 +212,7 @@ impl<'a> PartialOrd for GeometryRef<'a> {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
-        match self.column_x.len().partial_cmp(&other.column_x.len()) {
+        match self.x.len().partial_cmp(&other.x.len()) {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
@@ -220,11 +220,11 @@ impl<'a> PartialOrd for GeometryRef<'a> {
             core::cmp::Ordering::Equal => {}
             ord => return Some(ord),
         }
-        match self.column_x.partial_cmp(other.column_x) {
+        match self.x.partial_cmp(other.x) {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
-        self.column_y.partial_cmp(other.column_y)
+        self.y.partial_cmp(other.y)
     }
 }
 
@@ -241,8 +241,8 @@ impl<'a> Debug for GeometryRef<'a> {
         } else {
             f.debug_struct("GeometryRef")
                 .field("buf", &self.buf)
-                .field("x", &self.column_x)
-                .field("y", &self.column_y)
+                .field("x", &self.x)
+                .field("y", &self.y)
                 .finish()
         }
     }
