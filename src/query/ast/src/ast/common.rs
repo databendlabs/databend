@@ -29,7 +29,16 @@ pub struct Identifier {
     pub span: Span,
     pub name: String,
     pub quote: Option<char>,
-    pub is_hole: bool,
+    #[drive(skip)]
+    pub ident_type: IdentifierType,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum IdentifierType {
+    #[default]
+    None,
+    Hole,
+    Variable,
 }
 
 impl Identifier {
@@ -37,12 +46,20 @@ impl Identifier {
         self.quote.is_some()
     }
 
+    pub fn is_hole(&self) -> bool {
+        self.ident_type == IdentifierType::Hole
+    }
+
+    pub fn is_variable(&self) -> bool {
+        self.ident_type == IdentifierType::Variable
+    }
+
     pub fn from_name(span: Span, name: impl Into<String>) -> Self {
         Self {
             span,
             name: name.into(),
             quote: None,
-            is_hole: false,
+            ident_type: IdentifierType::None,
         }
     }
 
@@ -51,15 +68,17 @@ impl Identifier {
             span,
             name: name.into(),
             quote,
-            is_hole: false,
+            ident_type: IdentifierType::None,
         }
     }
 }
 
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.is_hole {
+        if self.is_hole() {
             write!(f, "IDENTIFIER(:{})", self.name)
+        } else if self.is_variable() {
+            write!(f, "IDENTIFIER(${})", self.name)
         } else if let Some(quote) = self.quote {
             write!(f, "{}", QuotedIdent(&self.name, quote))
         } else {

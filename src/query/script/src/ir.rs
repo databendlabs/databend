@@ -184,7 +184,7 @@ impl StatementTemplate {
             }
 
             fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole {
+                if ident.is_hole() {
                     let index = ident.name.parse::<usize>().unwrap();
                     let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
