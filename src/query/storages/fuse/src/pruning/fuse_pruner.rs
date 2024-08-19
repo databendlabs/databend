@@ -27,9 +27,9 @@ use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::BlockMetaCache;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::BlockMetaCache;
-use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -411,11 +411,10 @@ impl FusePruner {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {
-                let block_metas = Arc::new(segment.block_metas()?);
-                if populate_cache {
-                    cache.put(segment_path.to_string(), block_metas.clone());
+                match populate_cache {
+                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
+                    false => Ok(Arc::new(segment.block_metas()?)),
                 }
-                Ok(block_metas)
             }
         } else {
             Ok(Arc::new(segment.block_metas()?))

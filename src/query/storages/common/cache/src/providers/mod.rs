@@ -22,7 +22,7 @@ pub use disk_cache::DiskCacheKey;
 pub use disk_cache::LruDiskCache;
 pub use disk_cache::LruDiskCacheBuilder;
 pub use disk_cache::LruDiskCacheHolder;
-pub use memory_cache::InMemoryItemCacheHolder;
+pub use memory_cache::InMemoryLruCache;
 pub use table_data_cache::TableDataCache;
 pub use table_data_cache::TableDataCacheBuilder;
 pub use table_data_cache::TableDataCacheKey;
