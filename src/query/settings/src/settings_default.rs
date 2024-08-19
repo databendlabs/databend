@@ -847,7 +847,7 @@ impl DefaultSettings {
     /// The maximum number of days that data can be retained.
     /// The max is read from the global config:data_retention_time_in_days_max
     /// If the global config is not set, the default value is 90 days.
-    fn data_retention_time_in_days_max() -> u64 {
+    pub(crate) fn data_retention_time_in_days_max() -> u64 {
         match GlobalConfig::try_get_instance() {
             None => 90,
             Some(conf) => conf.query.data_retention_time_in_days_max,

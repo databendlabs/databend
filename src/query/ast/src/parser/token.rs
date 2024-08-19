@@ -149,9 +149,6 @@ pub enum TokenKind {
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
-    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
-    VariableAccess,
-
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -239,6 +236,8 @@ pub enum TokenKind {
     LBrace,
     #[token("}")]
     RBrace,
+    #[token("$")]
+    Dollar,
     #[token("->")]
     RArrow,
     #[token("->>")]
@@ -1378,6 +1377,7 @@ impl TokenKind {
                 | Factorial
                 | LBrace
                 | RBrace
+                | Dollar
                 | RArrow
                 | LongRArrow
                 | HashRArrow

@@ -56,20 +56,18 @@ use hashlink::linked_hash_map;
 use hashlink::LinkedHashMap;
 
 use crate::cache::Cache;
-use crate::meter::count_meter::Count;
-use crate::meter::count_meter::CountableMeter;
+use crate::mem_sized::MemSized;
 
 /// An LRU cache.
 #[derive(Clone)]
-pub struct LruCache<K: Eq + Hash, V, M: CountableMeter<K, V> = Count> {
+pub struct LruCache<K: Eq + Hash + MemSized, V: MemSized> {
     map: LinkedHashMap<K, V>,
-    current_measure: M::Measure,
-    max_capacity: u64,
-    // weight: usize,
-    meter: M,
+    max_items: usize,
+    max_bytes: usize,
+    bytes: usize,
 }
 
-impl<K: Eq + Hash, V> LruCache<K, V> {
+impl<K: Eq + Hash + MemSized, V: MemSized> LruCache<K, V> {
     /// Creates an empty cache that can hold at most `capacity` items.
     ///
     /// # Examples
@@ -78,66 +76,28 @@ impl<K: Eq + Hash, V> LruCache<K, V> {
     /// use databend_common_cache::{Cache, LruCache};
     /// let mut cache: LruCache<i32, &str> = LruCache::new(10);
     /// ```
-    pub fn new(capacity: u64) -> Self {
+    pub fn with_items_capacity(items_capacity: usize) -> Self {
         LruCache {
             map: LinkedHashMap::new(),
-            current_measure: (),
-            max_capacity: capacity,
-            meter: Count,
+            max_items: items_capacity,
+            max_bytes: usize::MAX,
+            bytes: 0,
+        }
+    }
+
+    pub fn with_bytes_capacity(bytes_capacity: usize) -> Self {
+        LruCache {
+            map: LinkedHashMap::new(),
+            max_items: usize::MAX,
+            max_bytes: bytes_capacity,
+            bytes: 0,
         }
     }
 }
 
-impl<K: Eq + Hash, V, M: CountableMeter<K, V>> LruCache<K, V, M> {
-    /// Creates an empty cache that can hold at most `capacity` as measured by `meter`.
-    ///
-    /// You can implement the [`Meter`][meter] trait to allow custom metrics.
-    ///
-    /// [meter]: trait.Meter.html
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache, Meter};
-    /// use std::borrow::Borrow;
-    ///
-    /// /// Measure Vec items by their length
-    /// struct VecLen;
-    ///
-    /// impl<K, T> Meter<K, Vec<T>> for VecLen {
-    ///     // Use `Measure = usize` or implement `CountableMeter` as well.
-    ///     type Measure = usize;
-    ///     fn measure<Q: ?Sized>(&self, _: &Q, v: &Vec<T>) -> usize
-    ///         where K: Borrow<Q>
-    ///     {
-    ///         v.len()
-    ///     }
-    /// }
-    ///
-    /// let mut cache = LruCache::with_meter(5, VecLen);
-    /// cache.put(1, vec![1, 2]);
-    /// assert_eq!(cache.size(), 2);
-    /// cache.put(2, vec![3, 4]);
-    /// cache.put(3, vec![5, 6]);
-    /// assert_eq!(cache.size(), 4);
-    /// assert_eq!(cache.len(), 2);
-    /// ```
-    pub fn with_meter(capacity: u64, meter: M) -> LruCache<K, V, M> {
-        LruCache {
-            map: LinkedHashMap::new(),
-            current_measure: Default::default(),
-            max_capacity: capacity,
-            meter,
-        }
-    }
-}
-
-impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V, M> {
+impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
-    ///
-    /// Note that this method is not available for cache objects using `Meter` implementations
-    /// other than `Count`.
     ///
     /// # Examples
     ///
@@ -184,7 +144,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
     /// assert_eq!(cache.peek(&1), Some(&"a"));
     /// assert_eq!(cache.peek(&2), Some(&"b"));
     /// ```
-    fn peek<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
+    fn peek<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
@@ -226,16 +186,17 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
     /// assert_eq!(cache.get(&1), Some(&"a"));
     /// assert_eq!(cache.get(&2), Some(&"b"));
     /// ```
-    fn put(&mut self, k: K, v: V) -> Option<V> {
-        let new_size = self.meter.measure(&k, &v);
-        self.current_measure = self.meter.add(self.current_measure, new_size);
+    fn insert(&mut self, k: K, v: V) -> Option<V> {
+        // self.bytes += k.mem_bytes();
+        self.bytes += v.mem_bytes();
+
         if let Some(old) = self.map.get(&k) {
-            self.current_measure = self
-                .meter
-                .sub(self.current_measure, self.meter.measure(&k, old));
+            // self.bytes -= k.mem_bytes();
+            self.bytes -= old.mem_bytes();
         }
+
         let old_val = self.map.insert(k, v);
-        while self.size() > self.capacity() {
+        while self.bytes > self.max_bytes || self.map.len() > self.max_items {
             self.pop_by_policy();
         }
         old_val
@@ -262,10 +223,10 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.map.remove(k).inspect(|v| {
-            self.current_measure = self
-                .meter
-                .sub(self.current_measure, self.meter.measure(k, v));
+        self.map.remove_entry(k).map(|(_k, v)| {
+            // self.bytes -= k.mem_bytes();
+            self.bytes -= v.mem_bytes();
+            v
         })
     }
 
@@ -287,9 +248,8 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
     #[inline]
     fn pop_by_policy(&mut self) -> Option<(K, V)> {
         self.map.pop_front().map(|(k, v)| {
-            self.current_measure = self
-                .meter
-                .sub(self.current_measure, self.meter.measure(&k, &v));
+            // self.bytes -= k.mem_bytes();
+            self.bytes -= v.mem_bytes();
             (k, v)
         })
     }
@@ -324,8 +284,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
         self.map.is_empty()
     }
 
-    /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
-    /// `Meter` used by the cache.
+    /// Returns the maximum bytes size of the key-value pairs the cache can hold.
     ///
     /// # Examples
     ///
@@ -334,67 +293,27 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
     /// let mut cache: LruCache<i32, &str> = LruCache::new(2);
     /// assert_eq!(cache.capacity(), 2);
     /// ```
-    fn capacity(&self) -> u64 {
-        self.max_capacity
+    fn bytes_capacity(&self) -> u64 {
+        self.max_bytes as u64
     }
 
-    /// Sets the size of the key-value pairs the cache can hold, as measured by the `Meter` used by
-    /// the cache.
-    ///
-    /// Removes least-recently-used key-value pairs if necessary.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache};
-    ///
-    /// let mut cache = LruCache::new(2);
-    ///
-    /// cache.put(1, "a");
-    /// cache.put(2, "b");
-    /// cache.put(3, "c");
-    ///
-    /// assert_eq!(cache.get(&1), None);
-    /// assert_eq!(cache.get(&2), Some(&"b"));
-    /// assert_eq!(cache.get(&3), Some(&"c"));
-    ///
-    /// cache.set_capacity(3);
-    /// cache.put(1, "a");
-    /// cache.put(2, "b");
-    ///
-    /// assert_eq!(cache.get(&1), Some(&"a"));
-    /// assert_eq!(cache.get(&2), Some(&"b"));
-    /// assert_eq!(cache.get(&3), Some(&"c"));
-    ///
-    /// cache.set_capacity(1);
-    ///
-    /// assert_eq!(cache.get(&1), None);
-    /// assert_eq!(cache.get(&2), None);
-    /// assert_eq!(cache.get(&3), Some(&"c"));
-    /// ```
-    fn set_capacity(&mut self, capacity: u64) {
-        while self.size() > capacity {
-            self.pop_by_policy();
-        }
-        self.max_capacity = capacity;
+    fn items_capacity(&self) -> u64 {
+        self.max_items as u64
     }
 
-    /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
-    /// by the cache.
-    fn size(&self) -> u64 {
-        self.meter
-            .size(self.current_measure)
-            .unwrap_or_else(|| self.map.len() as u64)
+    /// Returns the bytes size of all the key-value pairs in the cache.
+    fn bytes_size(&self) -> u64 {
+        self.bytes as u64
     }
 
     /// Removes all key-value pairs from the cache.
     fn clear(&mut self) {
         self.map.clear();
-        self.current_measure = Default::default();
+        self.bytes = 0;
     }
 }
 
-impl<K: Eq + Hash, V, M: CountableMeter<K, V>> LruCache<K, V, M> {
+impl<K: Eq + Hash + MemSized, V: MemSized> LruCache<K, V> {
     /// Returns an iterator over the cache's key-value pairs in least- to most-recently-used order.
     ///
     /// Accessing the cache through the iterator does _not_ affect the cache's LRU state.
@@ -453,23 +372,21 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> LruCache<K, V, M> {
     }
 }
 
-impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Extend<(K, V)> for LruCache<K, V, M> {
+impl<K: Eq + Hash + MemSized, V: MemSized> Extend<(K, V)> for LruCache<K, V> {
     fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
         for (k, v) in iter {
-            self.put(k, v);
+            self.insert(k, v);
         }
     }
 }
 
-impl<K: fmt::Debug + Eq + Hash, V: fmt::Debug, M: CountableMeter<K, V>> fmt::Debug
-    for LruCache<K, V, M>
-{
+impl<K: fmt::Debug + Eq + Hash + MemSized, V: fmt::Debug + MemSized> fmt::Debug for LruCache<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_map().entries(self.iter().rev()).finish()
     }
 }
 
-impl<K: Eq + Hash, V, M: CountableMeter<K, V>> IntoIterator for LruCache<K, V, M> {
+impl<K: Eq + Hash + MemSized, V: MemSized> IntoIterator for LruCache<K, V> {
     type Item = (K, V);
     type IntoIter = IntoIter<K, V>;
 
@@ -478,7 +395,7 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> IntoIterator for LruCache<K, V, M
     }
 }
 
-impl<'a, K: Eq + Hash, V, M: CountableMeter<K, V>> IntoIterator for &'a LruCache<K, V, M> {
+impl<'a, K: Eq + Hash + MemSized, V: MemSized> IntoIterator for &'a LruCache<K, V> {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
     fn into_iter(self) -> Iter<'a, K, V> {
@@ -486,7 +403,7 @@ impl<'a, K: Eq + Hash, V, M: CountableMeter<K, V>> IntoIterator for &'a LruCache
     }
 }
 
-impl<'a, K: Eq + Hash, V, M: CountableMeter<K, V>> IntoIterator for &'a mut LruCache<K, V, M> {
+impl<'a, K: Eq + Hash + MemSized, V: MemSized> IntoIterator for &'a mut LruCache<K, V> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
     fn into_iter(self) -> IterMut<'a, K, V> {

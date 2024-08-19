@@ -32,11 +32,11 @@ use databend_common_metrics::cache::get_cache_hit_count;
 use databend_common_metrics::cache::get_cache_miss_count;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CountableMeter;
-use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CacheValue;
+use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::Unit;
 use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
-use databend_storages_common_cache_manager::CacheManager;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -130,8 +130,8 @@ impl SyncSystemTable for CachesTable {
             columns.nodes.push(local_node.clone());
             columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
             columns.num_items.push(cache.len() as u64);
-            columns.size.push(cache.size());
-            columns.capacity.push(cache.capacity());
+            columns.size.push(cache.bytes_size());
+            columns.capacity.push(cache.bytes_capacity());
             columns.unit.push(Unit::Bytes.to_string());
             let access = get_cache_access_count(DISK_TABLE_DATA_CACHE_NAME);
             let hit = get_cache_hit_count(DISK_TABLE_DATA_CACHE_NAME);
@@ -188,17 +188,26 @@ impl CachesTable {
         SyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    fn append_row<V, M: CountableMeter<String, Arc<V>>>(
-        cache: &InMemoryItemCacheHolder<V, M>,
+    fn append_row<V: Into<CacheValue<V>>>(
+        cache: &InMemoryLruCache<V>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {
         columns.nodes.push(local_node.to_string());
         columns.names.push(cache.name().to_string());
         columns.num_items.push(cache.len() as u64);
-        columns.size.push(cache.size());
-        columns.capacity.push(cache.capacity());
-        columns.unit.push(cache.unit().to_string());
+        columns.size.push(cache.bytes_size());
+
+        match cache.unit() {
+            Unit::Bytes => {
+                columns.unit.push(cache.unit().to_string());
+                columns.capacity.push(cache.bytes_capacity());
+            }
+            Unit::Count => {
+                columns.unit.push(cache.unit().to_string());
+                columns.capacity.push(cache.items_capacity());
+            }
+        }
 
         let access = get_cache_access_count(cache.name());
         let hit = get_cache_hit_count(cache.name());

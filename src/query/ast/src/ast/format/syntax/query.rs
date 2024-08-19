@@ -387,6 +387,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             params,
             named_params,
             alias,
+            sample,
         } => {
             let separator = if !named_params.is_empty() && !params.is_empty() {
                 RcDoc::text(", ")
@@ -408,6 +409,11 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
                     .append(pretty_expr(v))
             })))
             .append(RcDoc::text(")"))
+            .append(if let Some(sample) = sample {
+                RcDoc::text(format!(" {sample}"))
+            } else {
+                RcDoc::nil()
+            })
             .append(if let Some(alias) = alias {
                 RcDoc::text(format!(" AS {alias}"))
             } else {
