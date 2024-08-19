@@ -12,6 +12,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+log = { workspace = true }
 parking_lot = { workspace = true }
 serde = { version = "1.0.194", features = ["derive"] }
 uuid = { workspace = true }
