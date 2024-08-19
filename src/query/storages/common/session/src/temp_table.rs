@@ -26,6 +26,8 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReply;
+use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -258,6 +260,25 @@ impl TempTblMgr {
         };
         table.copied_files.clear();
         Ok(TruncateTableReply {})
+    }
+
+    pub fn get_table_copied_file_info(
+        &self,
+        req: GetTableCopiedFileReq,
+    ) -> Result<GetTableCopiedFileReply> {
+        let Some(table) = self.id_to_table.get(&req.table_id) else {
+            return Err(ErrorCode::UnknownTable(format!(
+                "Temporary table id {} not found",
+                req.table_id
+            )));
+        };
+        let mut file_info = BTreeMap::new();
+        for name in req.files {
+            if let Some(info) = table.copied_files.get(&name) {
+                file_info.insert(name, info.clone());
+            }
+        }
+        Ok(GetTableCopiedFileReply { file_info })
     }
 }
 

@@ -739,6 +739,16 @@ pub struct UpdateMultiTableMetaReq {
     pub update_temp_tables: Vec<UpdateTempTableReq>,
 }
 
+impl UpdateMultiTableMetaReq {
+    pub fn is_empty(&self) -> bool {
+        self.update_table_metas.is_empty()
+            && self.copied_files.is_empty()
+            && self.update_stream_metas.is_empty()
+            && self.deduplicated_labels.is_empty()
+            && self.update_temp_tables.is_empty()
+    }
+}
+
 /// The result of updating multiple table meta
 ///
 /// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.

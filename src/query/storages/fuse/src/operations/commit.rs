@@ -230,6 +230,7 @@ impl FuseTable {
 
         let mut update_temp_tables = vec![];
         let mut update_table_metas = vec![];
+        let mut copied_files_req = vec![];
         if new_table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
             let req = UpdateTempTableReq {
                 table_id,
@@ -248,6 +249,7 @@ impl FuseTable {
                 new_table_meta,
             };
             update_table_metas.push((req, table_info.clone()));
+            copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
         }
 
         // 3. let's roll
@@ -255,7 +257,7 @@ impl FuseTable {
             .update_multi_table_meta(UpdateMultiTableMetaReq {
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
-                copied_files: copied_files.iter().map(|c| (table_id, c.clone())).collect(),
+                copied_files: copied_files_req,
                 deduplicated_labels: deduplicated_label.into_iter().collect(),
                 update_temp_tables,
             })

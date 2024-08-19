@@ -414,8 +414,11 @@ impl Catalog for SessionCatalog {
         match state {
             TxnState::AutoCommit => {
                 let update_temp_tables = std::mem::take(&mut req.update_temp_tables);
-                println!("{:?}", update_temp_tables);
-                let reply = self.inner.retryable_update_multi_table_meta(req).await?;
+                let reply = if req.is_empty() {
+                    Ok(Default::default())
+                } else {
+                    self.inner.retryable_update_multi_table_meta(req).await?
+                };
                 self.temp_tbl_mgr
                     .lock()
                     .update_multi_table_meta(update_temp_tables);
@@ -444,7 +447,6 @@ impl Catalog for SessionCatalog {
         self.inner.drop_table_index(req).await
     }
 
-    // TODO: implement this
     async fn get_table_copied_file_info(
         &self,
         tenant: &Tenant,
@@ -452,10 +454,15 @@ impl Catalog for SessionCatalog {
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
         let table_id = req.table_id;
-        let mut reply = self
-            .inner
-            .get_table_copied_file_info(tenant, db_name, req)
-            .await?;
+        let mut reply = if is_temp_table_id(table_id) {
+            self.temp_tbl_mgr
+                .lock()
+                .get_table_copied_file_info(req.clone())?
+        } else {
+            self.inner
+                .get_table_copied_file_info(tenant, db_name, req)
+                .await?
+        };
         reply
             .file_info
             .extend(self.txn_mgr.lock().get_table_copied_file_info(table_id));
@@ -474,6 +481,7 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    // TODO: implement this
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         self.inner.list_lock_revisions(req).await
     }
