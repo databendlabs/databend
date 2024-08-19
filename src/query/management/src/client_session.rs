@@ -110,9 +110,7 @@ impl ClientSessionMgr {
     ) -> Result<bool> {
         let ident = self.session_ident(client_session_id);
         let seq = MatchSeq::GE(0);
-        let upsert = UpsertPB::update(ident, value)
-            .with(seq)
-            .with_ttl(Duration::from_secs(ttl.as_secs()));
+        let upsert = UpsertPB::update(ident, value).with(seq).with_ttl(ttl);
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
