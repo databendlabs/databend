@@ -22,6 +22,7 @@ use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
@@ -328,8 +329,7 @@ impl<E> HTTPSessionEndpoint<E> {
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
         let client_host = get_client_ip(req);
 
-        let ctx = session.create_query_context().await?;
-        let node_id = ctx.get_cluster().local_id.clone();
+        let node_id = GlobalConfig::instance().query.node_id.clone();
 
         Ok(HttpQueryContext {
             session,
