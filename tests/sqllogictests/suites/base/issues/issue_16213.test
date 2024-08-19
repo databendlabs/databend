@@ -15,14 +15,14 @@ statement ok
 create table if not exists test_inf_nan (a float)
 
 statement ok
-insert into test_inf_nan select 'inf' from numbers(100);
+insert into test_inf_nan select 'inf' from numbers(100)
 
 statement ok
-insert into test_inf_nan select '-inf' from numbers(100);
+insert into test_inf_nan select '-inf' from numbers(100)
 
 statement ok
-insert into test_inf_nan select 'nan' from numbers(100);
+insert into test_inf_nan select 'nan' from numbers(100)
 
 query
-select max(a) from test_inf_nan;
+select max(a) from test_inf_nan
 inf
