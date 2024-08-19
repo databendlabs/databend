@@ -26,10 +26,7 @@ use num_traits::float::FloatCore;
 use num_traits::NumCast;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
-use serde::Serializer;
-use serde_json::Value;
 
 use super::decimal::DecimalSize;
 use crate::property::Domain;
@@ -318,10 +315,28 @@ pub enum NumberScalar {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    #[serde(serialize_with = "serialize_f32", deserialize_with = "deserialize_f32")]
-    Float32(F32),
-    #[serde(serialize_with = "serialize_f64", deserialize_with = "deserialize_f64")]
-    Float64(F64),
+    #[serde(
+        serialize_with = "json_serde_impl::serialize_f32",
+        deserialize_with = "json_serde_impl::deserialize_f32"
+    )]
+    Float32(
+        #[borsh(
+            serialize_with = "borsh_serde_impl::serialize_f32",
+            deserialize_with = "borsh_serde_impl::deserialize_f32"
+        )]
+        F32,
+    ),
+    #[serde(
+        serialize_with = "json_serde_impl::serialize_f64",
+        deserialize_with = "json_serde_impl::deserialize_f64"
+    )]
+    Float64(
+        #[borsh(
+            serialize_with = "borsh_serde_impl::serialize_f64",
+            deserialize_with = "borsh_serde_impl::deserialize_f64"
+        )]
+        F64,
+    ),
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -1425,74 +1440,128 @@ impl Number for F64 {
         }
     }
 }
-fn serialize_f32<S>(value: &F32, serializer: S) -> Result<S::Ok, S::Error>
-where S: Serializer {
-    if serializer.is_human_readable() {
-        if value.is_infinite() {
-            if value.is_sign_positive() {
-                serializer.serialize_str("Infinity")
+
+/// Json serialize and deserialize implementation for `F32` and `F64`. It specially handles the
+/// cases of `Infinity`, `-Infinity` and `Nan`.
+mod json_serde_impl {
+
+    use num_traits::float::FloatCore;
+    use ordered_float::OrderedFloat;
+    use serde::Deserialize;
+    use serde::Deserializer;
+    use serde::Serializer;
+    use serde_json::Value;
+
+    use crate::types::F32;
+    use crate::types::F64;
+
+    pub fn serialize_f32<S>(value: &F32, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        if serializer.is_human_readable() {
+            if value.is_infinite() {
+                if value.is_sign_positive() {
+                    serializer.serialize_str("Infinity")
+                } else {
+                    serializer.serialize_str("-Infinity")
+                }
+            } else if value.is_nan() {
+                serializer.serialize_str("Nan")
             } else {
-                serializer.serialize_str("-Infinity")
+                serde::Serialize::serialize(&value, serializer)
             }
-        } else if value.is_nan() {
-            serializer.serialize_str("Nan")
         } else {
             serde::Serialize::serialize(&value, serializer)
         }
-    } else {
-        serde::Serialize::serialize(&value, serializer)
     }
-}
 
-fn deserialize_f32<'de, D>(deserializer: D) -> Result<F32, D::Error>
-where D: Deserializer<'de> {
-    if deserializer.is_human_readable() {
-        let value = Value::deserialize(deserializer)?;
-        match value {
-            Value::String(s) if s == "Infinity" => Ok(F32::infinity()),
-            Value::String(s) if s == "-Infinity" => Ok(F32::neg_infinity()),
-            Value::String(s) if s == "Nan" => Ok(F32::nan()),
-            _ => <f32 as Deserialize>::deserialize(value)
-                .map(<OrderedFloat<f32> as From<f32>>::from)
-                .map_err(|e| serde::de::Error::custom(e.to_string())),
-        }
-    } else {
-        serde::Deserialize::deserialize(deserializer)
-    }
-}
-
-fn serialize_f64<S>(value: &F64, serializer: S) -> Result<S::Ok, S::Error>
-where S: Serializer {
-    if serializer.is_human_readable() {
-        if value.is_infinite() {
-            if value.is_sign_positive() {
-                serializer.serialize_str("Infinity")
-            } else {
-                serializer.serialize_str("-Infinity")
+    pub fn deserialize_f32<'de, D>(deserializer: D) -> Result<F32, D::Error>
+    where D: Deserializer<'de> {
+        if deserializer.is_human_readable() {
+            let value = Value::deserialize(deserializer)?;
+            match value {
+                Value::String(s) if s == "Infinity" => Ok(F32::infinity()),
+                Value::String(s) if s == "-Infinity" => Ok(F32::neg_infinity()),
+                Value::String(s) if s == "Nan" => Ok(F32::nan()),
+                _ => <f32 as Deserialize>::deserialize(value)
+                    .map(<OrderedFloat<f32> as From<f32>>::from)
+                    .map_err(|e| serde::de::Error::custom(e.to_string())),
             }
-        } else if value.is_nan() {
-            serializer.serialize_str("Nan")
+        } else {
+            serde::Deserialize::deserialize(deserializer)
+        }
+    }
+
+    pub fn serialize_f64<S>(value: &F64, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        if serializer.is_human_readable() {
+            if value.is_infinite() {
+                if value.is_sign_positive() {
+                    serializer.serialize_str("Infinity")
+                } else {
+                    serializer.serialize_str("-Infinity")
+                }
+            } else if value.is_nan() {
+                serializer.serialize_str("Nan")
+            } else {
+                serde::Serialize::serialize(&value, serializer)
+            }
         } else {
             serde::Serialize::serialize(&value, serializer)
         }
-    } else {
-        serde::Serialize::serialize(&value, serializer)
+    }
+
+    pub fn deserialize_f64<'de, D>(deserializer: D) -> Result<F64, D::Error>
+    where D: Deserializer<'de> {
+        if deserializer.is_human_readable() {
+            let value = Value::deserialize(deserializer)?;
+            match value {
+                Value::String(s) if s == "Infinity" => Ok(F64::infinity()),
+                Value::String(s) if s == "-Infinity" => Ok(F64::neg_infinity()),
+                Value::String(s) if s == "Nan" => Ok(F64::nan()),
+                _ => <f64 as Deserialize>::deserialize(value)
+                    .map(<OrderedFloat<f64> as From<f64>>::from)
+                    .map_err(|e| serde::de::Error::custom(e.to_string())),
+            }
+        } else {
+            serde::Deserialize::deserialize(deserializer)
+        }
     }
 }
 
-fn deserialize_f64<'de, D>(deserializer: D) -> Result<F64, D::Error>
-where D: Deserializer<'de> {
-    if deserializer.is_human_readable() {
-        let value = Value::deserialize(deserializer)?;
-        match value {
-            Value::String(s) if s == "Infinity" => Ok(F64::infinity()),
-            Value::String(s) if s == "-Infinity" => Ok(F64::neg_infinity()),
-            Value::String(s) if s == "Nan" => Ok(F64::nan()),
-            _ => <f64 as Deserialize>::deserialize(value)
-                .map(<OrderedFloat<f64> as From<f64>>::from)
-                .map_err(|e| serde::de::Error::custom(e.to_string())),
-        }
-    } else {
-        serde::Deserialize::deserialize(deserializer)
+/// Borsh serialize and deserialize implementation for `F32` and `F64`.
+mod borsh_serde_impl {
+    use ordered_float::OrderedFloat;
+
+    use crate::types::F32;
+    use crate::types::F64;
+
+    pub fn serialize_f32<W: borsh::io::Write>(
+        obj: &F32,
+        writer: &mut W,
+    ) -> Result<(), borsh::io::Error> {
+        writer.write_all(&obj.to_bits().to_le_bytes())?;
+        Ok(())
+    }
+
+    pub fn deserialize_f32<R: borsh::io::Read>(reader: &mut R) -> Result<F32, borsh::io::Error> {
+        let mut buf = [0u8; size_of::<F32>()];
+        reader.read_exact(&mut buf)?;
+        let res = OrderedFloat::from(f32::from_bits(u32::from_le_bytes(buf)));
+        Ok(res)
+    }
+
+    pub fn serialize_f64<W: borsh::io::Write>(
+        obj: &F64,
+        writer: &mut W,
+    ) -> Result<(), borsh::io::Error> {
+        writer.write_all(&obj.to_bits().to_le_bytes())?;
+        Ok(())
+    }
+
+    pub fn deserialize_f64<R: borsh::io::Read>(reader: &mut R) -> Result<F64, borsh::io::Error> {
+        let mut buf = [0u8; size_of::<F64>()];
+        reader.read_exact(&mut buf)?;
+        let res = OrderedFloat::from(f64::from_bits(u64::from_le_bytes(buf)));
+        Ok(res)
     }
 }
