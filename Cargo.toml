@@ -322,6 +322,9 @@ typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 xorfilter-rs = "0.5"
+iceberg = { version = "0.3.0" }
+iceberg-catalog-hms = { version = "0.3.0" }
+iceberg-catalog-rest = { version = "0.3.0" }
 
 # Observability
 fastrace = { version = "0.6", features = ["enable"] }
