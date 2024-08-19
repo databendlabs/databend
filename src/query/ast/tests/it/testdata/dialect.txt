@@ -34,7 +34,7 @@ ColumnRef {
                 quote: Some(
                     '"',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -62,7 +62,7 @@ ColumnRef {
                 quote: Some(
                     '`',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -165,7 +165,7 @@ ColumnRef {
                 quote: Some(
                     '"',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -193,7 +193,7 @@ ColumnRef {
                 quote: Some(
                     '"',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -221,7 +221,7 @@ ColumnRef {
                 quote: Some(
                     '"',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -262,7 +262,7 @@ ColumnRef {
                 quote: Some(
                     '"',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -320,7 +320,7 @@ ColumnRef {
                 quote: Some(
                     '`',
                 ),
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -496,7 +496,7 @@ ColumnRef {
                 ),
                 name: "a",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -520,7 +520,7 @@ FunctionCall {
             ),
             name: "add",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -537,7 +537,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -556,7 +556,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -586,7 +586,7 @@ FunctionCall {
             ),
             name: "add",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             FunctionCall {
@@ -601,7 +601,7 @@ FunctionCall {
                         ),
                         name: "sub",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                     args: [
                         ColumnRef {
@@ -618,7 +618,7 @@ FunctionCall {
                                         ),
                                         name: "a",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -637,7 +637,7 @@ FunctionCall {
                                         ),
                                         name: "b",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -662,7 +662,7 @@ FunctionCall {
                             ),
                             name: "e",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -692,7 +692,7 @@ FunctionCall {
             ),
             name: "add",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             FunctionCall {
@@ -707,7 +707,7 @@ FunctionCall {
                         ),
                         name: "sub",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                     args: [
                         ColumnRef {
@@ -724,7 +724,7 @@ FunctionCall {
                                         ),
                                         name: "a",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -743,7 +743,7 @@ FunctionCall {
                                         ),
                                         name: "b",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -768,7 +768,7 @@ FunctionCall {
                             ),
                             name: "e",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -830,7 +830,7 @@ BinaryOp {
                 ),
                 name: "k1",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
         },
     },
@@ -854,7 +854,7 @@ FunctionCall {
             ),
             name: "plus",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Literal {
@@ -898,7 +898,7 @@ FunctionCall {
             ),
             name: "add",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Literal {
@@ -940,7 +940,7 @@ FunctionCall {
                         ),
                         name: "k1",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 },
             },
@@ -969,7 +969,7 @@ FunctionCall {
             ),
             name: "array_map",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             FunctionCall {
@@ -984,7 +984,7 @@ FunctionCall {
                         ),
                         name: "array_filter",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                     args: [
                         Array {
@@ -1030,7 +1030,7 @@ FunctionCall {
                                     ),
                                     name: "x",
                                     quote: None,
-                                    is_hole: false,
+                                    ident_type: None,
                                 },
                             ],
                             expr: BinaryOp {
@@ -1057,7 +1057,7 @@ FunctionCall {
                                                     ),
                                                     name: "x",
                                                     quote: None,
-                                                    is_hole: false,
+                                                    ident_type: None,
                                                 },
                                             ),
                                         },
@@ -1096,7 +1096,7 @@ FunctionCall {
                         ),
                         name: "x",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ],
                 expr: BinaryOp {
@@ -1118,7 +1118,7 @@ FunctionCall {
                                     ),
                                     name: "x",
                                     quote: None,
-                                    is_hole: false,
+                                    ident_type: None,
                                 },
                             ),
                         },

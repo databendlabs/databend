@@ -48,7 +48,6 @@ members = [
     "src/query/sql",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
-    "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
     "src/query/storages/common/io",
     "src/query/storages/common/pruner",
@@ -195,7 +194,6 @@ databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }
-databend-storages-common-cache-manager = { path = "src/query/storages/common/cache_manager" }
 databend-storages-common-index = { path = "src/query/storages/common/index" }
 databend-storages-common-io = { path = "src/query/storages/common/io" }
 databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
@@ -221,7 +219,7 @@ arrow-udf-js = "0.3.1"
 arrow-udf-python = "0.2.1"
 arrow-udf-wasm = "0.2.2"
 async-backtrace = "0.2"
-async-trait = { version = "0.1.77", package = "async-trait-fn" }
+async-trait = { version = "0.1.77" }
 backtrace = "0.3.73"
 base64 = "0.22"
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
@@ -256,10 +254,10 @@ jsonb = "0.4.1"
 jwt-simple = "0.11.0"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
-object_store_opendal = "0.45"
+object_store_opendal = "0.46"
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.48.0", features = [
+opendal = { version = "0.49.0", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",

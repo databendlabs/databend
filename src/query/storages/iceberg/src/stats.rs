@@ -76,8 +76,6 @@ fn parse_datum(data: &Datum) -> Option<Scalar> {
         PrimitiveLiteral::Long(v) => Some(Scalar::Number(i64::upcast_scalar(*v))),
         PrimitiveLiteral::Float(v) => Some(Scalar::Number(F32::upcast_scalar(F32::from(*v)))),
         PrimitiveLiteral::Double(v) => Some(Scalar::Number(F64::upcast_scalar(F64::from(*v)))),
-        PrimitiveLiteral::Date(v) => Some(Scalar::Date(*v)),
-        PrimitiveLiteral::Timestamp(v) => Some(Scalar::Timestamp(*v)),
         PrimitiveLiteral::String(v) => Some(Scalar::String(v.clone())),
         _ => None,
     }

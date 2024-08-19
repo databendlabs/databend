@@ -33,7 +33,6 @@ pub trait PrefetchAsyncSource: Send {
     const NAME: &'static str;
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
     fn is_full(&self, prefetched: &[DataBlock]) -> bool;
 

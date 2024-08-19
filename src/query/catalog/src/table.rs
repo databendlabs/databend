@@ -296,6 +296,18 @@ pub trait Table: Sync + Send {
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
+    /// - Returns `Some(_)`
+    ///    if table has accurate columns ranges information,
+    /// - Otherwise returns `None`.
+    #[async_backtrace::framed]
+    async fn accurate_columns_ranges(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _column_ids: &[ColumnId],
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
+        Ok(None)
+    }
+
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
@@ -411,6 +423,10 @@ pub trait Table: Sync + Send {
     }
 
     fn is_read_only(&self) -> bool {
+        false
+    }
+
+    fn use_own_sample_block(&self) -> bool {
         false
     }
 }
@@ -607,4 +623,16 @@ impl CompactionLimits {
             block_limit: v,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Bound {
+    pub value: Scalar,
+    pub may_be_truncated: bool,
+}
+
+#[derive(Debug)]
+pub struct ColumnRange {
+    pub min: Bound,
+    pub max: Bound,
 }

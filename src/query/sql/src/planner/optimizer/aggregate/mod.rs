@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod normalize_aggregate;
+mod stats_aggregate;
 
 pub use normalize_aggregate::RuleNormalizeAggregateOptimizer;
+pub use stats_aggregate::RuleStatsAggregateOptimizer;

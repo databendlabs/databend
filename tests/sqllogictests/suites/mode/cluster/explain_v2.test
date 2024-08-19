@@ -5,6 +5,9 @@ statement ok
 drop table if exists t2 all;
 
 statement ok
+set max_threads = 1;
+
+statement ok
 create table t1(a int not null, b int not null) as select number as a, number+1 as b from numbers(100);
 
 statement ok
@@ -175,30 +178,13 @@ Limit
     ├── estimated rows: 1.00
     └── EvalScalar
         ├── output columns: [count(1) (#2), max(a) (#4), count(b) (#3)]
-        ├── expressions: [count(1) (#2)]
+        ├── expressions: [99, count(1) (#2)]
         ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [count(1) (#2), max(a) (#4)]
-            ├── group by: []
-            ├── aggregate functions: [count(), max(a)]
+        └── EvalScalar
+            ├── output columns: [count(1) (#2)]
+            ├── expressions: [100]
             ├── estimated rows: 1.00
-            └── Exchange
-                ├── output columns: [count(1) (#2), max(a) (#4)]
-                ├── exchange type: Merge
-                └── AggregatePartial
-                    ├── group by: []
-                    ├── aggregate functions: [count(), max(a)]
-                    ├── estimated rows: 1.00
-                    └── TableScan
-                        ├── table: default.default.t1
-                        ├── output columns: [a (#0)]
-                        ├── read rows: 100
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 3
-                        ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 100.00
+            └── DummyTableScan
 
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
