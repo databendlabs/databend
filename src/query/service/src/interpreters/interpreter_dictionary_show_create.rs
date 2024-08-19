@@ -189,8 +189,9 @@ impl ShowCreateDictionaryInterpreter {
             for (key, value) in source_options {
                 if key == "password" {
                     dict_create_sql.push_str(&format!(" {}='****' ", key));
+                } else {
+                    dict_create_sql.push_str(&format!(" {}='{}' ", key, value));
                 }
-                dict_create_sql.push_str(&format!(" {}='{}' ", key, value));
             }
             dict_create_sql.push_str("))\n")
         }
