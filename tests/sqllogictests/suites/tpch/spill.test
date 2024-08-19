@@ -1,3 +1,4 @@
+# TPC-H spill test
 statement ok
 set sandbox_tenant = 'test_tenant';
 
@@ -32,7 +33,7 @@ statement ok
 set window_partition_spilling_bytes_threshold_per_proc = 1;
 
 # TPC-H TEST
-# include ./queries.test
+include ./queries.test
 
 # CROSS JOIN
 query I

@@ -291,7 +291,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024),
+                    value: UserSettingValue::UInt64(512),
                     desc: "Set the spilling buffer threshold (MB) for each join processor.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
