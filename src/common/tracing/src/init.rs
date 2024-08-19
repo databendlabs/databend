@@ -221,11 +221,16 @@ pub fn init_logging(
 
     // opentelemetry logger
     if cfg.otlp.on {
+        let labels = labels
+            .iter()
+            .chain(&cfg.otlp.endpoint.labels)
+            .map(|(k, v)| (k.clone().into(), v.clone().into()))
+            .chain([("category".into(), "system".into())]);
         let otel = logforth::append::OpentelemetryLog::new(
             log_name,
-            "system",
             &cfg.otlp.endpoint.endpoint,
             cfg.otlp.endpoint.protocol.into(),
+            labels,
         )
         .expect("initialize opentelemetry logger");
         let dispatch = Dispatch::new()
@@ -290,11 +295,16 @@ pub fn init_logging(
             logger = logger.dispatch(dispatch);
         }
         if let Some(endpoint) = &cfg.query.otlp {
+            let labels = labels
+                .iter()
+                .chain(&endpoint.labels)
+                .map(|(k, v)| (k.clone().into(), v.clone().into()))
+                .chain([("category".into(), "query".into())]);
             let otel = logforth::append::OpentelemetryLog::new(
                 log_name,
-                "query",
                 &endpoint.endpoint,
                 endpoint.protocol.into(),
+                labels,
             )
             .expect("initialize opentelemetry logger");
             let dispatch = Dispatch::new()
@@ -324,11 +334,16 @@ pub fn init_logging(
             logger = logger.dispatch(dispatch);
         }
         if let Some(endpoint) = &cfg.profile.otlp {
+            let labels = labels
+                .iter()
+                .chain(&endpoint.labels)
+                .map(|(k, v)| (k.clone().into(), v.clone().into()))
+                .chain([("category".into(), "profile".into())]);
             let otel = logforth::append::OpentelemetryLog::new(
                 log_name,
-                "profile",
                 &endpoint.endpoint,
                 endpoint.protocol.into(),
+                labels,
             )
             .expect("initialize opentelemetry logger");
             let dispatch = Dispatch::new()
