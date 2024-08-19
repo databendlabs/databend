@@ -318,4 +318,23 @@ pub async fn drop_table_by_id(
     Ok(Some(DropTableReply { spec_vec: None }))
 }
 
+pub async fn drop_all_temp_tables(mgr: TempTblMgrRef) -> Result<()> {
+    let dirs = {
+        let mut guard = mgr.lock();
+        let mut dirs = Vec::new();
+        for (id, table) in &guard.id_to_table {
+            let dir = parse_storage_prefix(&table.meta.options, *id)?;
+            dirs.push(dir);
+        }
+        guard.id_to_table.clear();
+        guard.name_to_id.clear();
+        dirs
+    };
+    let op = DataOperator::instance().operator();
+    for dir in dirs {
+        op.remove_all(&dir).await?;
+    }
+    Ok(())
+}
+
 pub type TempTblMgrRef = Arc<Mutex<TempTblMgr>>;
