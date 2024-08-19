@@ -48,7 +48,6 @@ members = [
     "src/query/sql",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
-    "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
     "src/query/storages/common/io",
     "src/query/storages/common/pruner",
@@ -195,7 +194,6 @@ databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }
-databend-storages-common-cache-manager = { path = "src/query/storages/common/cache_manager" }
 databend-storages-common-index = { path = "src/query/storages/common/index" }
 databend-storages-common-io = { path = "src/query/storages/common/io" }
 databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }

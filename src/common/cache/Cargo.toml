@@ -11,7 +11,6 @@ doctest = false
 test = true
 
 [dependencies]
-bytes = { workspace = true }
 hashbrown = { workspace = true }
 hashlink = "0.8"
 

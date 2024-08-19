@@ -39,7 +39,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -167,10 +167,10 @@ impl FuseTable {
         if need_to_save_statistics {
             let table_statistics_location: String = table_statistics_location.unwrap();
             match &res {
-                Ok(_) => TableSnapshotStatistics::cache().put(
-                    table_statistics_location,
-                    Arc::new(table_statistics.unwrap()),
-                ),
+                Ok(_) => {
+                    TableSnapshotStatistics::cache()
+                        .insert(table_statistics_location, table_statistics.unwrap());
+                }
                 Err(e) => info!("update_table_meta failed. {}", e),
             }
         }
@@ -264,7 +264,7 @@ impl FuseTable {
             .await?;
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
-        TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
+        TableSnapshot::cache().insert(snapshot_location.clone(), snapshot);
         Self::write_last_snapshot_hint(ctx, operator, location_generator, &snapshot_location).await;
 
         Ok(())

@@ -2663,7 +2663,7 @@ impl SchemaApiTestSuite {
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
-                    expire_at: None,
+                    ttl: None,
                     fail_if_duplicated: true,
                 };
 
@@ -2713,7 +2713,7 @@ impl SchemaApiTestSuite {
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
-                    expire_at: None,
+                    ttl: None,
                     fail_if_duplicated: true,
                 };
                 let req = UpdateTableMetaReq {
@@ -2762,7 +2762,7 @@ impl SchemaApiTestSuite {
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
-                    expire_at: None,
+                    ttl: None,
                     fail_if_duplicated: true,
                 };
                 let req = UpdateTableMetaReq {
@@ -3614,7 +3614,7 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                ttl: Some(std::time::Duration::from_secs(86400)),
                 fail_if_duplicated: true,
             };
 
@@ -3778,7 +3778,7 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                ttl: Some(std::time::Duration::from_secs(86400)),
                 fail_if_duplicated: true,
             };
 
@@ -5733,7 +5733,7 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                ttl: Some(std::time::Duration::from_secs(86400)),
                 fail_if_duplicated: true,
             };
 
@@ -5782,7 +5782,8 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() - 86400) as u64),
+                // Make it expire at once.
+                ttl: Some(std::time::Duration::from_secs(0)),
                 fail_if_duplicated: true,
             };
 
@@ -7208,7 +7209,7 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                ttl: Some(std::time::Duration::from_secs(86400)),
                 fail_if_duplicated: true,
             };
 
@@ -7266,7 +7267,7 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                ttl: Some(std::time::Duration::from_secs(86400)),
                 fail_if_duplicated: true,
             };
 
@@ -7321,7 +7322,7 @@ impl SchemaApiTestSuite {
 
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                ttl: Some(std::time::Duration::from_secs(86400)),
                 fail_if_duplicated: false,
             };
 
@@ -7680,7 +7681,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 
         let copied_file_req = UpsertTableCopiedFileReq {
             file_info: file_infos.clone(),
-            expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            ttl: Some(std::time::Duration::from_secs(86400)),
             fail_if_duplicated: true,
         };
 

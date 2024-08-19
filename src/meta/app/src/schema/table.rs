@@ -20,6 +20,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::func_name;
 use chrono::DateTime;
@@ -1005,7 +1006,8 @@ pub struct GetTableCopiedFileReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
-    pub expire_at: Option<u64>,
+    /// If not None, specifies the time-to-live for the keys.
+    pub ttl: Option<Duration>,
     pub fail_if_duplicated: bool,
 }
 
