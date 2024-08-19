@@ -83,10 +83,6 @@ async fn check_login(
 ///  # For SQL driver implementer:
 /// - It is encouraged to call `/v1/session/login` when establishing connection, not mandatory for now.
 /// - May get 404 when talk to old server, may check `/health` (no `/v1` prefix) to ensure the host:port is not wrong.
-///
-///  # TODO (need design):
-/// - (optional) check client version.
-/// - Return token for auth in the following queries from this session, to make it a real login.
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn login_handler(
