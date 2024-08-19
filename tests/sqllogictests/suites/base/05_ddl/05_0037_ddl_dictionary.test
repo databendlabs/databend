@@ -52,7 +52,7 @@ d CREATE DICTIONARY d (
 PRIMARY KEY(c1)
 SOURCE(mysql
 (
-db='db1'  host='localhost'  password='****'  port='3306'  username='root' ))
+ db='db1'  host='localhost'  password='****'  port='3306'  username='root' ))
 
 query TT
 show create dictionary d2
@@ -64,20 +64,19 @@ d2 CREATE DICTIONARY d2 (
 PRIMARY KEY(a)
 SOURCE(mysql
 (
-db='db1' host='localhost' password='****' port='3306' username='root' ))
+ db='db1' host='localhost' password='****' port='3306' username='root' ))
 
 query TT
 show create dictionary d3
 ----
 d3 CREATE DICTIONARY d3 (
-   a INT NULL, 
-   b VARCHAR NULL
+  a INT NULL,
+  b VARCHAR NULL
 )
 PRIMARY KEY(a)
 SOURCE(mysql
 (
-db='db1' host='localhost' password='****' port='3306' username='root' ))
-COMMENT 'comment'
+ db='db1'  host='localhost'  password='****'  password='1234'  port='3306'  username='root' ))
 
 query TT
 show create dictionary d4
@@ -88,7 +87,7 @@ d4 CREATE DICTIONARY d4 (
 PRIMARY KEY(a)
 SOURCE(mysql
 (
-db='db1' host='localhost' password='****' port='3306' username='root' ))
+ db='db1' host='localhost' password='****' port='3306' username='root' ))
 
 statement error 3114
 show create dictionary test
