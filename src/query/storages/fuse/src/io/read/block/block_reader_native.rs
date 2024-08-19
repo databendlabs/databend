@@ -18,8 +18,8 @@ use std::io::BufReader;
 use std::ops::Range;
 use std::sync::Arc;
 
+use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::native::read::reader::infer_schema;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::read::NativeReadBuf;
@@ -31,6 +31,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -258,6 +259,7 @@ impl BlockReader {
             .into_std_read(0..meta.content_length())
             .ok()?;
         let schema = infer_schema(&mut reader).ok()?;
-        Some(schema)
+        let schema = DataSchema::try_from(&schema).ok()?;
+        Some(ArrowSchema::from(&schema))
     }
 }

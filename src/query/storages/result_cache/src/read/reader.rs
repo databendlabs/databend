@@ -25,6 +25,7 @@ use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::parse_metadata;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
@@ -121,23 +122,5 @@ impl ResultCacheReader {
         }
 
         Ok(blocks)
-    }
-
-    #[async_backtrace::framed]
-    pub async fn read_table_schema_and_data(
-        operator: Operator,
-        location: &str,
-    ) -> Result<(TableSchema, Vec<u8>)> {
-        let data = operator.read(location).await?;
-        // TODO: improve this part by implement ChunkReader for opendal::Buffer.
-        let chunk_reader = data.to_bytes();
-        let meta = parse_metadata(&chunk_reader)?;
-        let arrow_schema = parquet_to_arrow_schema(
-            meta.file_metadata().schema_descr(),
-            meta.file_metadata().key_value_metadata(),
-        )?;
-        let table_schema = TableSchema::try_from(&arrow_schema).unwrap();
-
-        Ok((table_schema, chunk_reader.into()))
     }
 }

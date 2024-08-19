@@ -16,13 +16,18 @@ use std::any::Any;
 use std::io::Cursor;
 use std::sync::Arc;
 
+use arrow::datatypes::Schema;
 use databend_common_arrow::arrow::io::parquet::read::infer_schema;
+use databend_common_arrow::arrow::io::parquet::read::schema::infer_schema_with_options;
 use databend_common_arrow::arrow::io::parquet::read::{self as pread};
 use databend_common_arrow::parquet::read::read_metadata;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ParquetReadOptions;
+use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ResultScanTableInfo;
 use databend_common_catalog::table::Table;
@@ -39,21 +44,33 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_storage::parquet_rs::infer_schema_with_extension;
+use databend_common_storage::read_metadata_async;
+use databend_common_storage::DataOperator;
+use databend_common_storages_parquet::ParquetFilesPart;
+use databend_common_storages_parquet::ParquetPart;
+use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_common_storages_parquet::ParquetSource;
+use parquet::file::metadata::ParquetMetaData;
 
 const RESULT_SCAN: &str = "result_scan";
 
 pub struct ResultScan {
     table_info: TableInfo,
     query_id: String,
-    block_raw_data: Vec<u8>,
+    location: String,
+    schema: Schema,
+    file_size: u64,
 }
 
 impl ResultScan {
-    pub fn try_create(
-        table_schema: TableSchema,
-        query_id: String,
-        block_raw_data: Vec<u8>,
-    ) -> Result<Arc<dyn Table>> {
+    pub async fn try_create(query_id: String, location: String) -> Result<Arc<dyn Table>> {
+        let op = DataOperator::instance().operator();
+        let file_size = op.stat(&location).await?.content_length();
+        let metadata = read_metadata_async(&location, &op, Some(file_size)).await?;
+        let schema = infer_schema_with_extension(metadata.file_metadata())?;
+        let table_schema = TableSchema::try_from(&schema)?;
+
         let table_info = TableInfo {
             ident: TableIdent::new(0, 0),
             desc: format!("''.'{RESULT_SCAN}'"),
@@ -69,7 +86,9 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info,
             query_id,
-            block_raw_data,
+            schema,
+            location,
+            file_size,
         }))
     }
 
@@ -77,7 +96,9 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info: info.table_info.clone(),
             query_id: info.query_id.clone(),
-            block_raw_data: info.block_raw_data.clone(),
+            location: info.location.clone(),
+            schema: info.schema.clone(),
+            file_size: info.file_size,
         }))
     }
 }
@@ -100,7 +121,9 @@ impl Table for ResultScan {
         DataSourceInfo::ResultScanSource(ResultScanTableInfo {
             table_info: self.table_info.clone(),
             query_id: self.query_id.clone(),
-            block_raw_data: self.block_raw_data.clone(),
+            location: self.location.clone(),
+            schema: self.schema.clone(),
+            file_size: self.file_size,
         })
     }
 
@@ -111,7 +134,16 @@ impl Table for ResultScan {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), Partitions::default()))
+        let part = ParquetPart::ParquetFiles(ParquetFilesPart {
+            files: vec![(self.location.clone(), self.file_size)],
+            estimated_uncompressed_size: self.file_size,
+        });
+
+        let part_info: Box<dyn PartInfo> = Box::new(part);
+        Ok((
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::Mod, vec![Arc::new(part_info) as _]),
+        ))
     }
 
     fn table_args(&self) -> Option<TableArgs> {
@@ -122,29 +154,35 @@ impl Table for ResultScan {
 
     fn read_data(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
-        if self.block_raw_data.is_empty() {
-            pipeline.add_source(EmptySource::create, 1)?;
-        } else {
-            let mut reader = Cursor::new(self.block_raw_data.clone());
-            let meta = read_metadata(&mut reader)?;
-            let arrow_schema = infer_schema(&meta)?;
-            let schema = DataSchema::try_from(&arrow_schema).unwrap();
+        let read_options = ParquetReadOptions::default();
+        let op = DataOperator::instance().operator();
+        let mut builder = ParquetRSReaderBuilder::create(
+            ctx.clone(),
+            op,
+            self.table_info.schema(),
+            self.schema.clone(),
+        )?
+        .with_options(read_options);
+        let row_group_reader = Arc::new(builder.build_row_group_reader()?);
+        let full_file_reader = Some(Arc::new(builder.build_full_reader()?));
 
-            // Read the parquet file into one block.
-            let chunks_iter =
-                pread::FileReader::new(reader, meta.row_groups, arrow_schema, None, None, None);
-
-            for chunk in chunks_iter {
-                let block = DataBlock::from_arrow_chunk(&chunk?, &schema)?;
-                pipeline.add_source(|output| OneBlockSource::create(output, block.clone()), 1)?;
-            }
-        }
-        Ok(())
+        pipeline.add_source(
+            |output| {
+                ParquetSource::create(
+                    ctx.clone(),
+                    output,
+                    row_group_reader.clone(),
+                    full_file_reader.clone(),
+                    Arc::new(None),
+                )
+            },
+            1,
+        )
     }
 
     fn result_can_be_cached(&self) -> bool {
