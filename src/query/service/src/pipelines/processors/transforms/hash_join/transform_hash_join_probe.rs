@@ -441,7 +441,7 @@ impl Processor for TransformHashJoinProbe {
                     )
                     .await?;
                 self.data_blocks_need_to_spill.clear();
-                if self.is_left_related_join_type() {
+                if !self.can_fast_return() {
                     Self::add_split_data_blocks(
                         &mut self.unspilled_data_blocks_need_to_probe,
                         unspilled_data_blocks,
@@ -577,13 +577,6 @@ impl TransformHashJoinProbe {
         }
     }
 
-    fn is_left_related_join_type(&self) -> bool {
-        matches!(
-            self.join_probe_state.join_type(),
-            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAnti | JoinType::Full
-        )
-    }
-
     // The method is called after finishing each round
     pub fn reset_next_restore_file(&mut self) {
         self.spiller.reset_next_restore_file();
@@ -644,18 +637,13 @@ impl TransformHashJoinProbe {
 
     // Check if directly go to fast return
     fn can_fast_return(&self) -> bool {
-        matches!(
-            self.join_probe_state
-                .hash_join_state
-                .hash_join_desc
-                .join_type,
-            JoinType::Inner
-                | JoinType::Cross
-                | JoinType::Right
-                | JoinType::RightSingle
-                | JoinType::RightAnti
-                | JoinType::RightSemi
-                | JoinType::LeftSemi
+        !matches!(
+            self.join_probe_state.join_type(),
+            JoinType::Left
+                | JoinType::LeftSingle
+                | JoinType::LeftAnti
+                | JoinType::RightMark
+                | JoinType::Full
         )
     }
 }
