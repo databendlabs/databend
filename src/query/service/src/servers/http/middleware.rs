@@ -145,12 +145,7 @@ fn get_credential(
             ))
         }
     } else {
-        auth_by_header(
-            &std_auth_headers,
-            client_ip,
-            endpoint_kind,
-            req.uri().path(),
-        )
+        auth_by_header(&std_auth_headers, client_ip, endpoint_kind)
     }
 }
 
@@ -185,7 +180,6 @@ fn auth_by_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
     endpoint_kind: EndpointKind,
-    path: &str,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
@@ -306,7 +300,7 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant);
         }
 
-        self.auth_manager.auth(&mut session, &credential).await?;
+        let client_session_id = self.auth_manager.auth(&mut session, &credential).await?;
         let databend_token = match credential {
             Credential::DatabendToken { token, .. } => Some(token),
             _ => None,
@@ -352,6 +346,7 @@ impl<E> HTTPSessionEndpoint<E> {
             uri: req.uri().to_string(),
             client_host,
             databend_token,
+            client_session_id,
         })
     }
 }

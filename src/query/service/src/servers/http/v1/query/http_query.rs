@@ -36,6 +36,7 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_txn::TxnState;
 use fastrace::prelude::*;
+use http::StatusCode;
 use log::info;
 use log::warn;
 use poem::web::Json;
@@ -333,6 +334,7 @@ pub enum ExpireResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) client_session_id: Option<String>,
     pub(crate) session_id: String,
     pub(crate) node_id: String,
     request: HttpQueryRequest,
@@ -560,6 +562,7 @@ impl HttpQuery {
 
         let query = HttpQuery {
             id: query_id,
+            client_session_id: http_ctx.client_session_id.clone(),
             session_id,
             node_id,
             request,
@@ -748,5 +751,18 @@ impl HttpQuery {
                 ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
         }
+    }
+
+    pub fn check_client_session_id(&self, id: &Option<String>) -> poem::error::Result<()> {
+        if *id != self.client_session_id {
+            return Err(poem::error::Error::from_string(
+                format!(
+                    "wrong client_session_id, expect {:?}, got {id:?}",
+                    &self.client_session_id
+                ),
+                StatusCode::UNAUTHORIZED,
+            ));
+        }
+        Ok(())
     }
 }

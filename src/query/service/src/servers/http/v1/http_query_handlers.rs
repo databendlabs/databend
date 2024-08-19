@@ -239,10 +239,11 @@ async fn query_final_handler(
         match http_query_manager
             .remove_query(
                 &query_id,
+                &ctx.client_session_id,
                 RemoveReason::Finished,
                 ErrorCode::ClosedQuery("closed by client"),
             )
-            .await
+            .await?
         {
             Some(query) => {
                 let mut response = query.get_response_state_only().await;
@@ -277,10 +278,11 @@ async fn query_cancel_handler(
         match http_query_manager
             .remove_query(
                 &query_id,
+                &ctx.client_session_id,
                 RemoveReason::Canceled,
                 ErrorCode::AbortedQuery("canceled by client"),
             )
-            .await
+            .await?
         {
             Some(_) => Ok(StatusCode::OK),
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -302,6 +304,7 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
@@ -329,6 +332,7 @@ async fn query_page_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {

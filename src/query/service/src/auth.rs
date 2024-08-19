@@ -72,7 +72,11 @@ impl AuthMgr {
     }
 
     #[async_backtrace::framed]
-    pub async fn auth(&self, session: &mut Session, credential: &Credential) -> Result<()> {
+    pub async fn auth(
+        &self,
+        session: &mut Session,
+        credential: &Credential,
+    ) -> Result<Option<String>> {
         let user_api = UserApiProvider::instance();
         match credential {
             Credential::DatabendToken {
@@ -90,6 +94,8 @@ impl AuthMgr {
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
+                session.set_client_session_id(claim.session_id.clone());
+                Ok(Some(claim.session_id))
             }
             Credential::Jwt {
                 token: t,
@@ -151,6 +157,7 @@ impl AuthMgr {
                 };
 
                 session.set_authed_user(user, jwt.custom.role).await?;
+                Ok(None)
             }
             Credential::Password {
                 name: n,
@@ -195,8 +202,8 @@ impl AuthMgr {
                 authed?;
 
                 session.set_authed_user(user, None).await?;
+                Ok(None)
             }
-        };
-        Ok(())
+        }
     }
 }
