@@ -5,18 +5,6 @@ statement ok
 set sql_dialect = 'PostgreSQL'
 
 statement ok
-DROP TABLE IF EXISTS `05_0003_at_t0`
-
-statement ok
-DROP TABLE IF EXISTS `05_0003_at_t1`
-
-statement ok
-DROP TABLE IF EXISTS `05_0003_at_t2`
-
-statement ok
-DROP TABLE IF EXISTS `05_0003_at_t3`
-
-statement ok
 CREATE TEMP TABLE `05_0003_at_t0`(a int not null)
 
 statement ok
@@ -249,9 +237,3 @@ query TT
 select name, comment from system.tables where name='t1' and database='default';
 ----
 t1 t1-new-comment
-
-statement ok
-DROP TABLE IF EXISTS t;
-
-statement ok
-DROP TABLE IF EXISTS t1;

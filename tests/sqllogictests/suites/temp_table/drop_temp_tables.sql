@@ -1,7 +1,4 @@
 statement ok
-DROP TABLE IF EXISTS t
-
-statement ok
 CREATE TEMPORARY TABLE t(c1 int)
 
 statement ok

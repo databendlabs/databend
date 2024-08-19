@@ -1,7 +1,4 @@
 statement ok
-DROP TABLE IF EXISTS t1
-
-statement ok
 CREATE TEMP TABLE t1(c1 int)
 
 statement ok
@@ -35,7 +32,4 @@ TRUNCATE TABLE t2
 
 statement ok
 SELECT * FROM t2
-
-statement ok
-DROP TABLE IF EXISTS t2
 

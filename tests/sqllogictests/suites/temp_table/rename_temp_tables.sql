@@ -1,10 +1,4 @@
 statement ok
-DROP TABLE IF EXISTS t0
-
-statement ok
-DROP TABLE IF EXISTS t1
-
-statement ok
 CREATE TEMP TABLE t0(a int)
 
 statement ok
@@ -92,7 +86,4 @@ SELECT * FROM t1
 
 statement error 1006
 RENAME TABLE t1 to system.t1
-
-statement ok
-DROP TABLE IF EXISTS t1
 

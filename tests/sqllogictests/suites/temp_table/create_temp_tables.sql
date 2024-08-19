@@ -1,16 +1,4 @@
 statement ok
-DROP TABLE IF EXISTS t
-
-statement ok
-DROP TABLE IF EXISTS t2
-
-statement ok
-DROP TABLE IF EXISTS t3
-
-statement ok
-DROP TABLE IF EXISTS t4
-
-statement ok
 CREATE TEMPORARY TABLE t(c1 int) 
 
 statement ok
