@@ -117,6 +117,7 @@ pub struct FunctionContext {
     pub parse_datetime_ignore_remainder: bool,
     pub enable_dst_hour_fix: bool,
     pub enable_strict_datetime_parser: bool,
+    pub random_function_seed: bool,
 }
 
 impl Default for FunctionContext {
@@ -139,6 +140,7 @@ impl Default for FunctionContext {
             parse_datetime_ignore_remainder: false,
             enable_dst_hour_fix: false,
             enable_strict_datetime_parser: true,
+            random_function_seed: false,
         }
     }
 }

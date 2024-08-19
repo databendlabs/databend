@@ -824,6 +824,12 @@ impl DefaultSettings {
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("random_function_seed", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Deterministic table sample for row level",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 })
             ]);
 
