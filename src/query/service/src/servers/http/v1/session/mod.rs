@@ -14,6 +14,7 @@
 
 mod client_session_manager;
 pub mod login_handler;
+pub(crate) mod logout_handler;
 pub mod renew_handler;
 mod token;
 

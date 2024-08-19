@@ -67,6 +67,7 @@ use crate::sessions::SessionType;
 #[derive(Copy, Clone)]
 pub enum EndpointKind {
     Login,
+    Logout,
     Refresh,
     StartQuery,
     PollQuery,
@@ -210,11 +211,18 @@ fn auth_by_header(
                     let (token_type, set_user) = match endpoint_kind {
                         EndpointKind::Refresh => (TokenType::Refresh, true),
                         EndpointKind::StartQuery => (TokenType::Session, true),
-                        EndpointKind::PollQuery => (TokenType::Session, false),
-                        _ => {
-                            return Err(ErrorCode::AuthenticateFailure(format!(
-                                "should not use databend auth when accessing {path}"
-                            )));
+                        EndpointKind::PollQuery | EndpointKind::Logout => {
+                            (TokenType::Session, false)
+                        }
+                        EndpointKind::Login => {
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "should not use databend token for login",
+                            ));
+                        }
+                        EndpointKind::Clickhouse => {
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "clickhouse handler should not use databend auth",
+                            ));
                         }
                     };
                     Ok(Credential::DatabendToken {

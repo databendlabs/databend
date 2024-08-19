@@ -224,8 +224,8 @@ impl ClientSessionManager {
         };
         Ok(claim)
     }
-    async fn drop_client_session(self: &Arc<Self>, session_token: &str) -> Result<()> {
-        let claim = SessionClaim::decode(&session_token)?;
+    pub async fn drop_client_session(self: &Arc<Self>, session_token: &str) -> Result<()> {
+        let claim = SessionClaim::decode(session_token)?;
         let now = unix_ts().as_secs();
 
         let client_session_api =
@@ -233,10 +233,19 @@ impl ClientSessionManager {
 
         if now < claim.expire_at_in_secs {
             let session_token_hash = hash_token(session_token.as_bytes());
-            // should exist when `verify_token`
-            if let Some(Some(hash)) = self.session_tokens.write().pop(&session_token_hash) {
-                self.refresh_tokens.write().pop(&hash);
-                client_session_api.drop_token(&hash).await.ok();
+            // should exist after `verify_token`
+            let refresh_token_hash =
+                if let Some(Some(hash)) = self.session_tokens.write().pop(&session_token_hash) {
+                    self.refresh_tokens.write().pop(&hash);
+                    Some(hash)
+                } else {
+                    None
+                };
+            if let Some(refresh_token_hash) = refresh_token_hash {
+                client_session_api
+                    .drop_token(&refresh_token_hash)
+                    .await
+                    .ok();
             }
             client_session_api
                 .drop_token(&session_token_hash)

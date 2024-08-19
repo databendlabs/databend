@@ -34,6 +34,7 @@ pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
 pub use session::login_handler::login_handler;
 pub use session::login_handler::LoginResponse;
+pub use session::logout_handler::logout_handler;
 pub use session::renew_handler::renew_handler;
 pub use session::renew_handler::RenewResponse;
 pub use session::ClientSessionManager;
