@@ -271,9 +271,9 @@ impl<'a> Binder {
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
             // Dictionaries
-            Statement::CreateDictionary(_stmt) => todo!(),
-            Statement::DropDictionary(_stmt) => todo!(),
-            Statement::ShowCreateDictionary(_stmt) => todo!(),
+            Statement::CreateDictionary(stmt) => self.bind_create_dictionary(stmt).await?,
+            Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
+            Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
             Statement::ShowDictionaries { show_options: _ } => todo!(),
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
