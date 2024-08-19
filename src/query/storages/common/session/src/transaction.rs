@@ -28,6 +28,7 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -314,10 +315,17 @@ impl TxnManager {
         if !self.is_active() {
             return ret;
         }
-        let reqs = self.txn_buffer.copied_files.get(&table_id);
-        if let Some(reqs) = reqs {
-            for req in reqs {
-                ret.extend(req.file_info.clone().into_iter());
+        if is_temp_table_id(table_id) {
+            let temp_table = self.txn_buffer.mutated_temp_tables.get(&table_id);
+            if let Some(temp_table) = temp_table {
+                ret.extend(temp_table.copied_files.clone());
+            }
+        } else {
+            let reqs = self.txn_buffer.copied_files.get(&table_id);
+            if let Some(reqs) = reqs {
+                for req in reqs {
+                    ret.extend(req.file_info.clone().into_iter());
+                }
             }
         }
         ret
