@@ -221,8 +221,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
     /// List the tables name by meta ids.
-    ///
-    /// **Do not** pass temp table id as meta id.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -394,7 +392,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 
-    // TODO: implement lock related functions
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>>;
 
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply>;

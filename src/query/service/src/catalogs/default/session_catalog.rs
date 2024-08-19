@@ -21,6 +21,7 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -169,6 +170,12 @@ impl Catalog for SessionCatalog {
     }
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
+        if is_temp_table_id(req.meta.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "CreateIndex: table id {} is a temporary table id",
+                req.meta.table_id
+            )));
+        }
         self.inner.create_index(req).await
     }
 
@@ -185,10 +192,22 @@ impl Catalog for SessionCatalog {
     }
 
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        if req.table_id.is_some_and(is_temp_table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "ListIndexes: table id {} is a temporary table id",
+                req.table_id.unwrap()
+            )));
+        }
         self.inner.list_indexes(req).await
     }
 
     async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        if is_temp_table_id(req.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "ListIndexIdsByTableId: table id {} is a temporary table id",
+                req.table_id
+            )));
+        }
         self.inner.list_index_ids_by_table_id(req).await
     }
 
@@ -196,6 +215,12 @@ impl Catalog for SessionCatalog {
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
+        if is_temp_table_id(req.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "ListIndexesByTableId: table id {} is a temporary table id",
+                req.table_id
+            )));
+        }
         self.inner.list_indexes_by_table_id(req).await
     }
 
@@ -203,6 +228,12 @@ impl Catalog for SessionCatalog {
         &self,
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply> {
+        if is_temp_table_id(req.name_ident.table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "CreateVirtualColumn: table id {} is a temporary table id",
+                req.name_ident.table_id()
+            )));
+        }
         self.inner.create_virtual_column(req).await
     }
 
@@ -210,6 +241,12 @@ impl Catalog for SessionCatalog {
         &self,
         req: UpdateVirtualColumnReq,
     ) -> Result<UpdateVirtualColumnReply> {
+        if is_temp_table_id(req.name_ident.table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "UpdateVirtualColumn: table id {} is a temporary table id",
+                req.name_ident.table_id()
+            )));
+        }
         self.inner.update_virtual_column(req).await
     }
 
@@ -217,6 +254,12 @@ impl Catalog for SessionCatalog {
         &self,
         req: DropVirtualColumnReq,
     ) -> Result<DropVirtualColumnReply> {
+        if is_temp_table_id(req.name_ident.table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "DropVirtualColumn: table id {} is a temporary table id",
+                req.name_ident.table_id()
+            )));
+        }
         self.inner.drop_virtual_column(req).await
     }
 
@@ -224,6 +267,12 @@ impl Catalog for SessionCatalog {
         &self,
         req: ListVirtualColumnsReq,
     ) -> Result<Vec<VirtualColumnMeta>> {
+        if req.table_id.is_some_and(is_temp_table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "ListVirtualColumns: table id {} is a temporary table id",
+                req.table_id.unwrap()
+            )));
+        }
         self.inner.list_virtual_columns(req).await
     }
 
@@ -256,7 +305,6 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // TODO: implement this
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -321,12 +369,10 @@ impl Catalog for SessionCatalog {
         Ok(table)
     }
 
-    // TODO: implement this
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables(tenant, db_name).await
     }
 
-    // TODO: implement this
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
@@ -335,7 +381,6 @@ impl Catalog for SessionCatalog {
         self.inner.list_tables_history(tenant, db_name).await
     }
 
-    // TODO: implement this
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
@@ -343,7 +388,6 @@ impl Catalog for SessionCatalog {
         self.inner.get_drop_table_infos(req).await
     }
 
-    // TODO: implement this
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
         self.inner.gc_drop_tables(req).await
     }
@@ -367,12 +411,10 @@ impl Catalog for SessionCatalog {
         self.inner.drop_table_by_id(req).await
     }
 
-    // TODO: implement this
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         self.inner.undrop_table(req).await
     }
 
-    // TODO: implement this
     async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
         self.inner.undrop_table_by_id(req).await
     }
@@ -436,14 +478,32 @@ impl Catalog for SessionCatalog {
         &self,
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
+        if is_temp_table_id(req.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "SetTableColumnMaskPolicy: table id {} is a temporary table id",
+                req.table_id
+            )));
+        }
         self.inner.set_table_column_mask_policy(req).await
     }
 
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        if is_temp_table_id(req.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "CreateTableIndex: table id {} is a temporary table id",
+                req.table_id
+            )));
+        }
         self.inner.create_table_index(req).await
     }
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        if is_temp_table_id(req.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "DropTableIndex: table id {} is a temporary table id",
+                req.table_id
+            )));
+        }
         self.inner.drop_table_index(req).await
     }
 
@@ -481,20 +541,43 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // TODO: implement this
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
+        if is_temp_table_id(req.lock_key.get_table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "ListLockRevisions: table id {} is a temporary table id",
+                req.lock_key.get_table_id()
+            )));
+        }
         self.inner.list_lock_revisions(req).await
     }
 
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
+        if is_temp_table_id(req.lock_key.get_table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "CreateLockRevision: table id {} is a temporary table id",
+                req.lock_key.get_table_id()
+            )));
+        }
         self.inner.create_lock_revision(req).await
     }
 
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
+        if is_temp_table_id(req.lock_key.get_table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "ExtendLockRevision: table id {} is a temporary table id",
+                req.lock_key.get_table_id()
+            )));
+        }
         self.inner.extend_lock_revision(req).await
     }
 
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
+        if is_temp_table_id(req.lock_key.get_table_id()) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "DeleteLockRevision: table id {} is a temporary table id",
+                req.lock_key.get_table_id()
+            )));
+        }
         self.inner.delete_lock_revision(req).await
     }
 
