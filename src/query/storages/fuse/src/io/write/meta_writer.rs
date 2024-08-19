@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -61,10 +59,7 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
         let bytes = self.marshal()?;
         data_accessor.write(location, bytes.clone()).await?;
         if let Some(cache) = CompactSegmentInfo::cache() {
-            cache.put(
-                location.to_owned(),
-                Arc::new(CompactSegmentInfo::try_from(&self)?),
-            )
+            cache.insert(location.to_owned(), CompactSegmentInfo::try_from(&self)?);
         }
         Ok(())
     }

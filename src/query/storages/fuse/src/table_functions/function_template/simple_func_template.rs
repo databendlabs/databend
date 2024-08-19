@@ -224,7 +224,6 @@ where T: SimpleTableFunc
 {
     const NAME: &'static str = "template_func";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {

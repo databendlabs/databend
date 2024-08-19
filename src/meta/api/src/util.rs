@@ -359,11 +359,6 @@ pub fn txn_op_get(key: &impl kvapi::Key) -> TxnOp {
     TxnOp::get(key.to_string_key())
 }
 
-// TODO: replace it with common_meta_types::with::With
-pub fn txn_op_put_with_expire(key: &impl kvapi::Key, value: Vec<u8>, expire_at: u64) -> TxnOp {
-    TxnOp::put_with_expire(key.to_string_key(), value, Some(expire_at))
-}
-
 /// Build a txn operation that deletes a record.
 pub fn txn_op_del(key: &impl kvapi::Key) -> TxnOp {
     TxnOp::delete(key.to_string_key())

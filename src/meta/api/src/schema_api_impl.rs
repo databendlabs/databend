@@ -257,7 +257,6 @@ use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_get;
 use crate::txn_op_put;
-use crate::txn_op_put_with_expire;
 use crate::util::db_id_has_to_exist;
 use crate::util::deserialize_id_get_response;
 use crate::util::deserialize_struct_get_response;
@@ -3794,10 +3793,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&key, Eq, 0),
             ];
 
-            let if_then = vec![txn_op_put_with_expire(
-                &key,
+            let if_then = vec![TxnOp::put_with_ttl(
+                key.to_string_key(),
                 serialize_struct(&lock_meta)?,
-                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
+                Some(req.expire_secs * 1000),
             )];
 
             let txn_req = TxnRequest {
@@ -3859,10 +3858,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&key, Eq, lock_seq),
             ];
 
-            let if_then = vec![txn_op_put_with_expire(
-                &key,
+            let if_then = vec![TxnOp::put_with_ttl(
+                key.to_string_key(),
                 serialize_struct(&lock_meta)?,
-                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
+                Some(req.expire_secs * 1000),
             )];
 
             let txn_req = TxnRequest {
@@ -5226,28 +5225,31 @@ fn build_upsert_table_copied_file_info_conditions(
             // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
         }
-        set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
+        set_update_expire_operation(&key, &file_info, req.ttl, &mut if_then)?;
     }
     Ok((condition, if_then))
 }
 
 fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
-    let expire_at = Some(SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60);
-    TxnOp::put_with_expire(deduplicated_label, 1_i8.to_le_bytes().to_vec(), expire_at)
+    TxnOp::put_with_ttl(
+        deduplicated_label,
+        1_i8.to_le_bytes().to_vec(),
+        Some(86400 * 1000),
+    )
 }
 
 fn set_update_expire_operation(
     key: &TableCopiedFileNameIdent,
     file_info: &TableCopiedFileInfo,
-    expire_at_opt: &Option<u64>,
+    ttl: Option<std::time::Duration>,
     then_branch: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    match expire_at_opt {
-        Some(expire_at) => {
-            then_branch.push(txn_op_put_with_expire(
-                key,
+    match ttl {
+        Some(ttl) => {
+            then_branch.push(TxnOp::put_with_ttl(
+                key.to_string_key(),
                 serialize_struct(file_info)?,
-                *expire_at,
+                Some(ttl.as_millis() as u64),
             ));
         }
         None => {
