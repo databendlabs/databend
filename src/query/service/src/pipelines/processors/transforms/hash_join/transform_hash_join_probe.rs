@@ -580,7 +580,7 @@ impl TransformHashJoinProbe {
     fn is_left_related_join_type(&self) -> bool {
         matches!(
             self.join_probe_state.join_type(),
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAnti | JoinType::Full
         )
     }
 
