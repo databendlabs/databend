@@ -708,6 +708,7 @@ impl TableContext for QueryContext {
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
+        let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
             tz,
@@ -729,6 +730,7 @@ impl TableContext for QueryContext {
             parse_datetime_ignore_remainder,
             enable_dst_hour_fix,
             enable_strict_datetime_parser,
+            random_function_seed,
         })
     }
 
