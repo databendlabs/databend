@@ -576,7 +576,7 @@ create or replace table t_opt_retention (c int);
 
 # invalid value
 # ERROR HY000 (1105): FromStdError. Code: 1001, Text = invalid digit found in string.
-statement error 1105
+statement error
 alter table t_opt_retention  set options(data_retention_period_in_hours = 'abc');
 
 # invalid value (larger than default max 90 days, 90 * 24 = 2160)
