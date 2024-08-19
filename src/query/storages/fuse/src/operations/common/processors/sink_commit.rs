@@ -177,7 +177,7 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn do_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
-        if table.transient() {
+        if table.is_transient() {
             return true;
         }
 
