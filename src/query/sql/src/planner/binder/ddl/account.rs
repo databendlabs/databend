@@ -157,8 +157,8 @@ impl Binder {
                     .is_temp_table(&catalog_name, &database_name, table_name)
                 {
                     return Err(ErrorCode::StorageOther(format!(
-                        "{} is a temporary table, cannot grant privileges on it",
-                        table_name
+                        "{}.{}.{} is a temporary table, cannot grant privileges on it",
+                        catalog_name, database_name, table_name
                     )));
                 }
                 let db_id = catalog
@@ -211,8 +211,8 @@ impl Binder {
                     .is_temp_table(&catalog_name, &database_name, table_name)
                 {
                     return Err(ErrorCode::StorageOther(format!(
-                        "{} is a temporary table, cannot revoke privileges on it",
-                        table_name
+                        "{}.{}.{} is a temporary table, cannot revoke privileges on it",
+                        catalog_name, database_name, table_name
                     )));
                 }
                 let db_id = catalog
