@@ -8,7 +8,13 @@ statement ok
 set join_spilling_memory_ratio = 1;
 
 statement ok
+set join_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+# TPC-H TEST
+# include ./queries.test
 
 # CROSS JOIN
 query I
@@ -394,3 +400,13 @@ ORDER BY  custdist DESC,
 1 3
 1595 1
 36 1
+
+
+statement ok
+set join_spilling_memory_ratio = 60;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 512;
