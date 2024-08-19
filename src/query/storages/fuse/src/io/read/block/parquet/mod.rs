@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
@@ -28,8 +27,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
-use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 
@@ -104,7 +103,7 @@ impl BlockReader {
                             let (offset, len) = meta.offset_length();
                             let key =
                                 TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.put(key.into(), Arc::new((arrow2_array.clone(), data.len())))
+                            cache.insert(key.into(), (arrow2_array.clone(), data.len()));
                         }
                     }
                     Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)

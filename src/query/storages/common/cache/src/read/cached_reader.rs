@@ -15,13 +15,13 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_cache::CountableMeter;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
 
 use super::loader::LoadParams;
+use crate::caches::CacheValue;
 use crate::CacheAccessor;
-use crate::InMemoryItemCacheHolder;
+use crate::InMemoryLruCache;
 use crate::Loader;
 
 /// A cache-aware reader
@@ -30,12 +30,10 @@ pub struct CachedReader<L, C> {
     loader: L,
 }
 
-impl<V, L, M> CachedReader<L, InMemoryItemCacheHolder<V, M>>
-where
-    L: Loader<V> + Sync,
-    M: CountableMeter<String, Arc<V>>,
+impl<V: Into<CacheValue<V>>, L> CachedReader<L, InMemoryLruCache<V>>
+where L: Loader<V> + Sync
 {
-    pub fn new(cache: Option<InMemoryItemCacheHolder<V, M>>, loader: L) -> Self {
+    pub fn new(cache: Option<InMemoryLruCache<V>>, loader: L) -> Self {
         Self { cache, loader }
     }
 
@@ -52,7 +50,6 @@ where
                         let start = Instant::now();
 
                         let v = self.loader.load(params).await?;
-                        let item = Arc::new(v);
 
                         // Perf.
                         {
@@ -62,10 +59,10 @@ where
                             );
                         }
 
-                        if params.put_cache {
-                            cache.put(cache_key, item.clone());
+                        match params.put_cache {
+                            true => Ok(cache.insert(cache_key, v)),
+                            false => Ok(Arc::new(v)),
                         }
-                        Ok(item)
                     }
                 }
             }
