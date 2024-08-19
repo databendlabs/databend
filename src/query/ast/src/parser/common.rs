@@ -27,6 +27,7 @@ use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::IdentifierType;
 use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
@@ -127,7 +128,7 @@ fn plain_identifier(
                 span: transform_span(&[token.clone()]),
                 name: token.text().to_string(),
                 quote: None,
-                is_hole: false,
+                ident_type: IdentifierType::None,
             },
         )(i)
     }
@@ -152,7 +153,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 span: transform_span(&[token.clone()]),
                 name: ident,
                 quote: Some(quote),
-                is_hole: false,
+                ident_type: IdentifierType::None,
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -166,15 +167,29 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
 fn identifier_hole(i: Input) -> IResult<Identifier> {
     check_template_mode(map(
         consumed(rule! {
-            IDENTIFIER ~ ^"(" ~ ^#template_hole ~ ^")"
+            IDENTIFIER ~ ^"(" ~ #template_hole ~ ^")"
         }),
-        |(span, (_, _, (_, name), _))| Identifier {
+        |(span, (_, _, name, _))| Identifier {
             span: transform_span(span.tokens),
             name,
             quote: None,
-            is_hole: true,
+            ident_type: IdentifierType::Hole,
         },
     ))(i)
+}
+
+fn identifier_variable(i: Input) -> IResult<Identifier> {
+    map(
+        consumed(rule! {
+            IDENTIFIER ~ ^"(" ~ ^#variable_ident ~ ^")"
+        }),
+        |(span, (_, _, name, _))| Identifier {
+            span: transform_span(span.tokens),
+            name,
+            quote: None,
+            ident_type: IdentifierType::Variable,
+        },
+    )(i)
 }
 
 fn non_reserved_identifier(
@@ -185,6 +200,7 @@ fn non_reserved_identifier(
             #plain_identifier(is_reserved_keyword)
             | #quoted_identifier
             | #identifier_hole
+            | #identifier_variable
         )(i)
     }
 }
@@ -277,11 +293,11 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
     ))(i)
 }
 
-pub fn variable_ident(i: Input) -> IResult<Identifier> {
-    map(rule! { VariableAccess }, |token| {
-        let name = token.text().to_string();
-        Identifier::from_name(Some(token.span), &name[1..])
-    })(i)
+pub fn variable_ident(i: Input) -> IResult<String> {
+    map(
+        rule! { "$" ~ ^#plain_identifier(|token| token.is_reserved_ident(false)) },
+        |(_, name)| name.name,
+    )(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -564,12 +580,12 @@ where F: nom::Parser<Input<'a>, O, Error<'a>> {
     }
 }
 
-pub fn template_hole(i: Input) -> IResult<(Span, String)> {
+pub fn template_hole(i: Input) -> IResult<String> {
     check_template_mode(map(
-        consumed(rule! {
+        rule! {
             ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
-        }),
-        |(span, (_, ident))| (transform_span(span.tokens), ident.name),
+        },
+        |(_, name)| name.name,
     ))(i)
 }
 

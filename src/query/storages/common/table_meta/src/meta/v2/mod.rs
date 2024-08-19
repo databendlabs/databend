@@ -18,13 +18,11 @@ pub mod statistics;
 mod table_snapshot_statistics;
 
 pub use segment::BlockMeta;
-pub use segment::BlockMetaMessagePack;
 pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
 pub use statistics::Statistics;
-pub use statistics::StatisticsMessagePack;
 pub use table_snapshot_statistics::MetaHLL;
 pub use table_snapshot_statistics::TableSnapshotStatistics;

@@ -47,6 +47,7 @@ use crate::CountSetOps;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::VariableNormalizer;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
@@ -241,6 +242,15 @@ impl Planner {
     }
 
     fn replace_stmt(&self, stmt: &mut Statement) -> Result<()> {
+        let name_resolution_ctx =
+            NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+
+        let mut variable_normalizer =
+            VariableNormalizer::new(&name_resolution_ctx, self.ctx.clone());
+
+        stmt.drive_mut(&mut variable_normalizer);
+        variable_normalizer.render_error()?;
+
         stmt.drive_mut(&mut DistinctToGroupBy::default());
         stmt.drive_mut(&mut AggregateRewriter);
         let mut set_ops_counter = CountSetOps::default();
