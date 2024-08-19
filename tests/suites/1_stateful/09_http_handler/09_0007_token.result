@@ -35,3 +35,10 @@
 ---- do_renew(5,)
 {'code': '401', 'message': 'refresh token not found'}
 ---- do_renew(6,)
+---- do_logout(0,)
+{'code': '401', 'message': 'session token not found'}
+---- do_logout(1,)
+---- do_query("select 'after logout'",)
+{'code': '401', 'message': 'session token not found'}
+---- do_renew('after_logout',)
+{'code': '401', 'message': 'refresh token not found'}
