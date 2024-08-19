@@ -173,6 +173,7 @@ impl HashJoinSpiller {
                 if spilled_data.num_rows() != 0 {
                     data_blocks.push(spilled_data);
                 }
+                self.next_restore_file += 1;
             }
         }
         Ok(data_blocks)
