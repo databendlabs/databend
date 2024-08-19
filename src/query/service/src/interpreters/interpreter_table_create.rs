@@ -194,8 +194,6 @@ impl CreateTableInterpreter {
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
         let reply = catalog.create_table(req.clone()).await?;
-        println!("create table as select");
-        println!("{:?}", self.ctx.session_state().temp_tbl_mgr);
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
