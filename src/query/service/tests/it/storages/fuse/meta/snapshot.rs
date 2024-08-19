@@ -127,6 +127,6 @@ fn test_snapshot_reader() {
 fn test_seg_reader() {
     let meta = include_bytes!("c_seg_v4.mpk");
     let seg = databend_storages_common_table_meta::meta::SegmentInfo::from_slice(meta).unwrap();
-    assert!(seg.summary.col_stats.len() > 0);
+    assert!(!seg.summary.col_stats.is_empty());
     assert!(!seg.blocks.is_empty());
 }
