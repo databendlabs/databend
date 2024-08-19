@@ -153,7 +153,7 @@ impl ClientSessionManager {
         };
         self.refresh_tokens
             .write()
-            .insert(refresh_token_hash.clone(), ());
+            .insert(refresh_token_hash.clone(), None);
 
         claim.expire_at_in_secs = (now + SESSION_TOKEN_VALIDITY).as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
@@ -209,7 +209,9 @@ impl ClientSessionManager {
                 .get_token(&hash)
                 .await?
             {
-                Some(info) if info.token_type == token_type => cache.write().insert(hash, ()),
+                Some(info) if info.token_type == token_type => {
+                    cache.write().insert(hash, info.parent.clone())
+                }
                 _ => {
                     return match token_type {
                         TokenType::Refresh => {
