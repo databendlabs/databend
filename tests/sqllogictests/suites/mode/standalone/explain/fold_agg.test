@@ -1,0 +1,208 @@
+statement ok
+drop table if exists t
+
+statement ok
+create table t(number int, name string, money decimal(15, 2), day date, ts timestamp) as
+ select number, number::string, number, '2024-01-01'::Date + number, '2024-01-01'::Timestamp + number * 1e6 from numbers(1000)
+
+query T
+explain select count(*) from t
+----
+EvalScalar
+├── output columns: [COUNT(*) (#5)]
+├── expressions: [1000]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+explain select count(*) from (select * from t limit 10 offset 3)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#5)]
+├── expressions: [10]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+explain select count(*) from (select * from t limit 10 offset 999)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#5)]
+├── expressions: [1]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+
+query T
+explain select count(*) from (select floor(row_number() over (order by number)) from t)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#7)]
+├── expressions: [1000]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+explain select count(*) from (select number, floor(row_number() over (order by number)) from t)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#7)]
+├── expressions: [1000]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+
+statement ok
+insert into t select number, number::string, number, '2024-01-01'::Date + number, '2024-01-01'::Timestamp + number * 1e6 from numbers(2000);
+
+
+query T
+explain select count(*) from t
+----
+EvalScalar
+├── output columns: [COUNT(*) (#5)]
+├── expressions: [3000]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+explain select count(*) from t where number > 10
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#5)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── Filter
+        ├── output columns: []
+        ├── filters: [is_true(t.number (#0) > 10)]
+        ├── estimated rows: 2983.50
+        └── TableScan
+            ├── table: default.default.t
+            ├── output columns: [number (#0)]
+            ├── read rows: 3000
+            ├── read size: 5.89 KiB
+            ├── partitions total: 2
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+            ├── push downs: [filters: [is_true(t.number (#0) > 10)], limit: NONE]
+            └── estimated rows: 3000.00
+
+query T
+explain select count(*) from t group by number
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#5), t.number (#0)]
+├── group by: [number]
+├── aggregate functions: [count()]
+├── estimated rows: 2000.00
+└── AggregatePartial
+    ├── group by: [number]
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 2000.00
+    └── TableScan
+        ├── table: default.default.t
+        ├── output columns: [number (#0)]
+        ├── read rows: 3000
+        ├── read size: 5.89 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 3000.00
+
+query T
+explain select count(), max(number) + 3, min(day) from t;
+----
+EvalScalar
+├── output columns: [min(day) (#7), count() (#5), max(number) + 3 (#8)]
+├── expressions: [max(number) (#6) + 3]
+├── estimated rows: 1.00
+└── EvalScalar
+    ├── output columns: [max(number) (#6), min(day) (#7), count() (#5)]
+    ├── expressions: [1999, '2024-01-01', 3000]
+    ├── estimated rows: 1.00
+    └── DummyTableScan
+
+query T
+explain select  count(), max(number) + 4, sum_if(number + 4 , number > 3 ), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
+----
+EvalScalar
+├── output columns: [count() (#5), sum_if(number + 4, number > 3) (#9), sum(money) (#14), min(day) (#10), max(ts) (#11), min(money) (#12), min(ts) (#13), max(number) + 4 (#15), 8 (#16)]
+├── expressions: [max(number) (#6) + 4, 8]
+├── estimated rows: 1.00
+└── EvalScalar
+    ├── output columns: [count() (#5), sum_if(number + 4, number > 3) (#9), sum(money) (#14), max(number) (#6), min(day) (#10), max(ts) (#11), min(money) (#12), min(ts) (#13)]
+    ├── expressions: [1999, '2024-01-01', '2024-01-01 00:33:19.000000', 0.00, '2024-01-01 00:00:00.000000']
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [count() (#5), sum_if(number + 4, number > 3) (#9), sum(money) (#14)]
+        ├── group by: []
+        ├── aggregate functions: [count(), sum_if(sum_if_arg_0, sum_if_arg_1), sum(money)]
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: []
+            ├── aggregate functions: [count(), sum_if(sum_if_arg_0, sum_if_arg_1), sum(money)]
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [t.money (#2), sum_if_arg_0 (#7), sum_if_arg_1 (#8)]
+                ├── expressions: [t.number (#0) + 4, t.number (#0) > 3]
+                ├── estimated rows: 3000.00
+                └── TableScan
+                    ├── table: default.default.t
+                    ├── output columns: [number (#0), money (#2)]
+                    ├── read rows: 3000
+                    ├── read size: 10.51 KiB
+                    ├── partitions total: 2
+                    ├── partitions scanned: 2
+                    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 3000.00
+
+query T
+explain select 5, count(), min(number), max(ts), min(money), 4 from t;
+----
+EvalScalar
+├── output columns: [min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5), 5 (#9), 4 (#10)]
+├── expressions: [5, 4]
+├── estimated rows: 1.00
+└── EvalScalar
+    ├── output columns: [min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5)]
+    ├── expressions: [0, '2024-01-01 00:33:19.000000', 0.00, 3000]
+    ├── estimated rows: 1.00
+    └── DummyTableScan
+
+query T
+----
+explain select 5,  count(), sum(number), sum(money), 4 from t;
+----
+EvalScalar
+├── output columns: [count() (#5), sum(number) (#6), sum(money) (#7), 5 (#8), 4 (#9)]
+├── expressions: [5, 4]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [count() (#5), sum(number) (#6), sum(money) (#7)]
+    ├── group by: []
+    ├── aggregate functions: [count(), sum(number), sum(money)]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count(), sum(number), sum(money)]
+        ├── estimated rows: 1.00
+        └── TableScan
+            ├── table: default.default.t
+            ├── output columns: [number (#0), money (#2)]
+            ├── read rows: 3000
+            ├── read size: 10.51 KiB
+            ├── partitions total: 2
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 3000.00
+
+statement ok
+drop table t

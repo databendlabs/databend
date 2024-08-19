@@ -3224,7 +3224,6 @@ dependencies = [
 name = "databend-common-cache"
 version = "0.1.0"
 dependencies = [
- "bytes",
  "hashbrown 0.14.5",
  "hashlink 0.8.4",
 ]
@@ -4272,7 +4271,6 @@ dependencies = [
  "criterion",
  "databend-common-arrow",
  "databend-common-base",
- "databend-common-cache",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
@@ -4293,7 +4291,6 @@ dependencies = [
  "databend-enterprise-fail-safe",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
- "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-pruner",
@@ -4346,7 +4343,6 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-cache",
- "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "fastrace",
@@ -4668,7 +4664,6 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-storages-common-cache",
- "databend-storages-common-cache-manager",
  "futures",
  "itertools 0.10.5",
  "jsonb",
@@ -5168,7 +5163,6 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
- "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-table-meta",
@@ -5329,39 +5323,27 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "async-backtrace",
  "async-trait",
  "bytes",
  "crc32fast",
  "crossbeam-channel",
- "databend-common-base",
- "databend-common-cache",
- "databend-common-config",
- "databend-common-exception",
- "databend-common-metrics",
- "hex",
- "log",
- "parking_lot 0.12.3",
- "rayon",
- "siphasher",
- "tempfile",
-]
-
-[[package]]
-name = "databend-storages-common-cache-manager"
-version = "0.1.0"
-dependencies = [
- "arrow",
  "databend-common-arrow",
  "databend-common-base",
  "databend-common-cache",
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
- "databend-storages-common-cache",
+ "databend-common-metrics",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "hex",
  "log",
+ "parking_lot 0.12.3",
+ "rayon",
+ "siphasher",
+ "tempfile",
 ]
 
 [[package]]

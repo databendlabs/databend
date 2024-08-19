@@ -16,16 +16,22 @@
 #![feature(associated_type_defaults)]
 
 mod cache;
+mod caches;
+mod manager;
 mod providers;
 mod read;
 
 pub use cache::CacheAccessor;
 pub use cache::Unit;
-pub use databend_common_cache::CountableMeter;
+pub use caches::BlockMetaCache;
+pub use caches::CacheValue;
+pub use caches::CachedObject;
+pub use caches::SizedColumnArray;
+pub use manager::CacheManager;
 pub use providers::DiskCacheError;
 pub use providers::DiskCacheKey;
 pub use providers::DiskCacheResult;
-pub use providers::InMemoryItemCacheHolder;
+pub use providers::InMemoryLruCache;
 pub use providers::LruDiskCache;
 pub use providers::LruDiskCacheBuilder;
 pub use providers::LruDiskCacheHolder;
