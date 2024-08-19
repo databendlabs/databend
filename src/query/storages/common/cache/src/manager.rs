@@ -16,37 +16,29 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_cache::CountableMeter;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
-use databend_storages_common_cache::InMemoryCacheBuilder;
-use databend_storages_common_cache::InMemoryItemCacheHolder;
-use databend_storages_common_cache::Named;
-use databend_storages_common_cache::NamedCache;
-use databend_storages_common_cache::TableDataCache;
-use databend_storages_common_cache::TableDataCacheBuilder;
-use databend_storages_common_cache::Unit;
 use log::info;
 
+use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
+use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
+use crate::caches::PrunePartitionsCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-use crate::BlockMetaCache;
-use crate::BloomIndexFilterMeter;
-use crate::ColumnArrayMeter;
-use crate::CompactSegmentInfoMeter;
-use crate::InvertedIndexFileMeter;
-use crate::PrunePartitionsCache;
+use crate::InMemoryLruCache;
+use crate::TableDataCache;
+use crate::TableDataCacheBuilder;
 
-static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
+static DEFAULT_FILE_META_DATA_CACHE_ITEMS: usize = 3000;
 
 /// Where all the caches reside
 pub struct CacheManager {
@@ -99,7 +91,7 @@ impl CacheManager {
                     Self::new_block_data_cache(
                         &real_disk_cache_root,
                         queue_size,
-                        config.disk_cache_config.max_bytes,
+                        config.disk_cache_config.max_bytes as usize,
                         config.data_cache_key_reload_policy.clone(),
                         config.disk_cache_config.sync_data,
                     )?
@@ -109,18 +101,16 @@ impl CacheManager {
 
         // setup in-memory table column cache
         let memory_cache_capacity = if config.table_data_deserialized_data_bytes != 0 {
-            config.table_data_deserialized_data_bytes
+            config.table_data_deserialized_data_bytes as usize
         } else {
-            max_server_memory_usage * config.table_data_deserialized_memory_ratio / 100
+            (*max_server_memory_usage as usize)
+                * config.table_data_deserialized_memory_ratio as usize
+                / 100
         };
 
         // Cache of deserialized table data
-        let in_memory_table_data_cache = Self::new_named_cache_with_meter(
-            memory_cache_capacity,
-            ColumnArrayMeter,
-            MEMORY_CACHE_TABLE_DATA,
-            Unit::Bytes,
-        );
+        let in_memory_table_data_cache =
+            Self::new_named_bytes_cache(MEMORY_CACHE_TABLE_DATA, memory_cache_capacity);
 
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
@@ -139,59 +129,57 @@ impl CacheManager {
                 block_meta_cache: None,
             }));
         } else {
-            let table_snapshot_cache = Self::new_named_cache(
-                config.table_meta_snapshot_count,
+            let table_snapshot_cache = Self::new_named_items_cache(
+                config.table_meta_snapshot_count as usize,
                 MEMORY_CACHE_TABLE_SNAPSHOT,
             );
-            let table_statistic_cache = Self::new_named_cache(
-                config.table_meta_statistic_count,
+            let table_statistic_cache = Self::new_named_items_cache(
+                config.table_meta_statistic_count as usize,
                 MEMORY_CACHE_TABLE_STATISTICS,
             );
-            let compact_segment_info_cache = Self::new_named_cache_with_meter(
-                config.table_meta_segment_bytes,
-                CompactSegmentInfoMeter {},
+            let compact_segment_info_cache = Self::new_named_bytes_cache(
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
-                Unit::Bytes,
+                config.table_meta_segment_bytes as usize,
             );
-            let bloom_index_filter_cache = Self::new_named_cache_with_meter(
-                config.table_bloom_index_filter_size,
-                BloomIndexFilterMeter {},
+            let bloom_index_filter_cache = Self::new_named_bytes_cache(
                 MEMORY_CACHE_BLOOM_INDEX_FILTER,
-                Unit::Bytes,
+                config.table_bloom_index_filter_size as usize,
             );
-            let bloom_index_meta_cache = Self::new_named_cache(
-                config.table_bloom_index_meta_count,
+            let bloom_index_meta_cache = Self::new_named_items_cache(
+                config.table_bloom_index_meta_count as usize,
                 MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA,
             );
-            let inverted_index_meta_cache = Self::new_named_cache(
-                config.inverted_index_meta_count,
+            let inverted_index_meta_cache = Self::new_named_items_cache(
+                config.inverted_index_meta_count as usize,
                 MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA,
             );
 
             // setup in-memory inverted index filter cache
             let inverted_index_file_size = if config.inverted_index_filter_memory_ratio != 0 {
-                max_server_memory_usage * config.inverted_index_filter_memory_ratio / 100
+                (*max_server_memory_usage as usize)
+                    * config.inverted_index_filter_memory_ratio as usize
+                    / 100
             } else {
-                config.inverted_index_filter_size
+                config.inverted_index_filter_size as usize
             };
-            let inverted_index_file_cache = Self::new_named_cache_with_meter(
-                inverted_index_file_size,
-                InvertedIndexFileMeter {},
+            let inverted_index_file_cache = Self::new_named_bytes_cache(
                 MEMORY_CACHE_INVERTED_INDEX_FILE,
-                Unit::Bytes,
+                inverted_index_file_size,
             );
-            let prune_partitions_cache = Self::new_named_cache(
-                config.table_prune_partitions_count,
+            let prune_partitions_cache = Self::new_named_items_cache(
+                config.table_prune_partitions_count as usize,
                 MEMORY_CACHE_PRUNE_PARTITIONS,
             );
 
-            let parquet_file_meta_data_cache = Self::new_named_cache(
+            let parquet_file_meta_data_cache = Self::new_named_items_cache(
                 DEFAULT_FILE_META_DATA_CACHE_ITEMS,
                 MEMORY_CACHE_PARQUET_FILE_META,
             );
 
-            let block_meta_cache =
-                Self::new_named_cache(config.block_meta_count, MEMORY_CACHE_BLOCK_META);
+            let block_meta_cache = Self::new_named_items_cache(
+                config.block_meta_count as usize,
+                MEMORY_CACHE_BLOCK_META,
+            );
 
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
@@ -264,40 +252,33 @@ impl CacheManager {
         self.in_memory_table_data_cache.clone()
     }
 
-    pub fn new_named_cache<V>(
-        capacity: u64,
+    pub fn new_named_items_cache<V: Into<CacheValue<V>>>(
+        capacity: usize,
         name: impl Into<String>,
-    ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
-        if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into(), Unit::Count))
-        } else {
-            None
+    ) -> Option<InMemoryLruCache<V>> {
+        match capacity {
+            0 => None,
+            _ => Some(InMemoryLruCache::with_items_capacity(name.into(), capacity)),
         }
     }
 
-    fn new_named_cache_with_meter<V, M>(
-        capacity: u64,
-        meter: M,
+    fn new_named_bytes_cache<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
-        unit: Unit,
-    ) -> Option<NamedCache<InMemoryItemCacheHolder<V, M>>>
-    where
-        M: CountableMeter<String, Arc<V>>,
-    {
-        if capacity > 0 {
-            Some(
-                InMemoryCacheBuilder::new_in_memory_cache(capacity, meter)
-                    .name_with(name.into(), unit),
-            )
-        } else {
-            None
+        bytes_capacity: usize,
+    ) -> Option<InMemoryLruCache<V>> {
+        match bytes_capacity {
+            0 => None,
+            _ => Some(InMemoryLruCache::with_bytes_capacity(
+                name.into(),
+                bytes_capacity,
+            )),
         }
     }
 
     fn new_block_data_cache(
         path: &PathBuf,
         population_queue_size: u32,
-        disk_cache_bytes_size: u64,
+        disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<Option<TableDataCache>> {

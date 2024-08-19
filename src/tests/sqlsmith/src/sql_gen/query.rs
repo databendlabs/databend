@@ -524,6 +524,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }],
                     named_params: vec![],
                     alias: None,
+                    sample: None,
                 }
             }
             "generate_series" | "range" => {
@@ -594,6 +595,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     },
                     named_params: vec![],
                     alias: None,
+                    sample: None,
                 }
             }
             _ => unreachable!(),

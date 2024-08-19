@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_arrow::arrow::array::Array;
@@ -39,8 +38,8 @@ use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
-use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::block_reader_deserialize::DeserializedArray;
@@ -168,7 +167,7 @@ impl BlockReader {
                         let meta = column_metas.get(&column_id).unwrap();
                         let (offset, len) = meta.offset_length();
                         let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                        cache.put(key.into(), Arc::new((array, size)))
+                        cache.insert(key.into(), (array, size));
                     }
                 }
             }
