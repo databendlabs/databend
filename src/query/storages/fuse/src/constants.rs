@@ -18,6 +18,8 @@ pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
 pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
 
+pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";
+
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_BLOCK_INDEX_PREFIX: &str = "_i";
 pub const FUSE_TBL_XOR_BLOOM_INDEX_PREFIX: &str = "_i_b_v2";
