@@ -4438,7 +4438,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
             if dictionary_id_seq == 0 {
-                return Ok(None);
+                return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                    UnknownDictionary::new(dictionary_ident.dict_name(), "drop_dictionary"),
+                )));
             }
 
             // delete dictionary id
@@ -4489,7 +4491,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
         if dictionary_id_seq == 0 {
-            return Ok(None);
+            return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                UnknownDictionary::new(dictionary_ident.dict_name(), "get_dictionary"),
+            )));
         }
 
         // Safe unwrap(): dictionary_meta_seq > 0 implies dictionary_meta is not None.

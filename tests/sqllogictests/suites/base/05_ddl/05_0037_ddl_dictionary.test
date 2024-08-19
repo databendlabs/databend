@@ -35,7 +35,7 @@ statement ok
 create dictionary d3(`a` int) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1'))
 
 statement ok
-create or replace dictionary d3(a int,b Varchar) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1'))
+create or replace dictionary d3(a int,b Varchar) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1')) comment 'comment'
 
 statement error 3116
 create dictionary d4(a int) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' name='dummy'))
@@ -43,20 +43,55 @@ create dictionary d4(a int) PRIMARY KEY a SOURCE(mysql(host='localhost' port='33
 statement ok
 create or replace dictionary d4(a Varchar) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1'))
 
-statement ok
+query TT
 show create dictionary d
+----
+d CREATE DICTIONARY d (
+  c1 INT NULL
+)
+PRIMARY KEY(c1)
+SOURCE(mysql
+(
+db='db1'  host='localhost'  password='****'  port='3306'  username='root' ))
 
-statement ok
+query TT
 show create dictionary d2
+----
+d2 CREATE DICTIONARY d2 (
+    a INT NULL, 
+    b INT NULL
+)
+PRIMARY KEY(a)
+SOURCE(mysql
+(
+db='db1' host='localhost' password='****' port='3306' username='root' ))
 
-statement ok
+query TT
 show create dictionary d3
+----
+d3 CREATE DICTIONARY d3 (
+   a INT NULL, 
+   b VARCHAR NULL
+)
+PRIMARY KEY(a)
+SOURCE(mysql
+(
+db='db1' host='localhost' password='****' port='3306' username='root' ))
+COMMENT 'comment'
 
-statement ok
+query TT
 show create dictionary d4
+----
+d4 CREATE DICTIONARY d4 (
+    a VARCHAR NULL
+)
+PRIMARY KEY(a)
+SOURCE(mysql
+(
+db='db1' host='localhost' password='****' port='3306' username='root' ))
 
-statement ok
-show create dictionary d
+statement error 3114
+show create dictionary test
 
 statement ok
 DROP DICTIONARY IF EXISTS d
@@ -70,17 +105,17 @@ DROP DICTIONARY IF EXISTS d3
 statement ok
 DROP DICTIONARY IF EXISTS d4
 
-statement ok
+statement error 3114
 drop dictionary test
 
 statement ok
 DROP DATABASE IF EXISTS db1
 
 statement ok
-DROP DATABASE IF EXISTS db2
-
-statement ok
 CREATE DATABASE db1
 
 statement ok
 CREATE DICTIONARY db1.test1(a int, b int) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1'))
+
+statement ok
+DROP DATABASE db1

@@ -63,7 +63,7 @@ impl Interpreter for DropDictionaryInterpreter {
             return Ok(PipelineBuildResult::create());
         } else {
             return Err(ErrorCode::UnknownDictionary(format!(
-                "Dictionary {} is unknown.",
+                "Unknown dictionary '{}'",
                 dict_name,
             )));
         }

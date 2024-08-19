@@ -184,17 +184,22 @@ impl ShowCreateDictionaryInterpreter {
         }
         // Append source options.
         {
-            dict_create_sql.push_str(&format!(") SOURCE({}\n", source));
+            dict_create_sql.push_str(&format!("SOURCE({}\n", source));
             dict_create_sql.push_str("(\n");
             for (key, value) in source_options {
-                dict_create_sql.push_str(&format!(" {}='{}'\n", key, value));
+                if key == "password" {
+                    dict_create_sql.push_str(&format!(" {}='****' ", key));
+                }
+                dict_create_sql.push_str(&format!(" {}='{}' ", key, value));
             }
             dict_create_sql.push_str("))\n")
         }
         // Append comment.
         {
-            dict_create_sql.push_str("COMMENT ");
-            dict_create_sql.push_str(&format!("'{}';", comment));
+            if comment.len() > 0 {
+                dict_create_sql.push_str("COMMENT ");
+                dict_create_sql.push_str(&format!("'{}';", comment));
+            }
         }
         Ok(dict_create_sql)
     }
