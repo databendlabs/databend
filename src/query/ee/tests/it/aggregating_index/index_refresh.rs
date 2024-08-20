@@ -82,7 +82,11 @@ async fn test_refresh_agg_index() -> Result<()> {
     let agg_index_path = find_agg_index_path(root, index_id)?.unwrap();
     let indexes = collect_file_names(&agg_index_path)?;
 
-    assert_eq!(blocks, indexes);
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes);
 
     // Check aggregating index is correct.
     {

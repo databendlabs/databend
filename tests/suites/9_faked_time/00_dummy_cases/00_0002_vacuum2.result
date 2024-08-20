@@ -5,7 +5,7 @@
 4
 <<<<
 >>>> select count(*) from fuse_snapshot('default','test_vacuum2')
-2
+1
 <<<<
 >>>> select * from test_vacuum2;
 3
