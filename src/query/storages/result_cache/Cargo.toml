@@ -13,7 +13,6 @@ test = true
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -23,7 +22,6 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sinks = { workspace = true }
-databend-common-pipeline-sources = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
