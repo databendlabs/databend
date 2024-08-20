@@ -174,11 +174,11 @@ impl<'a> Debug for ScalarRef<'a> {
                 let geom = geos
                     .to_ewkt(geos.srid())
                     .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
-                write!(f, "{geom}")
+                write!(f, "{geom:?}")
             }
             ScalarRef::Geography(v) => {
                 let ewkt = v.to_ewkt().unwrap_or_else(|e| format!("Invalid data: {e}"));
-                write!(f, "{ewkt}")
+                write!(f, "{ewkt:?}")
             }
         }
     }

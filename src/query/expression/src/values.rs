@@ -1157,6 +1157,7 @@ impl Column {
             Column::String(x) => x.check_valid(),
             Column::Variant(x) => x.check_valid(),
             Column::Geometry(x) => x.check_valid(),
+            Column::Geography(x) => x.check_valid(),
             Column::Bitmap(x) => x.check_valid(),
             Column::Map(x) => {
                 for y in x.iter() {
@@ -1334,10 +1335,12 @@ impl Column {
                 GeometryType::from_data(data)
             }
             DataType::Geography => {
+                use crate::types::geography;
+
                 let mut builder = GeographyType::create_builder(len, &[]);
                 for _ in 0..len {
-                    let lon = rng.gen_range(-180.0..=180.0);
-                    let lat = rng.gen_range(-90.0..=90.0);
+                    let lon = rng.gen_range(geography::LONGITUDE_MIN..=geography::LONGITUDE_MAX);
+                    let lat = rng.gen_range(geography::LATITUDE_MIN..=geography::LATITUDE_MAX);
                     builder.put_slice(&GeographyType::point(lon, lat).0);
                     builder.commit_row()
                 }

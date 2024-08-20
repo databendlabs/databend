@@ -20,10 +20,10 @@ use scroll::IOwrite;
 
 const WKB_XDR: u8 = 0;
 const WKB_NDR: u8 = 1;
-const WKB_Z: u32 = 0x80000000;
-const WKB_M: u32 = 0x40000000;
-const WKB_SRID: u32 = 0x20000000;
-const WKB_TYPE_MASK: u32 = 7;
+const WKB_Z: u32 = 0x8000_0000;
+const WKB_M: u32 = 0x4000_0000;
+const WKB_SRID: u32 = 0x2000_0000;
+const WKB_TYPE_MASK: u32 = 0xFF;
 
 pub fn read_wkb_header(mut raw: &[u8]) -> Result<WkbInfo, String> {
     let byte_order = raw.ioread::<u8>().map_err(|e| e.to_string())?;

@@ -27,6 +27,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "st_makepoint",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<NumberType<F64>,NumberType<F64>,GeographyType> (|lon,lat,builder,ctx|{
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
             if let Err(e) = GeographyType::check_point(*lon, *lat) {
                 ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                 builder.commit_row()

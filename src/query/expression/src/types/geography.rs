@@ -18,8 +18,10 @@ use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_exception::Result;
 use databend_common_geo::read_wkb_header;
 use databend_common_geo::wkb::make_point;
+pub use databend_common_geo::wkb::WkbInfo;
 use geozero::wkb::Ewkb;
 use geozero::ToWkt;
 use serde::Deserialize;
@@ -76,6 +78,11 @@ impl<'a> GeographyRef<'a> {
     pub fn to_ewkt(&self) -> Result<String, String> {
         let info = read_wkb_header(self.0)?;
         Ewkb(self.0).to_ewkt(info.srid).map_err(|e| e.to_string())
+    }
+
+    pub fn info(&self) -> WkbInfo {
+        assert!(!self.0.is_empty(), "null geography");
+        read_wkb_header(self.0).unwrap()
     }
 }
 
@@ -287,6 +294,10 @@ impl GeographyColumn {
             offsets: self.0.offsets.windows(2),
             _t: std::marker::PhantomData,
         }
+    }
+
+    pub fn check_valid(&self) -> Result<()> {
+        self.0.check_valid()
     }
 }
 
