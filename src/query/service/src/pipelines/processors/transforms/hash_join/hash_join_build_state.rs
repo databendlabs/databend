@@ -223,8 +223,6 @@ impl HashJoinBuildState {
             .row_space
             .buffer_row_size
             .fetch_add(input_rows, Ordering::Relaxed);
-
-        self.merge_into_try_build_block_info_index(input.clone(), old_size);
         buffer.push(input);
 
         if old_size + input_rows < self.chunk_size_limit {
@@ -234,7 +232,7 @@ impl HashJoinBuildState {
         let data_block = DataBlock::concat(buffer.as_slice())?;
         buffer.clear();
         drop(buffer);
-        
+
         // We have acquired the lock, so we can use Ordering::Relaxed here.
         self.hash_join_state
             .row_space
