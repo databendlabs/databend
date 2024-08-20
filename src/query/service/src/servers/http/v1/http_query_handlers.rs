@@ -43,6 +43,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
@@ -68,23 +69,6 @@ pub fn make_final_uri(query_id: &str) -> String {
 
 pub fn make_kill_uri(query_id: &str) -> String {
     format!("/v1/query/{}/kill", query_id)
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct QueryError {
-    pub code: u16,
-    pub message: String,
-    pub detail: String,
-}
-
-impl QueryError {
-    pub(crate) fn from_error_code(e: ErrorCode) -> Self {
-        QueryError {
-            code: e.code(),
-            message: e.display_text(),
-            detail: e.detail(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

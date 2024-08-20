@@ -1,4 +1,5 @@
 ---- do_login()
+200
 ['refresh_token',
  'refresh_token_validity_in_secs',
  'session_id',
@@ -6,39 +7,58 @@
  'version']
 14400
 ---- do_query('select 1',)
+200
 [['1']]
 ---- do_query('select 2',)
-{'code': '401', 'message': 'jwt auth not configured.'}
+401
+{'code': 1051, 'detail': '', 'message': 'jwt auth not configured.'}
 ---- do_query('select 3',)
-{'code': '500',
+500
+{'code': 1001,
+ 'detail': '',
  'message': 'fail to decode token(base64 decode error: Invalid padding): '
             'bend-v1-xxx'}
 ---- do_query('select 4',)
-{'code': '401', 'message': 'session token expired'}
+401
+{'code': 5100, 'detail': '', 'message': 'session token expired'}
 ---- do_query('select 5',)
-{'code': '401', 'message': 'session token not found'}
+401
+{'code': 5102, 'detail': '', 'message': 'session token not found'}
 ---- do_renew(1,)
+200
 ['refresh_token', 'refresh_token_validity_in_secs', 'session_token']
 14400
 ---- do_query('select 6',)
+200
 [['6']]
 ---- do_query('select 7',)
+200
 [['7']]
 ---- do_renew(2,)
-{'code': '401', 'message': 'jwt auth not configured.'}
+401
+{'code': 1051, 'detail': '', 'message': 'jwt auth not configured.'}
 ---- do_renew(3,)
-{'code': '500',
+500
+{'code': 1001,
+ 'detail': '',
  'message': 'fail to decode token(base64 decode error: Invalid padding): '
             'bend-v1-xxx'}
 ---- do_renew(4,)
-{'code': '401', 'message': 'refresh token expired'}
+401
+{'code': 5101, 'detail': '', 'message': 'refresh token expired'}
 ---- do_renew(5,)
-{'code': '401', 'message': 'refresh token not found'}
+401
+{'code': 5103, 'detail': '', 'message': 'refresh token not found'}
 ---- do_renew(6,)
+200
 ---- do_logout(0,)
-{'code': '401', 'message': 'session token not found'}
+401
+{'code': 5102, 'detail': '', 'message': 'session token not found'}
 ---- do_logout(1,)
+200
 ---- do_query("select 'after logout'",)
-{'code': '401', 'message': 'session token not found'}
+401
+{'code': 5102, 'detail': '', 'message': 'session token not found'}
 ---- do_renew('after_logout',)
-{'code': '401', 'message': 'refresh token not found'}
+401
+{'code': 5103, 'detail': '', 'message': 'refresh token not found'}

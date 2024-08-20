@@ -17,9 +17,9 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
 
+use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::v1::QueryError;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct LogoutResponse {

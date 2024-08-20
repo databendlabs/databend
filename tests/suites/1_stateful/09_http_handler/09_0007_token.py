@@ -19,6 +19,8 @@ def print_error(func):
     def wrapper(*args, **kwargs):
         print(f"---- {func.__name__}{args[:1]}")
         resp = func(*args, **kwargs)
+        print(resp.status_code)
+        resp = resp.json()
         err = resp.get("error")
         if err:
             pprint(err)
@@ -36,7 +38,7 @@ def do_login():
         headers={"Content-Type": "application/json"},
         json=payload,
     )
-    return response.json()
+    return response
 
 
 @print_error
@@ -45,7 +47,7 @@ def do_logout(_case_id, session_token):
         logout_url,
         headers={"Authorization": f"Bearer {session_token}"},
     )
-    return response.json()
+    return response
 
 
 @print_error
@@ -59,7 +61,7 @@ def do_renew(_case_id, refresh_token, session_token):
         },
         json=payload,
     )
-    return response.json()
+    return response
 
 
 @print_error
@@ -73,7 +75,7 @@ def do_query(query, session_token):
         },
         json=query_payload,
     )
-    return response.json()
+    return response
 
 
 def fake_expired_token():

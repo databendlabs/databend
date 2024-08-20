@@ -45,10 +45,10 @@ use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
-use poem::error::Error as PoemError;
+use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::Addr;
-use poem::Body;
 use poem::Endpoint;
 use poem::IntoResponse;
 use poem::Middleware;
@@ -60,6 +60,9 @@ use super::v1::HttpQueryContext;
 use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
+use crate::servers::http::error::JsonErrorCode;
+use crate::servers::http::error::JsonErrorOnly;
+use crate::servers::http::error::QueryError;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -376,35 +379,23 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     req.extensions_mut().insert(ctx);
                     self.ep.call(req).await.map(|v| v.into_response())
                 }
-                Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE
-                    | ErrorCode::SESSION_TOKEN_EXPIRED
-                    | ErrorCode::SESSION_TOKEN_NOT_FOUND
-                    | ErrorCode::REFRESH_TOKEN_EXPIRED
-                    | ErrorCode::REFRESH_TOKEN_NOT_FOUND
-                    | ErrorCode::UNKNOWN_USER => {
+                Err(err) => {
+                    let err = JsonErrorCode(err);
+                    if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
-                        Err(PoemError::from_string(
-                            err.message(),
-                            StatusCode::UNAUTHORIZED,
-                        ))
-                    }
-                    _ => {
+                    } else {
                         error!(
                             "http request err: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
-                        Err(PoemError::from_string(
-                            err.message(),
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                        ))
                     }
-                },
+                    Ok(err.as_response())
+                }
             }
         })
         .await
@@ -490,22 +481,19 @@ impl poem::middleware::PanicHandler for PanicHandler {
     }
 }
 pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
-    let res = next.call(req).await;
-
-    match res {
-        Ok(resp) => {
-            let resp = resp.into_response();
-            Ok(resp)
-        }
-        Err(err) => {
-            let body = Body::from_json(serde_json::json!({
-                "error": {
-                    "code": err.status().as_str(),
-                    "message": err.to_string(),
-                }
-            }))
-            .unwrap();
-            Ok(Response::builder().status(err.status()).body(body))
-        }
-    }
+    let resp = match next.call(req).await {
+        Ok(resp) => resp.into_response(),
+        Err(err) => (
+            err.status(),
+            Json(JsonErrorOnly {
+                error: QueryError {
+                    code: err.status().as_u16(),
+                    message: err.to_string(),
+                    detail: "".to_string(),
+                },
+            }),
+        )
+            .into_response(),
+    };
+    Ok(resp)
 }
