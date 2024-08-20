@@ -46,12 +46,12 @@ create or replace dictionary d4(a Varchar, b int) PRIMARY KEY a SOURCE(mysql(hos
 query TT
 show create dictionary d
 ----
-d CREATE DICTIONARY d ( c1 INT NULL, c2 VARCHAR NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1 host='localhost password='****' port='3306 username='root))
+d CREATE DICTIONARY d ( c1 INT NULL, c2 VARCHAR NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' username='root'))
 
 query TT
 show create dictionary d3
 ----
-d3 CREATE DICTIONARY d3 ( a INT NULL, b VARCHAR NULL ) PRIMARY KEY a SOURCE(mysql(db='db1 host='localhost password='****' port='3306 username='root)) COMMENT 'comment'
+d3 CREATE DICTIONARY d3 ( a INT NULL, b VARCHAR NULL ) PRIMARY KEY a SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' username='root')) COMMENT 'comment'
 
 statement error 3114
 show create dictionary test

@@ -170,7 +170,7 @@ impl ShowCreateDictionaryInterpreter {
                 if key == "password" {
                     show_options.push(format!("{}='[HIDDEN]'", key));
                 } else {
-                    show_options.push(format!("{}='{}", key, value));
+                    show_options.push(format!("{}='{}'", key, value));
                 }
             }
             let res: String = show_options.join(" ");
