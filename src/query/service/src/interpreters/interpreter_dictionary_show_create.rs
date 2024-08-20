@@ -120,7 +120,7 @@ impl ShowCreateDictionaryInterpreter {
         // Append columns and indexes.
         {
             let mut create_defs = vec![];
-            for (_idx, field) in schema.fields().iter().enumerate() {
+            for field in schema.fields().iter() {
                 let nullable = if field.is_nullable() {
                     " NULL".to_string()
                 } else {
@@ -153,21 +153,22 @@ impl ShowCreateDictionaryInterpreter {
                 let field = schema.field_of_column_id(pk_id)?;
                 primary_names.push(field.name());
             }
-            let res: String = primary_names.iter()
+            let res: String = primary_names
+                .iter()
                 .map(|s| s.as_ref())
                 .collect::<Vec<&str>>()
                 .join(",");
             dict_create_sql.push_str(&res);
-            dict_create_sql.push_str("\n");
+            dict_create_sql.push('\n');
         }
         // Append source options.
         {
             dict_create_sql.push_str(&format!("SOURCE({}", source));
-            dict_create_sql.push_str("(");
+            dict_create_sql.push('(');
             let mut show_options = Vec::new();
             for (key, value) in source_options {
                 if key == "password" {
-                    show_options.push(format!("{}='****'", key));
+                    show_options.push(format!("{}='[HIDDEN]'", key));
                 } else {
                     show_options.push(format!("{}='{}", key, value));
                 }

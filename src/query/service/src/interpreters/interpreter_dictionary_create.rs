@@ -70,7 +70,7 @@ impl Interpreter for CreateDictionaryInterpreter {
             match self.plan.create_option {
                 CreateOption::Create => {
                     return Err(ErrorCode::DictionaryAlreadyExists(format!(
-                        "Dictionary {} already exists.",
+                        "Dictionary {} already exists",
                         self.plan.dictionary,
                     )));
                 }
