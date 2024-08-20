@@ -684,7 +684,7 @@ impl Catalog for MutableCatalog {
         let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await?;
         if reply.is_none() {
             return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown Dictionary {}.",
+                "Unknown Dictionary {}",
                 dict_ident.dict_name()
             )));
         }
@@ -699,7 +699,7 @@ impl Catalog for MutableCatalog {
         let reply = self.ctx.meta.get_dictionary(req.clone()).await?;
         if reply.is_none() {
             return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown Dictionary {}.",
+                "Unknown Dictionary {}",
                 req.dict_name()
             )));
         }

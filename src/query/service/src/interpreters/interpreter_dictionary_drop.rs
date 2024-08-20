@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::reply;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_sql::plans::DropDictionaryPlan;
@@ -57,15 +58,22 @@ impl Interpreter for DropDictionaryInterpreter {
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
-        let reply = catalog.drop_dictionary(dict_ident.clone()).await?;
-
-        if reply.is_some() || self.plan.if_exists {
+        let reply = catalog.drop_dictionary(dict_ident.clone()).await;
+        if self.plan.if_exists || reply?.is_some() {
             return Ok(PipelineBuildResult::create());
         } else {
             return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown dictionary {}.",
+                "Unknown dictionary {}",
                 dict_name
             )));
         }
+        // if reply.is_some() || self.plan.if_exists {
+        //     return Ok(PipelineBuildResult::create());
+        // } else {
+        //     return Err(ErrorCode::UnknownDictionary(format!(
+        //         "Unknown dictionary {}",
+        //         dict_name
+        //     )));
+        // }
     }
 }

@@ -20,10 +20,8 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
 use databend_common_expression::Value;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -108,7 +106,6 @@ impl ShowCreateDictionaryInterpreter {
         let sql_dialect = settings.sql_dialect;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let schema = dictionary.schema.clone();
-        let n_fields = schema.fields().len();
         let source = dictionary.source.clone();
         let source_options = dictionary.options.clone();
         let comment = dictionary.comment.clone();
@@ -116,14 +113,14 @@ impl ShowCreateDictionaryInterpreter {
         let field_comments = dictionary.field_comments.clone();
 
         let mut dict_create_sql = format!(
-            "CREATE DICTIONARY {}\n(",
+            "CREATE DICTIONARY {}\n(\n",
             display_ident(dict_name, quoted_ident_case_sensitive, sql_dialect)
         );
 
         // Append columns and indexes.
         {
             let mut create_defs = vec![];
-            for (idx, field) in schema.fields().iter().enumerate() {
+            for (_idx, field) in schema.fields().iter().enumerate() {
                 let nullable = if field.is_nullable() {
                     " NULL".to_string()
                 } else {
@@ -151,21 +148,23 @@ impl ShowCreateDictionaryInterpreter {
         // Append primary keys.
         {
             dict_create_sql.push_str(")\nPRIMARY KEY ");
-            let primary_names = Vec::new();
-            let fields = schema.fields.clone();
+            let mut primary_names = Vec::new();
             for pk_id in pk_id_list {
                 let field = schema.field_of_column_id(pk_id)?;
                 primary_names.push(field.name());
             }
-            let res: String = primary_names.join(",");
-            dict_create_sql.push_str(&pk_names);
+            let res: String = primary_names.iter()
+                .map(|s| s.as_ref())
+                .collect::<Vec<&str>>()
+                .join(",");
+            dict_create_sql.push_str(&res);
             dict_create_sql.push_str("\n");
         }
         // Append source options.
         {
             dict_create_sql.push_str(&format!("SOURCE({}", source));
             dict_create_sql.push_str("(");
-            let show_options = Vec::new();
+            let mut show_options = Vec::new();
             for (key, value) in source_options {
                 if key == "password" {
                     show_options.push(format!("{}='****'", key));
@@ -181,7 +180,7 @@ impl ShowCreateDictionaryInterpreter {
         {
             if !comment.is_empty() {
                 dict_create_sql.push_str("COMMENT ");
-                dict_create_sql.push_str(&format!("'{}';", comment));
+                dict_create_sql.push_str(&format!("'{}'", comment));
             }
         }
         Ok(dict_create_sql)
