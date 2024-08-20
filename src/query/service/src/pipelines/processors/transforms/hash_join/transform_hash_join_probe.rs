@@ -405,7 +405,7 @@ impl Processor for TransformHashJoinProbe {
                     .join_probe_state
                     .hash_join_state
                     .is_spill_happened
-                    .load(Ordering::Relaxed);
+                    .load(Ordering::Acquire);
                 self.is_build_finished = true;
             }
             Step::Async(AsyncStep::WaitProbe) => {
@@ -431,7 +431,7 @@ impl Processor for TransformHashJoinProbe {
                     .join_probe_state
                     .hash_join_state
                     .partition_id
-                    .load(Ordering::Relaxed);
+                    .load(Ordering::Acquire);
                 build_spilled_partitions.insert(next_partition_id_to_restore);
                 let unspilled_data_blocks = self
                     .spiller
@@ -512,12 +512,12 @@ impl TransformHashJoinProbe {
         let old_count = self
             .join_probe_state
             .wait_probe_counter
-            .fetch_sub(1, Ordering::Relaxed);
+            .fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
             self.join_probe_state
                 .hash_join_state
                 .need_next_round
-                .store(false, Ordering::Relaxed);
+                .store(false, Ordering::Release);
             self.join_probe_state
                 .hash_join_state
                 .continue_build_watcher
@@ -588,7 +588,7 @@ impl TransformHashJoinProbe {
             .join_probe_state
             .hash_join_state
             .need_next_round
-            .load(Ordering::Relaxed)
+            .load(Ordering::Acquire)
         {
             self.next_step(Step::Async(AsyncStep::NextRound))
         } else {
@@ -600,7 +600,7 @@ impl TransformHashJoinProbe {
         if self
             .join_probe_state
             .next_round_counter
-            .fetch_sub(1, Ordering::Relaxed)
+            .fetch_sub(1, Ordering::AcqRel)
             == 1
         {
             self.join_probe_state
@@ -610,10 +610,10 @@ impl TransformHashJoinProbe {
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
             self.join_probe_state
                 .wait_probe_counter
-                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
+                .store(self.join_probe_state.processor_count, Ordering::Release);
             self.join_probe_state
                 .next_round_counter
-                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
+                .store(self.join_probe_state.processor_count, Ordering::Release);
             self.join_probe_state
                 .hash_join_state
                 .continue_build_watcher
@@ -624,7 +624,7 @@ impl TransformHashJoinProbe {
             .join_probe_state
             .hash_join_state
             .partition_id
-            .load(Ordering::Relaxed);
+            .load(Ordering::Acquire);
         Ok(())
     }
 

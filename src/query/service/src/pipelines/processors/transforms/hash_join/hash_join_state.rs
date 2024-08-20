@@ -152,7 +152,7 @@ impl HashJoinState {
         };
         let (build_watcher, _build_done_dummy_receiver) = watch::channel(HashTableType::UnFinished);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
-        
+
         let settings = ctx.get_settings();
         let enable_spill = settings.get_join_spilling_memory_ratio()? != 0;
         let spill_partition_bits = settings.get_join_spilling_partition_bits()?;
@@ -299,6 +299,6 @@ impl HashJoinState {
     }
 
     pub fn next_cache_block_index(&self) -> usize {
-        self.next_cache_block_index.fetch_add(1, Ordering::Relaxed)
+        self.next_cache_block_index.fetch_add(1, Ordering::AcqRel)
     }
 }

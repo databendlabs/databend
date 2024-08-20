@@ -253,7 +253,7 @@ impl HashJoinProbeState {
         }
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
 
-        if self.hash_join_state.fast_return.load(Ordering::Relaxed)
+        if self.hash_join_state.fast_return.load(Ordering::Acquire)
             && matches!(
                 self.hash_join_state.hash_join_desc.join_type,
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
@@ -373,12 +373,12 @@ impl HashJoinProbeState {
     }
 
     pub fn probe_attach(&self) {
-        self.wait_probe_counter.fetch_add(1, Ordering::Relaxed);
-        self.next_round_counter.fetch_add(1, Ordering::Relaxed);
+        self.wait_probe_counter.fetch_add(1, Ordering::AcqRel);
+        self.next_round_counter.fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn probe_done(&self) -> Result<()> {
-        let old_count = self.wait_probe_counter.fetch_sub(1, Ordering::Relaxed);
+        let old_count = self.wait_probe_counter.fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;

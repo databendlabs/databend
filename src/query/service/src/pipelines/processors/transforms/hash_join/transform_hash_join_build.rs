@@ -130,7 +130,8 @@ impl TransformHashJoinBuild {
             true,
         )?;
 
-        // Spill settings
+        // Spill settings.
+        let enable_spill = build_state.hash_join_state.enable_spill;
         let global_memory_threshold = build_state.global_memory_threshold;
         let processor_memory_threshold = build_state.processor_memory_threshold;
 
@@ -147,7 +148,7 @@ impl TransformHashJoinBuild {
             is_finalize_finished: false,
             is_from_restore: false,
             spiller,
-            enable_spill: build_state.hash_join_state.enable_spill,
+            enable_spill,
             global_memory_threshold,
             processor_memory_threshold,
             step: Step::Sync(SyncStep::Collect),
@@ -290,7 +291,7 @@ impl Processor for TransformHashJoinBuild {
                     .build_state
                     .hash_join_state
                     .is_spill_happened
-                    .load(Ordering::Relaxed);
+                    .load(Ordering::Acquire);
             }
             Step::Async(AsyncStep::WaitCollect) => {
                 if !self.is_spilled_partitions_added {
@@ -310,7 +311,7 @@ impl Processor for TransformHashJoinBuild {
                 self.build_state
                     .hash_join_state
                     .is_spill_happened
-                    .store(true, Ordering::Relaxed);
+                    .store(true, Ordering::Release);
                 self.data_blocks.clear();
                 self.data_blocks_memory_size = 0;
             }
@@ -362,7 +363,7 @@ impl TransformHashJoinBuild {
         self.build_state
             .hash_join_state
             .fast_return
-            .load(Ordering::Relaxed)
+            .load(Ordering::Acquire)
     }
 
     fn is_finalize_finished(&self) -> bool {
@@ -377,21 +378,21 @@ impl TransformHashJoinBuild {
         self.build_state
             .hash_join_state
             .partition_id
-            .load(Ordering::Relaxed)
+            .load(Ordering::Acquire)
     }
 
     fn set_need_next_round(&self) {
         self.build_state
             .hash_join_state
             .need_next_round
-            .store(true, Ordering::Relaxed);
+            .store(true, Ordering::Release);
     }
 
     fn need_next_round(&self) -> bool {
         self.build_state
             .hash_join_state
             .need_next_round
-            .load(Ordering::Relaxed)
+            .load(Ordering::Acquire)
     }
 
     fn has_unrestored_data(&self) -> bool {
@@ -425,13 +426,13 @@ impl TransformHashJoinBuild {
         if self
             .build_state
             .next_round_counter
-            .fetch_sub(1, Ordering::Acquire)
+            .fetch_sub(1, Ordering::AcqRel)
             == 1
         {
             self.build_state
                 .hash_join_state
                 .need_next_round
-                .store(false, Ordering::Relaxed);
+                .store(false, Ordering::Release);
             // Before build processors into `WaitProbe` state, set the channel message to false.
             // Then after all probe processors are ready, the last one will send true to channel and wake up all build processors.
             self.build_state
@@ -439,16 +440,16 @@ impl TransformHashJoinBuild {
                 .continue_build_watcher
                 .send(false)
                 .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
-            let worker_num = self.build_state.build_worker_num.load(Ordering::Relaxed) as usize;
+            let worker_num = self.build_state.build_worker_num.load(Ordering::Acquire) as usize;
             self.build_state
                 .collect_counter
-                .store(worker_num, Ordering::Relaxed);
+                .store(worker_num, Ordering::Release);
             self.build_state
                 .finalize_counter
-                .store(worker_num, Ordering::Relaxed);
+                .store(worker_num, Ordering::Release);
             self.build_state
                 .next_round_counter
-                .store(worker_num, Ordering::Relaxed);
+                .store(worker_num, Ordering::Release);
             self.build_state.hash_join_state.reset();
         }
         Ok(())

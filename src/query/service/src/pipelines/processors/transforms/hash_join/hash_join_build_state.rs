@@ -221,7 +221,7 @@ impl HashJoinBuildState {
             .hash_join_state
             .row_space
             .buffer_row_size
-            .fetch_add(input_rows, Ordering::Relaxed);
+            .fetch_add(input_rows, Ordering::AcqRel);
 
         self.merge_into_try_build_block_info_index(input.clone(), old_size);
         buffer.push(input);
@@ -235,7 +235,7 @@ impl HashJoinBuildState {
         self.hash_join_state
             .row_space
             .buffer_row_size
-            .store(0, Ordering::Relaxed);
+            .store(0, Ordering::Release);
         drop(buffer);
         self.add_build_block(data_block)
     }
@@ -284,16 +284,16 @@ impl HashJoinBuildState {
 
     /// Attach to state: `collect_counter` and `finalize_counter`.
     pub fn build_attach(&self) {
-        self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        self.collect_counter.fetch_add(1, Ordering::Relaxed);
-        self.finalize_counter.fetch_add(1, Ordering::Relaxed);
-        self.next_round_counter.fetch_add(1, Ordering::Relaxed);
+        self.build_worker_num.fetch_add(1, Ordering::AcqRel);
+        self.collect_counter.fetch_add(1, Ordering::AcqRel);
+        self.finalize_counter.fetch_add(1, Ordering::AcqRel);
+        self.next_round_counter.fetch_add(1, Ordering::AcqRel);
     }
 
     /// Detach to state: `collect_counter`,
     /// create finalize task and initialize the hash table.
     pub(crate) fn collect_done(&self) -> Result<()> {
-        let old_count = self.collect_counter.fetch_sub(1, Ordering::Relaxed);
+        let old_count = self.collect_counter.fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
@@ -320,11 +320,11 @@ impl HashJoinBuildState {
                 && !self
                     .hash_join_state
                     .is_spill_happened
-                    .load(Ordering::Relaxed)
+                    .load(Ordering::Acquire)
             {
                 self.hash_join_state
                     .fast_return
-                    .store(true, Ordering::Relaxed);
+                    .store(true, Ordering::Release);
                 self.hash_join_state
                     .build_watcher
                     .send(HashTableType::Empty)
@@ -352,75 +352,68 @@ impl HashJoinBuildState {
             self.generate_finalize_task()?;
 
             // Create a fixed size hash table.
-            let hashjoin_hashtable = match self.method.clone() {
-                HashMethodKind::Serializer(_) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
+            let (hash_join_hash_table, entry_size) = match self.method.clone() {
+                HashMethodKind::Serializer(_) => (
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
                         hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSerializer::default(),
-                    })
-                }
-                HashMethodKind::SingleBinary(_) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<StringRawEntry>(),
+                ),
+                HashMethodKind::SingleBinary(_) => (
                     HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable {
                         hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         hash_method: HashMethodSingleBinary::default(),
-                    })
-                }
-                HashMethodKind::KeysU8(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u8>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<StringRawEntry>(),
+                ),
+                HashMethodKind::KeysU8(hash_method) => (
                     HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU16(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u16>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u8>>(),
+                ),
+                HashMethodKind::KeysU16(hash_method) => (
                     HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU32(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u32>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u16>>(),
+                ),
+                HashMethodKind::KeysU32(hash_method) => (
                     HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU64(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u64>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u32>>(),
+                ),
+                HashMethodKind::KeysU64(hash_method) => (
                     HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU128(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<u128>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u64>>(),
+                ),
+                HashMethodKind::KeysU128(hash_method) => (
                     HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
-                HashMethodKind::KeysU256(hash_method) => {
-                    self.entry_size
-                        .store(std::mem::size_of::<RawEntry<U256>>(), Ordering::SeqCst);
+                    }),
+                    std::mem::size_of::<RawEntry<u128>>(),
+                ),
+                HashMethodKind::KeysU256(hash_method) => (
                     HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
-                }
+                    }),
+                    std::mem::size_of::<RawEntry<U256>>(),
+                ),
                 HashMethodKind::DictionarySerializer(_) => unimplemented!(),
             };
-            let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
-            *hashtable = hashjoin_hashtable;
+            self.entry_size.store(entry_size, Ordering::Release);
+            let hash_table = unsafe { &mut *self.hash_join_state.hash_table.get() };
+            *hash_table = hash_join_hash_table;
             self.merge_into_try_generate_matched_memory();
         }
         Ok(())
@@ -442,7 +435,7 @@ impl HashJoinBuildState {
 
     /// Get the finalize task and using the `chunks` in `hash_join_state.row_space` to build hash table in parallel.
     pub(crate) fn finalize(&self, task: usize) -> Result<()> {
-        let entry_size = self.entry_size.load(Ordering::Relaxed);
+        let entry_size = self.entry_size.load(Ordering::Acquire);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
@@ -815,9 +808,9 @@ impl HashJoinBuildState {
 
     /// Detach to state: `finalize_counter`.
     pub(crate) fn finalize_done(&self, hash_table_type: HashTableType) -> Result<()> {
-        if self.finalize_counter.fetch_sub(1, Ordering::Relaxed) == 1 {
+        if self.finalize_counter.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.build_generation_state();
-            if self.hash_join_state.need_next_round.load(Ordering::Relaxed) {
+            if self.hash_join_state.need_next_round.load(Ordering::Acquire) {
                 let partition_id = if self.join_type() != JoinType::Cross {
                     // If build side has spilled data, we need to wait build side to next round.
                     // Set partition id to `HashJoinState`
@@ -830,11 +823,8 @@ impl HashJoinBuildState {
                 };
                 self.hash_join_state
                     .partition_id
-                    .store(partition_id, Ordering::Relaxed);
-                info!(
-                    "next partition to read: {:?}, final probe done",
-                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
-                );
+                    .store(partition_id, Ordering::Release);
+                info!("next partition to read: {:?}, finalize done", partition_id);
             }
             self.hash_join_state
                 .build_watcher
