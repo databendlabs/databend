@@ -1171,7 +1171,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
             })?;
             let index_id = deserialize_u64(&seq.data)?;
-            id_name_list.push((index_id.0, name_ident.index_name().to_string()));
+            id_name_list.push((*index_id, name_ident.index_name().to_string()));
         }
 
         debug!(ident = prefix_key; "list_indexes");
@@ -1216,7 +1216,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
             })?;
             let index_id = deserialize_u64(&seq.data)?;
-            id_name_list.push((index_id.0, name_ident.index_name().to_string()));
+            id_name_list.push((*index_id, name_ident.index_name().to_string()));
         }
 
         debug!(ident :% =(&prefix); "list_indexes");
@@ -1255,7 +1255,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
             })?;
             let index_id = deserialize_u64(&seq.data)?;
-            id_name_list.push((index_id.0, name_ident.index_name().to_string()));
+            id_name_list.push((*index_id, name_ident.index_name().to_string()));
         }
 
         debug!(ident :% =(&prefix); "list_indexes");
@@ -5654,7 +5654,7 @@ async fn gc_dropped_table_index(
             KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
         })?;
         let index_id = deserialize_u64(&seq.data)?;
-        id_name_list.push((index_id.0, name_ident.index_name().to_string()));
+        id_name_list.push((*index_id, name_ident.index_name().to_string()));
     }
 
     if id_name_list.is_empty() {

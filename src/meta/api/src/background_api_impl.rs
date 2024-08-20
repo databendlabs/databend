@@ -222,7 +222,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
             let job_id = deserialize_u64(&v.data)?;
 
-            let req = BackgroundJobIdIdent::new(&req.tenant, job_id.0);
+            let req = BackgroundJobIdIdent::new(&req.tenant, *job_id);
             let seq_info = self.get_pb(&req).await?;
 
             // filter none and get the task info
