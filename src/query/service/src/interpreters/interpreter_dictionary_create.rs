@@ -56,11 +56,6 @@ impl Interpreter for CreateDictionaryInterpreter {
         let tenant = &self.plan.tenant;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        let _req = ListDictionaryReq {
-            tenant: self.plan.tenant.clone(),
-            db_id: self.plan.database_id,
-        };
-
         let dictionary_meta = self.plan.meta.clone();
         let dict_ident =
             DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());

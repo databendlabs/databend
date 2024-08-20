@@ -116,7 +116,7 @@ impl ShowCreateDictionaryInterpreter {
         let field_comments = dictionary.field_comments.clone();
 
         let mut dict_create_sql = format!(
-            "CREATE DICTIONARY {} (\n",
+            "CREATE DICTIONARY {}\n(",
             display_ident(dict_name, quoted_ident_case_sensitive, sql_dialect)
         );
 
@@ -129,38 +129,16 @@ impl ShowCreateDictionaryInterpreter {
                 } else {
                     " NOT NULL".to_string()
                 };
-                let default_expr = match field.default_expr() {
-                    Some(expr) => {
-                        format!(" DEFAULT {expr}")
-                    }
-                    None => "".to_string(),
-                };
-                let computed_expr = match field.computed_expr() {
-                    Some(ComputedExpr::Virtual(expr)) => {
-                        format!(" AS ({expr}) VIRTUAL")
-                    }
-                    Some(ComputedExpr::Stored(expr)) => {
-                        format!(" AS ({expr}) STORED")
-                    }
-                    _ => "".to_string(),
-                };
                 // compatibility: creating table in the old planner will not have `fields_comments`
-                let comment = if field_comments.len() == n_fields
-                    && !field_comments[&(idx as u32)].is_empty()
-                {
-                    // make the display more readable.
-                    // can not use debug print, will add double quote
-                    format!(" COMMENT '{}'", comment.as_str(),)
-                } else {
-                    "".to_string()
-                };
+                let comment = field_comments
+                    .get(&field.column_id)
+                    .and_then(|c| format!(" COMMENT '{}'", c).into())
+                    .unwrap_or_default();
                 let column_str = format!(
-                    "  {} {}{}{}{}{}",
+                    "  {} {}{}{}",
                     display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
                     field.data_type().remove_recursive_nullable().sql_name(),
                     nullable,
-                    default_expr,
-                    computed_expr,
                     comment
                 );
 
@@ -172,28 +150,32 @@ impl ShowCreateDictionaryInterpreter {
         }
         // Append primary keys.
         {
-            dict_create_sql.push_str(")\nPRIMARY KEY(");
+            dict_create_sql.push_str(")\nPRIMARY KEY ");
+            let primary_names = Vec::new();
             let fields = schema.fields.clone();
             for pk_id in pk_id_list {
-                let field: &TableField = &fields[pk_id as usize];
-                let name = field.name.clone();
-                dict_create_sql.push_str(&format!("{},", name));
+                let field = schema.field_of_column_id(pk_id)?;
+                primary_names.push(field.name());
             }
-            dict_create_sql.pop();
-            dict_create_sql.push_str(")\n");
+            let res: String = primary_names.join(",");
+            dict_create_sql.push_str(&pk_names);
+            dict_create_sql.push_str("\n");
         }
         // Append source options.
         {
-            dict_create_sql.push_str(&format!("SOURCE({}\n", source));
-            dict_create_sql.push_str("(\n");
+            dict_create_sql.push_str(&format!("SOURCE({}", source));
+            dict_create_sql.push_str("(");
+            let show_options = Vec::new();
             for (key, value) in source_options {
                 if key == "password" {
-                    dict_create_sql.push_str(&format!(" {}='****' ", key));
+                    show_options.push(format!("{}='****'", key));
                 } else {
-                    dict_create_sql.push_str(&format!(" {}='{}' ", key, value));
+                    show_options.push(format!("{}='{}", key, value));
                 }
             }
-            dict_create_sql.push_str("))\n")
+            let res: String = show_options.join(" ");
+            dict_create_sql.push_str(&res);
+            dict_create_sql.push_str("))\n");
         }
         // Append comment.
         {

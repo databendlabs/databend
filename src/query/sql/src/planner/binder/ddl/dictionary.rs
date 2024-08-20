@@ -92,7 +92,7 @@ impl Binder {
         let mut primary_column_ids = Vec::new();
 
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
-        for table_field in schema.fields.clone() {
+        for table_field in schema.fields() {
             if table_field.default_expr.is_some() || table_field.computed_expr.is_some() {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
                     "The table field configuration is invalid. ".to_owned()
