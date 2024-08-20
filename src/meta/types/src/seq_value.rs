@@ -14,6 +14,8 @@
 
 use std::convert::TryInto;
 use std::fmt::Formatter;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -97,6 +99,20 @@ pub struct SeqV<T = Vec<u8>> {
     pub seq: u64,
     pub meta: Option<KVMeta>,
     pub data: T,
+}
+
+impl<T> Deref for SeqV<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T> DerefMut for SeqV<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
 }
 
 impl<V> SeqValue<V> for SeqV<V> {

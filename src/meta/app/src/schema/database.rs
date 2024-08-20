@@ -21,6 +21,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_meta_types::SeqV;
 
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
@@ -35,15 +36,9 @@ use crate::KeyWithTenant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseInfo {
-    pub ident: DatabaseIdent,
+    pub database_id: DatabaseId,
     pub name_ident: DatabaseNameIdent,
-    pub meta: DatabaseMeta,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DatabaseIdent {
-    pub db_id: u64,
-    pub seq: u64,
+    pub meta: SeqV<DatabaseMeta>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
@@ -145,6 +140,17 @@ impl Display for DatabaseMeta {
 impl DatabaseInfo {
     pub fn engine(&self) -> &str {
         &self.meta.engine
+    }
+
+    /// Create a new database info without id or meta seq.
+    ///
+    /// Usually such an instance is used for an external database, whose metadata is not stored in databend meta-service.
+    pub fn without_id_seq(name_ident: DatabaseNameIdent, meta: DatabaseMeta) -> Self {
+        Self {
+            database_id: DatabaseId::new(0),
+            name_ident,
+            meta: SeqV::new(0, meta),
+        }
     }
 }
 

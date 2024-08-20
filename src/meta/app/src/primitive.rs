@@ -14,9 +14,7 @@
 
 use std::ops::Deref;
 
-use databend_common_io::prelude::BufMut;
 use databend_common_meta_kvapi::kvapi;
-use prost::bytes::Buf;
 
 /// The identifier of an internal record used in an application upon [`kvapi::KVApi`],
 /// e.g. TableId, DatabaseId as a value.
@@ -131,7 +129,7 @@ mod prost_message_impl {
         #[test]
         fn test_id_as_protobuf_message() {
             let mut v: u64 = 1;
-            for i in 0..200 {
+            for _i in 0..200 {
                 v = v.wrapping_mul(7);
 
                 let id = Id(v);

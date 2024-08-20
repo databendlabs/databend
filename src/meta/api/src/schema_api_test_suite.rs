@@ -668,7 +668,7 @@ impl SchemaApiTestSuite {
                 .await;
             debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!(1, res.database_id.db_id, "db1 id is 1");
             assert_eq!("db1", res.name_ident.database_name(), "db1.db is db1");
         }
 
@@ -752,7 +752,7 @@ impl SchemaApiTestSuite {
             assert_ne!(res.meta.engine, new_engine.to_string());
 
             let orig_db_id: u64 = get_kv_u64_data(mt.as_kv_api(), &db_name).await?;
-            assert_eq!(orig_db_id, res.ident.db_id);
+            assert_eq!(orig_db_id, res.database_id.db_id);
             let db_id_name_key = DatabaseIdToName { db_id: orig_db_id };
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
@@ -776,7 +776,7 @@ impl SchemaApiTestSuite {
             assert_eq!(res.meta.engine, new_engine.to_string());
 
             let db_id: u64 = get_kv_u64_data(mt.as_kv_api(), &db_name).await?;
-            assert_eq!(db_id, res.ident.db_id);
+            assert_eq!(db_id, res.database_id.db_id);
             let db_id_name_key = DatabaseIdToName { db_id };
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
@@ -918,7 +918,7 @@ impl SchemaApiTestSuite {
                 .await;
             debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!(1, res.database_id.db_id, "db1 id is 1");
             assert_eq!("db1", res.name_ident.database_name(), "db1.db is db1");
         }
 
@@ -1004,13 +1004,13 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
 
-            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
+            let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
             assert_eq!(db_ids, got);
 
             for (i, db_info) in dbs.iter().enumerate() {
                 assert_eq!(tenant.tenant_name(), db_info.name_ident.tenant_name());
                 assert_eq!(db_names[i], db_info.name_ident.database_name());
-                assert_eq!(db_ids[i], db_info.ident.db_id);
+                assert_eq!(db_ids[i], db_info.database_id.db_id);
                 assert_eq!(engines[i], db_info.meta.engine);
             }
         }
@@ -1048,7 +1048,7 @@ impl SchemaApiTestSuite {
                     filter: None,
                 })
                 .await?;
-            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
+            let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
             assert_eq!(db_ids, got)
         }
 
@@ -1061,7 +1061,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             let want: Vec<u64> = vec![db_id_3];
-            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
+            let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
 
@@ -1154,7 +1154,7 @@ impl SchemaApiTestSuite {
                 .await;
             debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.db_id, "db3 id is 1");
+            assert_eq!(1, res.database_id.db_id, "db3 id is 1");
             assert_eq!("db3", res.name_ident.database_name(), "db3.db is db3");
 
             info!("--- get old database after rename");
@@ -1727,7 +1727,7 @@ impl SchemaApiTestSuite {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 assert!(res.table_id >= 1, "table id >= 1");
 
                 let tb_id = res.table_id;
@@ -1823,7 +1823,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let res = mt.create_table(req.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
             assert!(
                 res.table_id > tb_ident_2.table_id,
                 "table id > {}",
@@ -2003,7 +2003,7 @@ impl SchemaApiTestSuite {
 
             // - verify other states are as expected
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
             assert!(create_table_as_dropped_resp.table_id >= 1, "table id >= 1");
 
             // -- verify this table is committpable
@@ -2188,7 +2188,7 @@ impl SchemaApiTestSuite {
             // check if get_database_history return db_id
             let mut found = false;
             for db_info in res {
-                if db_info.ident.db_id == util.db_id {
+                if db_info.database_id.db_id == util.db_id {
                     found = true;
                     break;
                 }
@@ -2320,7 +2320,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
             mt.create_table(create_tb2_req.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let req = GetTableReq::new(&tenant, db1_name, tb2_name);
             let got = mt.get_table(req).await?;
@@ -2332,7 +2332,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
             mt.rename_table(rename_db1tb2_to_db1tb3(false)).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let req = GetTableReq::new(&tenant, db1_name, tb3_name);
             let got = mt.get_table(req).await?;
@@ -2382,7 +2382,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
             mt.create_table(create_tb2_req.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let got = mt
                 .get_table((tenant_name, db1_name, tb2_name).into())
@@ -2469,8 +2469,8 @@ impl SchemaApiTestSuite {
             mt.rename_table(req.clone()).await?;
             let cur_db1 = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
             let cur_db2 = mt.get_database(Self::req_get_db(&tenant, db2_name)).await?;
-            assert!(old_db1.ident.seq < cur_db1.ident.seq);
-            assert!(old_db2.ident.seq < cur_db2.ident.seq);
+            assert!(old_db1.meta.seq < cur_db1.meta.seq);
+            assert!(old_db2.meta.seq < cur_db2.meta.seq);
 
             let got = mt
                 .get_table((tenant_name, db2_name, tb3_name).into())
@@ -2548,7 +2548,7 @@ impl SchemaApiTestSuite {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 assert!(res.table_id >= 1, "table id >= 1");
                 let tb_id = res.table_id;
 
@@ -3193,7 +3193,7 @@ impl SchemaApiTestSuite {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 assert!(res.table_id >= 1, "table id >= 1");
                 let tb_id = res.table_id;
 
@@ -4003,7 +4003,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let res = mt.create_table(req.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
             let table_id = res.table_id;
             assert!(table_id >= 1, "table id >= 1");
 
@@ -4654,7 +4654,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let res = mt.create_table(req.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
@@ -4683,13 +4683,13 @@ impl SchemaApiTestSuite {
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tbl_name_ident.tenant.clone(),
-                db_id: old_db.ident.db_id,
+                db_id: old_db.database_id.db_id,
                 table_name: tbl_name_ident.table_name.clone(),
                 tb_id,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4711,7 +4711,7 @@ impl SchemaApiTestSuite {
             };
             mt.undrop_table(plan).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4734,13 +4734,13 @@ impl SchemaApiTestSuite {
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.clone(),
-                db_id: old_db.ident.db_id,
+                db_id: old_db.database_id.db_id,
                 table_name: tbl_name.to_string(),
                 tb_id,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4766,7 +4766,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
@@ -4791,13 +4791,13 @@ impl SchemaApiTestSuite {
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.clone(),
-                db_id: old_db.ident.db_id,
+                db_id: old_db.database_id.db_id,
                 table_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4818,7 +4818,7 @@ impl SchemaApiTestSuite {
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4861,7 +4861,7 @@ impl SchemaApiTestSuite {
                 .get_table_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -4892,7 +4892,7 @@ impl SchemaApiTestSuite {
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.clone(),
-                db_id: cur_db.ident.db_id,
+                db_id: cur_db.database_id.db_id,
                 table_name: tbl_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
             };
@@ -4900,7 +4900,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             mt.drop_table_by_id(drop_plan.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4937,7 +4937,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let _got = mt.rename_table(rename_dbtb_to_dbtb1(false)).await;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -5434,7 +5434,7 @@ impl SchemaApiTestSuite {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 assert!(res.table_id >= 1, "table id >= 1");
                 let tb_id = res.table_id;
 
@@ -5554,7 +5554,7 @@ impl SchemaApiTestSuite {
 
                 let db = mt.get_database(plan).await.unwrap();
 
-                let got = mt.get_db_name_by_id(db.ident.db_id).await?;
+                let got = mt.get_db_name_by_id(db.database_id.db_id).await?;
 
                 assert_eq!(got, db_name.to_string());
             }
@@ -5922,7 +5922,7 @@ impl SchemaApiTestSuite {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 assert!(res.table_id >= 1, "table id >= 1");
 
                 let tb_id1 = res.table_id;
@@ -5931,7 +5931,7 @@ impl SchemaApiTestSuite {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 let res = mt.create_table(req.clone()).await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
                 let tb_id2 = res.table_id;
 
@@ -6911,7 +6911,7 @@ impl SchemaApiTestSuite {
                 .await;
             debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!(1, res.database_id.db_id, "db1 id is 1");
             assert_eq!("db1", res.name_ident.database_name(), "db1.db is db1");
         }
 
@@ -6972,9 +6972,9 @@ impl SchemaApiTestSuite {
             debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(db_ids[0], res[0].ident.db_id, "db1 id");
+            assert_eq!(db_ids[0], res[0].database_id.db_id, "db1 id");
             assert_eq!("db1", res[0].name_ident.database_name(), "db1.name is db1");
-            assert_eq!(db_ids[1], res[1].ident.db_id, "db3 id");
+            assert_eq!(db_ids[1], res[1].database_id.db_id, "db3 id");
             assert_eq!("db3", res[1].name_ident.database_name(), "db3.name is db3");
         }
 
@@ -7037,7 +7037,7 @@ impl SchemaApiTestSuite {
                 let cur_db = node_a
                     .get_database(Self::req_get_db(&tenant, db_name))
                     .await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(old_db.meta.seq < cur_db.meta.seq);
                 tb_ids.push(res.table_id);
             }
         }
@@ -7113,7 +7113,7 @@ impl SchemaApiTestSuite {
             let cur_db = node_a
                 .get_database(Self::req_get_db(&tenant, db_name))
                 .await?;
-            assert!(old_db.ident.seq < cur_db.ident.seq);
+            assert!(old_db.meta.seq < cur_db.meta.seq);
             res.table_id
         };
 
@@ -7386,7 +7386,7 @@ impl SchemaApiTestSuite {
             inner: db_name_ident.clone(),
         };
         let db_info = mt.get_database(get_db_req).await?;
-        let db_id = db_info.ident.db_id;
+        let db_id = db_info.database_id.db_id;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![
