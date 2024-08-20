@@ -26,9 +26,9 @@ databend-common-storages-parquet = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
-iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg", rev = "v0.3.0-rc.1" }
-iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "v0.3.0-rc.1" }
-iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "v0.3.0-rc.1" }
+iceberg = { workspace = true }
+iceberg-catalog-hms = { workspace = true }
+iceberg-catalog-rest = { workspace = true }
 match-template = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
