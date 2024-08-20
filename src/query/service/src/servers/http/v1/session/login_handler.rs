@@ -31,7 +31,6 @@ use crate::servers::http::v1::QueryError;
 struct LoginRequest {
     pub database: Option<String>,
     pub role: Option<String>,
-    pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
 }
 
@@ -67,9 +66,6 @@ async fn check_login(
     if let Some(role_name) = &req.role {
         session.set_current_role_checked(role_name).await?;
     }
-    session
-        .set_secondary_roles_checked(req.secondary_roles.clone())
-        .await?;
 
     if let Some(conf_settings) = &req.settings {
         let settings = session.get_settings();
