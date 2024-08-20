@@ -3382,6 +3382,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
+ "databend-common-geo",
  "databend-common-hashtable",
  "databend-common-io",
  "educe",
@@ -3472,6 +3473,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-geo",
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-openai",
@@ -3511,6 +3513,13 @@ dependencies = [
  "strength_reduce",
  "stringslice",
  "twox-hash",
+]
+
+[[package]]
+name = "databend-common-geo"
+version = "0.1.0"
+dependencies = [
+ "scroll 0.12.0",
 ]
 
 [[package]]
@@ -7238,7 +7247,7 @@ dependencies = [
  "geo-types",
  "geojson",
  "log",
- "scroll",
+ "scroll 0.11.0",
  "serde_json",
  "thiserror",
  "wkt",
@@ -7254,7 +7263,7 @@ dependencies = [
  "geojson",
  "geos",
  "log",
- "scroll",
+ "scroll 0.11.0",
  "serde_json",
  "thiserror",
  "wkt",
@@ -10568,18 +10577,18 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.7.3"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e613fc340b2220f734a8595782c551f1250e969d87d3be1ae0579e8d4065179"
+checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
 dependencies = [
  "num_enum_derive",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.7.3"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
+checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -13378,6 +13387,12 @@ name = "scroll"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
+
+[[package]]
+name = "scroll"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
 
 [[package]]
 name = "scrypt"

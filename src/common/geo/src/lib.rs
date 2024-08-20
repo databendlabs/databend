@@ -12,14 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod from;
-mod to;
-
-pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
-pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
-pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
-pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
-pub const ARROW_EXT_TYPE_GEOMETRY: &str = "Geometry";
-pub const ARROW_EXT_TYPE_GEOGRAPHY: &str = "Geography";
-
-pub use to::set_validities;
+pub mod wkb;
+pub use wkb::read_wkb_header;

@@ -149,6 +149,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
+            ColumnBuilder::Geography(c) => self.read_geography(c, data),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -316,6 +317,13 @@ impl SeparatedTextDecoder {
     }
 
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
+        let geom = parse_to_ewkb(data, None)?;
+        column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
         let geom = parse_to_ewkb(data, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();

@@ -28,6 +28,7 @@ members = [
     "src/common/vector",
     "src/common/license",
     "src/common/parquet2",
+    "src/common/geo",
     "src/query/ast",
     "src/query/async_functions",
     "src/query/codegen",
@@ -124,6 +125,7 @@ databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
 databend-common-formats = { path = "src/query/formats" }
 databend-common-functions = { path = "src/query/functions" }
+databend-common-geo = { path = "src/common/geo" }
 databend-common-grpc = { path = "src/common/grpc" }
 databend-common-hashtable = { path = "src/common/hashtable" }
 databend-common-http = { path = "src/common/http" }
