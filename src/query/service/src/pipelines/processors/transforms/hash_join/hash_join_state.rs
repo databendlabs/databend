@@ -122,7 +122,7 @@ pub struct HashJoinState {
     pub(crate) continue_build_watcher: Sender<bool>,
     /// A dummy receiver to make continue build watcher channel open
     pub(crate) _continue_build_dummy_receiver: Receiver<bool>,
-    pub(crate) _enable_spill: bool,
+    pub(crate) enable_spill: bool,
 
     pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
 
@@ -152,11 +152,9 @@ impl HashJoinState {
         };
         let (build_watcher, _build_done_dummy_receiver) = watch::channel(HashTableType::UnFinished);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
+        
         let settings = ctx.get_settings();
-        let mut _enable_spill = false;
-        if settings.get_join_spilling_memory_ratio()? != 0 {
-            _enable_spill = true;
-        }
+        let enable_spill = settings.get_join_spilling_memory_ratio()? != 0;
         let spill_partition_bits = settings.get_join_spilling_partition_bits()?;
         let spill_buffer_threshold = settings.get_join_spilling_buffer_threshold_per_proc()?;
 
@@ -181,7 +179,7 @@ impl HashJoinState {
             partition_id: AtomicU8::new(0),
             need_next_round: AtomicBool::new(false),
             is_spill_happened: AtomicBool::new(false),
-            _enable_spill,
+            enable_spill,
             spill_partition_bits,
             spill_buffer_threshold,
             merge_into_state: match enable_merge_into_optimization {

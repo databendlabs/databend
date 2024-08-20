@@ -99,6 +99,7 @@ pub struct TransformHashJoinBuild {
     // Spill related states.
     // The spiller is used to spill/restore data blocks.
     spiller: HashJoinSpiller,
+    enable_spill: bool,
     // Max memory usage threshold for join.
     global_memory_threshold: usize,
     // Max memory usage threshold for each processor.
@@ -146,6 +147,7 @@ impl TransformHashJoinBuild {
             is_finalize_finished: false,
             is_from_restore: false,
             spiller,
+            enable_spill: build_state.hash_join_state.enable_spill,
             global_memory_threshold,
             processor_memory_threshold,
             step: Step::Sync(SyncStep::Collect),
@@ -453,6 +455,10 @@ impl TransformHashJoinBuild {
     }
 
     fn need_spill(&mut self) -> bool {
+        if !self.enable_spill {
+            return false;
+        }
+
         if self.data_blocks_memory_size > self.processor_memory_threshold {
             info!(
                 "BuildSpillHandler DataBlock memory size: {:?} bytes, memory threshold per processor: {:?} bytes",
