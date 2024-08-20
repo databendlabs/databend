@@ -40,6 +40,8 @@ default_compression = 'zstd'
 
 enable_udf_server = true
 udf_server_allow_list = ['http://0.0.0.0:8815']
+udf_server_allow_insecure = true
+
 cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 
 [[query.users]]
