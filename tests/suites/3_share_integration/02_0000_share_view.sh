@@ -24,6 +24,7 @@ echo "create database provider_ref_db;" | $BENDSQL_CLIENT_PROVIDER_CONNECT
 echo "create table provider_ref_db.t2 (a int);" | $BENDSQL_CLIENT_PROVIDER_CONNECT
 echo "insert into provider_ref_db.t2 values(3),(4);"  | $BENDSQL_CLIENT_PROVIDER_CONNECT
 echo "create view provider_db.v as select * from provider_ref_db.t2;" | $BENDSQL_CLIENT_PROVIDER_CONNECT
+echo "select * from provider_db.v;" | $BENDSQL_CLIENT_PROVIDER_CONNECT
 
 echo "create provider share and grant access"
 echo "CREATE SHARE test_share;" | $BENDSQL_CLIENT_PROVIDER_CONNECT
