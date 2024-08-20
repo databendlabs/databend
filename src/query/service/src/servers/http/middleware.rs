@@ -31,7 +31,6 @@ use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
 use databend_common_metrics::http::metrics_incr_http_slow_request_count;
 use databend_common_metrics::http::metrics_observe_http_response_duration;
-use databend_common_storages_fuse::TableContext;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
