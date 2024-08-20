@@ -17,10 +17,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
-use databend_common_arrow::arrow::io::parquet::read::infer_schema;
-use databend_common_arrow::arrow::io::parquet::read::schema::infer_schema_with_options;
-use databend_common_arrow::arrow::io::parquet::read::{self as pread};
-use databend_common_arrow::parquet::read::read_metadata;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;

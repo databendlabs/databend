@@ -36,7 +36,6 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::DataOperator;
 use databend_common_storages_result_cache::ResultCacheMetaManager;
-use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_users::UserApiProvider;
 
