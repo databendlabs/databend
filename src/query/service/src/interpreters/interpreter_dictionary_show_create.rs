@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
@@ -69,10 +70,14 @@ impl Interpreter for ShowCreateDictionaryInterpreter {
             tenant,
             DictionaryIdentity::new(self.plan.database_id, dict_name.clone()),
         );
+
         let dictionary = if let Some(reply) = catalog.get_dictionary(dict_ident).await? {
             reply.dictionary_meta
         } else {
-            return Ok(PipelineBuildResult::create());
+            return Err(ErrorCode::UnknownDictionary(format!(
+                "Unknown dictionary {}",
+                dict_name.clone(),
+            )));
         };
         let settings = self.ctx.get_settings();
         let settings = ShowCreateQuerySettings {

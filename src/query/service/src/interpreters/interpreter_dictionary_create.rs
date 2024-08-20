@@ -63,29 +63,32 @@ impl Interpreter for CreateDictionaryInterpreter {
             dictionary_ident: dictionary_ident.clone(),
             dictionary_meta: dictionary_meta.clone(),
         };
+
         let reply = catalog.create_dictionary(req).await;
-        if reply.is_ok() {
-            return Ok(PipelineBuildResult::create());
-        } else {
-            match self.plan.create_option {
-                CreateOption::Create => {
-                    return Err(ErrorCode::DictionaryAlreadyExists(format!(
-                        "Dictionary {} already exists",
-                        self.plan.dictionary,
-                    )));
-                }
-                CreateOption::CreateIfNotExists => {
-                    return Ok(PipelineBuildResult::create());
-                }
-                CreateOption::CreateOrReplace => {
-                    let req = UpdateDictionaryReq {
-                        dictionary_meta: dictionary_meta.clone(),
-                        dictionary_ident: dictionary_ident.clone(),
-                    };
-                    let _reply = catalog.update_dictionary(req).await?;
-                    return Ok(PipelineBuildResult::create());
+        if let Err(e) = reply {
+            if e.code() == ErrorCode::DICTIONARY_ALREADY_EXISTS {
+                match self.plan.create_option {
+                    CreateOption::Create => {
+                        return Err(ErrorCode::DictionaryAlreadyExists(format!(
+                            "Dictionary {} already exists",
+                            self.plan.dictionary,
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    CreateOption::CreateOrReplace => {
+                        let req = UpdateDictionaryReq {
+                            dictionary_meta: dictionary_meta.clone(),
+                            dictionary_ident: dictionary_ident.clone(),
+                        };
+                        let _reply = catalog.update_dictionary(req).await?;
+                        return Ok(PipelineBuildResult::create());
+                    }
                 }
             }
+            return Err(e);
         }
+        Ok(PipelineBuildResult::create())
     }
 }

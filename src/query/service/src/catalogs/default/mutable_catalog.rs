@@ -682,12 +682,6 @@ impl Catalog for MutableCatalog {
         dict_ident: TenantDictionaryIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await?;
-        if reply.is_none() {
-            return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown Dictionary {}",
-                dict_ident.dict_name()
-            )));
-        }
         Ok(reply)
     }
 
@@ -697,12 +691,6 @@ impl Catalog for MutableCatalog {
         req: TenantDictionaryIdent,
     ) -> Result<Option<GetDictionaryReply>> {
         let reply = self.ctx.meta.get_dictionary(req.clone()).await?;
-        if reply.is_none() {
-            return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown Dictionary {}",
-                req.dict_name()
-            )));
-        }
         Ok(reply)
     }
 
