@@ -632,10 +632,13 @@ impl CompactionLimits {
     }
 }
 
+#[derive(Debug)]
 pub struct Bound {
     pub value: Scalar,
     pub may_be_truncated: bool,
 }
+
+#[derive(Debug)]
 pub struct ColumnRange {
     pub min: Bound,
     pub max: Bound,

@@ -710,6 +710,7 @@ impl TableContext for QueryContext {
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
+        let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
             tz,
@@ -731,6 +732,7 @@ impl TableContext for QueryContext {
             parse_datetime_ignore_remainder,
             enable_dst_hour_fix,
             enable_strict_datetime_parser,
+            random_function_seed,
         })
     }
 
@@ -1314,7 +1316,7 @@ impl TableContext for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if tbl.engine() != "FUSE" {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() {
             return Ok(None);
         }
 
@@ -1324,11 +1326,15 @@ impl TableContext for QueryContext {
 
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
-            LockTableOption::NoLock => Ok(None),
+        let lock_guard = match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self.clone(), false).await?,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self.clone(), true).await?,
+            LockTableOption::NoLock => None,
+        };
+        if lock_guard.is_some() {
+            self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
         }
+        Ok(lock_guard)
     }
 
     fn get_session_id(&self) -> String {

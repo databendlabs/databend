@@ -21,6 +21,8 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::Duration;
+use chrono::TimeDelta;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -108,6 +110,7 @@ use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
@@ -419,7 +422,7 @@ impl FuseTable {
         })
     }
 
-    pub fn transient(&self) -> bool {
+    pub fn is_transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
@@ -456,6 +459,21 @@ impl FuseTable {
             .into_iter()
             .map(|v| v.data_type().clone())
             .collect()
+    }
+
+    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
+        let retention_period = if let Some(v) = self
+            .table_info
+            .meta
+            .options
+            .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
+        {
+            let retention_period = v.parse::<u64>()?;
+            Duration::hours(retention_period as i64)
+        } else {
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64)
+        };
+        Ok(retention_period)
     }
 }
 

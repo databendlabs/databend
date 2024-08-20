@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use educe::Educe;
 use log::info;
 
+use super::aggregate::RuleStatsAggregateOptimizer;
 use super::distributed::BroadcastToShuffleOptimizer;
 use super::format::display_memo;
 use super::Memo;
@@ -312,6 +313,10 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         )?;
     }
 
+    s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
+
     // Collect statistics for each leaf node in SExpr.
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
         .run(&s_expr)
@@ -401,6 +406,10 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
             s_expr.clone(),
         )?;
     }
+
+    s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
 
     // Collect statistics for each leaf node in SExpr.
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
