@@ -40,7 +40,7 @@ pub struct DatabaseInfo {
     pub meta: DatabaseMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseIdent {
     pub db_id: u64,
     pub seq: u64,
