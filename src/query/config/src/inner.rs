@@ -232,6 +232,7 @@ pub struct QueryConfig {
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
+    pub udf_server_allow_insecure: bool,
 
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
@@ -305,6 +306,7 @@ impl Default for QueryConfig {
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
+            udf_server_allow_insecure: false,
             cloud_control_grpc_server_address: None,
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
