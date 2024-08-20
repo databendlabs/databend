@@ -193,20 +193,14 @@ impl Catalog for SessionCatalog {
 
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         if req.table_id.is_some_and(is_temp_table_id) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "ListIndexes: table id {} is a temporary table id",
-                req.table_id.unwrap()
-            )));
+            return Ok(vec![]);
         }
         self.inner.list_indexes(req).await
     }
 
     async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
         if is_temp_table_id(req.table_id) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "ListIndexIdsByTableId: table id {} is a temporary table id",
-                req.table_id
-            )));
+            return Ok(vec![]);
         }
         self.inner.list_index_ids_by_table_id(req).await
     }
@@ -216,10 +210,7 @@ impl Catalog for SessionCatalog {
         req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         if is_temp_table_id(req.table_id) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "ListIndexesByTableId: table id {} is a temporary table id",
-                req.table_id
-            )));
+            return Ok(vec![]);
         }
         self.inner.list_indexes_by_table_id(req).await
     }
@@ -268,10 +259,7 @@ impl Catalog for SessionCatalog {
         req: ListVirtualColumnsReq,
     ) -> Result<Vec<VirtualColumnMeta>> {
         if req.table_id.is_some_and(is_temp_table_id) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "ListVirtualColumns: table id {} is a temporary table id",
-                req.table_id.unwrap()
-            )));
+            return Ok(vec![]);
         }
         self.inner.list_virtual_columns(req).await
     }
@@ -543,10 +531,7 @@ impl Catalog for SessionCatalog {
 
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         if is_temp_table_id(req.lock_key.get_table_id()) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "ListLockRevisions: table id {} is a temporary table id",
-                req.lock_key.get_table_id()
-            )));
+            return Ok(vec![]);
         }
         self.inner.list_lock_revisions(req).await
     }
