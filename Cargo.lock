@@ -4532,9 +4532,9 @@ dependencies = [
 name = "databend-common-storages-result-cache"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "async-backtrace",
  "async-trait",
- "databend-common-arrow",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
@@ -4544,8 +4544,8 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
- "databend-common-pipeline-sources",
  "databend-common-storage",
+ "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "opendal",
