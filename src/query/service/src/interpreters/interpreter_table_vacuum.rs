@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono::Duration;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -124,12 +123,12 @@ impl Interpreter for VacuumTableInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let duration = fuse_table.get_data_retention_period(ctx.as_ref())?;
 
         let retention_time = chrono::Utc::now() - duration;
         let ctx = self.ctx.clone();
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let handler = get_vacuum_handler();
         let purge_files_opt = handler
             .do_vacuum(
