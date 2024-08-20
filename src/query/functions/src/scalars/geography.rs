@@ -28,7 +28,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<NumberType<F64>,NumberType<F64>,GeographyType> (|lon,lat,builder,ctx|{
             if let Err(e) = GeographyType::check_point(*lon, *lat) {
-                ctx.set_error(0, ErrorCode::GeometryError(e.to_string()).to_string());
+                ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                 builder.commit_row()
             } else {
                 builder.put_slice(&make_point(*lon, *lat));

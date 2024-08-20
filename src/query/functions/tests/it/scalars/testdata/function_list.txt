@@ -3562,8 +3562,6 @@ Functions overloads:
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry
 1 st_endpoint(Geometry NULL) :: Geometry NULL
-0 st_geographyfromwkt(String) :: Geography
-1 st_geographyfromwkt(String NULL) :: Geography NULL
 0 st_geohash(Geometry) :: String
 1 st_geohash(Geometry NULL) :: String NULL
 2 st_geohash(Geometry, Int32) :: String
