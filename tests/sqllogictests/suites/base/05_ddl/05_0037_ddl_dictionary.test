@@ -70,13 +70,14 @@ query TT
 show create dictionary d3
 ----
 d3 CREATE DICTIONARY d3 (
-  a INT NULL,
-  b VARCHAR NULL
+    a INT NULL,
+    b VARCHAR NULL
 )
 PRIMARY KEY(a)
 SOURCE(mysql
 (
- db='db1'  host='localhost'  password='****'  password='1234'  port='3306'  username='root' ))
+db='db1'  host='localhost'  password='****'  password='1234'  port='3306'  username='root' ))
+COMMENT 'comment'
 
 query TT
 show create dictionary d4

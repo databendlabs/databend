@@ -197,7 +197,7 @@ impl ShowCreateDictionaryInterpreter {
         }
         // Append comment.
         {
-            if comment.len() > 0 {
+            if !comment.is_empty() {
                 dict_create_sql.push_str("COMMENT ");
                 dict_create_sql.push_str(&format!("'{}';", comment));
             }

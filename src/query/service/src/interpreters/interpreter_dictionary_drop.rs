@@ -57,15 +57,15 @@ impl Interpreter for DropDictionaryInterpreter {
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
-        let reply = catalog.drop_dictionary(dict_ident.clone()).await;
+        let reply = catalog.drop_dictionary(dict_ident.clone()).await?;
 
-        if reply.is_ok() || (reply.is_err() && self.plan.if_exists) {
-            return Ok(PipelineBuildResult::create());
-        } else {
+        if reply.is_none() {
             return Err(ErrorCode::UnknownDictionary(format!(
                 "Unknown dictionary '{}'",
                 dict_name,
             )));
+        } else {
+            return Ok(PipelineBuildResult::create());
         }
     }
 }
