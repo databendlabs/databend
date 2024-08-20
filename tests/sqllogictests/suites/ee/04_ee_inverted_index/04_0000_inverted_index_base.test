@@ -46,20 +46,41 @@ query
 SELECT id, score(), content FROM t WHERE match(content, 'test')
 ----
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 5 2.4594712 Time flies like an arrow; fruit flies like a banana
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'word')
 ----
 2 1.5948367 A picture is worth a thousand words
 4 1.6550698 Actions speak louder than words
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, 'box')
+----
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, 'box', 'fuzziness=1')
+----
+1 1.0 The quick brown fox jumps over the lazy dog
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1')
+----
+2 1.0 A picture is worth a thousand words
+3 1.0 The early bird catches the worm
+4 2.0 Actions speak louder than words
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1;operator=AND')
+----
+4 2.0 Actions speak louder than words
 
 statement ok
 INSERT INTO t VALUES 
@@ -87,7 +108,7 @@ INSERT INTO t VALUES
 (29, '每个人的人生都是一部独特的传奇，我们需要珍惜每一个瞬间，用心去感受生活的美好。'),
 (30, '张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。')
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 21 1.1111465 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -96,23 +117,29 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '北京') ORDER BY score()
 ----
 30 1.7396812 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 12 1.9475443 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '北京大学') ORDER BY score()
 ----
 30 5.2190437 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 
-query T
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, '北京 大', 'fuzziness=1;operator=AND') ORDER BY id
+----
+12 2.0 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
+30 2.0 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
+
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '文化博大精深') ORDER BY score()
 ----
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') ORDER BY score()
 ----
 21 1.1111465 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -120,25 +147,33 @@ SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') O
 15 2.063777 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '化博') ORDER BY score()
 ----
 
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '。') ORDER BY score()
 ----
 
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY score()
+----
+
+
+statement error 1903
+SELECT id, score(), content FROM t WHERE match(content, '()')
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 ----
 
 
 statement ok
 UPDATE t SET content = '科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。' WHERE id=24
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 21 1.423108 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -146,7 +181,7 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 1.5707673 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score()
 ----
 13 2.1947646 随着科技的发展，人们的生活变得越来越便利。
@@ -155,7 +190,7 @@ SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score
 statement ok
 DELETE FROM t WHERE id=21
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
@@ -169,7 +204,7 @@ CREATE OR REPLACE INVERTED INDEX idx1 ON t(content) tokenizer = 'chinese' index_
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 1 0.8323383 The quick brown fox jumps over the lazy dog
@@ -177,7 +212,7 @@ SELECT id, score(), content FROM t WHERE match(content, 'the')
 6 0.8788376 Beauty is in the eye of the beholder
 10 0.8788376 An apple a day keeps the doctor away
 
-query T
+query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 
@@ -262,6 +297,15 @@ SELECT id, score(), title FROM books WHERE query('title:python') ORDER BY score(
 11 1.0526798 OpenAI GPT For Python Developers, 2nd Edition
 6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
 13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+
+query IFT
+SELECT id, score(), title FROM books WHERE query('title:pyth', 'fuzziness=2') ORDER BY id
+----
+2 1.0 Python深度学习（第2版）
+6 1.0 Flask Web开发：基于Python的Web应用开发实战（第2版）
+11 1.0 OpenAI GPT For Python Developers, 2nd Edition
+13 1.0 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
+14 1.0 Building Recommendation Systems in Python and JAX
 
 query IFT
 SELECT id, score(), title FROM books WHERE query('title:python OR rust') ORDER BY score() DESC
