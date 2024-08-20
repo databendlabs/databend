@@ -289,6 +289,9 @@ parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
 # TODO: let's use native tls instead.
+iceberg = { version = "0.3.0" }
+iceberg-catalog-hms = { version = "0.3.0" }
+iceberg-catalog-rest = { version = "0.3.0" }
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
 proj4rs = { version = "0.1.3", features = ["geo-types", "crs-definitions"] }
 prometheus-client = "0.22"

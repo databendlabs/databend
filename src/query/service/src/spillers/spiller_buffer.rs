@@ -12,82 +12,77 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
-use crate::sessions::QueryContext;
-
 // The spiller buffer will record each partition's unspilled data.
 #[derive(Clone)]
-pub(crate) struct SpillerBuffer {
-    partition_unspilled_data: HashMap<u8, Vec<DataBlock>>,
-    buffer_size: HashMap<u8, usize>,
-    partition_buffer_threshold: usize,
+pub struct SpillBuffer {
+    partition_data: Vec<Vec<DataBlock>>,
+    partition_size: Vec<usize>,
+    partition_threshold: usize,
 }
 
-impl SpillerBuffer {
-    pub(crate) fn create(ctx: Arc<QueryContext>) -> Result<Self> {
-        let partition_number = 1_u32 << ctx.get_settings().get_join_spilling_partition_bits()?;
-        let buffer_threshold = ctx
-            .get_settings()
-            .get_join_spilling_buffer_threshold_per_proc()?;
-        let partition_buffer_threshold = buffer_threshold / partition_number as usize;
-        Ok(SpillerBuffer {
-            partition_unspilled_data: HashMap::new(),
-            buffer_size: HashMap::new(),
-            partition_buffer_threshold,
-        })
-    }
-
-    // Add a partition's unspilled data to the buffer
-    // The method will check if the partition's buffer is full, if so, it will spill the partition
-    // The return value is the partition id and the spilled data
-    pub(crate) fn add_partition_unspilled_data(
-        &mut self,
-        partition_id: u8,
-        data: DataBlock,
-    ) -> Result<Option<DataBlock>> {
-        let data_size = data.memory_size();
-        self.buffer_size
-            .entry(partition_id)
-            .and_modify(|e| *e += data_size)
-            .or_insert(data_size);
-        self.partition_unspilled_data
-            .entry(partition_id)
-            .or_default()
-            .push(data);
-        if *self.buffer_size.get(&partition_id).unwrap()
-            >= self.partition_buffer_threshold * 1000 * 1000
-        {
-            let blocks = self
-                .partition_unspilled_data
-                .get_mut(&partition_id)
-                .unwrap();
-            debug_assert!(!blocks.is_empty());
-            let merged_block = DataBlock::concat(blocks)?;
-            blocks.clear();
-            let old_size = self.buffer_size.get_mut(&partition_id).unwrap();
-            *old_size = 0;
-            return Ok(Some(merged_block));
+impl SpillBuffer {
+    pub fn create(num_partitions: usize, buffer_threshold: usize) -> Self {
+        // The threshold of each partition, we will spill the partition data if the
+        // size exceeds the threshold.
+        let partition_threshold =
+            (buffer_threshold as f64 / num_partitions as f64 * 1024.0 * 1024.0) as usize;
+        SpillBuffer {
+            partition_data: vec![Vec::new(); num_partitions],
+            partition_size: vec![0; num_partitions],
+            partition_threshold,
         }
-        Ok(None)
     }
 
-    pub(crate) fn empty(&self) -> bool {
-        // Check if each partition's buffer is empty
-        self.buffer_size.iter().all(|(_, v)| *v == 0)
+    // Add a partition's unspilled data to the SpillBuffer.
+    pub fn add_partition_data(&mut self, partition_id: usize, data_block: DataBlock) {
+        let data_size = data_block.memory_size();
+        self.partition_size[partition_id] += data_size;
+        self.partition_data[partition_id].push(data_block);
     }
 
-    pub(crate) fn partition_unspilled_data(&self) -> HashMap<u8, Vec<DataBlock>> {
-        self.partition_unspilled_data.clone()
+    // Check if the partition buffer is full, we will return the partition data.
+    pub fn pick_data_to_spill(&mut self, partition_id: usize) -> Result<Option<DataBlock>> {
+        if self.partition_size[partition_id] >= self.partition_threshold {
+            let data_blocks = self.partition_data[partition_id].clone();
+            self.partition_data[partition_id].clear();
+            self.partition_size[partition_id] = 0;
+            let data_block = DataBlock::concat(&data_blocks)?;
+            Ok(Some(data_block))
+        } else {
+            Ok(None)
+        }
     }
 
-    pub(crate) fn reset(&mut self) {
-        self.partition_unspilled_data.clear();
-        self.buffer_size.clear();
+    // Get partition data by partition id.
+    pub fn read_partition_data(&mut self, partition_id: u8, pick: bool) -> Option<Vec<DataBlock>> {
+        if !self.partition_data[partition_id as usize].is_empty() {
+            let data_blocks = if pick {
+                let data_blocks = self.partition_data[partition_id as usize].clone();
+                self.partition_data[partition_id as usize].clear();
+                data_blocks
+            } else {
+                self.partition_data[partition_id as usize].clone()
+            };
+            Some(data_blocks)
+        } else {
+            None
+        }
+    }
+
+    pub fn buffered_partitions(&self) -> Vec<u8> {
+        let mut partition_ids = vec![];
+        for (partition_id, data) in self.partition_data.iter().enumerate() {
+            if !data.is_empty() {
+                partition_ids.push(partition_id as u8);
+            }
+        }
+        partition_ids
+    }
+
+    pub fn empty_partition(&self, partition_id: u8) -> bool {
+        self.partition_data[partition_id as usize].is_empty()
     }
 }

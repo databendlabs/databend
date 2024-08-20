@@ -681,4 +681,12 @@ impl Settings {
     pub fn get_enable_last_snapshot_location_hint(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_last_snapshot_location_hint")? == 1)
     }
+
+    pub fn get_max_data_retention_period_in_days() -> u64 {
+        DefaultSettings::data_retention_time_in_days_max()
+    }
+
+    pub fn get_random_function_seed(&self) -> Result<bool> {
+        Ok(self.try_get_u64("random_function_seed")? == 1)
+    }
 }
