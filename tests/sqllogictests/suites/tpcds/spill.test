@@ -1,0 +1,51 @@
+# TPC-DS spill test
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpcds;
+
+statement ok
+set join_spilling_memory_ratio = 1;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+statement ok
+set sort_spilling_memory_ratio = 1;
+
+statement ok
+set sort_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set window_partition_spilling_memory_ratio = 1;
+
+statement ok
+set window_partition_spilling_bytes_threshold_per_proc = 1;
+
+# TPC-DS TEST
+include ./queries.test
+
+statement ok
+set join_spilling_memory_ratio = 60;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 512;
+
+statement ok
+set sort_spilling_memory_ratio = 60;
+
+statement ok
+set sort_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set window_partition_spilling_memory_ratio = 60;
+
+statement ok
+set window_partition_spilling_bytes_threshold_per_proc = 0;

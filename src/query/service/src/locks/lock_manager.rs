@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::timeout;
@@ -32,18 +33,15 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLockIdent;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_metrics::lock::metrics_inc_shutdown_lock_holder_nums;
 use databend_common_metrics::lock::metrics_inc_start_lock_holder_nums;
 use databend_common_metrics::lock::record_acquired_lock_nums;
-use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::UnlockApi;
 use databend_common_users::UserApiProvider;
-use fastrace::func_name;
 use futures_util::StreamExt;
 use parking_lot::RwLock;
 
@@ -91,39 +89,32 @@ impl LockManager {
     /// NOTICE: the lock holder is not 100% reliable.
     /// E.g., there is a very small probability of failure in extending or deleting the lock.
     #[async_backtrace::framed]
-    pub async fn try_lock<T: Lock + ?Sized>(
+    pub async fn try_lock(
         self: &Arc<Self>,
         ctx: Arc<dyn TableContext>,
-        lock: &T,
+        lock_key: LockKey,
+        catalog_name: &str,
         should_retry: bool,
     ) -> Result<Option<Arc<LockGuard>>> {
-        let user = ctx.get_current_user()?.name;
-        let node = ctx.get_cluster().local_id.clone();
-        let query_id = ctx.get_current_session_id();
+        let start = Instant::now();
+
+        let lock_type = lock_key.lock_type().to_string();
+        let table_id = lock_key.get_table_id();
+        let tenant = lock_key.get_tenant();
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
+        let query_id = ctx.get_id();
+        let req = CreateLockRevReq::new(
+            lock_key.clone(),
+            ctx.get_current_user()?.name,       // user
+            ctx.get_cluster().local_id.clone(), // node
+            query_id.clone(),                   // query_id
+            expire_secs,
+        );
 
-        let catalog = ctx.get_catalog(lock.get_catalog()).await?;
-
-        let tenant_name = lock.tenant_name();
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-        let table_id = lock.get_table_id();
-        let lock_key = LockKey::Table {
-            tenant: tenant.clone(),
-            table_id,
-        };
-
-        let req = CreateLockRevReq::new(lock_key.clone(), user, node, query_id, expire_secs);
-
-        // get a new table lock revision.
-        let res = catalog.create_lock_revision(req).await?;
-        let revision = res.revision;
-        // metrics.
-        record_created_lock_nums(lock.lock_type().to_string(), table_id, 1);
+        let catalog = ctx.get_catalog(catalog_name).await?;
 
         let lock_holder = Arc::new(LockHolder::default());
-        lock_holder
-            .start(ctx.get_id(), catalog.clone(), lock, revision, expire_secs)
-            .await?;
+        let revision = lock_holder.start(query_id, catalog.clone(), req).await?;
 
         self.insert_lock(revision, lock_holder);
         let guard = LockGuard::new(self.clone(), revision);
@@ -141,10 +132,15 @@ impl LockManager {
             let reply = catalog
                 .list_lock_revisions(list_table_lock_req.clone())
                 .await?;
-            let position = reply.iter().position(|(x, _)| *x == revision).ok_or_else(||
+            let rev_list = reply.into_iter().map(|(x, _)| x).collect::<Vec<_>>();
+            let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
-                ErrorCode::TableLockExpired("the acquired table lock has been expired".to_string()),
-            )?;
+                ErrorCode::TableLockExpired(format!(
+                    "the acquired table lock with revision '{}' is not in {:?}, maybe expired(elapsed: {:?})", 
+                    revision,
+                    rev_list,
+                    start.elapsed(),
+                )))?;
 
             if position == 0 {
                 // The lock is acquired by current session.
@@ -153,7 +149,7 @@ impl LockManager {
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_lock_nums(lock.lock_type().to_string(), table_id, 1);
+                record_acquired_lock_nums(lock_type, table_id, 1);
                 break;
             }
 
@@ -162,12 +158,13 @@ impl LockManager {
                 catalog
                     .delete_lock_revision(delete_table_lock_req.clone())
                     .await?;
-                return Err(ErrorCode::TableAlreadyLocked(
-                    "table is locked by other session, please retry later".to_string(),
-                ));
+                return Err(ErrorCode::TableAlreadyLocked(format!(
+                    "table is locked by other session, please retry later(elapsed: {:?})",
+                    start.elapsed()
+                )));
             }
 
-            let watch_delete_ident = TableLockIdent::new(&tenant, table_id, reply[position - 1].0);
+            let watch_delete_ident = TableLockIdent::new(tenant, table_id, rev_list[position - 1]);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
@@ -193,9 +190,10 @@ impl LockManager {
                     catalog
                         .delete_lock_revision(delete_table_lock_req.clone())
                         .await?;
-                    Err(ErrorCode::TableAlreadyLocked(
-                        "table is locked by other session, please retry later".to_string(),
-                    ))
+                    Err(ErrorCode::TableAlreadyLocked(format!(
+                        "table is locked by other session, please retry later(elapsed: {:?})",
+                        start.elapsed()
+                    )))
                 }
             }?;
         }
