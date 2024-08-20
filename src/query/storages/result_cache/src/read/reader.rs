@@ -18,14 +18,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::TableSchema;
 use databend_common_meta_store::MetaStore;
 use databend_common_storage::DataOperator;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::parquet_to_arrow_schema;
-use parquet::file::footer::parse_metadata;
-use parquet::file::metadata::ParquetMetaData;
 
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;

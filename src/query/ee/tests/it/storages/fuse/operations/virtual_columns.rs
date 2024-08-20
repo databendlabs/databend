@@ -84,8 +84,8 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
             assert!(schema.is_some());
             let schema = schema.unwrap();
             assert_eq!(schema.fields.len(), 2);
-            assert_eq!(schema.fields[0].name, "v['a']");
-            assert_eq!(schema.fields[1].name, "v[0]");
+            assert_eq!(schema.fields[0].name(), "v['a']");
+            assert_eq!(schema.fields[1].name(), "v[0]");
         }
     }
 

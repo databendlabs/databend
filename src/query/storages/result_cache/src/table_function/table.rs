@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
@@ -30,16 +29,12 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_common_storage::read_metadata_async;
 use databend_common_storage::DataOperator;
@@ -47,7 +42,6 @@ use databend_common_storages_parquet::ParquetFilesPart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
-use parquet::file::metadata::ParquetMetaData;
 
 const RESULT_SCAN: &str = "result_scan";
 
