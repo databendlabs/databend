@@ -14,7 +14,7 @@ mysql: [Warning] Using a password on the command line interface can be insecure.
 1
 3
 3
-3       NULL
+3	NULL
 2
 1
 mysql: [Warning] Using a password on the command line interface can be insecure.
