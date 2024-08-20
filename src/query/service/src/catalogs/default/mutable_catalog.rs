@@ -22,8 +22,11 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -681,7 +684,13 @@ impl Catalog for MutableCatalog {
         &self,
         dict_ident: TenantDictionaryIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
-        Ok(self.ctx.meta.drop_dictionary(dict_ident).await?)
+        let reply = self.ctx.meta.drop_dictionary(dict_ident).await?;
+        if reply.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                UnknownDictionary::new(dict_ident.dict_name(),"drop_dictionary"),
+            )));
+        }
+        Ok(reply)
     }
 
     #[async_backtrace::framed]
@@ -689,7 +698,13 @@ impl Catalog for MutableCatalog {
         &self,
         req: TenantDictionaryIdent,
     ) -> Result<Option<GetDictionaryReply>> {
-        Ok(self.ctx.meta.get_dictionary(req).await?)
+        let reply = self.ctx.meta.get_dictionary(req).await?;
+        if reply.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                UnknownDictionary::new(req.dict_name(),"get_dictionary"),
+            )));
+        }
+        Ok(reply)
     }
 
     #[async_backtrace::framed]
