@@ -56,7 +56,7 @@ impl Binder {
         {
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog.get_database(&tenant, &database).await?;
-            database_id = db.get_db_info().ident.db_id;
+            database_id = db.get_db_info().database_id.db_id;
         }
 
         let source = self.normalize_object_identifier(source_name);
@@ -152,7 +152,7 @@ impl Binder {
         {
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog.get_database(&tenant, &database).await?;
-            database_id = db.get_db_info().ident.db_id;
+            database_id = db.get_db_info().database_id.db_id;
         }
         Ok(Plan::DropDictionary(Box::new(DropDictionaryPlan {
             if_exists: *if_exists,
@@ -187,7 +187,7 @@ impl Binder {
             let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog.get_database(&tenant, &database).await?;
-            database_id = db.get_db_info().ident.db_id;
+            database_id = db.get_db_info().database_id.db_id;
         }
 
         Ok(Plan::ShowCreateDictionary(Box::new(
