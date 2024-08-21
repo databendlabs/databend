@@ -40,10 +40,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         columns = columns
             .iter()
             .map(|c| {
-                Column::Nullable(Box::new(NullableColumn {
-                    column: c.clone(),
-                    validity: Bitmap::new_constant(true, c.len()),
-                }))
+                NullableColumn::new_column(c.clone(), Bitmap::new_constant(true, c.len()))
             })
             .collect();
     }

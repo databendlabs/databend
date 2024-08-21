@@ -725,10 +725,7 @@ impl HashJoinProbeState {
             }
 
             let boolean_column = Column::Boolean(boolean_bit_map.into());
-            let marker_column = Column::Nullable(Box::new(NullableColumn {
-                column: boolean_column,
-                validity: validity.into(),
-            }));
+            let marker_column = NullableColumn::new_column(boolean_column, validity.into());
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_idx],

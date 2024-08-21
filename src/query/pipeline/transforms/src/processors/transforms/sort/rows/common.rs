@@ -107,10 +107,7 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                                 builder.commit_row();
                             }
                             if data_type.is_nullable() {
-                                Column::Nullable(Box::new(NullableColumn {
-                                    column: Column::Variant(builder.build()),
-                                    validity: validity.unwrap().clone(),
-                                }))
+                                NullableColumn::new_column(Column::Variant(builder.build()), validity.unwrap().clone())
                             } else {
                                 Column::Variant(builder.build())
                             }

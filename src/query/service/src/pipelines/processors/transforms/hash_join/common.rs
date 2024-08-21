@@ -134,10 +134,10 @@ impl HashJoinProbeState {
 
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
-            other => Ok(Column::Nullable(Box::new(NullableColumn {
-                validity: Bitmap::new_constant(true, other.len()),
-                column: other,
-            }))),
+            other => Ok(Column::Nullable(Box::new(NullableColumn::new(
+                other,
+                Bitmap::new_constant(true, other.len()),
+            )))),
         }
     }
 }
@@ -193,10 +193,7 @@ pub(crate) fn wrap_true_validity(
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        let col = Column::Nullable(Box::new(NullableColumn {
-            column: col,
-            validity,
-        }));
+        let col = NullableColumn::new_column(col, validity);
         BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }

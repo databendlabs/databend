@@ -307,10 +307,7 @@ impl<T: ValueType> NullableColumn<T> {
     }
 
     pub fn upcast(self) -> NullableColumn<AnyType> {
-        NullableColumn {
-            column: T::upcast_column(self.column),
-            validity: self.validity,
-        }
+        NullableColumn::new(T::upcast_column(self.column), self.validity)
     }
 
     pub fn memory_size(&self) -> usize {
@@ -320,16 +317,16 @@ impl<T: ValueType> NullableColumn<T> {
 
 impl NullableColumn<AnyType> {
     pub fn try_downcast<T: ValueType>(&self) -> Option<NullableColumn<T>> {
-        Some(NullableColumn {
-            column: T::try_downcast_column(&self.column)?,
-            validity: self.validity.clone(),
-        })
+        Some(NullableColumn::new(
+            T::try_downcast_column(&self.column)?,
+            self.validity.clone(),
+        ))
     }
 
     pub fn new_column(column: Column, validity: Bitmap) -> Column {
         debug_assert_eq!(column.len(), validity.len());
         debug_assert!(!matches!(column, Column::Nullable(_)));
-        Column::Nullable(Box::new(NullableColumn { column, validity }))
+        NullableColumn::new_column(column, validity)
     }
 }
 
@@ -400,10 +397,7 @@ impl<T: ValueType> NullableColumnBuilder<T> {
 
     pub fn build(self) -> NullableColumn<T> {
         assert_eq!(self.validity.len(), T::builder_len(&self.builder));
-        NullableColumn {
-            column: T::build_column(self.builder),
-            validity: self.validity.into(),
-        }
+        NullableColumn::new(T::build_column(self.builder), self.validity.into())
     }
 
     pub fn build_scalar(self) -> Option<T::Scalar> {

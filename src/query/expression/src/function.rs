@@ -727,18 +727,17 @@ pub fn error_to_null<I1: ArgType, O: ArgType>(
         if let Some((validity, _)) = ctx.errors.take() {
             match output {
                 Value::Scalar(_) => Value::Scalar(None),
-                Value::Column(column) => Value::Column(NullableColumn {
-                    column,
-                    validity: validity.into(),
-                }),
+                Value::Column(column) => {
+                    Value::Column(NullableColumn::new(column, validity.into()))
+                }
             }
         } else {
             match output {
                 Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn {
+                Value::Column(column) => Value::Column(NullableColumn::new(
                     column,
-                    validity: Bitmap::new_constant(true, ctx.num_rows),
-                }),
+                    Bitmap::new_constant(true, ctx.num_rows),
+                )),
             }
         }
     }

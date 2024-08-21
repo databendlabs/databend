@@ -806,7 +806,7 @@ impl Column {
                         .validity()
                         .cloned()
                         .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
-                    Column::Nullable(Box::new(NullableColumn { column, validity }))
+                    NullableColumn::new_column(column, validity)
                 }
                 (ty, arrow_ty) => {
                     return Err(ErrorCode::Unimplemented(format!(
