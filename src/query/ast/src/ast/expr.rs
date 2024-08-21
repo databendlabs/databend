@@ -940,6 +940,7 @@ pub enum TypeName {
     },
     Variant,
     Geometry,
+    Geography,
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -1058,6 +1059,9 @@ impl Display for TypeName {
             }
             TypeName::Geometry => {
                 write!(f, "GEOMETRY")?;
+            }
+            TypeName::Geography => {
+                write!(f, "GEOGRAPHY")?;
             }
             TypeName::Nullable(ty) => {
                 write!(f, "{} NULL", ty)?;

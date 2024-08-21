@@ -754,7 +754,7 @@ impl DefaultSettings {
                 // this setting will be removed when geometry type stable.
                 ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Create and alter table with geometry type",
+                    desc: "Create and alter table with geometry/geography type",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

@@ -642,6 +642,8 @@ pub enum TokenKind {
     GENERATED,
     #[token("GEOMETRY", ignore(ascii_case))]
     GEOMETRY,
+    #[token("GEOGRAPHY", ignore(ascii_case))]
+    GEOGRAPHY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
