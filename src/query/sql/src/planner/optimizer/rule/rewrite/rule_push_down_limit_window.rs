@@ -100,7 +100,7 @@ impl Rule for RulePushDownLimitWindow {
 }
 
 fn should_apply(child: &SExpr, window: &LogicalWindow) -> Result<bool> {
-    let child_window_exists = child_has_window(child)?;
+    let child_window_exists = child_has_window(child);
     // ranking functions are frame insensitive
     if is_ranking_function(&window.function) {
         Ok(!child_window_exists)
@@ -122,10 +122,10 @@ fn is_valid_frame(frame: &WindowFuncFrame) -> bool {
         && matches!(frame.end_bound, WindowFuncFrameBound::CurrentRow)
 }
 
-fn child_has_window(child: &SExpr) -> Result<bool> {
+fn child_has_window(child: &SExpr) -> bool {
     match child.plan() {
-        RelOperator::Window(_) => Ok(true),
-        RelOperator::Scan(_) => Ok(false), // finish recursion
-        _ => child_has_window(child.child(0)?),
+        RelOperator::Window(_) => true,
+        RelOperator::Scan(_) => false, // finish recursion
+        _ => child.children().any(|c| child_has_window(c)),
     }
 }
