@@ -1749,7 +1749,7 @@ impl AppErrorMessage for SequenceError {
 // dictionary
 impl AppErrorMessage for DictionaryAlreadyExists {
     fn message(&self) -> String {
-        format!("dictionary '{}' already exists", self.dictionary_name)
+        format!("Dictionary '{}' already exists", self.dictionary_name)
     }
 }
 

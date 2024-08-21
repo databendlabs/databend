@@ -45,7 +45,7 @@ struct QueryResponse {
 // make error message the same with ErrorCode::display
 fn format_error(value: serde_json::Value) -> String {
     let value = value.as_object().unwrap();
-    let detail = value["detail"].as_str();
+    let detail = value.get("detail").map(|v| v.as_str()).flatten();
     let code = value["code"].as_u64().unwrap();
     let message = value["message"].as_str().unwrap();
     if let Some(detail) = detail {

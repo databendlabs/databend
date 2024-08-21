@@ -385,6 +385,11 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
+    UnknownDictionaryId(3115),
+    UnsupportedDictionaryOption(3116),
+    UnsupportedDictionarySource(3117),
+    MissingDictionaryOption(3118),
+    WrongDictionaryFieldExpr(3119),
 }
 
 // Storage errors [3001, 4000].
