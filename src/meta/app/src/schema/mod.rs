@@ -46,7 +46,6 @@ pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;
 pub use database::DatabaseIdToName;
-pub use database::DatabaseIdent;
 pub use database::DatabaseInfo;
 pub use database::DatabaseInfoFilter;
 pub use database::DatabaseMeta;

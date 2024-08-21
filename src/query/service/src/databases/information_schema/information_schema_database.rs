@@ -15,10 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::SeqV;
 use databend_common_storages_information_schema::ColumnsTable;
 use databend_common_storages_information_schema::KeyColumnUsageTable;
 use databend_common_storages_information_schema::KeywordsTable;
@@ -55,15 +56,12 @@ impl InformationSchemaDatabase {
         }
 
         let db_info = DatabaseInfo {
-            ident: DatabaseIdent {
-                db_id: sys_db_meta.next_db_id(),
-                seq: 0,
-            },
+            database_id: DatabaseId::new(sys_db_meta.next_db_id()),
             name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), db),
-            meta: DatabaseMeta {
+            meta: SeqV::new(0, DatabaseMeta {
                 engine: "SYSTEM".to_string(),
                 ..Default::default()
-            },
+            }),
         };
 
         Self { db_info }

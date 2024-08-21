@@ -48,7 +48,6 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
@@ -242,15 +241,14 @@ impl ShareCatalog {
         let share_endpoint = &share_option.share_endpoint;
         let provider = &share_option.provider;
 
-        DatabaseInfo {
-            ident: DatabaseIdent::default(),
-            name_ident: DatabaseNameIdent::new(
+        DatabaseInfo::without_id_seq(
+            DatabaseNameIdent::new(
                 Tenant {
                     tenant: provider.to_owned(),
                 },
                 &database.name,
             ),
-            meta: DatabaseMeta {
+            DatabaseMeta {
                 engine: "SHARE".to_string(),
                 engine_options: BTreeMap::new(),
                 options: BTreeMap::new(),
@@ -263,7 +261,7 @@ impl ShareCatalog {
                 using_share_endpoint: Some(share_endpoint.to_owned()),
                 from_share_db_id: Some(ShareDbId::Usage(database.id)),
             },
-        }
+        )
     }
 }
 
