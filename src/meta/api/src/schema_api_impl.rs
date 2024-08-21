@@ -64,6 +64,7 @@ use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
@@ -219,6 +220,7 @@ use databend_common_meta_types::MetaId;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
@@ -266,6 +268,7 @@ use crate::util::get_virtual_column_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
+use crate::util::unknown_database_error;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
 
@@ -297,12 +300,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?.await;
 
             // Get db by name to ensure absence
-            let (db_id_seq, db_id) = get_u64_value(self, name_key).await?;
-            debug!(db_id_seq = db_id_seq, db_id = db_id, name_key :? =(name_key); "get_database");
+            let curr_seq_db_id = self.get_pb(name_key).await?;
+            debug!(curr_seq_db_id :? = curr_seq_db_id, name_key :? =(name_key); "get_database");
 
             let mut txn = TxnRequest::default();
 
-            let share_specs = if db_id_seq > 0 {
+            let share_specs = if let Some(ref curr_seq_db_id) = curr_seq_db_id {
                 match req.create_option {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
@@ -314,7 +317,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     }
                     CreateOption::CreateIfNotExists => {
                         return Ok(CreateDatabaseReply {
-                            db_id,
+                            db_id: curr_seq_db_id.data.into_inner(),
                             share_specs: None,
                         });
                     }
@@ -360,7 +363,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 db_id_list.append(db_id);
 
                 txn.condition.extend(vec![
-                    txn_cond_seq(name_key, Eq, db_id_seq),
+                    txn_cond_seq(name_key, Eq, curr_seq_db_id.seq()),
                     txn_cond_seq(&id_to_name_key, Eq, 0),
                     txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                 ]);
@@ -381,7 +384,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply { db_id, share_specs });
+                    return Ok(CreateDatabaseReply {
+                        db_id: id_key,
+                        share_specs,
+                    });
                 }
             }
         }
@@ -537,33 +543,45 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?.await;
 
             // get old db, not exists return err
-            let (old_db_id_seq, old_db_id) = get_u64_value(self, tenant_dbname).await?;
-            if req.if_exists {
-                if old_db_id_seq == 0 {
-                    return Ok(RenameDatabaseReply { share_spec: None });
-                }
-            } else {
-                db_has_to_exist(old_db_id_seq, tenant_dbname, "rename_database: src (db)")?;
-            }
+            let old_seq_db_id = self.get_pb(tenant_dbname).await?;
 
-            let id_key = DatabaseId { db_id: old_db_id };
-            let (db_meta_seq, db_meta) = get_pb_value(self, &id_key).await?;
-            db_has_to_exist(db_meta_seq, tenant_dbname, "rename_database: src (db)")?;
+            let Some(old_seq_db_id) = old_seq_db_id else {
+                if req.if_exists {
+                    return Ok(RenameDatabaseReply { share_spec: None });
+                } else {
+                    db_has_to_exist(
+                        old_seq_db_id.seq(),
+                        tenant_dbname,
+                        "rename_database: src (db)",
+                    )?;
+                    unreachable!("rename_database: src (db) should exist")
+                }
+            };
+
+            let old_db_id = old_seq_db_id.data.into_inner();
+
+            let old_seq_db_meta = self.get_pb(&old_db_id).await?;
+
+            db_has_to_exist(
+                old_seq_db_meta.seq(),
+                tenant_dbname,
+                "rename_database: src (db)",
+            )?;
             // safe to unwrap
-            let mut db_meta = db_meta.unwrap();
+            let mut db_meta = old_seq_db_meta.unwrap().data;
 
             debug!(
-                old_db_id = old_db_id,
+                old_db_id :? = old_db_id,
                 tenant_dbname :? =(tenant_dbname);
                 "rename_database"
             );
 
             // get new db, exists return err
-            let (db_id_seq, _db_id) = get_u64_value(self, &tenant_newdbname).await?;
-            db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
+            let new_seq_db_id = self.get_pb(&tenant_newdbname).await?;
+            db_has_to_not_exist(new_seq_db_id.seq(), &tenant_newdbname, "rename_database")?;
 
             // get db id -> name
-            let db_id_key = DatabaseIdToName { db_id: old_db_id };
+            let db_id_key = DatabaseIdToName { db_id: *old_db_id };
             let (db_name_seq, _): (_, Option<DatabaseNameIdentRaw>) =
                 get_pb_value(self, &db_id_key).await?;
 
@@ -576,20 +594,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if db_id_list_seq == 0 {
                 // may the database is created before add db_id_list, so we just add the id into the list.
                 db_id_list = DbIdList::new();
-                db_id_list.append(old_db_id);
+                db_id_list.append(*old_db_id);
             } else {
                 match db_id_list_opt {
                     Some(list) => db_id_list = list,
                     None => {
                         // may the database is created before add db_id_list, so we just add the id into the list.
                         db_id_list = DbIdList::new();
-                        db_id_list.append(old_db_id);
+                        db_id_list.append(*old_db_id);
                     }
                 }
             };
 
             if let Some(last_db_id) = db_id_list.last() {
-                if *last_db_id != old_db_id {
+                if *last_db_id != *old_db_id {
                     return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                         DatabaseAlreadyExists::new(
                             tenant_dbname.database_name(),
@@ -626,11 +644,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // rename database
             // move db id from old db id list to new db id list
             db_id_list.pop();
-            new_db_id_list.append(old_db_id);
+            new_db_id_list.append(*old_db_id);
 
             let mut condition = vec![
                 // Prevent renaming or deleting in other threads.
-                txn_cond_seq(tenant_dbname, Eq, old_db_id_seq),
+                txn_cond_seq(tenant_dbname, Eq, old_seq_db_id.seq),
                 txn_cond_seq(&db_id_key, Eq, db_name_seq),
                 txn_cond_seq(&tenant_newdbname, Eq, 0),
                 txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
@@ -639,7 +657,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut if_then = vec![
                 txn_op_del(tenant_dbname), // del old_db_name
                 // Renaming db should not affect the seq of db_meta. Just modify db name.
-                txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?), /* (tenant, new_db_name) -> old_db_id */
+                txn_op_put(&tenant_newdbname, serialize_u64(*old_db_id)?), /* (tenant, new_db_name) -> old_db_id */
                 txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?), /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
                 txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), /* _fd_db_id_list/tenant/db_name -> db_id_list */
                 txn_op_put(
@@ -651,7 +669,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // check if database if shared
             let share_spec = if !db_meta.shared_by.is_empty() {
                 let object =
-                    ShareObject::Database(tenant_dbname.database_name().to_string(), old_db_id);
+                    ShareObject::Database(tenant_dbname.database_name().to_string(), *old_db_id);
                 let update_on = Utc::now();
                 let mut share_spec_vec = vec![];
                 for share_id in &db_meta.shared_by {
@@ -699,9 +717,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 // clean db meta shared_by
                 db_meta.shared_by.clear();
-                let db_id_key = DatabaseId { db_id: old_db_id };
+                let db_id_key = DatabaseId { db_id: *old_db_id };
                 if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?));
-                Some((share_spec_vec, ReplyShareObject::Database(old_db_id)))
+                Some((share_spec_vec, ReplyShareObject::Database(*old_db_id)))
             } else {
                 None
             };
@@ -1562,24 +1580,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         // fixed: does not change in every loop.
-        let db_id = {
-            let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
-            SeqV::from_tuple((seq, id))
-        };
+        let seq_db_id = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
 
         // fixed
-        let key_dbid = DatabaseId { db_id: db_id.data };
-        let save_db_id = db_id.data;
+        let key_dbid = seq_db_id.data.into_inner();
+        let save_db_id = seq_db_id.data.into_inner();
 
         // fixed
         let key_dbid_tbname = DBIdTableName {
-            db_id: db_id.data,
+            db_id: *seq_db_id.data,
             table_name: req.name_ident.table_name.clone(),
         };
 
         // fixed
         let key_table_id_list = TableIdHistoryIdent {
-            database_id: db_id.data,
+            database_id: *seq_db_id.data,
             table_name: req.name_ident.table_name.clone(),
         };
         // if req.as_dropped, append new table id to orphan table id list
@@ -1587,7 +1602,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let now = Utc::now().timestamp_micros();
             let orphan_table_name = format!("{}@{}", ORPHAN_POSTFIX, now);
             (Some(orphan_table_name.clone()), TableIdHistoryIdent {
-                database_id: db_id.data,
+                database_id: *seq_db_id.data,
                 table_name: orphan_table_name,
             })
         } else {
@@ -1652,8 +1667,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 v.ok_or_else(|| {
                     AppError::UnknownDatabaseId(UnknownDatabaseId::new(
-                        db_id.data,
-                        format!("{}: {}", func_name!(), db_id.data),
+                        *seq_db_id.data,
+                        format!("{}: {}", func_name!(), seq_db_id.data),
                     ))
                 })?
             };
@@ -1684,7 +1699,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             return Ok(CreateTableReply {
                                 table_id: *id.data,
                                 table_id_seq: None,
-                                db_id: db_id.data,
+                                db_id: *seq_db_id.data,
                                 new_table: false,
                                 spec_vec: None,
                                 prev_table_id: None,
@@ -1704,7 +1719,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
                                     *id.data,
-                                    db_id.data,
+                                    *seq_db_id.data,
                                     false,
                                     false,
                                     &mut txn,
@@ -1830,10 +1845,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     return Ok(CreateTableReply {
                         table_id,
                         table_id_seq,
-                        db_id: db_id.data,
+                        db_id: *seq_db_id.data,
                         new_table: dbid_tbname_seq == 0,
                         spec_vec: if let Some(spec_vec) = opt.0 {
-                            Some((save_db_id, opt.2, spec_vec))
+                            Some((*save_db_id, opt.2, spec_vec))
                         } else {
                             None
                         },
@@ -4960,11 +4975,11 @@ pub(crate) async fn get_db_id_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
-) -> Result<(u64, u64), KVAppError> {
-    let (db_id_seq, db_id) = get_u64_value(kv_api, name_key).await?;
-    db_has_to_exist(db_id_seq, name_key, &msg)?;
+) -> Result<SeqV<Id<DatabaseId>>, KVAppError> {
+    let seq_db_id = kv_api.get_pb(name_key).await?;
 
-    Ok((db_id_seq, db_id))
+    let seq_db_id = seq_db_id.ok_or_else(|| unknown_database_error(name_key, msg))?;
+    Ok(seq_db_id)
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
@@ -4973,20 +4988,16 @@ pub(crate) async fn get_db_or_err(
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, SeqV<DatabaseMeta>), KVAppError> {
-    let (db_id_seq, db_id) = get_u64_value(kv_api, name_key).await?;
-    db_has_to_exist(db_id_seq, name_key, &msg)?;
+    // TODO: change to returning SeqV
+    let seq_db_id = kv_api.get_pb(name_key).await?;
+    let seq_db_id = seq_db_id.ok_or_else(|| unknown_database_error(name_key, &msg))?;
 
-    let id_key = DatabaseId { db_id };
+    let id_key = seq_db_id.data.into_inner();
 
-    let (db_meta_seq, db_meta) = get_pb_value(kv_api, &id_key).await?;
-    db_has_to_exist(db_meta_seq, name_key, msg)?;
+    let seq_db_meta = kv_api.get_pb(&id_key).await?;
+    let seq_db_meta = seq_db_meta.ok_or_else(|| unknown_database_error(name_key, &msg))?;
 
-    Ok((
-        db_id_seq,
-        db_id,
-        // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
-        SeqV::new(db_meta_seq, db_meta.unwrap()),
-    ))
+    Ok((seq_db_id.seq, *seq_db_id.data, seq_db_meta))
 }
 
 /// Returns (db_meta_seq, db_meta)

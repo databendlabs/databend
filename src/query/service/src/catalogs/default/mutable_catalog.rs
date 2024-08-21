@@ -46,7 +46,6 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
@@ -274,7 +273,7 @@ impl Catalog for MutableCatalog {
 
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
-            database_id: DatabaseId::new(res.db_id),
+            database_id: res.db_id,
             name_ident: req.name_ident.clone(),
             // TODO create_database should return meta seq
             meta: SeqV::new(0, req.meta.clone()),

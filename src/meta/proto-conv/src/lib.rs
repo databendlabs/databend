@@ -72,6 +72,7 @@ mod datetime_from_to_protobuf_impl;
 mod dictionary_from_to_protobuf_impl;
 mod file_format_from_to_protobuf_impl;
 mod from_to_protobuf;
+mod id_from_to_protobuf_impl;
 mod index_from_to_protobuf_impl;
 mod least_visible_time_from_to_protobuf_impl;
 mod lock_from_to_protobuf_impl;

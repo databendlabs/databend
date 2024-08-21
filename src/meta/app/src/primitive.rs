@@ -17,6 +17,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 
 /// A wrapper implements Deref<Target=u64>, which is used as the default type for `T` in `Id<T>`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct U64(u64);
 
 impl Deref for U64 {
@@ -49,7 +50,7 @@ impl From<u64> for U64 {
 ///
 /// `Id` implements `prost::Message` so that it can be used as a protobuf message.
 /// Although internally it uses JSON encoding.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Id<T = U64> {
     id: T,
 }
@@ -67,6 +68,10 @@ impl<T> Id<T> {
 
     pub fn inner(&self) -> &T {
         &self.id
+    }
+
+    pub fn into_inner(self) -> T {
+        self.id
     }
 }
 
@@ -95,7 +100,7 @@ where T: Deref<Target = u64>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let type_name = std::any::type_name::<T>();
-        let last = type_name.rsplitn(2, "::").next().unwrap_or(type_name);
+        let last = type_name.rsplit("::").next().unwrap_or(type_name);
         write!(f, "Id({}({}))", last, *self.id)
     }
 }
