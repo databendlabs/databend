@@ -83,6 +83,17 @@ impl<T> SeqValue<T> for Marked<T> {
         }
     }
 
+    fn into_value(self) -> Option<T> {
+        match self {
+            Marked::TombStone { internal_seq: _ } => None,
+            Marked::Normal {
+                internal_seq: _,
+                value,
+                meta: _,
+            } => Some(value),
+        }
+    }
+
     fn meta(&self) -> Option<&KVMeta> {
         match self {
             Marked::TombStone { .. } => None,

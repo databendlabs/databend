@@ -27,6 +27,7 @@ use crate::EvalExpireTime;
 pub trait SeqValue<V = Vec<u8>> {
     fn seq(&self) -> u64;
     fn value(&self) -> Option<&V>;
+    fn into_value(self) -> Option<V>;
     fn meta(&self) -> Option<&KVMeta>;
 
     /// Return the expire time in millisecond since 1970.
@@ -124,6 +125,10 @@ impl<V> SeqValue<V> for SeqV<V> {
         Some(&self.data)
     }
 
+    fn into_value(self) -> Option<V> {
+        Some(self.data)
+    }
+
     fn meta(&self) -> Option<&KVMeta> {
         self.meta.as_ref()
     }
@@ -136,6 +141,10 @@ impl<V> SeqValue<V> for Option<SeqV<V>> {
 
     fn value(&self) -> Option<&V> {
         self.as_ref().and_then(|v| v.value())
+    }
+
+    fn into_value(self) -> Option<V> {
+        self.map(|v| v.data)
     }
 
     fn meta(&self) -> Option<&KVMeta> {

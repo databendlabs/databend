@@ -293,9 +293,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             "BackgroundTaskApi: {}",
             func_name!()
         );
-        let name = &req.name;
-        let (_, resp) = get_background_task_by_name(self, name).await?;
-        Ok(GetBackgroundTaskReply { task_info: resp })
+
+        let resp = self.get_pb(&req.name).await?;
+        Ok(GetBackgroundTaskReply {
+            task_info: resp.into_value(),
+        })
     }
 }
 
@@ -332,19 +334,18 @@ pub fn assert_background_job_exist(
 ) -> Result<(), AppError> {
     if seq == 0 {
         debug!(seq = seq, name_ident :? =(name_ident); "background job does not exist");
-        let unknown = UnknownBackgroundJob::new(name_ident.job_name(), format!("{:?}", name_ident));
-        Err(AppError::UnknownBackgroundJob(unknown))
+        let err = unknown_background_job(name_ident);
+        Err(err)
     } else {
         Ok(())
     }
 }
 
-async fn get_background_task_by_name(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    id: &BackgroundTaskIdent,
-) -> Result<(u64, Option<BackgroundTaskInfo>), KVAppError> {
-    let (seq, res) = get_pb_value(kv_api, id).await?;
-    Ok((seq, res))
+pub fn unknown_background_job(name_ident: &BackgroundJobIdent) -> AppError {
+    AppError::UnknownBackgroundJob(UnknownBackgroundJob::new(
+        name_ident.job_name(),
+        format!("{:?}", name_ident),
+    ))
 }
 
 async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo) -> bool>(

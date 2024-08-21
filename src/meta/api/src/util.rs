@@ -183,7 +183,7 @@ where
     K::ValueType: FromToProto,
 {
     let res = kv_api.get_pb(k).await?;
-    Ok((res.seq(), res.value()))
+    Ok((res.seq(), res.into_value()))
 }
 
 /// Batch get values that are encoded with FromToProto.
