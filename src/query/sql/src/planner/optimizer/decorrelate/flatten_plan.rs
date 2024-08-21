@@ -43,7 +43,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
-use crate::plans::SrfItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::BaseTableColumn;
@@ -324,7 +323,7 @@ impl SubqueryRewriter {
         )?;
         let mut srfs = Vec::with_capacity(project_set.srfs.len());
         for item in project_set.srfs.iter() {
-            let new_item = SrfItem {
+            let new_item = ScalarItem {
                 scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
                 index: item.index,
             };

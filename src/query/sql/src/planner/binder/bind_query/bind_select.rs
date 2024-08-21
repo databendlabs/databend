@@ -38,7 +38,6 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
 
-use crate::binder::project_set::SrfCollector;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
@@ -102,26 +101,15 @@ impl Binder {
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
-        // Collect set returning functions
-        let set_returning_functions = {
-            let mut collector = SrfCollector::new();
-            stmt.select_list.iter().for_each(|item| {
-                if let SelectTarget::AliasedExpr { expr, .. } = item {
-                    collector.visit(expr);
-                }
-            });
-            collector.into_srfs()
-        };
-
-        // Bind set returning functions
-        s_expr = self.bind_project_set(&mut from_context, &set_returning_functions, s_expr)?;
-
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
         // Generate a analyzed select list with from context
         let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
+
+        // analyze set returning functions
+        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -179,7 +167,7 @@ impl Binder {
         )?;
 
         // After all analysis is done.
-        if set_returning_functions.is_empty() {
+        if from_context.srfs.is_empty() {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,
@@ -190,6 +178,11 @@ impl Binder {
                 &order_items.items,
                 limit.unwrap_or_default(),
             )?;
+        }
+
+        if !from_context.srfs.is_empty() {
+            // Bind set returning functions
+            s_expr = self.bind_project_set(&mut from_context, s_expr)?;
         }
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()

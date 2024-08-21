@@ -208,7 +208,7 @@ impl Binder {
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: Default::default(),
+            srfs: vec![],
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
