@@ -656,7 +656,7 @@ fn test_geography_as_arrow() {
     use databend_common_expression::types::binary::BinaryColumnBuilder;
     use databend_common_expression::types::geography::GeographyColumn;
     use databend_common_expression::Column;
-    use databend_common_geo::wkb::make_point;
+    use databend_common_io::wkb::make_point;
 
     let mut builder = BinaryColumnBuilder::with_capacity(3, 0);
     builder.put_slice(&make_point(1.0, 2.0));

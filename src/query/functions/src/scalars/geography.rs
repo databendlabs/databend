@@ -17,7 +17,7 @@ use databend_common_expression::types::*;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
-use databend_common_geo::wkb::make_point;
+use databend_common_io::wkb::make_point;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases

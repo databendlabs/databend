@@ -3382,7 +3382,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
- "databend-common-geo",
  "databend-common-hashtable",
  "databend-common-io",
  "educe",
@@ -3473,7 +3472,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-geo",
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-openai",
@@ -3513,13 +3511,6 @@ dependencies = [
  "strength_reduce",
  "stringslice",
  "twox-hash",
-]
-
-[[package]]
-name = "databend-common-geo"
-version = "0.1.0"
-dependencies = [
- "scroll 0.12.0",
 ]
 
 [[package]]
@@ -3590,6 +3581,7 @@ dependencies = [
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
+ "scroll 0.12.0",
  "serde",
  "wkt",
 ]
