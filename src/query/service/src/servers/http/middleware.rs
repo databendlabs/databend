@@ -488,7 +488,7 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
                 error: QueryError {
                     code: err.status().as_u16(),
                     message: err.to_string(),
-                    detail: "".to_string(),
+                    detail: None,
                 },
             }),
         )
