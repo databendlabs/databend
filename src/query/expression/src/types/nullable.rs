@@ -254,6 +254,17 @@ pub struct NullableColumnVec {
 }
 
 impl<T: ValueType> NullableColumn<T> {
+    // though column and validity are public
+    // we should better use new to create a new instance to ensure the validity and column are consistent
+    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+        debug_assert_eq!(T::column_len(&column), validity.len());
+        debug_assert!(!matches!(
+            T::upcast_column(column.clone()),
+            Column::Nullable(_)
+        ));
+        NullableColumn { column, validity }
+    }
+
     pub fn len(&self) -> usize {
         self.validity.len()
     }
@@ -313,6 +324,12 @@ impl NullableColumn<AnyType> {
             column: T::try_downcast_column(&self.column)?,
             validity: self.validity.clone(),
         })
+    }
+
+    pub fn new_column(column: Column, validity: Bitmap) -> Column {
+        debug_assert_eq!(column.len(), validity.len());
+        debug_assert!(!matches!(column, Column::Nullable(_)));
+        Column::Nullable(Box::new(NullableColumn { column, validity }))
     }
 }
 

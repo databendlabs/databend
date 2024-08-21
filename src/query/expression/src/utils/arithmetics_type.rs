@@ -1042,7 +1042,7 @@ impl ResultTypeOfUnary for i64 {
 }
 
 impl ResultTypeOfUnary for F32 {
-    type Negate = F32;
+    type Negate = F64;
     type Sum = F64;
 
     fn checked_add(self, rhs: Self) -> Option<Self> {

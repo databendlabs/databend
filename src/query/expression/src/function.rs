@@ -288,21 +288,16 @@ impl Function {
                 match output {
                     Value::Scalar(_) => Value::Scalar(Scalar::Null),
                     Value::Column(column) => {
-                        Value::Column(Column::Nullable(Box::new(NullableColumn {
-                            column,
-                            validity: validity.into(),
-                        })))
+                        Value::Column(NullableColumn::new_column(column, validity.into()))
                     }
                 }
             } else {
                 match output {
                     Value::Scalar(scalar) => Value::Scalar(scalar),
-                    Value::Column(column) => {
-                        Value::Column(Column::Nullable(Box::new(NullableColumn {
-                            column,
-                            validity: Bitmap::new_constant(true, num_rows),
-                        })))
-                    }
+                    Value::Column(column) => Value::Column(NullableColumn::new_column(
+                        column,
+                        Bitmap::new_constant(true, num_rows),
+                    )),
                 }
             }
         });
@@ -711,15 +706,10 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                             &nullable_column.validity,
                             &validity,
                         );
-                        Column::Nullable(Box::new(NullableColumn {
-                            column: nullable_column.column,
-                            validity,
-                        }))
+
+                        NullableColumn::new_column(nullable_column.column, validity)
                     }
-                    _ => Column::Nullable(Box::new(NullableColumn {
-                        column,
-                        validity: bitmap.into(),
-                    })),
+                    _ => NullableColumn::new_column(column, bitmap.into()),
                 };
                 Value::Column(result)
             }

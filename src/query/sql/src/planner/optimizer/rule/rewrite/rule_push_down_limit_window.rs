@@ -126,6 +126,6 @@ fn child_has_window(child: &SExpr) -> bool {
     match child.plan() {
         RelOperator::Window(_) => true,
         RelOperator::Scan(_) => false, // finish recursion
-        _ => child.children().any(|c| child_has_window(c)),
+        _ => child.children().any(child_has_window),
     }
 }

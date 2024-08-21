@@ -85,10 +85,7 @@ impl HashJoinProbeState {
             row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
-        let marker_column = Column::Nullable(Box::new(NullableColumn {
-            column: boolean_column,
-            validity: validity.into(),
-        }));
+        let marker_column = NullableColumn::new_column(boolean_column, validity.into());
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
