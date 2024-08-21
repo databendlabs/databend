@@ -577,6 +577,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("auto_compaction_segments_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "This setting is deprecated",
