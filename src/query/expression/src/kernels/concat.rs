@@ -28,6 +28,7 @@ use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -39,6 +40,7 @@ use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -356,6 +358,12 @@ impl Column {
                 columns.map(|col| col.into_geometry().unwrap()),
                 capacity,
             )),
+            Column::Geography(_) => {
+                GeographyType::upcast_column(GeographyColumn(Self::concat_binary_types(
+                    columns.map(|col| col.into_geography().unwrap().0),
+                    capacity,
+                )))
+            }
         };
         Ok(column)
     }

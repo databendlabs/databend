@@ -135,6 +135,7 @@ impl NestedValues {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -326,6 +327,19 @@ impl NestedValues {
     }
 
     fn read_geometry<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let geom = parse_to_ewkb(&buf, None)?;
+        column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography<R: AsRef<[u8]>>(
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,

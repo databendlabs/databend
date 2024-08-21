@@ -23,9 +23,11 @@ use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
@@ -160,6 +162,11 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         ),
         TableDataType::Geometry => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOMETRY.to_string(),
+            Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geography => ArrowDataType::Extension(
+            ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
             Box::new(ArrowDataType::LargeBinary),
             None,
         ),
@@ -391,7 +398,10 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Bitmap(col) | Column::Variant(col) | Column::Geometry(col) => {
+            Column::Bitmap(col)
+            | Column::Variant(col)
+            | Column::Geometry(col)
+            | Column::Geography(GeographyColumn(col)) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(
