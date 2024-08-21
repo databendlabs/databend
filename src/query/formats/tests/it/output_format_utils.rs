@@ -74,7 +74,7 @@ pub fn get_simple_block(is_nullable: bool) -> (TableSchemaRef, DataBlock) {
             .map(|(idx, (data_type, c))| {
                 let validity = Bitmap::new_constant(true, c.len());
                 (
-                   NullableColumn::new_column(c, validity),
+                    NullableColumn::new_column(c, validity),
                     TableField::new(&format!("c{}", idx + 1), data_type.wrap_nullable()),
                 )
             })

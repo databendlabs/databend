@@ -150,7 +150,7 @@ impl Column {
             Column::Nullable(c) => {
                 let column = Self::take_ranges(&c.column, ranges, num_rows);
                 let validity = Self::take_ranges_boolean_types(&c.validity, ranges, num_rows);
-               NullableColumn::new_column(column, validity)
+                NullableColumn::new_column(column, validity)
             }
             Column::Tuple(fields) => {
                 let fields = fields

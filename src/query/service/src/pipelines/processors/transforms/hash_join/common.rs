@@ -134,10 +134,12 @@ impl HashJoinProbeState {
 
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
-            other => Ok(Column::Nullable(Box::new(NullableColumn::new(
-                other,
-                Bitmap::new_constant(true, other.len()),
-            )))),
+            other => {
+                let validity = Bitmap::new_constant(true, other.len());
+                Ok(Column::Nullable(Box::new(NullableColumn::new(
+                    other, validity,
+                ))))
+            }
         }
     }
 }

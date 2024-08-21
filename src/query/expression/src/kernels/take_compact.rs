@@ -174,7 +174,10 @@ impl Column {
                 let column = c.column.take_compacted_indices(indices, num_rows);
                 let validity =
                     Self::take_compacted_arg_types::<BooleanType>(&c.validity, indices, num_rows);
-                Column::Nullable(Box::new(NullableColumn::new(column, BooleanType::try_downcast_column(&validity).unwrap())))
+                Column::Nullable(Box::new(NullableColumn::new(
+                    column,
+                    BooleanType::try_downcast_column(&validity).unwrap(),
+                )))
             }
             Column::Tuple(fields) => {
                 let fields = fields

@@ -75,11 +75,17 @@ fn test_not(file: &mut impl Write) {
     )]);
     run_ast(file, "NOT a", &[(
         "a",
-        NullableColumn::new_column(Column::Boolean(vec![true, false, true].into()), vec![false, true, false].into()),
+        NullableColumn::new_column(
+            Column::Boolean(vec![true, false, true].into()),
+            vec![false, true, false].into(),
+        ),
     )]);
     run_ast(file, "NOT a", &[(
         "a",
-        NullableColumn::new_column(Column::Boolean(vec![false, false, false].into()), vec![true, true, false].into()),
+        NullableColumn::new_column(
+            Column::Boolean(vec![false, false, false].into()),
+            vec![true, true, false].into(),
+        ),
     )]);
 }
 

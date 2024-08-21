@@ -376,7 +376,10 @@ impl Column {
                     result_size,
                 );
 
-                NullableColumn::new_column(inner_column, BooleanType::try_downcast_column(&inner_bitmap).unwrap())
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             Column::Tuple { .. } => {
                 let inner_ty = datatype.as_tuple().unwrap();
@@ -747,7 +750,10 @@ impl Column {
                     binary_items_buf,
                 );
 
-                NullableColumn::new_column(inner_column, BooleanType::try_downcast_column(&inner_bitmap).unwrap())
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             ColumnVec::Tuple(columns) => {
                 let inner_data_type = data_type.as_tuple().unwrap();

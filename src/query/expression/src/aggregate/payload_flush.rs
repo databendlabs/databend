@@ -260,7 +260,7 @@ impl Payload {
             let b = self.flush_type_column::<BooleanType>(validity_offset, state);
             let validity = b.into_boolean().unwrap();
 
-           NullableColumn::new_column(col, validity)
+            NullableColumn::new_column(col, validity)
         } else {
             col
         }
