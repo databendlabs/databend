@@ -317,7 +317,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             .get_database(tenant, db_name)
             .await?
             .get_db_info()
-            .ident
+            .database_id
             .db_id;
         let req = TenantDictionaryIdent::new(
             tenant,
