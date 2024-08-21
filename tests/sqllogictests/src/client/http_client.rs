@@ -45,16 +45,16 @@ struct QueryResponse {
 // make error message the same with ErrorCode::display
 fn format_error(value: serde_json::Value) -> String {
     let value = value.as_object().unwrap();
-    let detail = value["detail"].as_str().unwrap();
+    let detail = value["detail"].as_str();
     let code = value["code"].as_u64().unwrap();
     let message = value["message"].as_str().unwrap();
-    if detail.is_empty() {
-        format!("http query error: code: {}, Text: {}", code, message)
-    } else {
+    if let Some(detail) = detail {
         format!(
             "http query error: code: {}, Text: {}\n{}",
             code, message, detail
         )
+    } else {
+        format!("http query error: code: {}, Text: {}", code, message)
     }
 }
 
