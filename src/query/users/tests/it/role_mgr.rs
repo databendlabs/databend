@@ -36,13 +36,13 @@ async fn test_role_manager() -> Result<()> {
     // add role
     {
         let role_info = RoleInfo::new(&role_name);
-        role_mgr.add_role(&tenant, role_info, false).await?;
+        role_mgr.add_role(&tenant, role_info, false, true).await?;
     }
 
     // add role again, error
     {
         let role_info = RoleInfo::new(&role_name);
-        let res = role_mgr.add_role(&tenant, role_info, false).await;
+        let res = role_mgr.add_role(&tenant, role_info, false, false).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::ROLE_ALREADY_EXISTS,);
     }
@@ -50,12 +50,12 @@ async fn test_role_manager() -> Result<()> {
     // add role
     {
         let role_info = RoleInfo::new(&role_name);
-        role_mgr.add_role(&tenant, role_info, true).await?;
+        role_mgr.add_role(&tenant, role_info, true, true).await?;
     }
 
     // get role
     {
-        let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(&tenant, role_name.clone(), false).await?;
         assert_eq!(role.name, "test-role1");
     }
 
@@ -81,7 +81,7 @@ async fn test_role_manager() -> Result<()> {
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(&tenant, role_name.clone(), false).await?;
         assert!(
             role.grants
                 .verify_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
@@ -99,7 +99,7 @@ async fn test_role_manager() -> Result<()> {
             )
             .await?;
 
-        let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(&tenant, role_name.clone(), true).await?;
         assert_eq!(role.grants.entries().len(), 0);
     }
 
