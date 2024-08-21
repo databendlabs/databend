@@ -32,7 +32,7 @@ async fn test_network_policy() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant = Tenant::new_literal("test");
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant, false).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";

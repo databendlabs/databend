@@ -29,7 +29,7 @@ async fn test_role_manager() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant = Tenant::new_literal("tenant1");
 
-    let role_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
+    let role_mgr = UserApiProvider::try_create_simple(conf, &tenant, false).await?;
 
     let role_name = "test-role1".to_string();
 

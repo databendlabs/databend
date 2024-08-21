@@ -74,6 +74,7 @@ pub async fn check_and_upgrade_to_pb<T>(
     key: &String,
     seq_value: &SeqV,
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    enable_upgrade_meta_data_to_pb: bool,
 ) -> std::result::Result<SeqV<T>, MetaError>
 where
     T: FromToProto + serde::de::DeserializeOwned + 'static,
@@ -98,23 +99,27 @@ where
     }
     quota.decrement();
 
-    // If we reached here, it means JSON deserialization was successful but we need to serialize to protobuf format.
-    let value = databend_common_meta_api::serialize_struct(&data)?;
+    if enable_upgrade_meta_data_to_pb {
+        // If we reached here, it means JSON deserialization was successful but we need to serialize to protobuf format.
+        let value = databend_common_meta_api::serialize_struct(&data)?;
 
-    let res = kv_api
-        .upsert_kv(UpsertKVReq::new(
-            key,
-            MatchSeq::Exact(seq_value.seq),
-            Operation::Update(value),
-            None,
-        ))
-        .await?;
+        let res = kv_api
+            .upsert_kv(UpsertKVReq::new(
+                key,
+                MatchSeq::Exact(seq_value.seq),
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
 
-    let seq = if res.is_changed() {
-        res.result.seq()
+        let seq = if res.is_changed() {
+            res.result.seq()
+        } else {
+            seq_value.seq
+        };
+
+        Ok(SeqV::new(seq, data))
     } else {
-        seq_value.seq
-    };
-
-    Ok(SeqV::new(seq, data))
+        Ok(SeqV::new(seq_value.seq, data))
+    }
 }

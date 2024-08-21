@@ -66,7 +66,7 @@ impl PySessionContext {
             let session = session_manager.register_session(session).unwrap();
 
             let config = GlobalConfig::instance();
-            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
+            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant, config.query.enable_upgrade_meta_data_to_pb)
                 .await
                 .unwrap();
 

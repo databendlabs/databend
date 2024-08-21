@@ -59,16 +59,19 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
+    enable_upgrade_meta_data_to_pb: bool,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Self {
         RoleMgr {
             kv_api,
             tenant: tenant.clone(),
+            enable_upgrade_meta_data_to_pb,
         }
     }
 
@@ -167,8 +170,14 @@ impl RoleApi for RoleMgr {
             Ok(_) => {
                 let mut quota = Quota::new(func_name!());
 
-                let u = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
-                    .await?;
+                let u = check_and_upgrade_to_pb(
+                    &mut quota,
+                    &key,
+                    &seq_value,
+                    self.kv_api.as_ref(),
+                    self.enable_upgrade_meta_data_to_pb,
+                )
+                .await?;
 
                 // Keep the original seq.
                 Ok(SeqV::new(seq_value.seq, u.data))
@@ -190,7 +199,14 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await?;
+            let u = check_and_upgrade_to_pb(
+                &mut quota,
+                &key,
+                &val,
+                self.kv_api.as_ref(),
+                self.enable_upgrade_meta_data_to_pb,
+            )
+            .await?;
             r.push(u);
         }
 
@@ -218,7 +234,15 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         for (key, val) in values {
-            match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
+            match check_and_upgrade_to_pb(
+                &mut quota,
+                &key,
+                &val,
+                self.kv_api.as_ref(),
+                self.enable_upgrade_meta_data_to_pb,
+            )
+            .await
+            {
                 Ok(u) => r.push(u),
                 // If we add a new item in OwnershipObject, and generate a new kv about this new item,
                 // After rollback the old version, deserialize will return Err Ownership can not be none.
@@ -411,8 +435,14 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         // if can not get ownership, will directly return None.
-        let seq_val =
-            check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref()).await?;
+        let seq_val = check_and_upgrade_to_pb(
+            &mut quota,
+            &key,
+            &seq_value,
+            self.kv_api.as_ref(),
+            self.enable_upgrade_meta_data_to_pb,
+        )
+        .await?;
 
         Ok(Some(seq_val.data))
     }

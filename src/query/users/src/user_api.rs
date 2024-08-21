@@ -52,6 +52,7 @@ pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     builtin: BuiltIn,
+    enable_upgrade_meta_data_to_pb: bool,
 }
 
 impl UserApiProvider {
@@ -61,8 +62,11 @@ impl UserApiProvider {
         builtin: BuiltIn,
         tenant: &Tenant,
         quota: Option<TenantQuota>,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, builtin, tenant).await?);
+        GlobalInstance::set(
+            Self::try_create(conf, builtin, tenant, enable_upgrade_meta_data_to_pb).await?,
+        );
         let user_mgr = UserApiProvider::instance();
         if let Some(q) = quota {
             let i = user_mgr.tenant_quota_api(tenant);
@@ -77,12 +81,14 @@ impl UserApiProvider {
         conf: RpcClientConf,
         builtin: BuiltIn,
         tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         let user_mgr = UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
             builtin,
+            enable_upgrade_meta_data_to_pb,
         };
 
         // init built-in role
@@ -107,8 +113,15 @@ impl UserApiProvider {
     pub async fn try_create_simple(
         conf: RpcClientConf,
         tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, BuiltIn::default(), tenant).await
+        Self::try_create(
+            conf,
+            BuiltIn::default(),
+            tenant,
+            enable_upgrade_meta_data_to_pb,
+        )
+        .await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -125,7 +138,11 @@ impl UserApiProvider {
     }
 
     pub fn role_api(&self, tenant: &Tenant) -> Arc<impl RoleApi> {
-        let role_mgr = RoleMgr::create(self.client.clone(), tenant);
+        let role_mgr = RoleMgr::create(
+            self.client.clone(),
+            tenant,
+            self.enable_upgrade_meta_data_to_pb,
+        );
         Arc::new(role_mgr)
     }
 

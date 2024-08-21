@@ -35,7 +35,7 @@ async fn test_user_manager() -> Result<()> {
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant, false).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";
