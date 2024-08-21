@@ -123,7 +123,7 @@ impl Interpreter for DropTableInterpreter {
                 tenant: tenant.clone(),
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
-                db_id: db.get_db_info().ident.db_id,
+                db_id: db.get_db_info().database_id.db_id,
             })
             .await?;
 
@@ -133,7 +133,7 @@ impl Interpreter for DropTableInterpreter {
         let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
         let owner_object = OwnershipObject::Table {
             catalog_name: self.plan.catalog.clone(),
-            db_id: db.get_db_info().ident.db_id,
+            db_id: db.get_db_info().database_id.db_id,
             table_id,
         };
 

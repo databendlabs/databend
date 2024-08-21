@@ -226,9 +226,9 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
-        if self.sys_db.get_db_info().ident.db_id == db_id {
+        if self.sys_db.get_db_info().database_id.db_id == db_id {
             Ok("system".to_string())
-        } else if self.info_schema_db.get_db_info().ident.db_id == db_id {
+        } else if self.info_schema_db.get_db_info().database_id.db_id == db_id {
             Ok("information_schema".to_string())
         } else {
             Err(ErrorCode::UnknownDatabaseId(format!(
@@ -245,9 +245,9 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<Vec<Option<String>>> {
         let mut res = Vec::new();
         for id in db_ids {
-            if self.sys_db.get_db_info().ident.db_id == *id {
+            if self.sys_db.get_db_info().database_id.db_id == *id {
                 res.push(Some("system".to_string()));
-            } else if self.info_schema_db.get_db_info().ident.db_id == *id {
+            } else if self.info_schema_db.get_db_info().database_id.db_id == *id {
                 res.push(Some("information_schema".to_string()));
             }
         }

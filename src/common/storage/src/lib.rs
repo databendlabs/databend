@@ -49,10 +49,6 @@ mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
 
-mod parquet2;
-pub use parquet2::infer_schema_with_extension;
-pub use parquet2::read_parquet_metas_in_parallel;
-
 pub mod parquet_rs;
 pub use parquet_rs::read_metadata_async;
 pub use parquet_rs::read_parquet_schema_async_rs;

@@ -1780,7 +1780,7 @@ async fn get_share_object_seq_and_id(
     match obj_name {
         ShareGrantObjectName::Database(db_name) => {
             let name_key = DatabaseNameIdent::new(tenant.clone(), db_name);
-            let (_db_id_seq, db_id, db_meta_seq, db_meta) = get_db_or_err(
+            let (_db_id_seq, db_id, db_meta) = get_db_or_err(
                 kv_api,
                 &name_key,
                 format!("get_share_object_seq_and_id: {}", name_key.display()),
@@ -1798,7 +1798,7 @@ async fn get_share_object_seq_and_id(
                 ));
             }
             Ok((
-                ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, db_meta),
+                ShareGrantObjectSeqAndId::Database(db_meta.seq, db_id, db_meta.data),
                 ShareObject::Database(db_name.to_owned(), db_id),
             ))
         }

@@ -49,6 +49,7 @@ impl AggIndexReader {
                         .iter()
                         .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
                 );
+
                 let columns_meta = metadata
                     .into_iter()
                     .enumerate()

@@ -112,7 +112,7 @@ impl PrivilegeAccess {
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 OwnershipObject::Database {
                     catalog_name: catalog_name.clone(),
@@ -135,7 +135,7 @@ impl PrivilegeAccess {
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = if !disable_table_info_refresh {
                     self.ctx
@@ -615,7 +615,7 @@ impl PrivilegeAccess {
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
-            .ident
+            .database_id
             .db_id;
         if let Some(table_name) = table_name {
             let table_id = if !disable_table_info_refresh {

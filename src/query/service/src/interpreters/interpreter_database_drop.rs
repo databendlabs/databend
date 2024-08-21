@@ -60,7 +60,7 @@ impl Interpreter for DropDatabaseInterpreter {
             let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::Database {
                 catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().ident.db_id,
+                db_id: db.get_db_info().database_id.db_id,
             };
 
             role_api.revoke_ownership(&owner_object).await?;

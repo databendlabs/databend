@@ -19,10 +19,10 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use opendal::Operator;
+use tantivy::query::Query;
 use tantivy::query::QueryParser;
 use tantivy::schema::Field;
 use tantivy::tokenizer::TokenizerManager;
-use tantivy::Score;
 
 use crate::io::create_index_schema;
 use crate::io::create_tokenizer_manager;
@@ -49,13 +49,13 @@ use crate::io::TableMetaLocationGenerator;
 //
 pub struct InvertedIndexPruner {
     dal: Operator,
-    field_nums: usize,
     has_score: bool,
+    field_nums: usize,
+    index_name: String,
+    index_version: String,
     need_position: bool,
-    query_fields: Vec<Field>,
-    query_field_boosts: Vec<(Field, Score)>,
     tokenizer_manager: TokenizerManager,
-    inverted_index_info: InvertedIndexInfo,
+    query: Box<dyn Query>,
 }
 
 impl InvertedIndexPruner {
@@ -65,27 +65,8 @@ impl InvertedIndexPruner {
     ) -> Result<Option<Arc<InvertedIndexPruner>>> {
         let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
         if let Some(inverted_index_info) = inverted_index_info {
-            // collect query fields and optional boosts
-            let mut query_fields = Vec::with_capacity(inverted_index_info.query_fields.len());
-            let mut query_field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
-            for (field_name, boost) in &inverted_index_info.query_fields {
-                let i = inverted_index_info.index_schema.index_of(field_name)?;
-                let field = Field::from_field_id(i as u32);
-                query_fields.push(field);
-                if let Some(boost) = boost {
-                    query_field_boosts.push((field, boost.0));
-                }
-            }
+            let (query, tokenizer_manager) = create_inverted_index_query(inverted_index_info)?;
 
-            // parse query text to check whether has phrase terms need position file.
-            let (index_schema, index_fields) = create_index_schema(
-                Arc::new(inverted_index_info.index_schema.clone()),
-                &inverted_index_info.index_options,
-            )?;
-            let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
-            let query_parser =
-                QueryParser::new(index_schema, index_fields, tokenizer_manager.clone());
-            let query = query_parser.parse_query(&inverted_index_info.query_text)?;
             let mut need_position = false;
             query.query_terms(&mut |_, pos| {
                 if pos {
@@ -95,16 +76,18 @@ impl InvertedIndexPruner {
             // whether need to generate score internl column
             let has_score = inverted_index_info.has_score;
             let field_nums = inverted_index_info.index_schema.num_fields();
+            let index_name = inverted_index_info.index_name.clone();
+            let index_version = inverted_index_info.index_version.clone();
 
             return Ok(Some(Arc::new(InvertedIndexPruner {
                 dal,
-                field_nums,
                 has_score,
+                field_nums,
+                index_name,
+                index_version,
                 need_position,
-                query_fields,
-                query_field_boosts,
                 tokenizer_manager,
-                inverted_index_info: inverted_index_info.clone(),
+                query,
             })));
         }
         Ok(None)
@@ -118,25 +101,93 @@ impl InvertedIndexPruner {
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
             block_loc,
-            &self.inverted_index_info.index_name,
-            &self.inverted_index_info.index_version,
+            &self.index_name,
+            &self.index_version,
         );
 
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
             self.field_nums,
-            self.has_score,
             self.need_position,
-            self.query_fields.clone(),
-            self.query_field_boosts.clone(),
-            self.tokenizer_manager.clone(),
             &index_loc,
         )
         .await?;
 
-        let matched_rows =
-            inverted_index_reader.do_filter(&self.inverted_index_info.query_text, row_count)?;
+        let matched_rows = inverted_index_reader.do_filter(
+            self.has_score,
+            &self.query,
+            self.tokenizer_manager.clone(),
+            row_count,
+        )?;
 
         Ok(matched_rows)
     }
+}
+
+// create tantivy query for inverted index.
+pub fn create_inverted_index_query(
+    inverted_index_info: &InvertedIndexInfo,
+) -> Result<(Box<dyn Query>, TokenizerManager)> {
+    // collect query fields and optional boosts
+    let mut query_fields = Vec::with_capacity(inverted_index_info.query_fields.len());
+    let mut query_field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
+    for (field_name, boost) in &inverted_index_info.query_fields {
+        let i = inverted_index_info.index_schema.index_of(field_name)?;
+        let field = Field::from_field_id(i as u32);
+        query_fields.push(field);
+        if let Some(boost) = boost {
+            query_field_boosts.push((field, boost.0));
+        }
+    }
+
+    // parse query text to check whether has phrase terms need position file.
+    let (index_schema, _) = create_index_schema(
+        Arc::new(inverted_index_info.index_schema.clone()),
+        &inverted_index_info.index_options,
+    )?;
+    let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
+    let mut query_parser = QueryParser::new(
+        index_schema,
+        query_fields.clone(),
+        tokenizer_manager.clone(),
+    );
+
+    // set optional boost value for the field
+    for (field, boost) in query_field_boosts {
+        query_parser.set_field_boost(field, boost);
+    }
+    let fuzziness = inverted_index_info
+        .inverted_index_option
+        .as_ref()
+        .and_then(|o| o.fuzziness.as_ref());
+    if let Some(fuzziness) = fuzziness {
+        // Fuzzy query matches rows containing a specific term that is within Levenshtein distance.
+        for field in query_fields {
+            query_parser.set_field_fuzzy(field, false, *fuzziness, true);
+        }
+    }
+    let operator = inverted_index_info
+        .inverted_index_option
+        .as_ref()
+        .map(|o| o.operator)
+        .unwrap_or_default();
+    if operator {
+        // Operator if TRUE means operator is `AND`,
+        // set compose queries to a conjunction.
+        query_parser.set_conjunction_by_default();
+    }
+    let lenient = inverted_index_info
+        .inverted_index_option
+        .as_ref()
+        .map(|o| o.lenient)
+        .unwrap_or_default();
+    let query = if lenient {
+        // If lenient is TRUE, invalid query text will not report an error.
+        let (query, _) = query_parser.parse_query_lenient(&inverted_index_info.query_text);
+        query
+    } else {
+        query_parser.parse_query(&inverted_index_info.query_text)?
+    };
+
+    Ok((query, tokenizer_manager))
 }
