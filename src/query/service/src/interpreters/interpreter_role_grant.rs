@@ -57,10 +57,16 @@ impl Interpreter for GrantRoleInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
+        let enable_upgrade_meta_data_to_pb = self
+            .ctx
+            .get_settings()
+            .get_enable_upgrade_meta_data_to_pb()?;
         // TODO: check privileges
 
         // Check if the grant role exists.
-        user_mgr.get_role(&tenant, plan.role.clone()).await?;
+        user_mgr
+            .get_role(&tenant, plan.role.clone(), enable_upgrade_meta_data_to_pb)
+            .await?;
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
@@ -69,12 +75,14 @@ impl Interpreter for GrantRoleInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .grant_role_to_role(&tenant, &role, plan.role)
+                    .grant_role_to_role(&tenant, &role, plan.role, enable_upgrade_meta_data_to_pb)
                     .await?;
             }
         }
 
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+        RoleCacheManager::instance()
+            .force_reload(&tenant, enable_upgrade_meta_data_to_pb)
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

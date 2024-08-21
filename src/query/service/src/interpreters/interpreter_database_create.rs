@@ -62,7 +62,13 @@ impl Interpreter for CreateDatabaseInterpreter {
         let tenant = self.plan.tenant.clone();
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+        let quota = quota_api
+            .get_quota(
+                MatchSeq::GE(0),
+                self.ctx.get_settings().get_enable_query_result_cache()?,
+            )
+            .await?
+            .data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let databases = catalog.list_databases(&tenant).await?;
         if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
@@ -86,6 +92,7 @@ impl Interpreter for CreateDatabaseInterpreter {
                         db_id: reply.db_id,
                     },
                     &current_role.name,
+                    self.ctx.get_settings().get_enable_query_result_cache()?,
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);

@@ -218,7 +218,15 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
         // find their related roles as the final effective roles
         let role_cache = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
-        let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
+        let effective_roles = role_cache
+            .find_related_roles(
+                &tenant,
+                &role_names,
+                self.session_ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
+            .await?;
         Ok(effective_roles)
     }
 
@@ -241,7 +249,13 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
 
         let tenant = self.session_ctx.get_current_tenant();
         let mut related_roles = RoleCacheManager::instance()
-            .find_related_roles(&tenant, &roles)
+            .find_related_roles(
+                &tenant,
+                &roles,
+                self.session_ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
             .await?;
         related_roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(related_roles)
@@ -295,7 +309,13 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
         let owner_role_name = role_mgr
-            .find_object_owner(&tenant, object)
+            .find_object_owner(
+                &tenant,
+                object,
+                self.session_ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
             .await?
             .unwrap_or_else(|| BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
 
@@ -341,7 +361,11 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
         let user_api = UserApiProvider::instance();
         let ownerships = user_api
             .role_api(&self.session_ctx.get_current_tenant())
-            .get_ownerships()
+            .get_ownerships(
+                self.session_ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
             .await?;
         let roles = self.get_all_effective_roles().await?;
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();

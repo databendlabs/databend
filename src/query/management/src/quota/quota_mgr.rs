@@ -56,7 +56,11 @@ impl<const WRITE_PB: bool> QuotaMgr<WRITE_PB> {
 #[async_trait::async_trait]
 impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
     #[async_backtrace::framed]
-    async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
+    async fn get_quota(
+        &self,
+        seq: MatchSeq,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<SeqV<TenantQuota>> {
         let res = self.kv_api.get_kv(&self.key()).await?;
         match res {
             None => Ok(SeqV::new(0, TenantQuota::default())),
@@ -75,6 +79,7 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
                         &self.key(),
                         &seq_value,
                         self.kv_api.as_ref(),
+                        enable_upgrade_meta_data_to_pb,
                     )
                     .await?;
 

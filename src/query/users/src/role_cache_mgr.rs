@@ -59,7 +59,8 @@ impl RoleCacheManager {
             polling_interval: Duration::new(15, 0),
         };
 
-        role_cache_manager.background_polling();
+        // in background polling , should disable upgrade meta data from json to pb
+        role_cache_manager.background_polling(false);
         Ok(Arc::new(role_cache_manager))
     }
 
@@ -67,7 +68,7 @@ impl RoleCacheManager {
         GlobalInstance::get()
     }
 
-    pub fn background_polling(&mut self) {
+    pub fn background_polling(&mut self, enable_upgrade_meta_data_to_pb: bool) {
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;
         let user_manager = self.user_manager.clone();
@@ -78,7 +79,9 @@ impl RoleCacheManager {
                     cached.keys().cloned().collect::<Vec<_>>()
                 };
                 for tenant in tenants {
-                    match load_roles_data(&user_manager, &tenant).await {
+                    match load_roles_data(&user_manager, &tenant, enable_upgrade_meta_data_to_pb)
+                        .await
+                    {
                         Err(err) => {
                             warn!(
                                 "role_cache_mgr load roles data of tenant {} failed: {}",
@@ -118,8 +121,13 @@ impl RoleCacheManager {
         &self,
         tenant: &Tenant,
         object: &OwnershipObject,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Option<String>> {
-        match self.user_manager.get_ownership(tenant, object).await? {
+        match self
+            .user_manager
+            .get_ownership(tenant, object, enable_upgrade_meta_data_to_pb)
+            .await?
+        {
             None => return Ok(None),
             Some(owner) => Ok(Some(owner.role)),
         }
@@ -131,8 +139,10 @@ impl RoleCacheManager {
         &self,
         tenant: &Tenant,
         roles: &[String],
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Vec<RoleInfo>> {
-        self.maybe_reload(tenant).await?;
+        self.maybe_reload(tenant, enable_upgrade_meta_data_to_pb)
+            .await?;
         let cached = self.cache.read();
         let cached_roles = match cached.get(tenant) {
             None => return Ok(vec![]),
@@ -142,8 +152,13 @@ impl RoleCacheManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn force_reload(&self, tenant: &Tenant) -> Result<()> {
-        let data = load_roles_data(&self.user_manager, tenant).await?;
+    pub async fn force_reload(
+        &self,
+        tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<()> {
+        let data =
+            load_roles_data(&self.user_manager, tenant, enable_upgrade_meta_data_to_pb).await?;
         let mut cached = self.cache.write();
         cached.insert(tenant.clone(), data);
         Ok(())
@@ -152,7 +167,11 @@ impl RoleCacheManager {
     // Load roles data if not found in cache. Watch this tenant's role data in background if
     // once it loads successfully.
     #[async_backtrace::framed]
-    async fn maybe_reload(&self, tenant: &Tenant) -> Result<()> {
+    async fn maybe_reload(
+        &self,
+        tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<()> {
         let need_reload = {
             let cached = self.cache.read();
             match cached.get(tenant) {
@@ -168,14 +187,21 @@ impl RoleCacheManager {
             }
         };
         if need_reload {
-            self.force_reload(tenant).await?;
+            self.force_reload(tenant, enable_upgrade_meta_data_to_pb)
+                .await?;
         }
         Ok(())
     }
 }
 
-async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &Tenant) -> Result<CachedRoles> {
-    let roles = user_api.get_roles(tenant).await?;
+async fn load_roles_data(
+    user_api: &Arc<UserApiProvider>,
+    tenant: &Tenant,
+    enable_upgrade_meta_data_to_pb: bool,
+) -> Result<CachedRoles> {
+    let roles = user_api
+        .get_roles(tenant, enable_upgrade_meta_data_to_pb)
+        .await?;
     let roles_map = roles
         .into_iter()
         .map(|r| (r.identity().to_string(), r))

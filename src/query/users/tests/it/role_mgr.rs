@@ -62,7 +62,7 @@ async fn test_role_manager() -> Result<()> {
     // get all roles
     {
         let mut role_names = role_mgr
-            .get_roles(&tenant)
+            .get_roles(&tenant, true)
             .await?
             .into_iter()
             .map(|r| r.name)

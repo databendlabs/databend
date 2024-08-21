@@ -137,7 +137,14 @@ impl Interpreter for DropTableInterpreter {
             table_id,
         };
 
-        role_api.revoke_ownership(&owner_object).await?;
+        role_api
+            .revoke_ownership(
+                &owner_object,
+                self.ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
+            .await?;
         RoleCacheManager::instance().invalidate_cache(&tenant);
 
         let mut build_res = PipelineBuildResult::create();

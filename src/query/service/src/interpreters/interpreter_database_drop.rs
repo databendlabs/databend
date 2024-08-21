@@ -63,7 +63,12 @@ impl Interpreter for DropDatabaseInterpreter {
                 db_id: db.get_db_info().database_id.db_id,
             };
 
-            role_api.revoke_ownership(&owner_object).await?;
+            role_api
+                .revoke_ownership(
+                    &owner_object,
+                    self.ctx.get_settings().get_enable_query_result_cache()?,
+                )
+                .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 

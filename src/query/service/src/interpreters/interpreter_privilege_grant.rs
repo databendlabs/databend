@@ -134,8 +134,14 @@ impl GrantPrivilegeInterpreter {
             new_role
         );
 
+        let enable_upgrade_meta_data_to_pb = self
+            .ctx
+            .get_settings()
+            .get_enable_upgrade_meta_data_to_pb()?;
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
-        let owner = user_mgr.get_ownership(tenant, owner_object).await?;
+        let owner = user_mgr
+            .get_ownership(tenant, owner_object, enable_upgrade_meta_data_to_pb)
+            .await?;
         if let Some(owner) = owner {
             let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
             log_msg = format!(
@@ -155,7 +161,12 @@ impl GrantPrivilegeInterpreter {
 
         info!("{}", log_msg);
         user_mgr
-            .grant_ownership_to_role(tenant, owner_object, new_role)
+            .grant_ownership_to_role(
+                tenant,
+                owner_object,
+                new_role,
+                enable_upgrade_meta_data_to_pb,
+            )
             .await?;
 
         Ok(())

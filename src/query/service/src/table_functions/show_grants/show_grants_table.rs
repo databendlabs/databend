@@ -273,7 +273,7 @@ async fn show_account_grants(
         .is_ok();
 
     let user_api = UserApiProvider::instance();
-
+    let enable_upgrade_meta_data_to_pb = ctx.get_settings().get_enable_upgrade_meta_data_to_pb()?;
     // TODO: add permission check on reading user grants
     let (grant_to, name, identity, grant_set, roles) = match grant_type {
         "user" => {
@@ -314,9 +314,15 @@ async fn show_account_grants(
                 )));
             }
 
-            let role_info = user_api.get_role(&tenant, name.to_string()).await?;
+            let role_info = user_api
+                .get_role(&tenant, name.to_string(), enable_upgrade_meta_data_to_pb)
+                .await?;
             let related_roles = RoleCacheManager::instance()
-                .find_related_roles(&tenant, &role_info.grants.roles())
+                .find_related_roles(
+                    &tenant,
+                    &role_info.grants.roles(),
+                    enable_upgrade_meta_data_to_pb,
+                )
                 .await?;
             let mut roles: Vec<String> = related_roles
                 .iter()
@@ -341,7 +347,7 @@ async fn show_account_grants(
 
     // TODO: display roles list instead of the inherited roles
     let related_roles = RoleCacheManager::instance()
-        .find_related_roles(&tenant, &grant_set.roles())
+        .find_related_roles(&tenant, &grant_set.roles(), enable_upgrade_meta_data_to_pb)
         .await?;
 
     let roles: Vec<String> = if let Some(roles) = roles {
@@ -444,7 +450,10 @@ async fn show_account_grants(
     // If roles contains account_admin, it means this role has all roles.
     // No need to display ownership.
     if !roles.contains(&"account_admin".to_string()) {
-        let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+        let ownerships = user_api
+            .role_api(&tenant)
+            .get_ownerships(enable_upgrade_meta_data_to_pb)
+            .await?;
         // let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
         // let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
         for ownership in ownerships {
@@ -565,9 +574,16 @@ async fn show_object_grant(
 ) -> Result<Option<DataBlock>> {
     let tenant = ctx.get_tenant();
     let user_api = UserApiProvider::instance();
-    let roles = user_api.get_roles(&tenant).await?;
+    let roles = user_api
+        .get_roles(
+            &tenant,
+            ctx.get_settings().get_enable_upgrade_meta_data_to_pb()?,
+        )
+        .await?;
     let visibility_checker = ctx.get_visibility_checker().await?;
     let current_user = ctx.get_current_user()?.identity().username;
+    let enable_upgrade_meta_data_to_pb = ctx.get_settings().get_enable_upgrade_meta_data_to_pb()?;
+
     let (object, owner_object, object_id, object_name) = match grant_type {
         "table" => {
             let catalog = ctx.get_catalog(catalog_name).await?;
@@ -678,7 +694,10 @@ async fn show_object_grant(
         }
     }
 
-    let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+    let ownerships = user_api
+        .role_api(&tenant)
+        .get_ownerships(enable_upgrade_meta_data_to_pb)
+        .await?;
     for ownership in ownerships {
         if ownership.data.object == owner_object {
             privileges.push("OWNERSHIP".to_string());

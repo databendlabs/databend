@@ -68,7 +68,14 @@ impl Interpreter for RevokeRoleInterpreter {
             }
         }
 
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+        RoleCacheManager::instance()
+            .force_reload(
+                &tenant,
+                self.ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

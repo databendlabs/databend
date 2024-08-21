@@ -25,14 +25,25 @@ pub trait RoleApi: Sync + Send {
     async fn add_role(&self, role_info: RoleInfo) -> Result<u64>;
 
     #[allow(clippy::ptr_arg)]
-    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;
+    async fn get_role(
+        &self,
+        role: &String,
+        seq: MatchSeq,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<SeqV<RoleInfo>>;
 
     /// get all roles that store in meta
-    async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
+    async fn get_meta_roles(
+        &self,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<Vec<SeqV<RoleInfo>>>;
 
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply>;
 
-    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
+    async fn get_ownerships(
+        &self,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<Vec<SeqV<OwnershipInfo>>>;
 
     /// General role update.
     ///
@@ -48,7 +59,11 @@ pub trait RoleApi: Sync + Send {
     /// If a role is dropped, but the owner object is exists,
     ///
     /// The owner role need to update to account_admin.
-    async fn transfer_ownership_to_admin(&self, role: &str) -> Result<()>;
+    async fn transfer_ownership_to_admin(
+        &self,
+        role: &str,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<()>;
 
     /// Grant ownership would transfer ownership of a object from one role to another role
     ///
@@ -69,7 +84,12 @@ pub trait RoleApi: Sync + Send {
     /// 3. kv api upsert new owner object key.
     /// Note: if role/old_role is `account_admin` or `public` no need to revoke/grant ownership privilege
     #[allow(clippy::ptr_arg)]
-    async fn grant_ownership(&self, object: &OwnershipObject, role: &str) -> Result<()>;
+    async fn grant_ownership(
+        &self,
+        object: &OwnershipObject,
+        role: &str,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<()>;
 
     /// Remember to call this method when you dropped a OwnerObject like table/database/stage/udf.
     /// Revoke ownership used when drop old object, contains two step:
@@ -77,10 +97,18 @@ pub trait RoleApi: Sync + Send {
     /// 2. kv api delete old owner object key.
     ///
     /// Note: if role is `account_admin` or None no need to revoke
-    async fn revoke_ownership(&self, object: &OwnershipObject) -> Result<()>;
+    async fn revoke_ownership(
+        &self,
+        object: &OwnershipObject,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<()>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
-    async fn get_ownership(&self, object: &OwnershipObject) -> Result<Option<OwnershipInfo>>;
+    async fn get_ownership(
+        &self,
+        object: &OwnershipObject,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<Option<OwnershipInfo>>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

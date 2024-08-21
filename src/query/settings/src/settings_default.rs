@@ -254,6 +254,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
+                ("enable_upgrade_meta_data_to_pb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables upgrade role/ownership data from json to pb.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_dphyp", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables dphyp join order algorithm.",

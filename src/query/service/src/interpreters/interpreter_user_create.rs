@@ -65,7 +65,15 @@ impl Interpreter for CreateUserInterpreter {
         let user_counts = user_mgr.user_api(&tenant).get_raw_users().await?.len();
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+        let quota = quota_api
+            .get_quota(
+                MatchSeq::GE(0),
+                self.ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
+            .await?
+            .data;
         if quota.max_users != 0 && user_counts >= quota.max_users as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max users quota exceeded: {}",

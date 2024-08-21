@@ -19,7 +19,11 @@ use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait QuotaApi: Sync + Send {
-    async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>>;
+    async fn get_quota(
+        &self,
+        seq: MatchSeq,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<SeqV<TenantQuota>>;
 
     async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64>;
 }

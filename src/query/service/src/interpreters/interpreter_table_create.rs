@@ -135,7 +135,13 @@ impl Interpreter for CreateTableInterpreter {
         }
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+        let quota = quota_api
+            .get_quota(
+                MatchSeq::GE(0),
+                self.ctx.get_settings().get_enable_query_result_cache()?,
+            )
+            .await?
+            .data;
         let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         if quota.max_tables_per_database > 0 {
@@ -221,6 +227,9 @@ impl CreateTableInterpreter {
                         table_id,
                     },
                     &current_role.name,
+                    self.ctx
+                        .get_settings()
+                        .get_enable_upgrade_meta_data_to_pb()?,
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
@@ -378,6 +387,7 @@ impl CreateTableInterpreter {
                         table_id: reply.table_id,
                     },
                     &current_role.name,
+                    self.ctx.get_settings().get_enable_query_result_cache()?,
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);

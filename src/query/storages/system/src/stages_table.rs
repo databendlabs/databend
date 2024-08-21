@@ -61,6 +61,8 @@ impl AsyncSystemTable for StagesTable {
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let enable_upgrade_meta_data_to_pb =
+            ctx.get_settings().get_enable_upgrade_meta_data_to_pb()?;
         let stages = if enable_experimental_rbac_check {
             let visibility_checker = ctx.get_visibility_checker().await?;
             stages
@@ -90,7 +92,11 @@ impl AsyncSystemTable for StagesTable {
             name.push(stage_name.clone());
             owners.push(
                 user_api
-                    .get_ownership(&tenant, &OwnershipObject::Stage { name: stage_name })
+                    .get_ownership(
+                        &tenant,
+                        &OwnershipObject::Stage { name: stage_name },
+                        enable_upgrade_meta_data_to_pb,
+                    )
                     .await
                     .ok()
                     .and_then(|ownership| ownership.map(|o| o.role.clone())),

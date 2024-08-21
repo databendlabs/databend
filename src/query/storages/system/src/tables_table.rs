@@ -382,7 +382,13 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 .collect::<Vec<_>>();
 
             let ownership = if get_ownership {
-                user_api.get_ownerships(&tenant).await.unwrap_or_default()
+                user_api
+                    .get_ownerships(
+                        &tenant,
+                        ctx.get_settings().get_enable_upgrade_meta_data_to_pb()?,
+                    )
+                    .await
+                    .unwrap_or_default()
             } else {
                 HashMap::new()
             };

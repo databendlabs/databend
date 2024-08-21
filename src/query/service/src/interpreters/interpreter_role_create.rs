@@ -68,11 +68,22 @@ impl Interpreter for CreateRoleInterpreter {
         }
 
         let tenant = self.ctx.get_tenant();
+        let enable_upgrade_meta_data_to_pb = self
+            .ctx
+            .get_settings()
+            .get_enable_upgrade_meta_data_to_pb()?;
         let user_mgr = UserApiProvider::instance();
         user_mgr
-            .add_role(&tenant, RoleInfo::new(&role_name), plan.if_not_exists)
+            .add_role(
+                &tenant,
+                RoleInfo::new(&role_name),
+                plan.if_not_exists,
+                enable_upgrade_meta_data_to_pb,
+            )
             .await?;
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+        RoleCacheManager::instance()
+            .force_reload(&tenant, enable_upgrade_meta_data_to_pb)
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

@@ -66,7 +66,8 @@ impl UserApiProvider {
         let user_mgr = UserApiProvider::instance();
         if let Some(q) = quota {
             let i = user_mgr.tenant_quota_api(tenant);
-            let res = i.get_quota(MatchSeq::GE(0)).await?;
+            // In default, we consider all cluster is already use PB not json.
+            let res = i.get_quota(MatchSeq::GE(0), true).await?;
             i.set_quota(&q, MatchSeq::Exact(res.seq)).await?;
         }
         Ok(())
@@ -97,7 +98,9 @@ impl UserApiProvider {
         // We can add account_admin into meta.
         {
             let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-            user_mgr.add_role(tenant, public, true).await?;
+            // PUBLIC role will not auto upgrade json format to pb.
+            // If wants to upgrade, need to execute grant xx to role public;
+            user_mgr.add_role(tenant, public, true, false).await?;
         }
 
         Ok(Arc::new(user_mgr))

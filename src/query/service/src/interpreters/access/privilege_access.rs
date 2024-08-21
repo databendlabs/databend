@@ -690,6 +690,10 @@ impl AccessChecker for PrivilegeAccess {
             .ctx
             .get_settings()
             .get_enable_experimental_rbac_check()?;
+        let enable_upgrade_meta_data_to_pb = self
+            .ctx
+            .get_settings()
+            .get_enable_upgrade_meta_data_to_pb()?;
         let tenant = self.ctx.get_tenant();
         let ctl_name = self.ctx.get_current_catalog();
 
@@ -717,14 +721,14 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
 
-                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set).await? {
+                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, enable_upgrade_meta_data_to_pb).await? {
                             return Ok(())
                         }
 
                         let user_api = UserApiProvider::instance();
                         let ownerships = user_api
                             .role_api(&tenant)
-                            .get_ownerships()
+                            .get_ownerships(enable_upgrade_meta_data_to_pb)
                             .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
@@ -736,13 +740,13 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set).await? {
+                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set,enable_upgrade_meta_data_to_pb).await? {
                             return Ok(());
                         }
                         let user_api = UserApiProvider::instance();
                         let ownerships = user_api
                             .role_api(&tenant)
-                            .get_ownerships()
+                            .get_ownerships(enable_upgrade_meta_data_to_pb)
                             .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
@@ -759,7 +763,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set,enable_upgrade_meta_data_to_pb).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -887,13 +891,13 @@ impl AccessChecker for PrivilegeAccess {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
-                if has_priv(&tenant, &plan.database, None, show_db_id, None, grant_set).await? {
+                if has_priv(&tenant, &plan.database, None, show_db_id, None, grant_set,enable_upgrade_meta_data_to_pb).await? {
                     return Ok(());
                 }
                 let user_api = UserApiProvider::instance();
                 let ownerships = user_api
                     .role_api(&tenant)
-                    .get_ownerships()
+                    .get_ownerships(enable_upgrade_meta_data_to_pb)
                     .await?;
                 let roles = self.ctx.get_all_effective_roles().await?;
                 let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
@@ -1319,6 +1323,7 @@ async fn has_priv(
     db_id: u64,
     table_id: Option<u64>,
     grant_set: UserGrantSet,
+    enable_upgrade_meta_data_to_pb: bool,
 ) -> Result<bool> {
     if db_name.to_lowercase() == "information_schema" {
         return Ok(true);
@@ -1330,7 +1335,7 @@ async fn has_priv(
     }
 
     Ok(RoleCacheManager::instance()
-        .find_related_roles(tenant, &grant_set.roles())
+        .find_related_roles(tenant, &grant_set.roles(), enable_upgrade_meta_data_to_pb)
         .await?
         .into_iter()
         .map(|role| role.grants)

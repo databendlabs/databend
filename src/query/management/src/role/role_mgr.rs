@@ -157,7 +157,12 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
+    async fn get_role(
+        &self,
+        role: &String,
+        seq: MatchSeq,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.role_ident(role).to_string_key();
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
@@ -167,8 +172,14 @@ impl RoleApi for RoleMgr {
             Ok(_) => {
                 let mut quota = Quota::new(func_name!());
 
-                let u = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
-                    .await?;
+                let u = check_and_upgrade_to_pb(
+                    &mut quota,
+                    &key,
+                    &seq_value,
+                    self.kv_api.as_ref(),
+                    enable_upgrade_meta_data_to_pb,
+                )
+                .await?;
 
                 // Keep the original seq.
                 Ok(SeqV::new(seq_value.seq, u.data))
@@ -182,7 +193,10 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
+    async fn get_meta_roles(
+        &self,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let values = self.get_raw_meta_roles().await?;
 
         let mut r = vec![];
@@ -190,7 +204,14 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await?;
+            let u = check_and_upgrade_to_pb(
+                &mut quota,
+                &key,
+                &val,
+                self.kv_api.as_ref(),
+                enable_upgrade_meta_data_to_pb,
+            )
+            .await?;
             r.push(u);
         }
 
@@ -206,7 +227,10 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
+    async fn get_ownerships(
+        &self,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
         let object_owner_prefix = self.ownership_object_prefix();
         let values = self
             .kv_api
@@ -218,7 +242,15 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         for (key, val) in values {
-            match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
+            match check_and_upgrade_to_pb(
+                &mut quota,
+                &key,
+                &val,
+                self.kv_api.as_ref(),
+                enable_upgrade_meta_data_to_pb,
+            )
+            .await
+            {
                 Ok(u) => r.push(u),
                 // If we add a new item in OwnershipObject, and generate a new kv about this new item,
                 // After rollback the old version, deserialize will return Err Ownership can not be none.
@@ -249,11 +281,13 @@ impl RoleApi for RoleMgr {
     where
         F: FnOnce(&mut RoleInfo) + Send,
     {
+        // In update role, we must get role first, but in this case, we should not check setting
+        // enable_upgrade_meta_data_to_pb, because we need to update this role.
         let SeqV {
             seq,
             data: mut role_info,
             ..
-        } = self.get_role(role, seq).await?;
+        } = self.get_role(role, seq, true).await?;
 
         f(&mut role_info);
 
@@ -277,15 +311,19 @@ impl RoleApi for RoleMgr {
     async fn transfer_ownership_to_admin(
         &self,
         role: &str,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> databend_common_exception::Result<()> {
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
             let mut if_then = vec![];
             let mut condition = vec![];
-            let seq_owns = self.get_ownerships().await.map_err(|e| {
-                e.add_message_back("(while in transfer_ownership_to_admin get ownerships).")
-            })?;
+            let seq_owns = self
+                .get_ownerships(enable_upgrade_meta_data_to_pb)
+                .await
+                .map_err(|e| {
+                    e.add_message_back("(while in transfer_ownership_to_admin get ownerships).")
+                })?;
             let mut need_transfer = false;
             for own in seq_owns {
                 if own.data.role == *role {
@@ -335,11 +373,15 @@ impl RoleApi for RoleMgr {
         &self,
         object: &OwnershipObject,
         new_role: &str,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> databend_common_exception::Result<()> {
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-            let old_role = self.get_ownership(object).await?.map(|o| o.role);
+            let old_role = self
+                .get_ownership(object, enable_upgrade_meta_data_to_pb)
+                .await?
+                .map(|o| o.role);
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
@@ -357,7 +399,10 @@ impl RoleApi for RoleMgr {
 
             if let Some(ref old_role) = old_role {
                 // BUILTIN role or Dropped role may get err, no need to revoke
-                if let Ok(seqv) = self.get_role(old_role, MatchSeq::GE(1)).await {
+                if let Ok(seqv) = self
+                    .get_role(old_role, MatchSeq::GE(1), enable_upgrade_meta_data_to_pb)
+                    .await
+                {
                     let old_key = self.role_ident(old_role);
                     let old_seq = seqv.seq;
                     let mut old_role_info = seqv.data;
@@ -398,6 +443,7 @@ impl RoleApi for RoleMgr {
     async fn get_ownership(
         &self,
         object: &OwnershipObject,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> databend_common_exception::Result<Option<OwnershipInfo>> {
         let key = self.ownership_object_ident(object);
         let key = key.to_string_key();
@@ -411,8 +457,14 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         // if can not get ownership, will directly return None.
-        let seq_val =
-            check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref()).await?;
+        let seq_val = check_and_upgrade_to_pb(
+            &mut quota,
+            &key,
+            &seq_value,
+            self.kv_api.as_ref(),
+            enable_upgrade_meta_data_to_pb,
+        )
+        .await?;
 
         Ok(Some(seq_val.data))
     }
@@ -422,11 +474,15 @@ impl RoleApi for RoleMgr {
     async fn revoke_ownership(
         &self,
         object: &OwnershipObject,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> databend_common_exception::Result<()> {
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
-            let role = self.get_ownership(object).await?.map(|o| o.role);
+            let role = self
+                .get_ownership(object, enable_upgrade_meta_data_to_pb)
+                .await?
+                .map(|o| o.role);
 
             let owner_key = self.ownership_object_ident(object);
 
@@ -434,7 +490,14 @@ impl RoleApi for RoleMgr {
             let mut condition = vec![];
 
             if let Some(role) = role {
-                if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
+                if let Ok(seqv) = self
+                    .get_role(
+                        &role.to_owned(),
+                        MatchSeq::GE(1),
+                        enable_upgrade_meta_data_to_pb,
+                    )
+                    .await
+                {
                     let old_key = self.role_ident(&role);
                     let grant_object = convert_to_grant_obj(object);
                     let old_seq = seqv.seq;

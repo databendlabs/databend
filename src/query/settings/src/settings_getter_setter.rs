@@ -257,6 +257,10 @@ impl Settings {
         self.try_get_u64("max_result_rows")
     }
 
+    pub fn get_enable_upgrade_meta_data_to_pb(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_upgrade_meta_data_to_pb")? != 0)
+    }
+
     pub fn get_enable_dphyp(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_dphyp")? != 0)
     }

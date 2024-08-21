@@ -75,7 +75,15 @@ impl Interpreter for CreateUserStageInterpreter {
         let tenant = &plan.tenant;
 
         let quota_api = user_mgr.tenant_quota_api(tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+        let quota = quota_api
+            .get_quota(
+                MatchSeq::GE(0),
+                self.ctx
+                    .get_settings()
+                    .get_enable_upgrade_meta_data_to_pb()?,
+            )
+            .await?
+            .data;
         let stages = user_mgr.get_stages(tenant).await?;
         if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
@@ -129,6 +137,7 @@ impl Interpreter for CreateUserStageInterpreter {
                         name: self.plan.stage_info.stage_name.clone(),
                     },
                     &current_role.name,
+                    self.ctx.get_settings().get_enable_query_result_cache()?,
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);

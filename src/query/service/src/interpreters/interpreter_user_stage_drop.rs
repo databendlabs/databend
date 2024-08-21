@@ -74,7 +74,14 @@ impl Interpreter for DropUserStageInterpreter {
                 name: self.plan.name.clone(),
             };
 
-            role_api.revoke_ownership(&owner_object).await?;
+            role_api
+                .revoke_ownership(
+                    &owner_object,
+                    self.ctx
+                        .get_settings()
+                        .get_enable_upgrade_meta_data_to_pb()?,
+                )
+                .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
 
             if !matches!(&stage.stage_type, StageType::External) {

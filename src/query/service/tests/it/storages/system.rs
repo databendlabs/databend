@@ -350,7 +350,7 @@ async fn test_roles_table() -> Result<()> {
     {
         let role_info = RoleInfo::new("test");
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, false)
+            .add_role(&tenant, role_info, false, false)
             .await?;
     }
 
@@ -358,7 +358,7 @@ async fn test_roles_table() -> Result<()> {
         let mut role_info = RoleInfo::new("test1");
         role_info.grants.grant_role("test".to_string());
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, false)
+            .add_role(&tenant, role_info, false, true)
             .await?;
     }
     let table = RolesTable::create(1);

@@ -53,7 +53,14 @@ mod add {
             .await?;
 
         let get = role_api
-            .get_role(&role_name.to_owned(), MatchSeq::GE(1))
+            .get_role(&role_name.to_owned(), MatchSeq::GE(1), false)
+            .await?
+            .data;
+
+        assert_eq!("role1".to_string(), get.name);
+
+        let get = role_api
+            .get_role(&role_name.to_owned(), MatchSeq::GE(1), true)
             .await?
             .data;
 

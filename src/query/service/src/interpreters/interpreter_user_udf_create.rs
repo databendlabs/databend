@@ -70,6 +70,9 @@ impl Interpreter for CreateUserUDFScript {
                         name: self.plan.udf.name.clone(),
                     },
                     &current_role.name,
+                    self.ctx
+                        .get_settings()
+                        .get_enable_upgrade_meta_data_to_pb()?,
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);

@@ -71,6 +71,8 @@ impl AsyncSystemTable for DatabasesTable {
         let mut db_id = vec![];
         let mut owners: Vec<Option<String>> = vec![];
 
+        let enable_upgrade_meta_data_to_pb =
+            ctx.get_settings().get_enable_upgrade_meta_data_to_pb()?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         for (ctl_name, catalog) in catalogs.into_iter() {
@@ -94,10 +96,14 @@ impl AsyncSystemTable for DatabasesTable {
                 db_id.push(id);
                 owners.push(
                     user_api
-                        .get_ownership(&tenant, &OwnershipObject::Database {
-                            catalog_name: ctl_name.to_string(),
-                            db_id: id,
-                        })
+                        .get_ownership(
+                            &tenant,
+                            &OwnershipObject::Database {
+                                catalog_name: ctl_name.to_string(),
+                                db_id: id,
+                            },
+                            enable_upgrade_meta_data_to_pb,
+                        )
                         .await
                         .ok()
                         .and_then(|ownership| ownership.map(|o| o.role.clone())),

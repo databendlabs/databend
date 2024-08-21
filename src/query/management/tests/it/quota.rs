@@ -46,7 +46,7 @@ async fn test_update_quota_from_json_to_pb() -> Result<()> {
         "{\"max_databases\":2,\"max_tables_per_database\":3,\"max_stages\":4,\"max_files_per_stage\":5,\"max_users\":6}"
     );
 
-    let quota1 = quota_api_json.get_quota(MatchSeq::GE(0)).await?.data;
+    let quota1 = quota_api_json.get_quota(MatchSeq::GE(0), true).await?.data;
     assert_eq!(quota1, quota0);
 
     let value = kv_api.get_kv("__fd_quotas/admin").await?;
@@ -58,14 +58,14 @@ async fn test_update_quota_from_json_to_pb() -> Result<()> {
 
     // when enable write pb
 
-    let quota2 = quota_api_pb.get_quota(MatchSeq::GE(0)).await?.data;
+    let quota2 = quota_api_pb.get_quota(MatchSeq::GE(0), false).await?.data;
     assert_eq!(quota2, quota0);
 
     let value = kv_api.get_kv("__fd_quotas/admin").await?;
     let res = deserialize_struct::<TenantQuota>(&value.unwrap().data);
     assert_eq!(res.unwrap(), quota0);
 
-    let quota3 = quota_api_json.get_quota(MatchSeq::GE(0)).await?.data;
+    let quota3 = quota_api_json.get_quota(MatchSeq::GE(0), true).await?.data;
     assert_eq!(quota3, quota0);
 
     let quota4 = TenantQuota {
@@ -74,7 +74,7 @@ async fn test_update_quota_from_json_to_pb() -> Result<()> {
     };
     quota_api_pb.set_quota(&quota4, MatchSeq::GE(0)).await?;
 
-    let quota5 = quota_api_pb.get_quota(MatchSeq::GE(0)).await?.data;
+    let quota5 = quota_api_pb.get_quota(MatchSeq::GE(0), false).await?.data;
     assert_eq!(quota5, quota4);
 
     let value = kv_api.get_kv("__fd_quotas/admin").await?;

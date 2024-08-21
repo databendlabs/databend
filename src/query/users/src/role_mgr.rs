@@ -34,24 +34,36 @@ pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_role(&self, tenant: &Tenant, role: String) -> Result<RoleInfo> {
+    pub async fn get_role(
+        &self,
+        tenant: &Tenant,
+        role: String,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<RoleInfo> {
         let builtin_roles = self.builtin_roles();
         if let Some(role_info) = builtin_roles.get(&role) {
             return Ok(role_info.clone());
         }
 
         let client = self.role_api(tenant);
-        let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
+        let role_data = client
+            .get_role(&role, MatchSeq::GE(0), enable_upgrade_meta_data_to_pb)
+            .await?
+            .data;
         Ok(role_data)
     }
 
     // Get the tenant all roles list.
     #[async_backtrace::framed]
-    pub async fn get_roles(&self, tenant: &Tenant) -> Result<Vec<RoleInfo>> {
+    pub async fn get_roles(
+        &self,
+        tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<Vec<RoleInfo>> {
         let builtin_roles = self.builtin_roles();
         let seq_roles = self
             .role_api(tenant)
-            .get_meta_roles()
+            .get_meta_roles(enable_upgrade_meta_data_to_pb)
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
         // overwrite the builtin roles.
@@ -87,10 +99,11 @@ impl UserApiProvider {
     pub async fn get_ownerships(
         &self,
         tenant: &Tenant,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<HashMap<OwnershipObject, String>> {
         let seq_owns = self
             .role_api(tenant)
-            .get_ownerships()
+            .get_ownerships(enable_upgrade_meta_data_to_pb)
             .await
             .map_err(|e| e.add_message_back("(while get ownerships)."))?;
 
@@ -102,8 +115,16 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool> {
-        match self.get_role(tenant, role).await {
+    pub async fn exists_role(
+        &self,
+        tenant: &Tenant,
+        role: String,
+        enable_upgrade_meta_data_to_pb: bool,
+    ) -> Result<bool> {
+        match self
+            .get_role(tenant, role, enable_upgrade_meta_data_to_pb)
+            .await
+        {
             Ok(_) => Ok(true),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_ROLE {
@@ -122,8 +143,17 @@ impl UserApiProvider {
         tenant: &Tenant,
         role_info: RoleInfo,
         if_not_exists: bool,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<u64> {
-        if if_not_exists && self.exists_role(tenant, role_info.name.clone()).await? {
+        if if_not_exists
+            && self
+                .exists_role(
+                    tenant,
+                    role_info.name.clone(),
+                    enable_upgrade_meta_data_to_pb,
+                )
+                .await?
+        {
             return Ok(0);
         }
 
@@ -147,13 +177,15 @@ impl UserApiProvider {
         tenant: &Tenant,
         object: &OwnershipObject,
         new_role: &str,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<()> {
         // from and to role must exists
-        self.get_role(tenant, new_role.to_string()).await?;
+        self.get_role(tenant, new_role.to_string(), enable_upgrade_meta_data_to_pb)
+            .await?;
 
         let client = self.role_api(tenant);
         client
-            .grant_ownership(object, new_role)
+            .grant_ownership(object, new_role, enable_upgrade_meta_data_to_pb)
             .await
             .map_err(|e| e.add_message_back("(while set role ownership)"))
     }
@@ -163,10 +195,11 @@ impl UserApiProvider {
         &self,
         tenant: &Tenant,
         object: &OwnershipObject,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Option<OwnershipInfo>> {
         let client = self.role_api(tenant);
         let ownership = client
-            .get_ownership(object)
+            .get_ownership(object, enable_upgrade_meta_data_to_pb)
             .await
             .map_err(|e| e.add_message_back("(while get ownership)"))?;
         if let Some(owner) = ownership {
@@ -176,7 +209,10 @@ impl UserApiProvider {
             // Because this can cause system.table queries to slow down
             // The intention is that the account admin can grant ownership.
             // So system.tables will display dropped role. It's by design.
-            if !self.exists_role(tenant, owner.role.clone()).await? {
+            if !self
+                .exists_role(tenant, owner.role.clone(), enable_upgrade_meta_data_to_pb)
+                .await?
+            {
                 Ok(Some(OwnershipInfo {
                     role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
                     object: object.clone(),
@@ -232,9 +268,14 @@ impl UserApiProvider {
         tenant: &Tenant,
         target_role: &String,
         grant_role: String,
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Option<u64>> {
         let related_roles = self
-            .find_related_roles(tenant, &[grant_role.clone()])
+            .find_related_roles(
+                tenant,
+                &[grant_role.clone()],
+                enable_upgrade_meta_data_to_pb,
+            )
             .await?;
         let have_cycle = related_roles.iter().any(|r| r.identity() == target_role);
         if have_cycle {
@@ -276,7 +317,8 @@ impl UserApiProvider {
     pub async fn drop_role(&self, tenant: &Tenant, role: String, if_exists: bool) -> Result<()> {
         let client = self.role_api(tenant);
         // If the dropped role owns objects, transfer objects owner to account_admin role.
-        client.transfer_ownership_to_admin(&role).await?;
+        // role will be dropped , So when call get_ownerships can not upgrade to pb
+        client.transfer_ownership_to_admin(&role, false).await?;
 
         let drop_role = client.drop_role(role, MatchSeq::GE(1));
         match drop_role.await {
@@ -298,9 +340,10 @@ impl UserApiProvider {
         &self,
         tenant: &Tenant,
         role_identities: &[String],
+        enable_upgrade_meta_data_to_pb: bool,
     ) -> Result<Vec<RoleInfo>> {
         let tenant_roles_map = self
-            .get_roles(tenant)
+            .get_roles(tenant, enable_upgrade_meta_data_to_pb)
             .await?
             .into_iter()
             .map(|r| (r.identity().to_string(), r))
