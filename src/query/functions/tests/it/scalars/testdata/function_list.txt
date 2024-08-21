@@ -2500,8 +2500,8 @@ Functions overloads:
 18 minus(Int64) :: Int64
 19 minus(Int64 NULL) :: Int64 NULL
 20 minus FACTORY
-21 minus(Float32) :: Float32
-22 minus(Float32 NULL) :: Float32 NULL
+21 minus(Float32) :: Float64
+22 minus(Float32 NULL) :: Float64 NULL
 23 minus(Float64) :: Float64
 24 minus(Float64 NULL) :: Float64 NULL
 25 minus FACTORY

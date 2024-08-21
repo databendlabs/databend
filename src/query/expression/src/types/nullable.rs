@@ -270,6 +270,14 @@ impl<T: ValueType> NullableColumn<T> {
         self.validity.len()
     }
 
+    pub fn column_ref(&self) -> &T::Column {
+        &self.column
+    }
+
+    pub fn validity_ref(&self) -> &Bitmap {
+        &self.validity
+    }
+
     pub fn index(&self, index: usize) -> Option<Option<T::ScalarRef<'_>>> {
         match self.validity.get(index) {
             Some(true) => Some(Some(T::index_column(&self.column, index).unwrap())),
@@ -327,7 +335,7 @@ impl NullableColumn<AnyType> {
     pub fn new_column(column: Column, validity: Bitmap) -> Column {
         debug_assert_eq!(column.len(), validity.len());
         debug_assert!(!matches!(column, Column::Nullable(_)));
-        NullableColumn::new_column(column, validity)
+        Column::Nullable(Box::new(NullableColumn { column, validity }))
     }
 }
 
