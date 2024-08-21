@@ -275,7 +275,7 @@ impl Catalog for SessionCatalog {
         self.inner.get_table_by_info(table_info)
     }
 
-    async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         if let Some(t) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
@@ -301,7 +301,7 @@ impl Catalog for SessionCatalog {
         self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
-    async fn get_table_name_by_id(&self, table_id: u64) -> Result<Option<String>> {
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
         if let Some(name) = self.temp_tbl_mgr.lock().get_table_name_by_id(table_id) {
             return Ok(Some(name));
         }

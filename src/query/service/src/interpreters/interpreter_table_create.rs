@@ -296,7 +296,7 @@ impl CreateTableInterpreter {
         pipeline
             .main_pipeline
             .lift_on_finished(move |info: &ExecutionInfo| {
-                println!("{:?}", ctx.session_state().temp_tbl_mgr);
+                info!("{:?}", ctx.session_state().temp_tbl_mgr);
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
                 if info.res.is_ok() {
@@ -323,7 +323,7 @@ impl CreateTableInterpreter {
                         info!("create {} as select failed. {:?}", qualified_table_name, e);
                         e
                     })?;
-                    println!("{:?}", ctx.session_state().temp_tbl_mgr);
+                    info!("{:?}", ctx.session_state().temp_tbl_mgr);
                 }
 
                 Ok(())
