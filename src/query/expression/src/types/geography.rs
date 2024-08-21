@@ -19,6 +19,7 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
+use databend_common_io::geography::*;
 use databend_common_io::wkb::make_point;
 use databend_common_io::wkb::read_wkb_header;
 pub use databend_common_io::wkb::WkbInfo;
@@ -41,11 +42,6 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::ColumnBuilder;
-
-pub const LONGITUDE_MIN: f64 = -180.0;
-pub const LONGITUDE_MAX: f64 = 180.0;
-pub const LATITUDE_MIN: f64 = -90.0;
-pub const LATITUDE_MAX: f64 = 90.0;
 
 #[derive(
     Clone,
@@ -96,14 +92,8 @@ impl<'a> BinaryLike<'a> for GeographyRef<'a> {
 pub struct GeographyType;
 
 impl GeographyType {
-    pub fn check_point(lon: f64, lat: f64) -> Result<(), String> {
-        if !(LONGITUDE_MIN..=LONGITUDE_MAX).contains(&lon)
-            || !(LATITUDE_MIN..=LATITUDE_MAX).contains(&lat)
-        {
-            Err("latitude is out of range".to_string())
-        } else {
-            Ok(())
-        }
+    pub fn check_point(lon: f64, lat: f64) -> Result<()> {
+        check_point(lon, lat)
     }
 
     pub fn point(lon: f64, lat: f64) -> Geography {

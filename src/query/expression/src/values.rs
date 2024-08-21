@@ -1335,7 +1335,7 @@ impl Column {
                 GeometryType::from_data(data)
             }
             DataType::Geography => {
-                use crate::types::geography;
+                use databend_common_io::geography;
 
                 let mut builder = GeographyType::create_builder(len, &[]);
                 for _ in 0..len {

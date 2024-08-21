@@ -53,8 +53,9 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
@@ -495,7 +496,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        let geom = parse_to_ewkb(&buf, None)?;
+        let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())
@@ -509,8 +510,8 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        let geom = parse_to_ewkb(&buf, None)?;
-        column.put_slice(geom.as_bytes());
+        let geog = geography_from_ewkt_bytes(&buf)?;
+        column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
     }

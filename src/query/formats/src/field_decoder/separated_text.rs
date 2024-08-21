@@ -45,8 +45,9 @@ use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use jsonb::parse_value;
@@ -317,15 +318,15 @@ impl SeparatedTextDecoder {
     }
 
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
-        let geom = parse_to_ewkb(data, None)?;
+        let geom = parse_bytes_to_ewkb(data, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())
     }
 
     fn read_geography(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
-        let geom = parse_to_ewkb(data, None)?;
-        column.put_slice(geom.as_bytes());
+        let geog = geography_from_ewkt_bytes(data)?;
+        column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
     }
