@@ -84,7 +84,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 source: Some(source),
                 engine: Some(Engine::Fuse),
                 uri_location: None,
-                cluster_by: vec![],
+                cluster_by: None,
                 table_options: BTreeMap::new(),
                 as_query: None,
                 table_type: TableType::Normal,

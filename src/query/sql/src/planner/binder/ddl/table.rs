@@ -83,6 +83,7 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -655,16 +656,19 @@ impl Binder {
             )));
         }
 
-        let cluster_key = {
+        let mut cluster_key = None;
+        if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_by, schema.clone())
+                .analyze_cluster_keys(&cluster_opt.cluster_exprs, schema.clone())
                 .await?;
-            if keys.is_empty() {
-                None
-            } else {
-                Some(format!("({})", keys.join(", ")))
+            if !keys.is_empty() {
+                options.insert(
+                    OPT_KEY_CLUSTER_TYPE.to_owned(),
+                    format!("{}", cluster_opt.cluster_type).to_lowercase(),
+                );
+                cluster_key = Some(format!("({})", keys.join(", ")));
             }
-        };
+        }
 
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),

@@ -66,6 +66,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -520,6 +521,7 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
 
     r.insert(OPT_KEY_ENGINE);
 

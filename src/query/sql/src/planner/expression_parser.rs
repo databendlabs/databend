@@ -455,7 +455,7 @@ pub fn parse_hilbert_cluster_key(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     cluster_key_str: &str,
-) -> Result<Expr> {
+) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -522,42 +522,44 @@ pub fn parse_hilbert_cluster_key(
     };
 
     for expr in exprs.iter_mut() {
-        let data_type = expr.data_type();
-        let is_nullable = data_type.is_nullable();
-        let inner_type = data_type.remove_nullable();
-        if inner_type != hilbert_key_type {
-            let dest_type = if is_nullable {
-                hilbert_key_type.wrap_nullable()
-            } else {
-                hilbert_key_type.clone()
-            };
-            *expr = Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(expr.clone()),
-                dest_type,
-            };
-        }
-
+        let is_nullable = expr.data_type().is_nullable();
         if is_nullable {
-            let coalesce = check_function(
+            let is_not_null_expr = check_function(
                 None,
-                "coalesce",
+                "is_not_null",
                 &[],
-                &[expr.clone(), Expr::Constant {
+                &[expr.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            let assume_not_null_expr = check_function(
+                None,
+                "assume_not_null",
+                &[],
+                &[expr.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            *expr = check_function(
+                None,
+                "if",
+                &[],
+                &[is_not_null_expr, assume_not_null_expr, Expr::Constant {
                     span: None,
                     scalar: scalar.clone(),
                     data_type: hilbert_key_type.clone(),
                 }],
                 &BUILTIN_FUNCTIONS,
             )?;
-            *expr = check_function(
-                None,
-                "remove_nullable",
-                &[],
-                &[coalesce],
-                &BUILTIN_FUNCTIONS,
-            )?;
+        }
+
+        if expr.data_type() != &hilbert_key_type {
+            *expr = Expr::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type: hilbert_key_type.clone(),
+            };
         }
     }
 
@@ -574,7 +576,7 @@ pub fn parse_hilbert_cluster_key(
         }],
         &BUILTIN_FUNCTIONS,
     )?;
-    Ok(result)
+    Ok(vec![result])
 }
 
 fn hilbert_byte_size(data_type: &DataType) -> Result<usize> {

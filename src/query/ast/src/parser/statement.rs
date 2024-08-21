@@ -702,7 +702,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
-            ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
         },
@@ -736,9 +736,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 source,
                 engine,
                 uri_location,
-                cluster_by: opt_cluster_by
-                    .map(|(_, _, _, exprs, _)| exprs)
-                    .unwrap_or_default(),
+                cluster_by: opt_cluster_by.map(|(_, _, typ, _, exprs, _)| ClusterOption {
+                    cluster_type: typ.unwrap_or(ClusterType::Linear),
+                    cluster_exprs: exprs,
+                }),
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,
@@ -3902,6 +3903,13 @@ pub fn switch(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { ENABLE }),
         value(false, rule! { DISABLE }),
+    ))(i)
+}
+
+pub fn cluster_type(i: Input) -> IResult<ClusterType> {
+    alt((
+        value(ClusterType::Linear, rule! { LINEAR }),
+        value(ClusterType::Hilbert, rule! { HILBERT }),
     ))(i)
 }
 

@@ -60,6 +60,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sharing::create_share_table_operator;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
+use databend_common_sql::parse_hilbert_cluster_key;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -75,9 +76,11 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -510,7 +513,13 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_cluster_keys(ctx, table_meta.clone(), order).unwrap();
+            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            let cluster_keys = match cluster_type {
+                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
+                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
+            }
+            .unwrap();
+
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {

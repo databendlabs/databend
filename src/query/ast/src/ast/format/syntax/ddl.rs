@@ -25,6 +25,7 @@ use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
+use crate::ast::ClusterType;
 use crate::ast::CreateDictionaryStmt;
 use crate::ast::CreateOption;
 use crate::ast::CreateStreamStmt;
@@ -79,11 +80,15 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if !stmt.cluster_by.is_empty() {
+        .append(if let Some(cluster_by) = stmt.cluster_by {
             RcDoc::line()
                 .append(RcDoc::text("CLUSTER BY "))
+                .append(match cluster_by.cluster_type {
+                    ClusterType::Linear => RcDoc::text("LINEAR "),
+                    ClusterType::Hilbert => RcDoc::text("HILBERT "),
+                })
                 .append(parenthesized(
-                    interweave_comma(stmt.cluster_by.into_iter().map(pretty_expr)).group(),
+                    interweave_comma(cluster_by.cluster_exprs.into_iter().map(pretty_expr)).group(),
                 ))
         } else {
             RcDoc::nil()

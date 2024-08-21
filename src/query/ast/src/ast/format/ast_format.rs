@@ -1443,10 +1443,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let engine_node = FormatTreeNode::new(engine_format_ctx);
             children.push(engine_node);
         }
-        if !stmt.cluster_by.is_empty() {
-            let mut cluster_by_children = Vec::with_capacity(stmt.cluster_by.len());
-            for cluster_by in stmt.cluster_by.iter() {
-                self.visit_expr(cluster_by);
+        if let Some(cluster_by) = &stmt.cluster_by {
+            let mut cluster_by_children = Vec::with_capacity(cluster_by.cluster_exprs.len());
+            for expr in cluster_by.cluster_exprs.iter() {
+                self.visit_expr(expr);
                 cluster_by_children.push(self.children.pop().unwrap());
             }
             let cluster_by_name = "ClusterByList".to_string();

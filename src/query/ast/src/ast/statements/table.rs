@@ -129,6 +129,46 @@ impl Display for ShowDropTablesStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum ClusterType {
+    Linear,
+    Hilbert,
+}
+
+impl Display for ClusterType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ClusterType::Linear => write!(f, "LINEAR"),
+            ClusterType::Hilbert => write!(f, "HILBERT"),
+        }
+    }
+}
+
+impl std::str::FromStr for ClusterType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "linear" => Ok(ClusterType::Linear),
+            "hilbert" => Ok(ClusterType::Hilbert),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ClusterOption {
+    pub cluster_type: ClusterType,
+    pub cluster_exprs: Vec<Expr>,
+}
+
+impl Display for ClusterOption {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CLUSTER BY {}(", self.cluster_type)?;
+        write_comma_separated_list(f, &self.cluster_exprs)?;
+        write!(f, ")")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTableStmt {
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
@@ -137,7 +177,7 @@ pub struct CreateTableStmt {
     pub source: Option<CreateTableSource>,
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
-    pub cluster_by: Vec<Expr>,
+    pub cluster_by: Option<ClusterOption>,
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
     pub table_type: TableType,
@@ -185,10 +225,8 @@ impl Display for CreateTableStmt {
             write!(f, " {uri_location}")?;
         }
 
-        if !self.cluster_by.is_empty() {
-            write!(f, " CLUSTER BY (")?;
-            write_comma_separated_list(f, &self.cluster_by)?;
-            write!(f, ")")?
+        if let Some(cluster_by) = &self.cluster_by {
+            write!(f, " {cluster_by}")?;
         }
 
         // Format table options
