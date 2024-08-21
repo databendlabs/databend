@@ -23,6 +23,9 @@ use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
+use super::interpreter_dictionary_create::CreateDictionaryInterpreter;
+use super::interpreter_dictionary_drop::DropDictionaryInterpreter;
+use super::interpreter_dictionary_show_create::ShowCreateDictionaryInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_mutation::MutationInterpreter;
@@ -612,6 +615,17 @@ impl InterpreterFactory {
             Plan::System(p) => Ok(Arc::new(SystemActionInterpreter::try_create(
                 ctx,
                 *p.clone(),
+            )?)),
+            // Dictionary
+            Plan::CreateDictionary(create_dictionary) => Ok(Arc::new(
+                CreateDictionaryInterpreter::try_create(ctx, *create_dictionary.clone())?,
+            )),
+            Plan::ShowCreateDictionary(show_create_table) => Ok(Arc::new(
+                ShowCreateDictionaryInterpreter::try_create(ctx, *show_create_table.clone())?,
+            )),
+            Plan::DropDictionary(drop_dict) => Ok(Arc::new(DropDictionaryInterpreter::try_create(
+                ctx,
+                *drop_dict.clone(),
             )?)),
         }
     }
