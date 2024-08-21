@@ -30,7 +30,8 @@ use serde::Serialize;
 pub struct QueryError {
     pub code: u16,
     pub message: String,
-    pub detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 impl QueryError {
@@ -38,7 +39,11 @@ impl QueryError {
         QueryError {
             code: e.code(),
             message: e.display_text(),
-            detail: e.detail(),
+            detail: if e.detail().is_empty() {
+                None
+            } else {
+                Some(e.detail().clone())
+            },
         }
     }
 }

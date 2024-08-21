@@ -40,7 +40,7 @@ pub async fn logout_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         Some(QueryError {
             code: 500,
             message: "missing session token".to_string(),
-            detail: "".to_string(),
+            detail: None,
         })
     };
     Ok(Json(LogoutResponse { error }))
