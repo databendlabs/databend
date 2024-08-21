@@ -374,7 +374,7 @@ impl CreateTableInterpreter {
             if let Some(current_role) = self.ctx.get_current_role() {
                 let tenant = self.ctx.get_tenant();
                 let db = catalog.get_database(&tenant, &self.plan.database).await?;
-                let db_id = db.get_db_info().ident.db_id;
+                let db_id = db.get_db_info().database_id.db_id;
 
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 role_api

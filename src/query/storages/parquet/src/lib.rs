@@ -38,5 +38,6 @@ pub use parquet_rs::ParquetRSReaderBuilder;
 pub use parquet_rs::ParquetRSRowGroupPart;
 pub use parquet_rs::ParquetRSRowGroupReader;
 pub use parquet_rs::ParquetRSTable;
+pub use parquet_rs::ParquetSource;
 pub use parquet_rs::ParquetTableForCopy;
 pub use read_settings::ReadSettings;

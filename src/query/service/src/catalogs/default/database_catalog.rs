@@ -348,7 +348,7 @@ impl Catalog for DatabaseCatalog {
             .list_databases(tenant)
             .await?
             .iter()
-            .map(|sys_db| sys_db.get_db_info().ident.db_id)
+            .map(|sys_db| sys_db.get_db_info().database_id.db_id)
             .collect();
 
         let mut_db_ids: Vec<MetaId> = db_ids

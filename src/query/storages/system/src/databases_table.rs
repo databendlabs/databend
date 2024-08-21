@@ -81,7 +81,7 @@ impl AsyncSystemTable for DatabasesTable {
                     visibility_checker.check_database_visibility(
                         &ctl_name,
                         db.name(),
-                        db.get_db_info().ident.db_id,
+                        db.get_db_info().database_id.db_id,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -90,7 +90,7 @@ impl AsyncSystemTable for DatabasesTable {
                 catalog_names.push(ctl_name.clone());
                 let db_name = db.name().to_string();
                 db_names.push(db_name);
-                let id = db.get_db_info().ident.db_id;
+                let id = db.get_db_info().database_id.db_id;
                 db_id.push(id);
                 owners.push(
                     user_api

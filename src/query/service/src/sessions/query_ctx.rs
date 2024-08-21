@@ -152,6 +152,9 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
+    // Each table will create a new QueryContext
+    // So partition_queue could be independent in each table context
+    // see `builder_join.rs` for more details
     pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
