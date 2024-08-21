@@ -29,6 +29,7 @@ use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
@@ -185,6 +186,10 @@ impl Column {
             Column::Geometry(column) => {
                 let column = Self::filter_binary_scalars(column, filter);
                 Column::Geometry(column)
+            }
+            Column::Geography(column) => {
+                let column = Self::filter_binary_scalars(&column.0, filter);
+                Column::Geography(GeographyColumn(column))
             }
         }
     }

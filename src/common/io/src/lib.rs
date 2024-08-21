@@ -41,6 +41,7 @@ mod format_settings;
 mod geometry;
 mod position;
 mod stat_buffer;
+pub mod wkb;
 
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;

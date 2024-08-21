@@ -1013,6 +1013,13 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AnalyzeTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            // Dictionary
+            Plan::ShowCreateDictionary(_)
+            | Plan::CreateDictionary(_)
+            | Plan::DropDictionary(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
+            }
             // Others.
             Plan::Insert(plan) => {
                 let target_table_privileges = if plan.overwrite {
