@@ -324,7 +324,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 2"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 2"}}"#
     );
 
     // final
@@ -588,7 +588,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 6"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 6"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
