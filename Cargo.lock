@@ -3680,6 +3680,7 @@ dependencies = [
  "num-traits",
  "opendal",
  "paste",
+ "prost 0.12.6",
  "serde",
  "serde_json",
  "sha1",
