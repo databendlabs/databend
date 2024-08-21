@@ -150,6 +150,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader, positions),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader, positions),
             ColumnBuilder::Binary(_) => Err(ErrorCode::Unimplemented("binary literal")),
             ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
                 Err(ErrorCode::Unimplemented("empty array/map literal"))
@@ -487,6 +488,20 @@ impl FastFieldDecoderValues {
     }
 
     fn read_geometry<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let geom = parse_to_ewkb(&buf, None)?;
+        column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography<R: AsRef<[u8]>>(
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
