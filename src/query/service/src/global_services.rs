@@ -134,7 +134,7 @@ impl GlobalServices {
                 builtin,
                 &config.query.tenant_id,
                 config.query.tenant_quota.clone(),
-                config.query.enable_upgrade_meta_data_to_pb,
+                config.query.enable_meta_data_upgrade_json_to_pb_from_v307,
             )
             .await?;
         }

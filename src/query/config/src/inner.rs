@@ -214,7 +214,7 @@ pub struct QueryConfig {
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
-    pub enable_upgrade_meta_data_to_pb: bool,
+    pub enable_meta_data_upgrade_json_to_pb_from_v307: bool,
     pub internal_enable_sandbox_tenant: bool,
     pub internal_merge_on_read_mutation: bool,
     /// Disable some system load(For example system.configs) for cloud security.
@@ -295,7 +295,7 @@ impl Default for QueryConfig {
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
-            enable_upgrade_meta_data_to_pb: false,
+            enable_meta_data_upgrade_json_to_pb_from_v307: false,
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,

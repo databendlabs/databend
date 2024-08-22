@@ -59,19 +59,19 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
-    enable_upgrade_meta_data_to_pb: bool,
+    enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
-        enable_upgrade_meta_data_to_pb: bool,
+        enable_meta_data_upgrade_json_to_pb_from_v307: bool,
     ) -> Self {
         RoleMgr {
             kv_api,
             tenant: tenant.clone(),
-            enable_upgrade_meta_data_to_pb,
+            enable_meta_data_upgrade_json_to_pb_from_v307,
         }
     }
 
@@ -168,7 +168,10 @@ impl RoleApi for RoleMgr {
 
         match seq.match_seq(&seq_value) {
             Ok(_) => {
-                let mut quota = quota(func_name!(), self.enable_upgrade_meta_data_to_pb);
+                let mut quota = quota(
+                    func_name!(),
+                    self.enable_meta_data_upgrade_json_to_pb_from_v307,
+                );
 
                 let u = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
                     .await?;
@@ -190,7 +193,10 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
 
-        let mut quota = quota(func_name!(), self.enable_upgrade_meta_data_to_pb);
+        let mut quota = quota(
+            func_name!(),
+            self.enable_meta_data_upgrade_json_to_pb_from_v307,
+        );
 
         for (key, val) in values {
             let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await?;
@@ -218,7 +224,10 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
 
-        let mut quota = quota(func_name!(), self.enable_upgrade_meta_data_to_pb);
+        let mut quota = quota(
+            func_name!(),
+            self.enable_meta_data_upgrade_json_to_pb_from_v307,
+        );
 
         for (key, val) in values {
             match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
@@ -411,7 +420,10 @@ impl RoleApi for RoleMgr {
             None => return Ok(None),
         };
 
-        let mut quota = quota(func_name!(), self.enable_upgrade_meta_data_to_pb);
+        let mut quota = quota(
+            func_name!(),
+            self.enable_meta_data_upgrade_json_to_pb_from_v307,
+        );
 
         // if can not get ownership, will directly return None.
         let seq_val =
@@ -518,8 +530,8 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
     }
 }
 
-fn quota(target: impl ToString, enable_upgrade_meta_data_to_pb: bool) -> Quota {
-    if enable_upgrade_meta_data_to_pb {
+fn quota(target: impl ToString, enable_meta_data_upgrade_json_to_pb_from_v307: bool) -> Quota {
+    if enable_meta_data_upgrade_json_to_pb_from_v307 {
         Quota::new(target)
     } else {
         // Do not serialize to protobuf format

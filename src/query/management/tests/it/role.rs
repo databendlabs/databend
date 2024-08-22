@@ -88,10 +88,14 @@ mod add {
 }
 
 async fn new_role_api(
-    enable_upgrade_meta_data_to_pb: bool,
+    enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> databend_common_exception::Result<(Arc<MetaEmbedded>, RoleMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
     let tenant = Tenant::new_literal("admin");
-    let mgr = RoleMgr::create(test_api.clone(), &tenant, enable_upgrade_meta_data_to_pb);
+    let mgr = RoleMgr::create(
+        test_api.clone(),
+        &tenant,
+        enable_meta_data_upgrade_json_to_pb_from_v307,
+    );
     Ok((test_api, mgr))
 }
