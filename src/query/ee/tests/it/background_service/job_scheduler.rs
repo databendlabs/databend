@@ -29,13 +29,14 @@ use databend_common_meta_app::background::BackgroundJobParams;
 use databend_common_meta_app::background::BackgroundJobStatus;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::SeqV;
 use databend_enterprise_query::background_service::Job;
 use databend_enterprise_query::background_service::JobScheduler;
 
 #[derive(Clone)]
 struct TestJob {
     counter: Arc<AtomicUsize>,
-    info: BackgroundJobInfo,
+    info: SeqV<BackgroundJobInfo>,
     finish_tx: Arc<Mutex<Sender<u64>>>,
 }
 
@@ -60,7 +61,7 @@ impl Job for TestJob {
         let _ = self.finish_tx.clone().lock().await.send(1).await;
     }
 
-    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+    async fn get_info(&self) -> Result<SeqV<BackgroundJobInfo>> {
         Ok(self.info.clone())
     }
 

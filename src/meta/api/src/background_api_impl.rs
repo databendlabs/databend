@@ -46,20 +46,18 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::With;
 use fastrace::func_name;
 use log::debug;
 
 use crate::background_api::BackgroundApi;
 use crate::deserialize_struct;
 use crate::fetch_id;
-use crate::get_pb_value;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
@@ -200,10 +198,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
         let name_key = &req.name;
 
-        let (id_ident, _, job) =
+        let (id_ident, seq_joq) =
             get_background_job_or_error(self, name_key, format!("get_: {:?}", name_key)).await?;
 
-        Ok(GetBackgroundJobReply::new(id_ident, job))
+        Ok(GetBackgroundJobReply::new(id_ident, seq_joq))
     }
 
     #[fastrace::trace]
@@ -315,14 +313,15 @@ async fn get_background_job_or_error(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_ident: &BackgroundJobIdent,
     _msg: impl Display,
-) -> Result<(BackgroundJobIdIdent, u64, BackgroundJobInfo), KVAppError> {
+) -> Result<(BackgroundJobIdIdent, SeqV<BackgroundJobInfo>), KVAppError> {
     let id_ident = get_background_job_id(kv_api, name_ident).await?;
 
-    let (id_seq, job_info) = get_pb_value(kv_api, &id_ident).await?;
-    assert_background_job_exist(id_seq, name_ident)?;
+    let seq_job = kv_api
+        .get_pb(&id_ident)
+        .await?
+        .ok_or_else(|| unknown_background_job(name_ident))?;
 
-    // Safe unwrap(): background_job_seq > 0 implies background_job is not None.
-    Ok((id_ident, id_seq, job_info.unwrap()))
+    Ok((id_ident, seq_job))
 }
 
 /// Return OK if a db_id or db_meta exists by checking the seq.
@@ -354,15 +353,15 @@ async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo) -> bool>(
     mutation: F,
 ) -> Result<UpdateBackgroundJobReply, KVAppError> {
     debug!(req :? =(name); "BackgroundApi: {}", func_name!());
-    let (id_ident, id_val_seq, mut info) =
+    let (id_ident, mut seq_job) =
         get_background_job_or_error(kv_api, name, "update_background_job").await?;
 
-    let should_update = mutation(&mut info);
+    let should_update = mutation(&mut seq_job.data);
     if !should_update {
         return Ok(UpdateBackgroundJobReply::new(id_ident.clone()));
     }
 
-    let req = UpsertPB::update(id_ident.clone(), info).with(MatchSeq::Exact(id_val_seq));
+    let req = UpsertPB::update_exact(id_ident.clone(), seq_job);
     let resp = kv_api.upsert_pb(&req).await?;
 
     assert!(resp.is_changed());

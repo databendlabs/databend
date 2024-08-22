@@ -229,7 +229,7 @@ impl RealBackgroundService {
         meta: Arc<MetaStore>,
         id: &BackgroundJobIdent,
         suspend: bool,
-    ) -> Result<BackgroundJobInfo> {
+    ) -> Result<SeqV<BackgroundJobInfo>> {
         // create job if not exist
         let info = meta
             .get_background_job(GetBackgroundJobReq { name: id.clone() })
