@@ -65,8 +65,9 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for ShareId {
+        type KeyType = super::ShareNameIdent;
         /// ShareId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }

@@ -402,7 +402,8 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for DatabaseNameIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DatabaseIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

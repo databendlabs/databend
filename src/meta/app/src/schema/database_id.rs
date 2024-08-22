@@ -71,7 +71,8 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for DatabaseMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DatabaseId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

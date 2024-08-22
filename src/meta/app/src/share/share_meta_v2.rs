@@ -342,10 +342,12 @@ impl ShareMetaV2 {
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::share::ShareId;
     use crate::share::ShareMetaV2;
 
     impl kvapi::Value for ShareMetaV2 {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
