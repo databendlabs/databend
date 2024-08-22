@@ -291,9 +291,9 @@ impl<T: ValueType> NullableColumn<T> {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> {
         // we need to check the validity firstly
-        // cause `self.validity.get_unchecked` may check the index from buffer address with `true` result
+        // cause `self.validity.get_bit_unchecked` may check the index from buffer address with `true` result
         if index < self.validity.len() {
-            match self.validity.get_unchecked(index) {
+            match self.validity.get_bit_unchecked(index) {
                 true => Some(T::index_column_unchecked(&self.column, index)),
                 false => None,
             }
