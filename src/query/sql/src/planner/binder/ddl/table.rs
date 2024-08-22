@@ -1693,7 +1693,8 @@ impl Binder {
     }
 }
 
-const VERIFICATION_KEY: &'static str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
+const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
+const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
 // verify that essential privileges has granted for accessing external location
 async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
     // verify privilege to put
@@ -1710,6 +1711,11 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
     // verify privilege to list
     if let Err(e) = dal.list(VERIFICATION_KEY).await {
         errors.push(format!("Permission check for [List] failed: {}", e));
+    }
+
+    // verify privilege to delete (del something not exist)
+    if let Err(e) = dal.delete(VERIFICATION_KEY_DEL).await {
+        errors.push(format!("Permission check for [Delete] failed: {}", e));
     }
 
     if errors.is_empty() {
