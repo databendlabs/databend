@@ -129,9 +129,7 @@ impl UserApiProvider {
         let role_mgr = RoleMgr::create(
             self.client.clone(),
             tenant,
-            GlobalConfig::instance()
-                .query
-                .enable_meta_data_upgrade_json_to_pb_from_v307,
+            GlobalConfig::instance().query.upgrade_to_pb,
         );
         Arc::new(role_mgr)
     }
