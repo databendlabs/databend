@@ -1780,14 +1780,14 @@ async fn get_share_object_seq_and_id(
     match obj_name {
         ShareGrantObjectName::Database(db_name) => {
             let name_key = DatabaseNameIdent::new(tenant.clone(), db_name);
-            let (_db_id_seq, db_id, db_meta) = get_db_or_err(
+            let (seq_db_id, seq_db_meta) = get_db_or_err(
                 kv_api,
                 &name_key,
                 format!("get_share_object_seq_and_id: {}", name_key.display()),
             )
             .await?;
 
-            if grant && db_meta.from_share.is_some() {
+            if grant && seq_db_meta.from_share.is_some() {
                 return Err(KVAppError::AppError(
                     AppError::CannotShareDatabaseCreatedFromShare(
                         CannotShareDatabaseCreatedFromShare::new(
@@ -1798,8 +1798,12 @@ async fn get_share_object_seq_and_id(
                 ));
             }
             Ok((
-                ShareGrantObjectSeqAndId::Database(db_meta.seq, db_id, db_meta.data),
-                ShareObject::Database(db_name.to_owned(), db_id),
+                ShareGrantObjectSeqAndId::Database(
+                    seq_db_meta.seq,
+                    *seq_db_id.data,
+                    seq_db_meta.data,
+                ),
+                ShareObject::Database(db_name.to_owned(), *seq_db_id.data),
             ))
         }
 
