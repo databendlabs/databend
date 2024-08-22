@@ -4,6 +4,7 @@
  'refresh_token_validity_in_secs',
  'session_id',
  'session_token',
+ 'session_token_validity_in_secs',
  'version']
 14400
 ---- do_query('select 1',)
@@ -25,7 +26,11 @@
 {'code': 5103, 'message': 'session token not found'}
 ---- do_renew(1,)
 200
-['refresh_token', 'refresh_token_validity_in_secs', 'session_token']
+['refresh_token',
+ 'refresh_token_validity_in_secs',
+ 'session_token',
+ 'session_token_validity_in_secs',
+ 'version']
 14400
 ---- do_query('select 6',)
 200

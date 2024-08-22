@@ -25,6 +25,7 @@ use poem::IntoResponse;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
 use crate::servers::http::v1::session::client_session_manager::REFRESH_TOKEN_VALIDITY;
+use crate::servers::http::v1::session::client_session_manager::SESSION_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Deserialize, Clone)]
@@ -42,6 +43,7 @@ pub enum LoginResponse {
         session_id: String,
         session_token: String,
         refresh_token: String,
+        session_token_validity_in_secs: u64,
         refresh_token_validity_in_secs: u64,
     },
     Error {
@@ -101,6 +103,7 @@ pub async fn login_handler(
             session_id,
             session_token: token_pair.session,
             refresh_token: token_pair.refresh,
+            session_token_validity_in_secs: SESSION_TOKEN_VALIDITY.as_secs(),
             refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.as_secs(),
         })),
         Err(e) => Ok(Json(LoginResponse::Error {
