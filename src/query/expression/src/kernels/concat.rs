@@ -336,7 +336,7 @@ impl Column {
                     capacity,
                 ));
                 let validity = BooleanType::try_downcast_column(&validity).unwrap();
-                Column::Nullable(Box::new(NullableColumn { column, validity }))
+                NullableColumn::new_column(column, validity)
             }
             Column::Tuple(fields) => {
                 let fields = (0..fields.len())

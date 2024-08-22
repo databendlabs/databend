@@ -22,16 +22,15 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
 
-use crate::servers::http::v1::session::token_manager::TokenManager;
-use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
+use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
+use crate::servers::http::v1::session::client_session_manager::REFRESH_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::v1::QueryError;
 
 #[derive(Deserialize, Clone)]
 struct LoginRequest {
     pub database: Option<String>,
     pub role: Option<String>,
-    pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
 }
 
@@ -67,9 +66,6 @@ async fn check_login(
     if let Some(role_name) = &req.role {
         session.set_current_role_checked(role_name).await?;
     }
-    session
-        .set_secondary_roles_checked(req.secondary_roles.clone())
-        .await?;
 
     if let Some(conf_settings) = &req.settings {
         let settings = session.get_settings();
@@ -83,10 +79,6 @@ async fn check_login(
 ///  # For SQL driver implementer:
 /// - It is encouraged to call `/v1/session/login` when establishing connection, not mandatory for now.
 /// - May get 404 when talk to old server, may check `/health` (no `/v1` prefix) to ensure the host:port is not wrong.
-///
-///  # TODO (need design):
-/// - (optional) check client version.
-/// - Return token for auth in the following queries from this session, to make it a real login.
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn login_handler(
@@ -100,7 +92,7 @@ pub async fn login_handler(
         }));
     }
 
-    match TokenManager::instance()
+    match ClientSessionManager::instance()
         .new_token_pair(&ctx.session, None)
         .await
     {

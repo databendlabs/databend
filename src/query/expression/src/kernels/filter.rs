@@ -173,7 +173,7 @@ impl Column {
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
                 let validity = Self::filter_boolean_types(&c.validity, filter);
-                Column::Nullable(Box::new(NullableColumn { column, validity }))
+                NullableColumn::new_column(column, validity)
             }
             Column::Tuple(fields) => {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();

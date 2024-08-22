@@ -362,6 +362,14 @@ impl Session {
     pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
         self.session_ctx.set_all_variables(variables)
     }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.session_ctx.get_client_session_id()
+    }
+
+    pub fn set_client_session_id(&self, id: String) {
+        self.session_ctx.set_client_session_id(id)
+    }
 }
 
 impl Drop for Session {

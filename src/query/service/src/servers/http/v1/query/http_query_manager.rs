@@ -39,7 +39,7 @@ use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
 use crate::servers::http::v1::query::HttpQueryRequest;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq)]
 pub(crate) enum RemoveReason {
     Timeout,
     Canceled,
@@ -151,10 +151,12 @@ impl HttpQueryManager {
                         _ = self_clone
                             .remove_query(
                                 &query_id_clone,
+                                &None,
                                 RemoveReason::Timeout,
                                 ErrorCode::AbortedQuery(&msg),
                             )
-                            .await;
+                            .await
+                            .ok();
                         break;
                     }
                     ExpireResult::Sleep(t) => {
@@ -172,12 +174,16 @@ impl HttpQueryManager {
     pub(crate) async fn remove_query(
         self: &Arc<Self>,
         query_id: &str,
+        client_session_id: &Option<String>,
         reason: RemoveReason,
         error: ErrorCode,
-    ) -> Option<Arc<HttpQuery>> {
+    ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         // deref at once to avoid holding DashMap shard guard for too long.
         let query = self.queries.get(query_id).map(|q| q.clone());
         if let Some(q) = &query {
+            if reason != RemoveReason::Timeout {
+                q.check_client_session_id(client_session_id)?;
+            }
             if q.mark_removed(reason) {
                 q.kill(error).await;
                 let mut queue = self.removed_queries.lock();
@@ -186,7 +192,7 @@ impl HttpQueryManager {
                 };
             }
         }
-        query
+        Ok(query)
     }
 
     #[async_backtrace::framed]
