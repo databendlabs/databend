@@ -520,7 +520,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
 
 fn quota(target: impl ToString, upgrade_to_pb: bool) -> Quota {
     if upgrade_to_pb {
-        Quota::new(target)
+        Quota::new_limit(target, 10)
     } else {
         // Do not serialize to protobuf format
         Quota::new_limit(target, 0)
