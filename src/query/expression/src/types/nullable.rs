@@ -258,8 +258,8 @@ impl<T: ValueType> NullableColumn<T> {
     // we should better use new to create a new instance to ensure the validity and column are consistent
     // todo: make column and validity private
     pub fn new(column: T::Column, validity: Bitmap) -> Self {
-        assert_eq!(T::column_len(&column), validity.len());
-        assert!(!matches!(
+        debug_assert_eq!(T::column_len(&column), validity.len());
+        debug_assert!(!matches!(
             T::upcast_column(column.clone()),
             Column::Nullable(_)
         ));
@@ -290,11 +290,15 @@ impl<T: ValueType> NullableColumn<T> {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> {
-        debug_assert!(index < self.validity.len());
-
-        match self.validity.get_bit_unchecked(index) {
-            true => Some(T::index_column_unchecked(&self.column, index)),
-            false => None,
+        // we need to check the validity firstly
+        // cause `self.validity.get_unchecked` may check the index from buffer address with `true` result
+        if index < self.validity.len() {
+            match self.validity.get_unchecked(index) {
+                true => Some(T::index_column_unchecked(&self.column, index)),
+                false => None,
+            }
+        } else {
+            None
         }
     }
 
