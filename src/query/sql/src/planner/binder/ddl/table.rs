@@ -484,11 +484,11 @@ impl Binder {
         if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
             {
                 return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry type is an experimental feature. \
+                    "Create table using the geometry/geography type is an experimental feature. \
                     You can `set enable_geo_create_table=1` to use this feature. \
                     We do not guarantee its compatibility until we doc this feature.",
                 ));

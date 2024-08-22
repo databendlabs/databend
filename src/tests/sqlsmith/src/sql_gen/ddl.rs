@@ -32,7 +32,7 @@ use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
 
-const SIMPLE_COLUMN_TYPES: [TypeName; 20] = [
+const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
     TypeName::Boolean,
     TypeName::UInt8,
     TypeName::UInt16,
@@ -59,6 +59,7 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 20] = [
     TypeName::Variant,
     TypeName::Binary,
     TypeName::Geometry,
+    TypeName::Geography,
 ];
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -281,6 +282,10 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             value: Literal::String("null".to_string()),
         },
         TypeName::Geometry => Expr::Literal {
+            span: None,
+            value: Literal::String("POINT(0 0)".to_string()),
+        },
+        TypeName::Geography => Expr::Literal {
             span: None,
             value: Literal::String("POINT(0 0)".to_string()),
         },

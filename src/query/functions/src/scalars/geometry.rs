@@ -877,7 +877,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match parse_to_ewkb(wkt.as_bytes(), None) {
+            match parse_to_ewkb(wkt, None) {
                 Ok(data) => builder.put_slice(data.as_slice()),
                 Err(e) => ctx.set_error(
                     builder.len(),
@@ -899,7 +899,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match parse_to_ewkb(wkt.as_bytes(), Some(srid)) {
+                match parse_to_ewkb(wkt, Some(srid)) {
                     Ok(data) => builder.put_slice(data.as_slice()),
                     Err(e) => ctx.set_error(
                         builder.len(),
@@ -1665,7 +1665,7 @@ fn str_to_geometry_impl(
         Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
     };
     let ewkb = match geo_type {
-        GeometryDataType::WKT | GeometryDataType::EWKT => parse_to_ewkb(str.as_bytes(), srid),
+        GeometryDataType::WKT | GeometryDataType::EWKT => parse_to_ewkb(str, srid),
         GeometryDataType::GEOJSON => GeoJson(str)
             .to_ewkb(CoordDimensions::xy(), srid)
             .map_err(|e| ErrorCode::GeometryError(e.to_string())),

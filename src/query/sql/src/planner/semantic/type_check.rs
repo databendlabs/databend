@@ -4530,6 +4530,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         }
         TypeName::Variant => TableDataType::Variant,
         TypeName::Geometry => TableDataType::Geometry,
+        TypeName::Geography => TableDataType::Geography,
         TypeName::NotNull(inner_type) => {
             let data_type = resolve_type_name(inner_type, not_null)?;
             data_type.remove_nullable()
