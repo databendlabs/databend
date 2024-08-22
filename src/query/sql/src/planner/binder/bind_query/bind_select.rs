@@ -128,6 +128,12 @@ impl Binder {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
+        let have_srfs = !from_context.srfs.is_empty();
+        if have_srfs {
+            // Bind set returning functions first.
+            s_expr = self.bind_project_set(&mut from_context, s_expr)?;
+        }
+
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
         let where_scalar = if let Some(expr) = &stmt.selection {
@@ -167,7 +173,7 @@ impl Binder {
         )?;
 
         // After all analysis is done.
-        if from_context.srfs.is_empty() {
+        if !have_srfs {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,
@@ -178,11 +184,6 @@ impl Binder {
                 &order_items.items,
                 limit.unwrap_or_default(),
             )?;
-        }
-
-        if !from_context.srfs.is_empty() {
-            // Bind set returning functions
-            s_expr = self.bind_project_set(&mut from_context, s_expr)?;
         }
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
