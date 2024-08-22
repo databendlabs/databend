@@ -74,7 +74,7 @@ pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -
     })?;
     let mut prefix = table_storage_prefix(db_id, table_id);
     if let Some(temp_prefix) = options.get(OPT_KEY_TEMP_PREFIX) {
-        prefix = format!("{}/{}/{}", prefix, TEMP_TABLE_STORAGE_PREFIX, temp_prefix);
+        prefix = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, temp_prefix, prefix);
     }
     Ok(prefix)
 }
