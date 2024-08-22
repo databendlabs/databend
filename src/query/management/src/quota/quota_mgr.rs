@@ -78,7 +78,6 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
                         &self.key(),
                         &seq_value,
                         self.kv_api.as_ref(),
-                        false,
                     )
                     .await?;
 
