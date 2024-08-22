@@ -1621,7 +1621,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
-    let ty_geography = value(TypeName::Geography, rule! { GEOMETRY });
+    let ty_geography = value(TypeName::Geography, rule! { GEOGRAPHY });
     map_res(
         alt((
             rule! {

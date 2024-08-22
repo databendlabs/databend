@@ -484,7 +484,7 @@ impl Binder {
         if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
             {
                 return Err(ErrorCode::GeometryError(

@@ -296,7 +296,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name(None, "to_geography".to_string()),
+                        name: Identifier::from_name(None, "st_geographyfromewkt".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
