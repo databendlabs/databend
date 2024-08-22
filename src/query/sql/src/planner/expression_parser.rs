@@ -522,7 +522,23 @@ pub fn parse_hilbert_cluster_key(
     };
 
     for expr in exprs.iter_mut() {
-        let is_nullable = expr.data_type().is_nullable();
+        let data_type = expr.data_type();
+        let is_nullable = data_type.is_nullable();
+        let inner_type = data_type.remove_nullable();
+        if inner_type != hilbert_key_type {
+            let dest_type = if is_nullable {
+                hilbert_key_type.wrap_nullable()
+            } else {
+                hilbert_key_type.clone()
+            };
+            *expr = Expr::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type,
+            };
+        }
+
         if is_nullable {
             let is_not_null_expr = check_function(
                 None,
@@ -551,15 +567,6 @@ pub fn parse_hilbert_cluster_key(
                 }],
                 &BUILTIN_FUNCTIONS,
             )?;
-        }
-
-        if expr.data_type() != &hilbert_key_type {
-            *expr = Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(expr.clone()),
-                dest_type: hilbert_key_type.clone(),
-            };
         }
     }
 
