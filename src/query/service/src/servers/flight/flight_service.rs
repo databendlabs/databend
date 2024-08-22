@@ -150,7 +150,7 @@ where
     fn poll_ready(
         &mut self,
         _cx: &mut Context<'_>,
-    ) -> Poll<databend_common_exception::Result<(), Self::Error>> {
+    ) -> Poll<std::result::Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 

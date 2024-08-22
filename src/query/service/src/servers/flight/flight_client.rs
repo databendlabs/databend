@@ -12,8 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::atomic::AtomicPtr;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -22,16 +29,21 @@ use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
-use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
 use fastrace::Span;
+use futures::Stream;
 use futures::StreamExt;
 use futures_util::future::Either;
+use log::info;
+use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::sleep;
 use tonic::metadata::AsciiMetadataKey;
 use tonic::metadata::AsciiMetadataValue;
 use tonic::transport::channel::Channel;
@@ -41,6 +53,7 @@ use tonic::Streaming;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::DataPacket;
 
 pub struct FlightClient {
@@ -119,19 +132,31 @@ impl FlightClient {
         &mut self,
         query_id: &str,
         target: &str,
+        source_address: &str,
+        retry_times: usize,
+        retry_interval: usize,
     ) -> Result<FlightExchange> {
-        let streaming = self
-            .get_streaming(
-                RequestBuilder::create(Ticket::default())
-                    .with_metadata("x-type", "request_server_exchange")?
-                    .with_metadata("x-target", target)?
-                    .with_metadata("x-query-id", query_id)?
-                    .build(),
-            )
-            .await?;
+        let req = RequestBuilder::create(Ticket::default())
+            .with_metadata("x-type", "request_server_exchange")?
+            .with_metadata("x-target", target)?
+            .with_metadata("x-query-id", query_id)?
+            .with_metadata("x-continue-from", "0")?
+            .build();
+        let streaming = self.get_streaming(req).await?;
 
         let (notify, rx) = Self::streaming_receiver(streaming);
-        Ok(FlightExchange::create_receiver(notify, rx))
+        Ok(FlightExchange::create_receiver(
+            notify,
+            rx,
+            Some(ConnectionInfo {
+                query_id: query_id.to_string(),
+                target: target.to_string(),
+                fragment: None,
+                source_address: source_address.to_string(),
+                retry_times,
+                retry_interval: Duration::from_secs(retry_interval as u64),
+            }),
+        ))
     }
 
     #[async_backtrace::framed]
@@ -141,19 +166,34 @@ impl FlightClient {
         query_id: &str,
         target: &str,
         fragment: usize,
+        source_address: &str,
+        retry_times: usize,
+        retry_interval: usize,
     ) -> Result<FlightExchange> {
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
             .with_metadata("x-target", target)?
             .with_metadata("x-query-id", query_id)?
             .with_metadata("x-fragment-id", &fragment.to_string())?
+            .with_metadata("x-continue-from", "0")?
             .build();
         let request = databend_common_tracing::inject_span_to_tonic_request(request);
 
         let streaming = self.get_streaming(request).await?;
 
         let (notify, rx) = Self::streaming_receiver(streaming);
-        Ok(FlightExchange::create_receiver(notify, rx))
+        Ok(FlightExchange::create_receiver(
+            notify,
+            rx,
+            Some(ConnectionInfo {
+                query_id: query_id.to_string(),
+                target: target.to_string(),
+                fragment: Some(fragment),
+                source_address: source_address.to_string(),
+                retry_times,
+                retry_interval: Duration::from_secs(retry_interval as u64),
+            }),
+        ))
     }
 
     fn streaming_receiver(
@@ -209,27 +249,51 @@ impl FlightClient {
             Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
         }
     }
+
+    #[async_backtrace::framed]
+    async fn reconnect(&mut self, info: &ConnectionInfo, seq: usize) -> Result<FlightRxInner> {
+        let request = match info.fragment {
+            Some(fragment_id) => RequestBuilder::create(Ticket::default())
+                .with_metadata("x-type", "exchange_fragment")?
+                .with_metadata("x-target", &info.target)?
+                .with_metadata("x-query-id", &info.query_id)?
+                .with_metadata("x-fragment-id", &fragment_id.to_string())?
+                .with_metadata("x-continue-from", &seq.to_string())?
+                .build(),
+            None => RequestBuilder::create(Ticket::default())
+                .with_metadata("x-type", "request_server_exchange")?
+                .with_metadata("x-target", &info.target)?
+                .with_metadata("x-query-id", &info.query_id)?
+                .with_metadata("x-continue-from", &seq.to_string())?
+                .build(),
+        };
+        let request = databend_common_tracing::inject_span_to_tonic_request(request);
+
+        let streaming = self.get_streaming(request).await?;
+
+        let (network_notify, recv) = Self::streaming_receiver(streaming);
+        Ok(FlightRxInner::create(network_notify, recv))
+    }
 }
 
-pub struct FlightReceiver {
+#[derive(Clone)]
+pub struct ConnectionInfo {
+    pub query_id: String,
+    pub target: String,
+    pub fragment: Option<usize>,
+    pub source_address: String,
+    pub retry_times: usize,
+    pub retry_interval: Duration,
+}
+
+pub struct FlightRxInner {
     notify: Arc<WatchNotify>,
     rx: Receiver<Result<FlightData>>,
 }
 
-impl Drop for FlightReceiver {
-    fn drop(&mut self) {
-        drop_guard(move || {
-            self.close();
-        })
-    }
-}
-
-impl FlightReceiver {
-    pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver {
-            rx,
-            notify: Arc::new(WatchNotify::new()),
-        }
+impl FlightRxInner {
+    pub fn create(notify: Arc<WatchNotify>, rx: Receiver<Result<FlightData>>) -> FlightRxInner {
+        FlightRxInner { rx, notify }
     }
 
     #[async_backtrace::framed]
@@ -247,12 +311,107 @@ impl FlightReceiver {
     }
 }
 
+pub struct RetryableFlightReceiver {
+    seq: Arc<AtomicUsize>,
+    info: Option<ConnectionInfo>,
+    inner: Arc<AtomicPtr<FlightRxInner>>,
+}
+
+impl Drop for RetryableFlightReceiver {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+impl RetryableFlightReceiver {
+    pub fn dummy() -> RetryableFlightReceiver {
+        RetryableFlightReceiver {
+            seq: Arc::new(AtomicUsize::new(0)),
+            info: None,
+            inner: Arc::new(Default::default()),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn recv(&self) -> Result<Option<DataPacket>> {
+        // Non thread safe, we only use atomic to implement mutable.
+        loop {
+            let inner = unsafe { &*self.inner.load(Ordering::SeqCst) };
+            return match inner.recv().await {
+                Ok(message) => {
+                    self.seq.fetch_add(1, Ordering::SeqCst);
+                    Ok(message)
+                }
+                Err(cause) => {
+                    info!("Error while receiving data from flight : {:?}", cause);
+                    if cause.code() == ErrorCode::CANNOT_CONNECT_NODE {
+                        // only retry when error is network problem
+                        let Err(cause) = self.retry().await else {
+                            info!("Retry flight connection successfully!");
+                            continue;
+                        };
+
+                        info!("Retry flight connection failure, cause: {:?}", cause);
+                    }
+
+                    Err(cause)
+                }
+            };
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn retry(&self) -> Result<()> {
+        if let Some(connection_info) = &self.info {
+            let mut flight_client =
+                DataExchangeManager::create_client(&connection_info.source_address, true).await?;
+
+            for attempts in 0..connection_info.retry_times {
+                let Ok(recv) = flight_client
+                    .reconnect(connection_info, self.seq.load(Ordering::Acquire))
+                    .await
+                else {
+                    info!("Reconnect attempt {} failed", attempts);
+                    sleep(connection_info.retry_interval).await;
+                    continue;
+                };
+
+                let ptr = self
+                    .inner
+                    .swap(Box::into_raw(Box::new(recv)), Ordering::SeqCst);
+
+                unsafe {
+                    // We cannot determine the number of strong ref. so close it.
+                    let broken_connection = Box::from_raw(ptr);
+                    broken_connection.close();
+                }
+
+                return Ok(());
+            }
+
+            return Err(ErrorCode::Timeout("Exceed max retries time"));
+        }
+
+        Ok(())
+    }
+
+    pub fn close(&self) {
+        unsafe {
+            let inner = self.inner.load(Ordering::SeqCst);
+
+            if !inner.is_null() {
+                (*inner).close();
+            }
+        }
+    }
+}
+
 pub struct FlightSender {
-    tx: Sender<std::result::Result<Arc<FlightData>, Status>>,
+    tx: Sender<std::result::Result<FlightData, Status>>,
 }
 
 impl FlightSender {
-    pub fn create(tx: Sender<std::result::Result<Arc<FlightData>, Status>>) -> FlightSender {
+    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
         FlightSender { tx }
     }
 
@@ -262,11 +421,7 @@ impl FlightSender {
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self
-            .tx
-            .send(Ok(Arc::new(FlightData::try_from(data)?)))
-            .await
-        {
+        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
@@ -280,43 +435,260 @@ impl FlightSender {
     }
 }
 
+pub struct SenderPayload {
+    pub state: Arc<Mutex<FlightDataAckState>>,
+    pub sender: Option<Sender<std::result::Result<FlightData, Status>>>,
+}
+
+pub struct ReceiverPayload {
+    seq: Arc<AtomicUsize>,
+    info: Option<ConnectionInfo>,
+    inner: Arc<AtomicPtr<FlightRxInner>>,
+}
+
 pub enum FlightExchange {
     Dummy,
-    Receiver {
-        notify: Arc<WatchNotify>,
-        receiver: Receiver<Result<FlightData>>,
-    },
-    Sender(Sender<std::result::Result<Arc<FlightData>, Status>>),
+
+    Sender(SenderPayload),
+    Receiver(ReceiverPayload),
+
+    MovedSender(SenderPayload),
+    MovedReceiver(ReceiverPayload),
 }
 
 impl FlightExchange {
     pub fn create_sender(
-        sender: Sender<std::result::Result<Arc<FlightData>, Status>>,
+        state: Arc<Mutex<FlightDataAckState>>,
+        sender: Sender<std::result::Result<FlightData, Status>>,
     ) -> FlightExchange {
-        FlightExchange::Sender(sender)
+        FlightExchange::Sender(SenderPayload {
+            state,
+            sender: Some(sender),
+        })
     }
 
     pub fn create_receiver(
         notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
+        connection_info: Option<ConnectionInfo>,
     ) -> FlightExchange {
-        FlightExchange::Receiver { notify, receiver }
+        FlightExchange::Receiver(ReceiverPayload {
+            seq: Arc::new(AtomicUsize::new(0)),
+            info: connection_info,
+            inner: Arc::new(AtomicPtr::new(Box::into_raw(Box::new(
+                FlightRxInner::create(notify, receiver),
+            )))),
+        })
+    }
+    pub fn take_as_sender(&mut self) -> FlightSender {
+        let mut flight_sender = FlightExchange::Dummy;
+        std::mem::swap(self, &mut flight_sender);
+
+        if let FlightExchange::Sender(mut v) = flight_sender {
+            let flight_sender = FlightSender::create(v.sender.take().unwrap());
+            *self = FlightExchange::MovedSender(v);
+            return flight_sender;
+        }
+
+        unreachable!("take as sender miss match exchange type")
     }
 
-    pub fn convert_to_sender(self) -> FlightSender {
-        match self {
-            FlightExchange::Sender(tx) => FlightSender { tx },
-            _ => unreachable!(),
+    pub fn take_as_receiver(&mut self) -> RetryableFlightReceiver {
+        let mut flight_receiver = FlightExchange::Dummy;
+        std::mem::swap(self, &mut flight_receiver);
+
+        if let FlightExchange::Receiver(v) = flight_receiver {
+            let flight_receiver = RetryableFlightReceiver {
+                seq: v.seq.clone(),
+                info: v.info.clone(),
+                inner: v.inner.clone(),
+            };
+
+            *self = FlightExchange::MovedReceiver(v);
+
+            return flight_receiver;
+        }
+
+        unreachable!("take as receiver miss match exchange type")
+    }
+}
+
+pub struct FlightDataAckState {
+    seq: AtomicUsize,
+    auto_ack_window_size: usize,
+
+    may_retry: bool,
+    receiver: Receiver<std::result::Result<FlightData, Status>>,
+    confirmation_queue: VecDeque<(usize, std::result::Result<Arc<FlightData>, Status>)>,
+}
+
+impl FlightDataAckState {
+    pub fn create(
+        window_size: usize,
+        receiver: Receiver<std::result::Result<FlightData, Status>>,
+    ) -> Arc<Mutex<FlightDataAckState>> {
+        Arc::new(Mutex::new(FlightDataAckState {
+            receiver,
+            may_retry: true,
+            seq: AtomicUsize::new(0),
+            auto_ack_window_size: window_size,
+            confirmation_queue: VecDeque::with_capacity(window_size),
+        }))
+    }
+
+    fn ack_message(&mut self, seq: usize) {
+        while let Some((id, _)) = self.confirmation_queue.front() {
+            if *id <= seq {
+                self.confirmation_queue.pop_front();
+            } else {
+                break;
+            }
         }
     }
 
-    pub fn convert_to_receiver(self) -> FlightReceiver {
-        match self {
-            FlightExchange::Receiver { notify, receiver } => FlightReceiver {
-                notify,
-                rx: receiver,
-            },
-            _ => unreachable!(),
+    fn end_of_stream(&mut self) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+        self.ack_message(message_seq);
+
+        self.may_retry = false;
+        Poll::Ready(None)
+    }
+
+    fn error_of_stream(&mut self, cause: Status) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+
+        // Automatically acknowledge messages outside the ACK window.
+        // A better approach is for the client to send back an ACK.
+        if message_seq >= self.auto_ack_window_size {
+            self.ack_message(message_seq - self.auto_ack_window_size);
         }
+
+        self.confirmation_queue
+            .push_back((message_seq, Err(cause.clone())));
+        Poll::Ready(Some(Err(cause)))
+    }
+
+    fn message(&mut self, data: FlightData) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+        let data = Arc::new(data);
+        let duplicate = data.clone();
+
+        // Automatically acknowledge messages outside the ACK window.
+        // A better approach is for the client to send back an ACK.
+        if message_seq >= self.auto_ack_window_size {
+            self.ack_message(message_seq - self.auto_ack_window_size);
+        }
+
+        self.confirmation_queue.push_back((message_seq, Ok(data)));
+        Poll::Ready(Some(Ok(duplicate)))
+    }
+
+    fn check_resend(&mut self) -> Option<std::result::Result<Arc<FlightData>, Status>> {
+        let current_seq = self.seq.load(Ordering::SeqCst);
+
+        // normal case, no resend
+        if let Some((id, _)) = self.confirmation_queue.back() {
+            if *id == current_seq - 1 {
+                return None;
+            }
+        }
+
+        // message is ack
+        if let Some((id, _)) = self.confirmation_queue.front() {
+            if *id > current_seq {
+                return Some(Err(Status::aborted(
+                    "Aborted query, because the remote flight channel is closed.",
+                )));
+            }
+        }
+
+        // resend case, iterate the queue to find the message to resend
+        for (id, res) in self.confirmation_queue.iter() {
+            if *id == current_seq {
+                self.seq.fetch_add(1, Ordering::SeqCst);
+                return Some(res.clone());
+            }
+        }
+
+        None
+    }
+
+    pub fn poll_next(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+        if let Some(res) = self.check_resend() {
+            return Poll::Ready(Some(res));
+        }
+        match Pin::new(&mut self.receiver).poll_next(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => self.end_of_stream(),
+            Poll::Ready(Some(Err(status))) => self.error_of_stream(status),
+            Poll::Ready(Some(Ok(flight_data))) => self.message(flight_data),
+        }
+    }
+}
+
+pub struct FlightDataAckStream {
+    state: Arc<Mutex<FlightDataAckState>>,
+}
+
+impl FlightDataAckStream {
+    pub fn create(
+        state: Arc<Mutex<FlightDataAckState>>,
+        begin: usize,
+    ) -> Result<FlightDataAckStream> {
+        // reset begin
+        info!("Create FlightDataAckStream hold lock");
+        let mut state_guard = state.lock();
+        state_guard.seq.store(begin, Ordering::SeqCst);
+        state_guard.may_retry = true;
+        drop(state_guard);
+        info!("Create FlightDataAckStream release lock");
+        Ok(FlightDataAckStream { state })
+    }
+}
+
+impl Drop for FlightDataAckStream {
+    fn drop(&mut self) {
+        info!("Drop FlightDataAckStream");
+        let state_should_retry = {
+            info!("Drop stage1 hold lock");
+            let mut state = self.state.lock();
+            if state.may_retry {
+                state.may_retry = false;
+                true
+            } else {
+                state.receiver.close();
+                false
+            }
+        };
+        info!("Drop stage1 release lock");
+        if state_should_retry {
+            let weak = Arc::downgrade(&self.state);
+            GlobalIORuntime::instance().spawn(async move {
+                info!("Drop stage2 begin, wait for 60");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if let Some(ss) = weak.upgrade() {
+                    info!("Drop stage2 hold lock");
+                    let ss = ss.lock();
+                    if !ss.may_retry {
+                        ss.receiver.close();
+                    }
+                    info!("Drop stage2 release lock");
+                }
+            });
+        }
+    }
+}
+
+impl Stream for FlightDataAckStream {
+    type Item = std::result::Result<Arc<FlightData>, Status>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        info!("Poll next hold lock");
+        let res = self.state.lock().poll_next(cx);
+        info!("Poll next release lock");
+        res
     }
 }

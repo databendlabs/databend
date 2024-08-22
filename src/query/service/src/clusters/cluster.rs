@@ -50,11 +50,13 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use log::error;
+use log::info;
 use log::warn;
 use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
 
@@ -79,7 +81,7 @@ pub trait ClusterHelper {
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 
-    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
         &self,
         path: &str,
         message: HashMap<String, T>,
@@ -116,7 +118,7 @@ impl ClusterHelper for Cluster {
         self.nodes.to_vec()
     }
 
-    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
         &self,
         path: &str,
         message: HashMap<String, T>,
@@ -145,12 +147,33 @@ impl ClusterHelper for Cluster {
                 let node_secret = node.secret.clone();
 
                 async move {
-                    let mut conn = create_client(&config, &flight_address).await?;
-                    Ok::<_, ErrorCode>((
-                        id,
-                        conn.do_action::<_, Res>(path, node_secret, message, timeout)
-                            .await?,
-                    ))
+                    let mut attempt = 0;
+                    let max_attempts = 2;
+
+                    loop {
+                        let mut conn = create_client(&config, &flight_address).await?;
+                        match conn
+                            .do_action::<_, Res>(
+                                path,
+                                node_secret.clone(),
+                                message.clone(),
+                                timeout,
+                            )
+                            .await
+                        {
+                            Ok(result) => return Ok((id, result)),
+                            Err(e)
+                                if e.code() == ErrorCode::CANNOT_CONNECT_NODE
+                                    && attempt < max_attempts =>
+                            {
+                                // only retry when error is network problem
+                                info!("retry do_action, attempt: {}", attempt);
+                                attempt += 1;
+                                sleep(Duration::from_secs(1)).await;
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
                 }
             });
         }
