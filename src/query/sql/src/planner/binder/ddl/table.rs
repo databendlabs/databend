@@ -90,6 +90,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use derive_visitor::DriveMut;
 use log::debug;
+use opendal::Operator;
 
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
@@ -459,7 +460,7 @@ impl Binder {
                 .await?;
 
                 // create a temporary op to check if params is correct
-                DataOperator::try_create(&sp).await?;
+                let data_operator = DataOperator::try_create(&sp).await?;
 
                 // Path ends with "/" means it's a directory.
                 let fp = if uri.path.ends_with('/') {
@@ -468,6 +469,8 @@ impl Binder {
                     "".to_string()
                 };
 
+                // verify essential privileges
+                verify_external_location_privileges(data_operator.operator()).await?;
                 (Some(sp), fp)
             }
             (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
@@ -1687,5 +1690,34 @@ impl Binder {
             .get_settings()
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
+    }
+}
+
+const VERIFICATION_KEY: &'static str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
+// verify that essential privileges has granted for accessing external location
+async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+    // verify privilege to put
+    let mut errors = Vec::new();
+    if let Err(e) = dal.write(VERIFICATION_KEY, "V").await {
+        errors.push(format!("Permission check for [Write] failed: {}", e));
+    }
+
+    // verify privilege to get
+    if let Err(e) = dal.read_with(VERIFICATION_KEY).range(0..1).await {
+        errors.push(format!("Permission check for [Read] failed: {}", e));
+    }
+
+    // verify privilege to list
+    if let Err(e) = dal.list(VERIFICATION_KEY).await {
+        errors.push(format!("Permission check for [List] failed: {}", e));
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(ErrorCode::StorageOther(
+            "Checking essential permissions for the external location failed.",
+        )
+        .add_message(errors.join("\n")))
     }
 }
