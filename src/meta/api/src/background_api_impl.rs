@@ -50,7 +50,6 @@ use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;

@@ -84,9 +84,12 @@ async fn test_one_shot_job() -> Result<()> {
     let counter = Arc::new(AtomicUsize::new(0));
     let job = TestJob {
         counter: counter.clone(),
-        info: BackgroundJobInfo::new_compactor_job(
-            BackgroundJobParams::new_one_shot_job(),
-            UserIdentity::default(),
+        info: SeqV::new(
+            0,
+            BackgroundJobInfo::new_compactor_job(
+                BackgroundJobParams::new_one_shot_job(),
+                UserIdentity::default(),
+            ),
         ),
         finish_tx: scheduler.finish_tx.clone(),
     };
@@ -107,9 +110,12 @@ async fn test_interval_job() -> Result<()> {
     let counter = Arc::new(AtomicUsize::new(0));
     let job = TestJob {
         counter: counter.clone(),
-        info: BackgroundJobInfo::new_compactor_job(
-            BackgroundJobParams::new_interval_job(Duration::from_millis(10)),
-            UserIdentity::default(),
+        info: SeqV::new(
+            0,
+            BackgroundJobInfo::new_compactor_job(
+                BackgroundJobParams::new_interval_job(Duration::from_millis(10)),
+                UserIdentity::default(),
+            ),
         ),
         finish_tx: scheduler.finish_tx.clone(),
     };
