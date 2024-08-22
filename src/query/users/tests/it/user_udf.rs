@@ -102,6 +102,15 @@ async fn test_user_lambda_udf() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf_server() -> Result<()> {
+    // Init.
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+
+    // Init with default.
+    {
+        GlobalConfig::init(&InnerConfig::default()).unwrap();
+    }
+
     let conf = RpcClientConf::default();
     let tenant = Tenant::new_literal("test");
 
