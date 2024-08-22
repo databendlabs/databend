@@ -100,9 +100,19 @@ pub async fn vacuum_drop_tables_by_table_info(
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
     let start = Instant::now();
     let num_tables = table_infos.len();
-    info!("vacuum dropped tables, number of tables: {}", num_tables);
+
+    // - for each vacuum task, the tables passed to it will be processed sequentially
+    // - while removing one table's data, at most 1000 objects will be deleted (in batch)
+    // - let's assume that the rate limit is 3500 (individual) objects per second:
+    //   A parallelism degree of up to 3 appears to be safe.
+    let num_threads = std::cmp::min(num_threads, 3);
 
     let batch_size = (num_tables / num_threads).clamp(1, 50);
+
+    info!(
+        "vacuum dropped tables, number of tables: {}, batch_size: {}, parallelism degree: {}",
+        num_tables, batch_size, num_threads
+    );
 
     let result = if batch_size >= table_infos.len() {
         do_vacuum_drop_table(table_infos, dry_run_limit).await?
