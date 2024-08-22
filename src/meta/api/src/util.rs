@@ -375,15 +375,22 @@ pub fn db_has_to_exist(
     if seq == 0 {
         debug!(seq = seq, db_name_ident :? =(db_name_ident); "db does not exist");
 
-        Err(KVAppError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(
-                db_name_ident.database_name(),
-                format!("{}: {}", msg, db_name_ident.display()),
-            ),
+        Err(KVAppError::AppError(unknown_database_error(
+            db_name_ident,
+            msg,
         )))
     } else {
         Ok(())
     }
+}
+
+pub fn unknown_database_error(db_name_ident: &DatabaseNameIdent, msg: impl Display) -> AppError {
+    let e = UnknownDatabase::new(
+        db_name_ident.database_name(),
+        format!("{}: {}", msg, db_name_ident.display()),
+    );
+
+    AppError::UnknownDatabase(e)
 }
 
 /// Return OK if a db_id to db_meta exists by checking the seq.

@@ -247,6 +247,14 @@ impl<T> SeqV<T> {
         self.data = v;
         self
     }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> SeqV<U> {
+        SeqV {
+            seq: self.seq,
+            meta: self.meta,
+            data: f(self.data),
+        }
+    }
 }
 
 // TODO(1): test SeqValue for SeqV and Option<SeqV>

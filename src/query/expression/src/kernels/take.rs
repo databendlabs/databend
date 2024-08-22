@@ -177,10 +177,10 @@ impl Column {
             Column::Nullable(c) => {
                 let column = c.column.take(indices, string_items_buf);
                 let validity = Column::Boolean(Self::take_boolean_types(&c.validity, indices));
-                Column::Nullable(Box::new(NullableColumn {
+                Column::Nullable(Box::new(NullableColumn::new(
                     column,
-                    validity: BooleanType::try_downcast_column(&validity).unwrap(),
-                }))
+                    BooleanType::try_downcast_column(&validity).unwrap(),
+                )))
             }
             Column::Tuple(fields) => {
                 let fields = fields

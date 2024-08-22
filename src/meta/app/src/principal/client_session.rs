@@ -12,29 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait MemSized {
-    fn mem_bytes(&self) -> usize;
-}
+use serde::Deserialize;
+use serde::Serialize;
 
-impl MemSized for () {
-    fn mem_bytes(&self) -> usize {
-        0
-    }
-}
-
-impl MemSized for String {
-    fn mem_bytes(&self) -> usize {
-        self.len()
-    }
-}
-
-impl<T> MemSized for Option<T>
-where T: MemSized
-{
-    fn mem_bytes(&self) -> usize {
-        match self {
-            None => 0,
-            Some(s) => s.mem_bytes(),
-        }
-    }
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ClientSession {
+    pub user_name: String,
 }

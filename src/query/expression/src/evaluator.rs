@@ -365,10 +365,7 @@ impl<'a> Evaluator<'a> {
                         )?
                         .into_column()
                         .unwrap();
-                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        column,
-                        validity,
-                    }))))
+                    Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
                 other => unreachable!("source: {}", other),
             },
@@ -438,10 +435,9 @@ impl<'a> Evaluator<'a> {
                         )?
                         .into_column()
                         .unwrap();
-                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: Bitmap::new_constant(true, column.len()),
-                        column,
-                    }))))
+
+                    let validity = Bitmap::new_constant(true, column.len());
+                    Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
 
@@ -671,20 +667,19 @@ impl<'a> Evaluator<'a> {
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        column: new_col.column,
-                        validity: bitmap::and(&col.validity, &new_col.validity),
-                    }))))
+                    let validity = bitmap::and(&col.validity, &new_col.validity);
+                    Ok(Value::Column(NullableColumn::new_column(
+                        new_col.column,
+                        validity,
+                    )))
                 }
                 other => unreachable!("source: {}", other),
             },
             (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
                 Value::Scalar(_) => Ok(value),
                 Value::Column(column) => {
-                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: Bitmap::new_constant(true, column.len()),
-                        column,
-                    }))))
+                    let validity = Bitmap::new_constant(true, column.len());
+                    Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
 
@@ -719,10 +714,9 @@ impl<'a> Evaluator<'a> {
                         values: new_values,
                         offsets: col.offsets,
                     }));
-                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: Bitmap::new_constant(true, new_col.len()),
-                        column: new_col,
-                    }))))
+                    let validity = Bitmap::new_constant(true, new_col.len());
+
+                    Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
                 }
                 _ => unreachable!(),
             },
@@ -757,10 +751,9 @@ impl<'a> Evaluator<'a> {
                         values: new_values,
                         offsets: col.offsets,
                     }));
-                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: Bitmap::new_constant(true, new_col.len()),
-                        column: new_col,
-                    }))))
+                    let validity = Bitmap::new_constant(true, new_col.len());
+
+                    Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
                 }
                 _ => unreachable!(),
             },
@@ -795,10 +788,8 @@ impl<'a> Evaluator<'a> {
                             })
                             .collect::<Result<_>>()?;
                         let new_col = Column::Tuple(new_fields);
-                        Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                            validity: Bitmap::new_constant(true, new_col.len()),
-                            column: new_col,
-                        }))))
+                        let validity = Bitmap::new_constant(true, new_col.len());
+                        Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -1185,10 +1176,7 @@ impl<'a> Evaluator<'a> {
                 }))
             };
             let col = match validity {
-                Some(validity) => Value::Column(Column::Nullable(Box::new(NullableColumn {
-                    column: array_col,
-                    validity,
-                }))),
+                Some(validity) => Value::Column(NullableColumn::new_column(array_col, validity)),
                 None => Value::Column(array_col),
             };
             return Ok(col);

@@ -3,13 +3,12 @@
 ## kill
 200
 ## page
-{"error":{"code":"400","message":"query id QID canceled"}}
+{"error":{"code":400,"message":"query id QID canceled"}}
 400
 ## final
 {
   "code": 1043,
-  "message": "canceled by client",
-  "detail": ""
+  "message": "canceled by client"
 }
 ## query_log
 0		1

@@ -83,7 +83,7 @@ impl Interpreter for CreateDatabaseInterpreter {
                 .grant_ownership(
                     &OwnershipObject::Database {
                         catalog_name: self.plan.catalog.clone(),
-                        db_id: reply.db_id,
+                        db_id: *reply.db_id,
                     },
                     &current_role.name,
                 )
@@ -97,7 +97,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             remove_share_db_dir(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                reply.db_id,
+                *reply.db_id,
                 &share_specs,
             )
             .await?;

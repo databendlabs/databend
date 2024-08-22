@@ -752,10 +752,10 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         },
         |val, _| match val {
             ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: Bitmap::new_constant(true, col.len()),
-                column: col.iter().map(|val| *val as i64).collect(),
-            }),
+            ValueRef::Column(col) => Value::Column(NullableColumn::new(
+                col.iter().map(|val| *val as i64).collect(),
+                Bitmap::new_constant(true, col.len()),
+            )),
         },
     );
 
@@ -769,10 +769,10 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         },
         |val, _| match val {
             ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
-            ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: Bitmap::new_constant(true, col.len()),
-                column: col,
-            }),
+            ValueRef::Column(col) => {
+                let validity = Bitmap::new_constant(true, col.len());
+                Value::Column(NullableColumn::new(col, validity))
+            }
         },
     );
 }
