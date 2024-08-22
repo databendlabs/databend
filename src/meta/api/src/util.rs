@@ -84,6 +84,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -181,13 +182,8 @@ where
     K: kvapi::Key,
     K::ValueType: FromToProto,
 {
-    let res = kv_api.get_kv(&k.to_string_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
-    } else {
-        Ok((0, None))
-    }
+    let res = kv_api.get_pb(k).await?;
+    Ok((res.seq(), res.into_value()))
 }
 
 /// Batch get values that are encoded with FromToProto.
