@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
@@ -52,7 +53,6 @@ pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     builtin: BuiltIn,
-    enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 }
 
 impl UserApiProvider {
@@ -62,17 +62,8 @@ impl UserApiProvider {
         builtin: BuiltIn,
         tenant: &Tenant,
         quota: Option<TenantQuota>,
-        enable_meta_data_upgrade_json_to_pb_from_v307: bool,
     ) -> Result<()> {
-        GlobalInstance::set(
-            Self::try_create(
-                conf,
-                builtin,
-                tenant,
-                enable_meta_data_upgrade_json_to_pb_from_v307,
-            )
-            .await?,
-        );
+        GlobalInstance::set(Self::try_create(conf, builtin, tenant).await?);
         let user_mgr = UserApiProvider::instance();
         if let Some(q) = quota {
             let i = user_mgr.tenant_quota_api(tenant);
@@ -87,14 +78,12 @@ impl UserApiProvider {
         conf: RpcClientConf,
         builtin: BuiltIn,
         tenant: &Tenant,
-        enable_meta_data_upgrade_json_to_pb_from_v307: bool,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         let user_mgr = UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
             builtin,
-            enable_meta_data_upgrade_json_to_pb_from_v307,
         };
 
         // init built-in role
@@ -119,15 +108,8 @@ impl UserApiProvider {
     pub async fn try_create_simple(
         conf: RpcClientConf,
         tenant: &Tenant,
-        enable_meta_data_upgrade_json_to_pb_from_v307: bool,
     ) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(
-            conf,
-            BuiltIn::default(),
-            tenant,
-            enable_meta_data_upgrade_json_to_pb_from_v307,
-        )
-        .await
+        Self::try_create(conf, BuiltIn::default(), tenant).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -147,7 +129,9 @@ impl UserApiProvider {
         let role_mgr = RoleMgr::create(
             self.client.clone(),
             tenant,
-            self.enable_meta_data_upgrade_json_to_pb_from_v307,
+            GlobalConfig::instance()
+                .query
+                .enable_meta_data_upgrade_json_to_pb_from_v307,
         );
         Arc::new(role_mgr)
     }

@@ -4728,6 +4728,7 @@ dependencies = [
  "cidr",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-grpc",

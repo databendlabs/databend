@@ -28,7 +28,7 @@ async fn test_user_lambda_udf() -> Result<()> {
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant, false).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
@@ -94,7 +94,7 @@ async fn test_user_udf_server() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant = Tenant::new_literal("test");
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant, false).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let address = "http://127.0.0.1:8888";
     let arg_types = vec![DataType::String];
     let return_type = DataType::Boolean;

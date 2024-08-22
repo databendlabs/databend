@@ -33,7 +33,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant = Tenant::new_literal("tenant1");
 
-    let user_manager = UserApiProvider::try_create_simple(conf, &tenant, false).await?;
+    let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let role_cache_manager = RoleCacheManager::try_create(user_manager.clone())?;
 
     let mut role1 = RoleInfo::new("role1");
