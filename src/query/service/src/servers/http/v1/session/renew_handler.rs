@@ -51,7 +51,7 @@ pub async fn renew_handler(
     let refresh_token = ctx
         .databend_token
         .as_ref()
-        .expect("/session/renew should be authed by databend token")
+        .expect("/session/renew should be authed by refresh token")
         .clone();
     match ClientSessionManager::instance()
         .new_token_pair(
