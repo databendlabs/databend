@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryInto;
+use std::fmt;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -22,68 +22,8 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::EvalExpireTime;
-
-pub trait SeqValue<V = Vec<u8>> {
-    fn seq(&self) -> u64;
-    fn value(&self) -> Option<&V>;
-    fn into_value(self) -> Option<V>;
-    fn meta(&self) -> Option<&KVMeta>;
-
-    /// Return the expire time in millisecond since 1970.
-    fn get_expire_at_ms(&self) -> Option<u64> {
-        if let Some(meta) = self.meta() {
-            meta.get_expire_at_ms()
-        } else {
-            None
-        }
-    }
-
-    /// Evaluate and returns the absolute expire time in millisecond since 1970.
-    fn eval_expire_at_ms(&self) -> u64 {
-        self.meta().eval_expire_at_ms()
-    }
-
-    /// Return true if the record is expired.
-    fn is_expired(&self, now_ms: u64) -> bool {
-        self.eval_expire_at_ms() < now_ms
-    }
-}
-
-/// The meta data of a record in kv
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
-pub struct KVMeta {
-    /// expiration time in second since 1970
-    pub(crate) expire_at: Option<u64>,
-}
-
-impl KVMeta {
-    /// Create a new KVMeta
-    pub fn new(expire_at: Option<u64>) -> Self {
-        Self { expire_at }
-    }
-
-    /// Create a KVMeta with a absolute expiration time in second since 1970-01-01.
-    pub fn new_expire(expire_at: u64) -> Self {
-        Self {
-            expire_at: Some(expire_at),
-        }
-    }
-
-    /// Returns expire time in millisecond since 1970.
-    pub fn get_expire_at_ms(&self) -> Option<u64> {
-        self.expire_at.map(|t| t * 1000)
-    }
-}
-
-impl EvalExpireTime for KVMeta {
-    fn eval_expire_at_ms(&self) -> u64 {
-        match self.expire_at {
-            None => u64::MAX,
-            Some(exp_at_sec) => exp_at_sec * 1000,
-        }
-    }
-}
+use crate::KVMeta;
+use crate::SeqValue;
 
 /// Some value bound with a seq number.
 ///
@@ -152,8 +92,8 @@ impl<V> SeqValue<V> for Option<SeqV<V>> {
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for SeqV<T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+impl<T: fmt::Debug> fmt::Debug for SeqV<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut de = f.debug_struct("SeqV");
         de.field("seq", &self.seq);
         de.field("meta", &self.meta);
@@ -163,41 +103,12 @@ impl<T: std::fmt::Debug> std::fmt::Debug for SeqV<T> {
     }
 }
 
-pub trait IntoSeqV<T> {
-    type Error;
-    fn into_seqv(self) -> Result<SeqV<T>, Self::Error>;
-}
-
-impl<T, V> IntoSeqV<T> for SeqV<V>
-where V: TryInto<T>
-{
-    type Error = <V as TryInto<T>>::Error;
-
-    fn into_seqv(self) -> Result<SeqV<T>, Self::Error> {
-        Ok(SeqV {
-            seq: self.seq,
-            meta: self.meta,
-            data: self.data.try_into()?,
-        })
-    }
-}
-
 impl<T> From<(u64, T)> for SeqV<T> {
     fn from((seq, data): (u64, T)) -> Self {
         Self {
             seq,
             meta: None,
             data,
-        }
-    }
-}
-
-impl<T> SeqV<Option<T>> {
-    pub const fn empty() -> Self {
-        Self {
-            seq: 0,
-            meta: None,
-            data: None,
         }
     }
 }
@@ -257,6 +168,7 @@ impl<T> SeqV<T> {
         self
     }
 
+    /// Convert data to type U and leave seq and meta unchanged.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> SeqV<U> {
         SeqV {
             seq: self.seq,
@@ -264,6 +176,14 @@ impl<T> SeqV<T> {
             data: f(self.data),
         }
     }
-}
 
-// TODO(1): test SeqValue for SeqV and Option<SeqV>
+    /// Try to convert data to type U and leave seq and meta unchanged.
+    /// `f` returns an error if the conversion fails.
+    pub fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<SeqV<U>, E> {
+        Ok(SeqV {
+            seq: self.seq,
+            meta: self.meta,
+            data: f(self.data)?,
+        })
+    }
+}

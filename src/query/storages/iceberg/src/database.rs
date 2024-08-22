@@ -26,7 +26,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 
 use crate::table::IcebergTable;
 use crate::IcebergCatalog;

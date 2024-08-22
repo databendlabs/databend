@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
 
-#[async_trait::async_trait]
-pub trait QuotaApi: Sync + Send {
-    async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>>;
+use crate::kvapi;
 
-    async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64>;
-}
+/// A Key-Value pair for type Key. The value has a seq number.
+pub type Pair<K> = (K, SeqV<<K as kvapi::Key>::ValueType>);
