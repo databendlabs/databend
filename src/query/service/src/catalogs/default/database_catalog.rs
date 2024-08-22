@@ -110,6 +110,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;

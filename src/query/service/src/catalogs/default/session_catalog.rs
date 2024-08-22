@@ -107,6 +107,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -115,9 +116,17 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::TxnState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
+use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_txn::TxnState;
 
+use crate::catalog::Catalog;
+use crate::catalog::StorageDescription;
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::Catalog;
+use crate::database::Database;
+use crate::table::Table;
+use crate::table_args::TableArgs;
+use crate::table_function::TableFunction;
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
     inner: MutableCatalog,

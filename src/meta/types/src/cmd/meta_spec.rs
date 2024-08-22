@@ -88,7 +88,7 @@ mod tests {
 
     use super::MetaSpec;
     use crate::cmd::CmdContext;
-    use crate::KVMeta;
+    use crate::seq_value::KVMeta;
     use crate::Time;
 
     #[test]

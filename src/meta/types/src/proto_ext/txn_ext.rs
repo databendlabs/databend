@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::protobuf as pb;
-use crate::SeqV;
+use crate::seq_value::SeqV;
 use crate::TxnRequest;
 
 impl TxnRequest {

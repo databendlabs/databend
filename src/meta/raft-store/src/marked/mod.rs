@@ -19,9 +19,9 @@ mod internal_seq;
 
 mod marked_impl;
 
-use databend_common_meta_types::KVMeta;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 pub(crate) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
@@ -243,7 +243,7 @@ impl From<Marked<String>> for Option<ExpireValue> {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_types::KVMeta;
+    use databend_common_meta_types::seq_value::KVMeta;
 
     use super::Marked;
 

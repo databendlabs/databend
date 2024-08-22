@@ -19,7 +19,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_storages_information_schema::ColumnsTable;
 use databend_common_storages_information_schema::KeyColumnUsageTable;
 use databend_common_storages_information_schema::KeywordsTable;

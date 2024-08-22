@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqV;
 use fastrace::func_name;
 use log::debug;
 use log::warn;

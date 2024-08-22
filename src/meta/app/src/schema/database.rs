@@ -21,7 +21,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 
 use super::CreateOption;
 use crate::schema::database_id::DatabaseId;
