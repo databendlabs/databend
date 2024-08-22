@@ -34,6 +34,7 @@ use poem::EndpointExt;
 use poem::IntoEndpoint;
 use poem::Route;
 
+use super::v1::logout_handler;
 use super::v1::upload_to_stage;
 use crate::servers::http::middleware::json_response;
 use crate::servers::http::middleware::EndpointKind;
@@ -106,6 +107,13 @@ impl HttpHandler {
                 post(login_handler).with(HTTPSessionMiddleware::create(
                     self.kind,
                     EndpointKind::Login,
+                )),
+            )
+            .at(
+                "/session/logout",
+                post(logout_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Logout,
                 )),
             )
             .at(
