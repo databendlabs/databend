@@ -258,8 +258,8 @@ impl<T: ValueType> NullableColumn<T> {
     // we should better use new to create a new instance to ensure the validity and column are consistent
     // todo: make column and validity private
     pub fn new(column: T::Column, validity: Bitmap) -> Self {
-        debug_assert_eq!(T::column_len(&column), validity.len());
-        debug_assert!(!matches!(
+        assert_eq!(T::column_len(&column), validity.len());
+        assert!(!matches!(
             T::upcast_column(column.clone()),
             Column::Nullable(_)
         ));
