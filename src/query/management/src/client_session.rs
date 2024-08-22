@@ -18,6 +18,8 @@ use std::time::Duration;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_app::principal::client_session::ClientSession;
+use databend_common_meta_app::principal::client_session_ident::ClientSessionIdent;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token_ident::TokenIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -29,14 +31,14 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::With;
 
-pub struct TokenMgr {
+pub struct ClientSessionMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
 }
 
-impl TokenMgr {
+impl ClientSessionMgr {
     pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
-        TokenMgr {
+        ClientSessionMgr {
             kv_api,
             tenant: tenant.clone(),
         }
@@ -45,9 +47,12 @@ impl TokenMgr {
     fn token_ident(&self, token_hash: &str) -> TokenIdent {
         TokenIdent::new(self.tenant.clone(), token_hash)
     }
+    fn session_ident(&self, client_session_id: &str) -> ClientSessionIdent {
+        ClientSessionIdent::new(self.tenant.clone(), client_session_id)
+    }
 }
 
-impl TokenMgr {
+impl ClientSessionMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn upsert_token(
@@ -81,6 +86,41 @@ impl TokenMgr {
     #[fastrace::trace]
     pub async fn drop_token(&self, token_hash: &str) -> Result<()> {
         let key = self.token_ident(token_hash).to_string_key();
+
+        // simply ignore the result
+        self.kv_api
+            .upsert_kv(UpsertKVReq::new(
+                &key,
+                MatchSeq::GE(0),
+                Operation::Delete,
+                None,
+            ))
+            .await?;
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn upsert_client_session_id(
+        &self,
+        client_session_id: &str,
+        value: ClientSession,
+        ttl: Duration,
+    ) -> Result<bool> {
+        let ident = self.session_ident(client_session_id);
+        let seq = MatchSeq::GE(0);
+        let upsert = UpsertPB::update(ident, value).with(seq).with_ttl(ttl);
+
+        let res = self.kv_api.upsert_pb(&upsert).await?;
+
+        Ok(res.prev.is_none())
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn drop_client_session_id(&self, client_session_id: &str) -> Result<()> {
+        let key = self.session_ident(client_session_id).to_string_key();
 
         // simply ignore the result
         self.kv_api

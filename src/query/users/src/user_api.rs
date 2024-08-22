@@ -19,6 +19,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
+use databend_common_management::ClientSessionMgr;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
@@ -31,7 +32,6 @@ use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::TokenMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
@@ -158,8 +158,8 @@ impl UserApiProvider {
         PasswordPolicyMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn token_api(&self, tenant: &Tenant) -> TokenMgr {
-        TokenMgr::create(self.client.clone(), tenant)
+    pub fn client_session_api(&self, tenant: &Tenant) -> ClientSessionMgr {
+        ClientSessionMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

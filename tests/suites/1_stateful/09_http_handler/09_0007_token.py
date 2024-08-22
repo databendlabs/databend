@@ -10,6 +10,7 @@ from pprint import pprint
 # Define the URLs and credentials
 query_url = "http://localhost:8000/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
+logout_url = "http://localhost:8000/v1/session/logout"
 renew_url = "http://localhost:8000/v1/session/renew"
 auth = ("root", "")
 
@@ -18,6 +19,8 @@ def print_error(func):
     def wrapper(*args, **kwargs):
         print(f"---- {func.__name__}{args[:1]}")
         resp = func(*args, **kwargs)
+        print(resp.status_code)
+        resp = resp.json()
         err = resp.get("error")
         if err:
             pprint(err)
@@ -35,7 +38,16 @@ def do_login():
         headers={"Content-Type": "application/json"},
         json=payload,
     )
-    return response.json()
+    return response
+
+
+@print_error
+def do_logout(_case_id, session_token):
+    response = requests.post(
+        logout_url,
+        headers={"Authorization": f"Bearer {session_token}"},
+    )
+    return response
 
 
 @print_error
@@ -49,7 +61,7 @@ def do_renew(_case_id, refresh_token, session_token):
         },
         json=payload,
     )
-    return response.json()
+    return response
 
 
 @print_error
@@ -63,7 +75,7 @@ def do_query(query, session_token):
         },
         json=query_payload,
     )
-    return response.json()
+    return response
 
 
 def fake_expired_token():
@@ -117,6 +129,12 @@ def main():
 
     # test new_refresh_token works
     do_renew(6, new_refresh_token, session_token)
+
+    do_logout(0, new_refresh_token)
+    do_logout(1, new_session_token)
+
+    do_query("select 'after logout'", new_session_token)
+    do_renew("after_logout", new_refresh_token, session_token)
 
 
 if __name__ == "__main__":

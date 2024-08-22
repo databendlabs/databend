@@ -63,6 +63,7 @@
 mod background_job_from_to_protobuf_impl;
 mod background_task_from_to_protobuf_impl;
 mod catalog_from_to_protobuf_impl;
+mod client_session_from_to_protobuf_impl;
 mod config_from_to_protobuf_impl;
 mod connection_from_to_protobuf_impl;
 mod data_mask_from_to_protobuf_impl;
