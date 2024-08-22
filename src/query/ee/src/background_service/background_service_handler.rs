@@ -37,6 +37,7 @@ use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_background_service::background_service::BackgroundServiceHandlerWrapper;
 use databend_enterprise_background_service::BackgroundServiceHandler;

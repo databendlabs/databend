@@ -313,7 +313,7 @@ async fn get_background_job_or_error(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_ident: &BackgroundJobIdent,
     _msg: impl Display,
-) -> Result<(BackgroundJobIdIdent, SeqV<BackgroundJobInfo>), KVAppError> {
+) -> Result<kvapi::Pair<BackgroundJobIdIdent>, KVAppError> {
     let id_ident = get_background_job_id(kv_api, name_ident).await?;
 
     let seq_job = kv_api
