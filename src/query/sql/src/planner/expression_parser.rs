@@ -23,19 +23,17 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::hilbert_compact_state_list;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UInt16Type;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -481,64 +479,46 @@ pub fn parse_hilbert_cluster_key(
     }
 
     let mut max_size = 0;
-    let dimension = ast_exprs.len();
-    let mut exprs = Vec::with_capacity(dimension);
+    let mut exprs = Vec::with_capacity(ast_exprs.len());
     for ast in ast_exprs {
         let (scalar, _) = *type_checker.resolve(&ast)?;
         let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
         let inner_type = expr.data_type().remove_nullable();
         max_size = max_size.max(hilbert_byte_size(&inner_type)?);
-        let expr = if matches!(
-            inner_type,
-            DataType::String
-                | DataType::Number(NumberDataType::Float32)
-                | DataType::Number(NumberDataType::Float64)
-        ) {
-            check_function(None, "hilbert_key", &[], &[expr], &BUILTIN_FUNCTIONS)?
-        } else {
-            expr
+        let expr = match inner_type {
+            DataType::Decimal(_) => {
+                check_function(None, "to_float64", &[], &[expr], &BUILTIN_FUNCTIONS)?
+            }
+            DataType::Date => check_function(None, "to_int32", &[], &[expr], &BUILTIN_FUNCTIONS)?,
+            DataType::Timestamp => {
+                check_function(None, "to_int64", &[], &[expr], &BUILTIN_FUNCTIONS)?
+            }
+            _ => expr,
         };
         exprs.push(expr);
     }
 
-    let (hilbert_key_type, scalar) = match max_size {
-        1 => (
-            DataType::Number(NumberDataType::UInt8),
-            Scalar::Number(u8::MAX.into()),
-        ),
-        2 => (
-            DataType::Number(NumberDataType::UInt16),
-            Scalar::Number(u16::MAX.into()),
-        ),
-        4 => (
-            DataType::Number(NumberDataType::UInt32),
-            Scalar::Number(u32::MAX.into()),
-        ),
-        8 => (
-            DataType::Number(NumberDataType::UInt64),
-            Scalar::Number(u64::MAX.into()),
-        ),
-        _ => unreachable!(),
+    let max_size = max_size.min(8);
+    let max_val = Expr::Constant {
+        span: None,
+        scalar: Scalar::Binary(vec![0xFF; max_size]),
+        data_type: DataType::Binary,
     };
 
     for expr in exprs.iter_mut() {
+        *expr = check_function(
+            None,
+            "hilbert_key",
+            &[],
+            &[expr.clone(), Expr::Constant {
+                span: None,
+                scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64)),
+                data_type: DataType::Number(NumberDataType::UInt64),
+            }],
+            &BUILTIN_FUNCTIONS,
+        )?;
         let data_type = expr.data_type();
         let is_nullable = data_type.is_nullable();
-        let inner_type = data_type.remove_nullable();
-        if inner_type != hilbert_key_type {
-            let dest_type = if is_nullable {
-                hilbert_key_type.wrap_nullable()
-            } else {
-                hilbert_key_type.clone()
-            };
-            *expr = Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(expr.clone()),
-                dest_type,
-            };
-        }
-
         if is_nullable {
             let is_not_null_expr = check_function(
                 None,
@@ -560,17 +540,12 @@ pub fn parse_hilbert_cluster_key(
                 None,
                 "if",
                 &[],
-                &[is_not_null_expr, assume_not_null_expr, Expr::Constant {
-                    span: None,
-                    scalar: scalar.clone(),
-                    data_type: hilbert_key_type.clone(),
-                }],
+                &[is_not_null_expr, assume_not_null_expr, max_val.clone()],
                 &BUILTIN_FUNCTIONS,
             )?;
         }
     }
 
-    let hilbert_states = hilbert_compact_state_list(dimension)?;
     let array = check_function(None, "array", &[], &exprs, &BUILTIN_FUNCTIONS)?;
     let result = check_function(
         None,
@@ -578,8 +553,8 @@ pub fn parse_hilbert_cluster_key(
         &[],
         &[array, Expr::Constant {
             span: None,
-            scalar: Scalar::Array(UInt16Type::from_data(hilbert_states)),
-            data_type: DataType::Array(Box::new(DataType::Number(NumberDataType::UInt16))),
+            scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64 * 8)),
+            data_type: DataType::Number(NumberDataType::UInt64),
         }],
         &BUILTIN_FUNCTIONS,
     )?;
@@ -589,7 +564,7 @@ pub fn parse_hilbert_cluster_key(
 fn hilbert_byte_size(data_type: &DataType) -> Result<usize> {
     match data_type {
         DataType::Nullable(inner) => hilbert_byte_size(inner),
-        DataType::Number(_) | DataType::Date | DataType::Timestamp => {
+        DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::Decimal(_) => {
             Ok(data_type.numeric_byte_size().unwrap())
         }
         DataType::Boolean => Ok(1),

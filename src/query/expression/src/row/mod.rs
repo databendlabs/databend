@@ -20,4 +20,5 @@ mod fixed;
 mod row_converter;
 mod variable;
 
+pub use fixed::FixedLengthEncoding;
 pub use row_converter::RowConverter;

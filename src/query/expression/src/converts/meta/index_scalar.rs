@@ -37,7 +37,7 @@ pub enum IndexScalar {
     #[serde(alias = "String", alias = "Binary")]
     String(Vec<u8>),
     Tuple(Vec<IndexScalar>),
-    ClusterBinary(Vec<u8>),
+    BinaryV2(Vec<u8>),
 }
 
 impl TryFrom<IndexScalar> for Scalar {
@@ -54,7 +54,7 @@ impl TryFrom<IndexScalar> for Scalar {
             IndexScalar::String(s) => Scalar::String(String::from_utf8(s).map_err(|e| {
                 ErrorCode::InvalidUtf8String(format!("invalid utf8 data for string type: {}", e))
             })?),
-            IndexScalar::ClusterBinary(s) => Scalar::Binary(s),
+            IndexScalar::BinaryV2(s) => Scalar::Binary(s),
             IndexScalar::Tuple(tuple) => Scalar::Tuple(
                 tuple
                     .into_iter()
@@ -77,7 +77,7 @@ impl TryFrom<Scalar> for IndexScalar {
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),
             Scalar::String(string) => IndexScalar::String(string.as_bytes().to_vec()),
-            Scalar::Binary(s) => IndexScalar::ClusterBinary(s),
+            Scalar::Binary(s) => IndexScalar::BinaryV2(s),
             Scalar::Tuple(tuple) => IndexScalar::Tuple(
                 tuple
                     .into_iter()

@@ -14,8 +14,8 @@
 
 mod index;
 
-pub use index::hilbert_compact_state_list;
 pub use index::hilbert_index_u16;
 pub use index::hilbert_index_u32;
 pub use index::hilbert_index_u64;
 pub use index::hilbert_index_u8;
+pub use index::hilbert_index_vec;
