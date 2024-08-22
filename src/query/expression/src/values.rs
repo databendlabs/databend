@@ -1263,10 +1263,10 @@ impl Column {
                     .map(|_| rng.gen_range(DATE_MIN..=DATE_MAX))
                     .collect::<Vec<i32>>(),
             ),
-            DataType::Nullable(ty) => Column::Nullable(Box::new(NullableColumn {
-                column: Column::random(ty, len, seed),
-                validity: Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
-            })),
+            DataType::Nullable(ty) => NullableColumn::new_column(
+                Column::random(ty, len, seed),
+                Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
+            ),
             DataType::Array(inner_ty) => {
                 let mut inner_len = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
@@ -1365,17 +1365,11 @@ impl Column {
                     Some(v) => &v & (&null_column.validity),
                     None => null_column.validity.clone(),
                 };
-                Column::Nullable(Box::new(NullableColumn {
-                    column: null_column.column.clone(),
-                    validity,
-                }))
+                NullableColumn::new_column(null_column.column.clone(), validity)
             }
             _ => {
                 let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
-                Column::Nullable(Box::new(NullableColumn {
-                    column: self.clone(),
-                    validity,
-                }))
+                NullableColumn::new_column(self.clone(), validity)
             }
         }
     }

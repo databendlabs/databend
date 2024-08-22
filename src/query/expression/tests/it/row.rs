@@ -409,10 +409,7 @@ fn test_variant() {
         }
         builder.commit_row();
     }
-    let col = Column::Nullable(Box::new(NullableColumn {
-        column: Column::Variant(builder.build()),
-        validity: validity.into(),
-    }));
+    let col = NullableColumn::new_column(Column::Variant(builder.build()), validity.into());
 
     let converter =
         RowConverter::new(vec![SortField::new(DataType::Variant.wrap_nullable())]).unwrap();

@@ -90,10 +90,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |val, _| match val {
             ValueRef::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
-            ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: Bitmap::new_constant(true, col.len()),
-                column: col.into(),
-            }),
+            ValueRef::Column(col) => {
+                let validity = Bitmap::new_constant(true, col.len());
+                Value::Column(NullableColumn::new(col.into(), validity))
+            }
         },
     );
 
