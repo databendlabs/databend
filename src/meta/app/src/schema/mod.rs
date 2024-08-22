@@ -136,6 +136,7 @@ pub use table::UpdateMultiTableMetaResult;
 pub use table::UpdateStreamMetaReq;
 pub use table::UpdateTableMetaReply;
 pub use table::UpdateTableMetaReq;
+pub use table::UpdateTempTableReq;
 pub use table::UpsertTableCopiedFileReply;
 pub use table::UpsertTableCopiedFileReq;
 pub use table::UpsertTableOptionReply;

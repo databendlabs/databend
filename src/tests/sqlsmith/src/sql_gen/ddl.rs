@@ -24,6 +24,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TypeName;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -86,7 +87,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 cluster_by: vec![],
                 table_options: BTreeMap::new(),
                 as_query: None,
-                transient: false,
+                table_type: TableType::Normal,
             };
             tables.push((drop_table, create_table));
         }

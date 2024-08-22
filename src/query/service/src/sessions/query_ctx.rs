@@ -38,6 +38,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -105,9 +106,10 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -186,7 +188,7 @@ impl QueryContext {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.txn_mgr())?;
+            .build_catalog(table_info.catalog_info.clone(), self.session_state())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -588,7 +590,7 @@ impl TableContext for QueryContext {
             .get_catalog(
                 self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
-                self.txn_mgr(),
+                self.session_state(),
             )
             .await
     }
@@ -596,7 +598,7 @@ impl TableContext for QueryContext {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_default_catalog(self.txn_mgr())
+            .get_default_catalog(self.session_state())
     }
 
     fn get_id(&self) -> String {
@@ -1148,6 +1150,10 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.txn_mgr()
     }
 
+    fn session_state(&self) -> SessionState {
+        self.shared.session.session_ctx.session_state()
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1317,6 +1323,10 @@ impl TableContext for QueryContext {
             return Ok(None);
         }
 
+        if tbl.is_temp() {
+            return Ok(None);
+        }
+
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = match lock_opt {
@@ -1328,6 +1338,21 @@ impl TableContext for QueryContext {
             self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
         }
         Ok(lock_guard)
+    }
+
+    fn get_session_id(&self) -> String {
+        self.shared.session.id.clone()
+    }
+
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {
+        catalog_name == CATALOG_DEFAULT
+            && self
+                .shared
+                .session
+                .session_ctx
+                .temp_tbl_mgr()
+                .lock()
+                .is_temp_table(database_name, table_name)
     }
 }
 

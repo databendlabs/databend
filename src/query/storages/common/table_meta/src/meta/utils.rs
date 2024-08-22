@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::ops::Add;
 
 use chrono::DateTime;
@@ -19,6 +20,15 @@ use chrono::Datelike;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+
+use crate::table::table_storage_prefix;
+use crate::table::OPT_KEY_DATABASE_ID;
+use crate::table::OPT_KEY_STORAGE_PREFIX;
+use crate::table::OPT_KEY_TEMP_PREFIX;
+
+const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
 
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
@@ -46,4 +56,25 @@ pub fn monotonically_increased_timestamp(
         }
     }
     timestamp
+}
+
+pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -> Result<String> {
+    // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
+    if let Some(prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
+        return Ok(prefix.clone());
+    }
+
+    // otherwise, use database id and table id as storage prefix
+
+    let db_id = options.get(OPT_KEY_DATABASE_ID).ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "Invalid fuse table, table option {} not found",
+            OPT_KEY_DATABASE_ID
+        ))
+    })?;
+    let mut prefix = table_storage_prefix(db_id, table_id);
+    if let Some(temp_prefix) = options.get(OPT_KEY_TEMP_PREFIX) {
+        prefix = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, temp_prefix, prefix);
+    }
+    Ok(prefix)
 }

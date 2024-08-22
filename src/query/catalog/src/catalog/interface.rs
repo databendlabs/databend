@@ -101,6 +101,7 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -111,6 +112,8 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
@@ -224,9 +227,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
     /// Get the table meta by table id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>>;
+    async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
-    // List the tables name by meta ids.
+    /// List the tables name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -243,8 +246,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>>;
 
-    // Get the table name by meta id.
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>>;
+    /// Get the table name by meta id.
+    async fn get_table_name_by_id(&self, table_id: u64) -> Result<Option<String>>;
 
     // Get one table by db and table name.
     async fn get_table(
@@ -385,8 +388,22 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpdateTableMetaReq,
         table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
+        let mut update_table_metas = vec![];
+        let mut update_temp_tables = vec![];
+        if table_info.meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            let req = UpdateTempTableReq {
+                table_id: req.table_id,
+                desc: table_info.desc.clone(),
+                new_table_meta: req.new_table_meta,
+                copied_files: Default::default(),
+            };
+            update_temp_tables.push(req);
+        } else {
+            update_table_metas.push((req, table_info.clone()));
+        }
         self.update_multi_table_meta(UpdateMultiTableMetaReq {
-            update_table_metas: vec![(req, table_info.clone())],
+            update_table_metas,
+            update_temp_tables,
             ..Default::default()
         })
         .await
@@ -472,6 +489,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
+
+    fn set_session_state(&self, _state: SessionState) -> Arc<dyn Catalog> {
+        unimplemented!()
+    }
 
     /// Dictionary
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply>;

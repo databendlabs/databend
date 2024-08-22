@@ -31,6 +31,7 @@ use crate::ast::CreateStreamStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
+use crate::ast::TableType;
 use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
@@ -40,10 +41,10 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if stmt.transient {
-            RcDoc::space().append(RcDoc::text("TRANSIENT"))
-        } else {
-            RcDoc::nil()
+        .append(match stmt.table_type {
+            TableType::Transient => RcDoc::space().append(RcDoc::text("TRANSIENT")),
+            TableType::Temporary => RcDoc::space().append(RcDoc::text("TEMPORARY")),
+            TableType::Normal => RcDoc::nil(),
         })
         .append(RcDoc::space().append(RcDoc::text("TABLE")))
         .append(match stmt.create_option {

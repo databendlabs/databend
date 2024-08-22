@@ -35,7 +35,10 @@ pub async fn do_vacuum_drop_table(
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
     let mut list_files = vec![];
     for (table_info, operator) in tables {
-        let dir = format!("{}/", FuseTable::parse_storage_prefix(&table_info)?);
+        let dir = format!(
+            "{}/",
+            FuseTable::parse_storage_prefix_from_table_info(&table_info)?
+        );
 
         info!(
             "vacuum drop table {:?} dir {:?}, is_external_table:{:?}",

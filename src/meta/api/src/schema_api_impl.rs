@@ -3016,6 +3016,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             copied_files,
             update_stream_metas,
             deduplicated_labels,
+            update_temp_tables: _,
         } = req;
 
         let mut tbl_seqs = HashMap::new();

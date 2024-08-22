@@ -41,6 +41,8 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -424,6 +426,16 @@ pub trait Table: Sync + Send {
 
     fn is_read_only(&self) -> bool {
         false
+    }
+
+    fn is_temp(&self) -> bool {
+        let is_temp = self
+            .get_table_info()
+            .options()
+            .contains_key(OPT_KEY_TEMP_PREFIX);
+        let is_id_temp = is_temp_table_id(self.get_id());
+        assert_eq!(is_temp, is_id_temp);
+        is_temp
     }
 
     fn use_own_sample_block(&self) -> bool {

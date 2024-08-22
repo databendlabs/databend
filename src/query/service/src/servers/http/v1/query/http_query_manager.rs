@@ -30,7 +30,7 @@ use databend_common_base::JoinHandle;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 
 use super::HttpQueryContext;

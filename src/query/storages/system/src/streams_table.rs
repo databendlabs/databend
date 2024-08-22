@@ -75,7 +75,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
 
         let catalog_mgr = CatalogManager::instance();
         let ctls = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.session_state())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
