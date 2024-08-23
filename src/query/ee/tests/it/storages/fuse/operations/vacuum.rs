@@ -199,14 +199,21 @@ mod test_accessor {
         }
     }
 
-    pub struct VecLister(Vec<&'static str>);
+    pub struct VecLister(Vec<String>);
     impl oio::List for VecLister {
         fn next(&mut self) -> impl Future<Output = opendal::Result<Option<Entry>>> + MaybeSend {
             let me = &mut self.0;
             async move {
-                Ok(me
-                    .pop()
-                    .map(|v| Entry::new(v, Metadata::new(EntryMode::FILE))))
+                Ok(me.pop().map(|v| {
+                    Entry::new(
+                        &v,
+                        if v.ends_with('/') {
+                            Metadata::new(EntryMode::DIR)
+                        } else {
+                            Metadata::new(EntryMode::FILE)
+                        },
+                    )
+                }))
             }
         }
     }
@@ -234,11 +241,15 @@ mod test_accessor {
             self.hit_stat.store(true, Ordering::Release);
             if self.inject_stat_faulty {
                 Err(opendal::Error::new(
-                    opendal::ErrorKind::Unexpected,
+                    opendal::ErrorKind::NotFound,
                     "does not matter (stat)",
                 ))
             } else {
-                let stat = RpStat::new(Metadata::new(EntryMode::DIR));
+                let stat = if _path.ends_with('/') {
+                    RpStat::new(Metadata::new(EntryMode::DIR))
+                } else {
+                    RpStat::new(Metadata::new(EntryMode::FILE))
+                };
                 Ok(stat)
             }
         }
@@ -255,12 +266,21 @@ mod test_accessor {
             }
         }
 
-        async fn list(
-            &self,
-            _path: &str,
-            _args: OpList,
-        ) -> opendal::Result<(RpList, Self::Lister)> {
-            Ok((RpList::default(), VecLister(vec!["1/2/a", "1/2/b"])))
+        async fn list(&self, path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+            if self.inject_delete_faulty {
+                // While injecting faulty for delete operation, return an empty list;
+                // otherwise we need to impl other methods.
+                return Ok((RpList::default(), VecLister(vec![])));
+            };
+
+            Ok((
+                RpList::default(),
+                if path.ends_with('/') {
+                    VecLister(vec!["a".to_owned(), "b".to_owned()])
+                } else {
+                    VecLister(vec![])
+                },
+            ))
         }
     }
 }
@@ -351,7 +371,7 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
 
     use test_accessor::AccessorFaultyDeletion;
 
-    // Case 1: non-parallel vacuum dropped tables
+    // Case 1: non-parallel vacuum dry-run dropped tables
     {
         let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
@@ -364,12 +384,11 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
         // verify that accessor.stat() was called
         assert!(faulty_accessor.hit_stat_operation());
-
-        // verify that errors of deletions are not swallowed
-        assert!(result.is_err());
+        // verify that errors of NotFound are swallowed
+        assert!(result.is_ok());
     }
 
-    // Case 2: parallel vacuum dropped tables
+    // Case 2: parallel vacuum dry-run dropped tables
     {
         let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
@@ -381,8 +400,8 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
         // verify that accessor.stat() was called
         assert!(faulty_accessor.hit_stat_operation());
-        // verify that errors of deletions are not swallowed
-        assert!(result.is_err());
+        // verify that errors of NotFound are swallowed
+        assert!(result.is_ok());
     }
 
     Ok(())
