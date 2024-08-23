@@ -230,18 +230,6 @@ impl<'a> TypeChecker<'a> {
 
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
-            if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-                return Err(ErrorCode::SemanticError(
-                    "set-returning functions are only allowed in SELECT clause",
-                )
-                .set_span(expr.span()));
-            }
-            // Found a SRF, return it directly.
-            // See `Binder::bind_project_set` for more details.
-            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
-        }
-
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
@@ -751,6 +739,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
@@ -800,40 +789,6 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
-
-                // Check assumptions if it is a set returning function
-                if BUILTIN_FUNCTIONS
-                    .get_property(func_name)
-                    .map(|property| property.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InSetReturningFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions cannot be nested".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
-                    if self.in_window_function {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions cannot be used in window spec",
-                        )
-                        .set_span(*span));
-                    }
-
-                    if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions can only be used in SELECT".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
-                    // Should have been handled with `BindContext::srfs`
-                    return Err(ErrorCode::Internal("Logical error, there is a bug!"));
-                }
 
                 if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
                     // general window function
@@ -926,6 +881,13 @@ impl<'a> TypeChecker<'a> {
 
                     let data_type = async_func.return_type.as_ref().clone();
                     Box::new((async_func.into(), data_type))
+                } else if BUILTIN_FUNCTIONS
+                    .get_property(func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    // Set returning function
+                    self.resolve_set_returning_function(*span, func_name, &args)?
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -2519,8 +2481,80 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((scalar_expr, data_type)))
     }
 
-    /// Resolve function call.
+    /// Resolve set returning function.
+    pub fn resolve_set_returning_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+        if self.in_window_function {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions cannot be used in window spec",
+            )
+            .set_span(span));
+        }
+        if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions can only be used in SELECT".to_string(),
+            )
+            .set_span(span));
+        }
 
+        let original_context = self.bind_context.expr_context.clone();
+        self.bind_context
+            .set_expr_context(ExprContext::InSetReturningFunction);
+
+        let mut arguments = Vec::with_capacity(args.len());
+        for arg in args.iter() {
+            let box (scalar, _) = self.resolve(arg)?;
+            arguments.push(scalar);
+        }
+
+        // Restore the original context
+        self.bind_context.set_expr_context(original_context);
+
+        let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            span,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments,
+        });
+        let srf_expr = srf_scalar.as_expr()?;
+        let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "The return type of srf should be tuple, but got {}",
+                srf_expr.data_type()
+            ))
+        })?;
+
+        // If tuple has more than one field, return the tuple column,
+        // otherwise, extract the tuple field to top level column.
+        let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
+            (srf_scalar, srf_expr.data_type().clone())
+        } else {
+            let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
+                span,
+                func_name: "get".to_string(),
+                params: vec![Scalar::Number(NumberScalar::Int64(1))],
+                arguments: vec![srf_scalar],
+            });
+            (child_scalar, srf_tuple_types[0].clone())
+        };
+
+        Ok(Box::new((return_scalar, return_type)))
+    }
+
+    /// Resolve function call.
     pub fn resolve_function(
         &mut self,
         span: Span,

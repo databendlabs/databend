@@ -20,23 +20,14 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::IndexType;
-use crate::ScalarExpr;
-
-/// An item of set-returning function.
-/// Contains definition of srf and its output columns.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SrfItem {
-    pub scalar: ScalarExpr,
-    pub index: IndexType,
-}
+use crate::plans::ScalarItem;
 
 /// `ProjectSet` is a plan that evaluate a series of
 /// set-returning functions, zip the result together,
 /// and return the joined result with input relation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProjectSet {
-    pub srfs: Vec<SrfItem>,
+    pub srfs: Vec<ScalarItem>,
 }
 
 impl Operator for ProjectSet {
