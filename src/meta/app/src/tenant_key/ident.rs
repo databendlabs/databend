@@ -213,8 +213,8 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
 
+    use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::tenant::Tenant;
@@ -225,10 +225,20 @@ mod tests {
     fn test_tenant_ident() {
         struct Foo;
 
+        #[derive(Debug)]
+        struct FooValue;
+
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
-            type ValueType = Infallible;
+            type ValueType = FooValue;
+        }
+
+        impl kvapi::Value for FooValue {
+            type KeyType = TIdent<Foo>;
+            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+                []
+            }
         }
 
         let tenant = Tenant::new_literal("test");
@@ -244,10 +254,20 @@ mod tests {
     fn test_tenant_ident_u64() {
         struct Foo;
 
+        #[derive(Debug)]
+        struct FooValue;
+
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
-            type ValueType = Infallible;
+            type ValueType = FooValue;
+        }
+
+        impl kvapi::Value for FooValue {
+            type KeyType = TIdent<Foo, u64>;
+            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+                []
+            }
         }
 
         let tenant = Tenant::new_literal("test");

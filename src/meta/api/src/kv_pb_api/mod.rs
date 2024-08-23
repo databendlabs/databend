@@ -363,7 +363,7 @@ mod tests {
         type Error = MetaError;
 
         async fn upsert_kv(&self, _req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
-            todo!()
+            unimplemented!()
         }
 
         async fn get_kv_stream(
@@ -384,11 +384,11 @@ mod tests {
         }
 
         async fn list_kv(&self, _prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-            todo!()
+            unimplemented!()
         }
 
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
-            todo!()
+            unimplemented!()
         }
     }
 

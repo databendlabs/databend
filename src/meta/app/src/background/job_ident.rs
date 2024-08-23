@@ -33,6 +33,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::background::BackgroundJobIdIdent;
+    use crate::background::BackgroundJobIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -44,7 +45,9 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for BackgroundJobIdIdent {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = BackgroundJobIdent;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }
