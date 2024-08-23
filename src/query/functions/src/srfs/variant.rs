@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -562,11 +565,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                                                         ctx.set_error(row, err.to_string());
                                                         return null_result;
                                                     }
-                                                    Ok(res) => {
-                                                        let res_json_str = jaq_val_to_json(&res);
-                                                        res_builder.put_str(&res_json_str);
-                                                        res_builder.commit_row();
-                                                    }
+                                                    Ok(res) => match jaq_val_to_jsonb(&res) {
+                                                        Ok(res_jsonb) => {
+                                                            res_builder.put_slice(&res_jsonb);
+                                                            res_builder.commit_row();
+                                                        }
+                                                        Err(err) => {
+                                                            ctx.set_error(row, err.to_string());
+                                                            return null_result;
+                                                        }
+                                                    },
                                                 };
                                             }
                                         }
@@ -590,42 +598,50 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-// This comes straight from the jaq source. It converts a Jaq val type to a JSON string.
-// https://github.com/01mf02/jaq/blob/426fdab46c95e7ed0dadc5c049b3d83388271b1a/jaq/src/main.rs#L511
-// there may be an opportunity to format directly into
-// jsonb data so it doesn't need to be re-parsed.
-fn jaq_val_to_json(val: &Val) -> String {
-    match val {
-        Val::Null => "null".to_string(),
-        Val::Bool(b) => b.to_string(),
-        Val::Num(n) => n.to_string(),
-        Val::Float(f) if f.is_finite() => f.to_string(),
-        Val::Float(_) => "null".to_string(),
-        Val::Int(i) => i.to_string(),
-        Val::Str(s) => format!("\"{}\"", s),
-        Val::Arr(a) => {
-            let mut res = "[".to_string();
-            for (i, v) in a.iter().enumerate() {
-                if i > 0 {
-                    res.push_str(", ");
-                }
-                res.push_str(&jaq_val_to_json(v));
+// Convert a Jaq val to a jsonb value.
+fn jaq_val_to_jsonb(val: &Val) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    let jsonb_value = match val {
+        Val::Null => jsonb::Value::Null,
+        Val::Bool(b) => jsonb::Value::Bool(*b),
+        Val::Num(n) => {
+            if let Ok(f) = n.parse::<f64>() {
+                f.into()
+            } else {
+                return Err(ErrorCode::BadBytes(format!(
+                    "paser string `{}` to float falied",
+                    n
+                )));
             }
-            res.push(']');
-            res
         }
-        Val::Obj(o) => {
-            let mut res = "{".to_string();
-            for (i, (k, v)) in o.iter().enumerate() {
-                if i > 0 {
-                    res.push_str(", ");
-                }
-                res.push_str(&format!("\"{}\": {}", k, jaq_val_to_json(v)));
+        Val::Float(f) => (*f).into(),
+        Val::Int(i) => (*i).into(),
+        Val::Str(s) => jsonb::Value::String((**s).clone().into()),
+        Val::Arr(arr) => {
+            let items = arr
+                .iter()
+                .map(jaq_val_to_jsonb)
+                .collect::<Result<Vec<_>>>()?;
+            return match jsonb::build_array(items.iter().map(|v| &v[..]), &mut buf) {
+                Ok(_) => Ok(buf),
+                Err(_) => Err(ErrorCode::BadBytes("failed to build jsonb array")),
+            };
+        }
+        Val::Obj(obj) => {
+            let mut kvs = BTreeMap::new();
+            for (k, v) in obj.iter() {
+                let key = (**k).clone();
+                let val = jaq_val_to_jsonb(v)?;
+                kvs.insert(key, val);
             }
-            res.push('}');
-            res
+            return match jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut buf) {
+                Ok(_) => Ok(buf),
+                Err(_) => Err(ErrorCode::BadBytes("failed to build jsonb object")),
+            };
         }
-    }
+    };
+    jsonb_value.write_to_vec(&mut buf);
+    Ok(buf)
 }
 
 pub(crate) fn unnest_variant_array(

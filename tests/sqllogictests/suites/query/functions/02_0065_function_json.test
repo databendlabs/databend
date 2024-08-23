@@ -983,7 +983,7 @@ SELECT * FROM jq('.[] | .', json_object('k1', 'v1', 'k2', 'v2')) ORDER BY 1
 query T
 SELECT * FROM jq($$[.[] | .]$$, json_object('k1', 'v1', 'k2', 'v2'))
 ----
-["v1", "v2"]
+["v1","v2"]
 
 # Test with array input
 query T
@@ -1010,7 +1010,7 @@ SELECT * FROM jq('.[].name', json_array(json_object('name', 'Alice'), json_objec
 query T
 SELECT * FROM jq('.[] | select(.age > 30)', json_array(json_object('name', 'Alice', 'age', 25), json_object('name', 'Bob', 'age', 35)))
 ----
-{"name": "Bob", "age": 35}
+{"age":35,"name":"Bob"}
 
 # Test with multiple outputs per input element
 query T
@@ -1045,7 +1045,7 @@ SELECT * FROM jq('invalid_expression', json_object('k', 'v'))
 query T
 SELECT * FROM jq('{min: min, max: max, sum: add, length: length}', json_array(1, 2, 3, 4, 5))
 ----
-{"min": 1, "max": 5, "sum": 15, "length": 5}
+{"length":5,"max":5,"min":1,"sum":15}
 
 # Test with string manipulation
 query T
@@ -1066,13 +1066,13 @@ SELECT * FROM jq('.[] * 2', json_array(1, 2, 3))
 query T
 SELECT * FROM jq('{new_key: .key}', json_object('key', 'value'))
 ----
-{"new_key": "value"}
+{"new_key":"value"}
 
 # Test with array construction
 query T
 SELECT * FROM jq('[.[] | . * 2]', json_array(1, 2, 3))
 ----
-[2, 4, 6]
+[2,4,6]
 
 # Test with conditional logic
 query T
@@ -1100,12 +1100,12 @@ FROM
     test_data
 ORDER BY jq:key;
 ----
-1 {"key": "name", "value": "Alice"}
-2 {"key": "name", "value": "Bob"}
-3 {"key": "name", "value": "Charlie"}
-1 {"key": "scores", "value": "[85,90,78]"}
-2 {"key": "scores", "value": "[92,88,95]"}
-3 {"key": "scores", "value": "[76,80,82]"}
+1 {"key":"name","value":"Alice"}
+2 {"key":"name","value":"Bob"}
+3 {"key":"name","value":"Charlie"}
+1 {"key":"scores","value":"[85,90,78]"}
+2 {"key":"scores","value":"[92,88,95]"}
+3 {"key":"scores","value":"[76,80,82]"}
 
 statement ok
 DROP TABLE test_data;
