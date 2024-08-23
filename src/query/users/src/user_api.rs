@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
@@ -125,7 +126,11 @@ impl UserApiProvider {
     }
 
     pub fn role_api(&self, tenant: &Tenant) -> Arc<impl RoleApi> {
-        let role_mgr = RoleMgr::create(self.client.clone(), tenant);
+        let role_mgr = RoleMgr::create(
+            self.client.clone(),
+            tenant,
+            GlobalConfig::instance().query.upgrade_to_pb,
+        );
         Arc::new(role_mgr)
     }
 

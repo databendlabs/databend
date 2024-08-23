@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_base::base::tokio;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
@@ -30,6 +32,14 @@ pub const CATALOG_DEFAULT: &str = "default";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_cache_mgr() -> Result<()> {
+    // Init.
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+
+    // Init with default.
+    {
+        GlobalConfig::init(&InnerConfig::default()).unwrap();
+    }
     let conf = RpcClientConf::default();
     let tenant = Tenant::new_literal("tenant1");
 
