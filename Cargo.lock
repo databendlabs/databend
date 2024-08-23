@@ -3487,6 +3487,10 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
+ "jaq-core",
+ "jaq-interpret",
+ "jaq-parse",
+ "jaq-std",
  "jsonb",
  "lexical-core",
  "libm",
@@ -8466,6 +8470,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hifijson"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9958ab3ce3170c061a27679916bd9b969eceeb5e8b120438e6751d0987655c42"
+
+[[package]]
 name = "highway"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9215,6 +9225,66 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52f5385394064fa2c886205dba02598013ce83d3e92d33dbdc0c52fe0e7bf4fc"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "jaq-core"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6fda09ee08c84c81293fdf811d9ebaa87b327557b5391f290c926d728c2ddd4"
+dependencies = [
+ "aho-corasick",
+ "base64 0.22.1",
+ "chrono",
+ "hifijson",
+ "jaq-interpret",
+ "libm",
+ "log",
+ "regex",
+ "urlencoding",
+]
+
+[[package]]
+name = "jaq-interpret"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fe95ec3c24af3fd9f3dd1091593f5e49b003a66c496a8aa39d764d0a06ae17b"
+dependencies = [
+ "ahash 0.8.11",
+ "dyn-clone",
+ "hifijson",
+ "indexmap 2.4.0",
+ "jaq-syn",
+ "once_cell",
+ "serde_json",
+]
+
+[[package]]
+name = "jaq-parse"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0346d7d3146cdda8acd929581f3d6626a332356c74d5c95aeaffaac2eb6dee82"
+dependencies = [
+ "chumsky",
+ "jaq-syn",
+]
+
+[[package]]
+name = "jaq-std"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfbaa55578fd3b70433b594a370741e0c364e4afff92cc0099623fce87311bc1"
+dependencies = [
+ "jaq-syn",
+]
+
+[[package]]
+name = "jaq-syn"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ba44fe4428c71304604261ecbae047ee9cfb60c4f1a6bd222ebbb31726d3948"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

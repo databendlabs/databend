@@ -238,92 +238,92 @@ SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[1 to last] ? (@ >=2 && @ <=3
 ----
 1
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')
 ----
 1
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')
 ----
 0
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')
 ----
 0
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')
 ----
 0
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')
 ----
 1
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')
 ----
 0
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')
 ----
 0
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')
 ----
 1
 
-query T 
+query T
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')
 ----
 1
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":2}') @@ '$.a == 1'
 ----
 1
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":2}') @@ '$.a > 1'
 ----
 0
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":2}') @@ '$.c > 0'
 ----
 0
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":2}') @@ '$.b < 2'
 ----
 0
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] == 1'
 ----
 1
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] > 1'
 ----
 0
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[3] == 0'
 ----
 0
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] >= 2'
 ----
 1
 
-query T 
+query T
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] == 2 || $.b[1 to last] == 3'
 ----
 1
@@ -531,7 +531,7 @@ select id, v ? 'a' from t2 order by id
 4 NULL
 
 query T
-select id, v ?| ['a','d'] from t2 order by id 
+select id, v ?| ['a','d'] from t2 order by id
 ----
 1 0
 2 1
@@ -539,7 +539,7 @@ select id, v ?| ['a','d'] from t2 order by id
 4 NULL
 
 query T
-select id, v ?& ['a','c'] from t2 order by id 
+select id, v ?& ['a','c'] from t2 order by id
 ----
 1 0
 2 1
@@ -972,3 +972,140 @@ select id, v #- s from t3 order by id
 
 statement ok
 DROP TABLE IF EXISTS t3
+
+# Basic jq usage tests
+query T
+SELECT * FROM jq('.[] | .', json_object('k1', 'v1', 'k2', 'v2')) ORDER BY 1
+----
+"v1"
+"v2"
+
+query T
+SELECT * FROM jq($$[.[] | .]$$, json_object('k1', 'v1', 'k2', 'v2'))
+----
+["v1","v2"]
+
+# Test with array input
+query T
+SELECT * FROM jq('.[]', json_array(1, 2, 3))
+----
+1
+2
+3
+
+# Test with nested objects
+query T
+SELECT * FROM jq('.a.b', json_object('a', json_object('b', 'nested_value')))
+----
+"nested_value"
+
+# Test with array of objects
+query T
+SELECT * FROM jq('.[].name', json_array(json_object('name', 'Alice'), json_object('name', 'Bob')))
+----
+"Alice"
+"Bob"
+
+# Test with filtering
+query T
+SELECT * FROM jq('.[] | select(.age > 30)', json_array(json_object('name', 'Alice', 'age', 25), json_object('name', 'Bob', 'age', 35)))
+----
+{"age":35,"name":"Bob"}
+
+# Test with multiple outputs per input element
+query T
+SELECT * FROM jq('.[] | .name, .age', json_array(json_object('name', 'Alice', 'age', 25), json_object('name', 'Bob', 'age', 35)))
+----
+"Alice"
+25
+"Bob"
+35
+
+# Test with NULL input
+query T
+SELECT * FROM jq('.', NULL)
+----
+
+# Test with empty object
+query T
+SELECT * FROM jq('.', json_object())
+----
+{}
+
+# Test with empty array
+query T
+SELECT * FROM jq('.[]', json_array())
+----
+
+# Test with invalid jq expression
+statement error
+SELECT * FROM jq('invalid_expression', json_object('k', 'v'))
+
+# Test with complex transformations
+query T
+SELECT * FROM jq('{min: min, max: max, sum: add, length: length}', json_array(1, 2, 3, 4, 5))
+----
+{"length":5,"max":5,"min":1,"sum":15}
+
+# Test with string manipulation
+query T
+SELECT * FROM jq('.[] | ascii_upcase', json_array('hello', 'world'))
+----
+"HELLO"
+"WORLD"
+
+# Test with numeric operations
+query T
+SELECT * FROM jq('.[] * 2', json_array(1, 2, 3))
+----
+2
+4
+6
+
+# Test with object construction
+query T
+SELECT * FROM jq('{new_key: .key}', json_object('key', 'value'))
+----
+{"new_key":"value"}
+
+# Test with array construction
+query T
+SELECT * FROM jq('[.[] | . * 2]', json_array(1, 2, 3))
+----
+[2,4,6]
+
+# Test with conditional logic
+query T
+SELECT * FROM jq('.[] | if . == 0 then "zero" elif . == 1 then "one" else "many" end', json_array(0, 1, 2))
+----
+"zero"
+"one"
+"many"
+
+# Test with table and set returning functionality
+statement ok
+CREATE TABLE test_data (id INT, json_data JSON);
+
+statement ok
+INSERT INTO test_data VALUES
+    (1, '{"name": "Alice", "scores": [85, 90, 78]}'),
+    (2, '{"name": "Bob", "scores": [92, 88, 95]}'),
+    (3, '{"name": "Charlie", "scores": [76, 80, 82]}');
+
+query IT
+SELECT
+    id,
+    jq('to_entries[] | {key: .key, value: (.value | tostring)}', json_data) AS jq
+FROM
+    test_data
+ORDER BY jq:key;
+----
+1 {"key":"name","value":"Alice"}
+2 {"key":"name","value":"Bob"}
+3 {"key":"name","value":"Charlie"}
+1 {"key":"scores","value":"[85,90,78]"}
+2 {"key":"scores","value":"[92,88,95]"}
+3 {"key":"scores","value":"[76,80,82]"}
+
+statement ok
+DROP TABLE test_data;
