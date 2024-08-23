@@ -123,7 +123,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let catalogs = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.session_state())
             .await?
             .into_iter()
             .map(|cat| cat.disable_table_info_refresh())
@@ -376,7 +376,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     visibility_checker.check_database_visibility(
                         ctl_name,
                         db.name(),
-                        db.get_db_info().ident.db_id,
+                        db.get_db_info().database_id.db_id,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -387,7 +387,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 HashMap::new()
             };
             for db in final_dbs {
-                let db_id = db.get_db_info().ident.db_id;
+                let db_id = db.get_db_info().database_id.db_id;
                 let db_name = db.name();
                 let tables = if tables_names.is_empty()
                     || tables_names.len() > 10

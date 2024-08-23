@@ -3252,8 +3252,8 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-users",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "dyn-clone",
  "goldenfile",
  "log",
@@ -3585,6 +3585,7 @@ dependencies = [
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
+ "scroll 0.12.0",
  "serde",
  "wkt",
 ]
@@ -3676,6 +3677,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -3684,6 +3686,7 @@ dependencies = [
  "num-traits",
  "opendal",
  "paste",
+ "prost 0.12.6",
  "serde",
  "serde_json",
  "sha1",
@@ -4298,8 +4301,8 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-pruner",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "fastrace",
  "futures",
@@ -4730,6 +4733,7 @@ dependencies = [
  "cidr",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-grpc",
@@ -5169,8 +5173,8 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-io",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
  "fastrace",
@@ -5406,6 +5410,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-storages-common-session"
+version = "0.1.0"
+dependencies = [
+ "databend-common-exception",
+ "databend-common-meta-app",
+ "databend-common-meta-types",
+ "databend-common-storage",
+ "databend-storages-common-table-meta",
+ "log",
+ "parking_lot 0.12.3",
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
@@ -5441,17 +5460,6 @@ dependencies = [
  "snap",
  "typetag",
  "zstd 0.12.4",
-]
-
-[[package]]
-name = "databend-storages-common-txn"
-version = "0.1.0"
-dependencies = [
- "databend-common-meta-app",
- "databend-common-meta-types",
- "parking_lot 0.12.3",
- "serde",
- "uuid",
 ]
 
 [[package]]
@@ -7242,7 +7250,7 @@ dependencies = [
  "geo-types",
  "geojson",
  "log",
- "scroll",
+ "scroll 0.11.0",
  "serde_json",
  "thiserror",
  "wkt",
@@ -7258,7 +7266,7 @@ dependencies = [
  "geojson",
  "geos",
  "log",
- "scroll",
+ "scroll 0.11.0",
  "serde_json",
  "thiserror",
  "wkt",
@@ -13451,6 +13459,12 @@ name = "scroll"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
+
+[[package]]
+name = "scroll"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
 
 [[package]]
 name = "scrypt"

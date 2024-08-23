@@ -104,9 +104,9 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 

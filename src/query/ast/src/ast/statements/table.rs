@@ -140,7 +140,14 @@ pub struct CreateTableStmt {
     pub cluster_by: Vec<Expr>,
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
-    pub transient: bool,
+    pub table_type: TableType,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TableType {
+    Normal,
+    Transient,
+    Temporary,
 }
 
 impl Display for CreateTableStmt {
@@ -149,9 +156,11 @@ impl Display for CreateTableStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        if self.transient {
-            write!(f, "TRANSIENT ")?;
-        }
+        match self.table_type {
+            TableType::Normal => {}
+            TableType::Transient => write!(f, "TRANSIENT ")?,
+            TableType::Temporary => write!(f, "TEMPORARY ")?,
+        };
         write!(f, "TABLE ")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;

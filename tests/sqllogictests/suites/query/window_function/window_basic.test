@@ -818,5 +818,31 @@ FROM results_rollup order by 1,2;
 ----
 499999500000 1
 
+query TTII
+WITH sales AS (
+	SELECT col0 AS sale_id, col1 AS product_name, col2 AS sale_amount
+  	FROM (
+  		VALUES
+    	(1, 'Product A', 1000),
+      	(2, 'Product A', 1500),
+      	(3, 'Product A', 2000),
+      	(4, 'Product B', 500),
+      	(5, 'Product B', 800),
+      	(6, 'Product B', 1200)
+     )
+)
+SELECT
+	product_name, sale_amount
+    , LEAD(sale_amount) OVER (PARTITION BY product_name ORDER BY sale_id) AS next_sale_amount
+FROM sales ORDER BY product_name, sale_amount, next_sale_amount
+LIMIT 100
+----
+Product A 1000 1500
+Product A 1500 2000
+Product A 2000 NULL
+Product B 500 800
+Product B 800 1200
+Product B 1200 NULL
+
 statement ok
 DROP DATABASE test_window_basic;

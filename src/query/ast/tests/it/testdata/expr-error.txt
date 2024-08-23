@@ -29,7 +29,7 @@ error:
   --> SQL:1:14
   |
 1 | CAST(col1 AS foo)
-  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `LONGBLOB`, `GEOMETRY`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
+  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
   | |             
   | while parsing `CAST(... AS ...)`
   | while parsing expression

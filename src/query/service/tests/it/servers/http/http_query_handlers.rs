@@ -28,20 +28,20 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
+use databend_query::servers::http::error::QueryError;
 use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
-use databend_query::servers::http::v1::QueryError;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_txn::TxnState;
+use databend_storages_common_session::TxnState;
 use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
@@ -324,7 +324,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 2"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 2"}}"#
     );
 
     // final
@@ -588,7 +588,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 6"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 6"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();

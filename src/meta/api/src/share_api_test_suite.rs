@@ -219,7 +219,7 @@ impl ShareApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
             assert!(res.share_specs.is_none());
-            db_id = res.db_id;
+            db_id = *res.db_id;
 
             let req = GrantShareObjectReq {
                 share_name: share_name1.clone(),
@@ -602,7 +602,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            db_id = res.db_id;
+            db_id = *res.db_id;
             info!("create database res: {:?}", res);
 
             let share_specs = res.share_specs.unwrap();
@@ -688,7 +688,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            db_id = res.db_id;
+            db_id = *res.db_id;
             info!("create database res: {:?}", res);
             assert!(res.share_specs.is_none());
 
@@ -1541,7 +1541,7 @@ impl ShareApiTestSuite {
 
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
-            db_id = res.db_id;
+            db_id = *res.db_id;
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
@@ -2337,7 +2337,7 @@ impl ShareApiTestSuite {
 
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
-            db_id = res.db_id;
+            db_id = *res.db_id;
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,

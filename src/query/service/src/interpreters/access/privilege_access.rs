@@ -30,7 +30,7 @@ use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
@@ -42,6 +42,7 @@ use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -112,7 +113,7 @@ impl PrivilegeAccess {
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 OwnershipObject::Database {
                     catalog_name: catalog_name.clone(),
@@ -135,7 +136,7 @@ impl PrivilegeAccess {
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = if !disable_table_info_refresh {
                     self.ctx
@@ -288,6 +289,10 @@ impl PrivilegeAccess {
             || db_name == "information_schema")
             && privilege == UserPrivilegeType::Select
         {
+            return Ok(());
+        }
+
+        if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());
         }
 
@@ -615,7 +620,7 @@ impl PrivilegeAccess {
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
-            .ident
+            .database_id
             .db_id;
         if let Some(table_name) = table_name {
             let table_id = if !disable_table_info_refresh {
@@ -749,6 +754,9 @@ impl AccessChecker for PrivilegeAccess {
                         check_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
+                        if self.ctx.is_temp_table(catalog_name,database,table){
+                            return Ok(());
+                        }
                         let session = self.ctx.get_current_session();
                         if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false, false).await? ||
                             self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false, false).await?   {
@@ -801,9 +809,10 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
                     }
-                    if table.is_source_of_view() {
+                    if table.is_source_of_view()||table.table().is_temp() {
                         continue;
                     }
+
                     let catalog_name = table.catalog();
                     // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
                     // this is no means to check table `system.read_parquet(s3)` privilege
@@ -922,7 +931,9 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
             }
             Plan::CreateTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX){
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }
@@ -937,6 +948,9 @@ impl AccessChecker for PrivilegeAccess {
 
             }
             Plan::RenameTable(plan) => {
+                if  self.ctx.is_temp_table(&plan.catalog,&plan.database, &plan.table) {
+                    return Ok(());
+                }
                 // You must have ALTER and DROP privileges for the original table,
                 // and CREATE for the new db.
                 let privileges = vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop];
@@ -998,6 +1012,13 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::AnalyzeTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            }
+            // Dictionary
+            Plan::ShowCreateDictionary(_)
+            | Plan::CreateDictionary(_)
+            | Plan::DropDictionary(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
             }
             // Others.
             Plan::Insert(plan) => {

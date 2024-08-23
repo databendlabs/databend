@@ -19,16 +19,21 @@ use std::sync::Arc;
 
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::temp_table::TempTable;
 
 #[derive(Debug, Clone)]
 pub struct TxnManager {
@@ -49,15 +54,15 @@ pub enum TxnState {
 #[derive(Debug, Clone, Default)]
 pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
-
     mutated_tables: HashMap<u64, TableInfo>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
-
     stream_tables: HashMap<u64, StreamSnapshot>,
-
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
+
+    temp_table_desc_to_id: HashMap<String, u64>,
+    mutated_temp_tables: HashMap<u64, TempTable>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,12 +73,7 @@ struct StreamSnapshot {
 
 impl TxnBuffer {
     fn clear(&mut self) {
-        self.table_desc_to_id.clear();
-        self.mutated_tables.clear();
-        self.copied_files.clear();
-        self.update_stream_meta.clear();
-        self.deduplicated_labels.clear();
-        self.stream_tables.clear();
+        std::mem::take(self);
     }
 
     fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
@@ -95,6 +95,18 @@ impl TxnBuffer {
         self.update_stream_metas(&req.update_stream_metas);
 
         self.deduplicated_labels.extend(req.deduplicated_labels);
+
+        for req in req.update_temp_tables {
+            let (db_name, table_name) = req.desc.split_once('.').unwrap();
+            self.temp_table_desc_to_id
+                .insert(req.desc.clone(), req.table_id);
+            self.mutated_temp_tables.insert(req.table_id, TempTable {
+                db_name: db_name.to_string(),
+                table_name: table_name.to_string(),
+                meta: req.new_table_meta.clone(),
+                copied_files: req.copied_files.clone(),
+            });
+        }
     }
 
     fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -194,6 +206,20 @@ impl TxnManager {
         table_name: &str,
     ) -> Option<TableInfo> {
         let desc = format!("'{}'.'{}'", db_name, table_name);
+        let temp_table_id = self.txn_buffer.temp_table_desc_to_id.get(&desc);
+        if let Some(id) = temp_table_id {
+            let table = self.txn_buffer.mutated_temp_tables.get(id).unwrap();
+            return Some(TableInfo::new(
+                &table.db_name,
+                &table.table_name,
+                TableIdent {
+                    table_id: *id,
+                    seq: 0,
+                },
+                table.meta.clone(),
+            ));
+        }
+
         self.txn_buffer
             .table_desc_to_id
             .get(&desc)
@@ -203,14 +229,27 @@ impl TxnManager {
 
     pub fn get_table_from_buffer_by_id(&self, table_id: u64) -> Option<TableInfo> {
         self.txn_buffer
-            .mutated_tables
+            .mutated_temp_tables
             .get(&table_id)
-            .cloned()
+            .map(|t| {
+                TableInfo::new(
+                    &t.db_name,
+                    &t.table_name,
+                    TableIdent { table_id, seq: 0 },
+                    t.meta.clone(),
+                )
+            })
             .or_else(|| {
                 self.txn_buffer
-                    .stream_tables
+                    .mutated_tables
                     .get(&table_id)
-                    .map(|snapshot| snapshot.stream.clone())
+                    .cloned()
+                    .or_else(|| {
+                        self.txn_buffer
+                            .stream_tables
+                            .get(&table_id)
+                            .map(|snapshot| snapshot.stream.clone())
+                    })
             })
     }
 
@@ -250,6 +289,17 @@ impl TxnManager {
                 .iter()
                 .cloned()
                 .collect(),
+            update_temp_tables: self
+                .txn_buffer
+                .mutated_temp_tables
+                .iter()
+                .map(|(id, t)| UpdateTempTableReq {
+                    table_id: *id,
+                    new_table_meta: t.meta.clone(),
+                    copied_files: t.copied_files.clone(),
+                    desc: format!("'{}'.'{}'", t.db_name, t.table_name),
+                })
+                .collect(),
         }
     }
 
@@ -265,10 +315,17 @@ impl TxnManager {
         if !self.is_active() {
             return ret;
         }
-        let reqs = self.txn_buffer.copied_files.get(&table_id);
-        if let Some(reqs) = reqs {
-            for req in reqs {
-                ret.extend(req.file_info.clone().into_iter());
+        if is_temp_table_id(table_id) {
+            let temp_table = self.txn_buffer.mutated_temp_tables.get(&table_id);
+            if let Some(temp_table) = temp_table {
+                ret.extend(temp_table.copied_files.clone());
+            }
+        } else {
+            let reqs = self.txn_buffer.copied_files.get(&table_id);
+            if let Some(reqs) = reqs {
+                for req in reqs {
+                    ret.extend(req.file_info.clone().into_iter());
+                }
             }
         }
         ret

@@ -44,6 +44,7 @@ use databend_common_ast::ast::ShowTablesStatusStmt;
 use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
@@ -86,6 +87,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use derive_visitor::DriveMut;
 use log::debug;
 
@@ -420,7 +422,7 @@ impl Binder {
             table_options,
             cluster_by,
             as_query,
-            transient,
+            table_type,
             engine,
             uri_location,
         } = stmt;
@@ -475,20 +477,30 @@ impl Binder {
             _ => (None, "".to_string()),
         };
 
-        // If table is TRANSIENT, set a flag in table option
-        if *transient {
-            options.insert("TRANSIENT".to_owned(), "T".to_owned());
-        }
+        match table_type {
+            TableType::Normal => {}
+            TableType::Transient => {
+                let _ = options.insert("TRANSIENT".to_owned(), "T".to_owned());
+            }
+            TableType::Temporary => {
+                if engine != Engine::Fuse {
+                    return Err(ErrorCode::BadArguments(
+                        "Temporary table is only supported for FUSE engine",
+                    ));
+                }
+                let _ = options.insert(OPT_KEY_TEMP_PREFIX.to_string(), self.ctx.get_session_id());
+            }
+        };
 
         // todo(geometry): remove this when geometry stable.
         if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
             {
                 return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry type is an experimental feature. \
+                    "Create table using the geometry/geography type is an experimental feature. \
                     You can `set enable_geo_create_table=1` to use this feature. \
                     We do not guarantee its compatibility until we doc this feature.",
                 ));
@@ -586,7 +598,7 @@ impl Binder {
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
-            let db_id = db.get_db_info().ident.db_id;
+            let db_id = db.get_db_info().database_id.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
 
             let config = GlobalConfig::instance();
@@ -1386,7 +1398,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn analyze_create_table_schema_by_columns(
+    pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<String>)> {

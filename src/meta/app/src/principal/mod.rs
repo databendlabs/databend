@@ -37,6 +37,8 @@ mod user_stage;
 
 mod ownership_object;
 
+pub mod client_session;
+pub mod client_session_ident;
 pub mod connection_ident;
 pub mod network_policy_ident;
 pub mod password_policy_ident;

@@ -88,6 +88,7 @@ impl Interpreter for DropTableInterpreter {
                 }
             }
         };
+        let is_temp = tbl.is_temp();
         let table_id = tbl.get_table_info().ident.table_id;
 
         let engine = tbl.get_table_info().engine();
@@ -123,22 +124,24 @@ impl Interpreter for DropTableInterpreter {
                 tenant: tenant.clone(),
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
-                db_id: db.get_db_info().ident.db_id,
+                db_id: db.get_db_info().database_id.db_id,
             })
             .await?;
 
-        // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
-        // but the table still exists, in the interval maybe some unexpected things will happen.
-        // drop the ownership
-        let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-        let owner_object = OwnershipObject::Table {
-            catalog_name: self.plan.catalog.clone(),
-            db_id: db.get_db_info().ident.db_id,
-            table_id,
-        };
+        if !is_temp {
+            // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
+            // but the table still exists, in the interval maybe some unexpected things will happen.
+            // drop the ownership
+            let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+            let owner_object = OwnershipObject::Table {
+                catalog_name: self.plan.catalog.clone(),
+                db_id: db.get_db_info().database_id.db_id,
+                table_id,
+            };
 
-        role_api.revoke_ownership(&owner_object).await?;
-        RoleCacheManager::instance().invalidate_cache(&tenant);
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         let mut build_res = PipelineBuildResult::create();
         // if `plan.all`, truncate, then purge the historical data

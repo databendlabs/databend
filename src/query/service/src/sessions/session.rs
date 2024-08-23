@@ -32,7 +32,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -361,6 +361,14 @@ impl Session {
 
     pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
         self.session_ctx.set_all_variables(variables)
+    }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.session_ctx.get_client_session_id()
+    }
+
+    pub fn set_client_session_id(&self, id: String) {
+        self.session_ctx.set_client_session_id(id)
     }
 }
 

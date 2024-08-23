@@ -16,7 +16,6 @@
 mod interface;
 /// the catalog manager implementation
 mod manager;
-mod session_catalog;
 
 pub use interface::Catalog;
 pub use interface::CatalogCreator;

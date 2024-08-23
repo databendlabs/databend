@@ -508,6 +508,10 @@ impl Settings {
         self.try_set_u64("auto_compaction_imperfect_blocks_threshold", val)
     }
 
+    pub fn get_auto_compaction_segments_limit(&self) -> Result<u64> {
+        self.try_get_u64("auto_compaction_segments_limit")
+    }
+
     pub fn get_use_parquet2(&self) -> Result<bool> {
         Ok(self.try_get_u64("use_parquet2")? != 0)
     }
@@ -583,6 +587,10 @@ impl Settings {
 
     pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_batch_rows")
+    }
+
+    pub fn get_external_server_request_retry_times(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_retry_times")
     }
 
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {

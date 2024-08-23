@@ -18,3 +18,4 @@
 pub mod meta;
 pub mod readers;
 pub mod table;
+pub mod table_id_ranges;

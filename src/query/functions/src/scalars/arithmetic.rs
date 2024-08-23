@@ -995,10 +995,10 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                                 values.set_len(offset);
                             }
                             let result = builder.build();
-                            Value::Column(NullableColumn {
-                                column: result,
-                                validity: Bitmap::new_constant(true, from.len()),
-                            })
+                            Value::Column(NullableColumn::new(
+                                result,
+                                Bitmap::new_constant(true, from.len()),
+                            ))
                         }
                     },
                 );

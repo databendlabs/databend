@@ -27,3 +27,14 @@ impl MemSized for String {
         self.len()
     }
 }
+
+impl<T> MemSized for Option<T>
+where T: MemSized
+{
+    fn mem_bytes(&self) -> usize {
+        match self {
+            None => 0,
+            Some(s) => s.mem_bytes(),
+        }
+    }
+}

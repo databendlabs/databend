@@ -31,10 +31,8 @@ mod non_empty;
 mod operation;
 mod raft_snapshot_data;
 mod raft_txid;
-pub mod raft_types;
 mod seq_errors;
 mod seq_num;
-mod seq_value;
 mod time;
 mod with;
 
@@ -44,6 +42,8 @@ mod proto_ext;
 pub mod cmd;
 pub mod config;
 pub mod errors;
+pub mod raft_types;
+pub mod seq_value;
 pub mod snapshot_db;
 pub mod sys_data;
 
@@ -106,7 +106,6 @@ pub use protobuf::TxnRequest;
 pub use raft_txid::RaftTxId;
 pub use seq_errors::ConflictSeq;
 pub use seq_num::SeqNum;
-pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
 pub use seq_value::SeqValue;

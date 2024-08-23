@@ -61,12 +61,12 @@ fn test_get(file: &mut impl Write) {
     )]);
     run_ast(file, "col.1", &[(
         "col",
-        Column::Nullable(Box::new(NullableColumn {
-            column: Column::Tuple(vec![StringType::from_data_with_validity(
+        NullableColumn::new_column(
+            Column::Tuple(vec![StringType::from_data_with_validity(
                 vec!["a", "b", "c", "d"],
                 vec![true, true, false, false],
             )]),
-            validity: vec![true, false, true, false].into(),
-        })),
+            vec![true, false, true, false].into(),
+        ),
     )]);
 }

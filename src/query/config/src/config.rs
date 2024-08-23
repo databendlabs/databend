@@ -1547,6 +1547,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub internal_enable_sandbox_tenant: bool,
 
+    #[clap(long, value_name = "VALUE")]
+    pub enable_meta_data_upgrade_json_to_pb_from_v307: bool,
+
     /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
     #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
@@ -1746,6 +1749,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            upgrade_to_pb: self.enable_meta_data_upgrade_json_to_pb_from_v307,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             data_retention_time_in_days_max: self.data_retention_time_in_days_max,
@@ -1832,6 +1836,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            enable_meta_data_upgrade_json_to_pb_from_v307: inner.upgrade_to_pb,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
             data_retention_time_in_days_max: 90,

@@ -31,8 +31,8 @@ databend-common-pipeline-core = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
+databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-databend-storages-common-txn = { workspace = true }
 dyn-clone = "1.0.9"
 log = { workspace = true }
 parking_lot = { workspace = true }

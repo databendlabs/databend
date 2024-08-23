@@ -37,6 +37,7 @@ pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
+pub use utils::parse_storage_prefix;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;

@@ -36,6 +36,11 @@ sha1 -> sha
 siphash -> siphash64
 st_asbinary -> st_aswkb
 st_astext -> st_aswkt
+st_geogfromewkt -> st_geographyfromewkt
+st_geogfromtext -> st_geographyfromewkt
+st_geogfromwkt -> st_geographyfromewkt
+st_geographyfromtext -> st_geographyfromewkt
+st_geographyfromwkt -> st_geographyfromewkt
 st_geom_point -> st_makegeompoint
 st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
@@ -47,6 +52,7 @@ st_geomfromwkb -> st_geometryfromwkb
 st_geomfromwkt -> st_geometryfromwkt
 st_make_line -> st_makeline
 st_numpoints -> st_npoints
+st_point -> st_makepoint
 st_polygon -> st_makepolygon
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
@@ -3562,6 +3568,8 @@ Functions overloads:
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry
 1 st_endpoint(Geometry NULL) :: Geometry NULL
+0 st_geographyfromewkt(String) :: Geography
+1 st_geographyfromewkt(String NULL) :: Geography NULL
 0 st_geohash(Geometry) :: String
 1 st_geohash(Geometry NULL) :: String NULL
 2 st_geohash(Geometry, Int32) :: String
@@ -3588,6 +3596,8 @@ Functions overloads:
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
+0 st_makepoint(Float64, Float64) :: Geography
+1 st_makepoint(Float64 NULL, Float64 NULL) :: Geography NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
 0 st_npoints(Geometry) :: UInt32

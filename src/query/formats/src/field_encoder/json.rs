@@ -81,7 +81,11 @@ impl FieldEncoderJSON {
             }
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
-                out_buf.extend_from_slice(Ewkb(v.to_vec()).to_json().unwrap().as_bytes())
+                out_buf.extend_from_slice(Ewkb(v).to_json().unwrap().as_bytes())
+            }
+            Column::Geography(c) => {
+                let v = unsafe { c.index_unchecked(row_index) };
+                out_buf.extend_from_slice(Ewkb(v.0).to_json().unwrap().as_bytes())
             }
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),

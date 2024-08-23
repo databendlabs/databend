@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::protobuf as pb;
-use crate::KVMeta;
-use crate::SeqV;
+use crate::seq_value::KVMeta;
+use crate::seq_value::SeqV;
 
 impl From<KVMeta> for pb::KvMeta {
     fn from(m: KVMeta) -> Self {

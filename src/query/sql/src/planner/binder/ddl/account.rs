@@ -108,7 +108,7 @@ impl Binder {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
                 let grant_object = self.convert_to_revoke_grant_object(level).await?;
-                // Note if old version `grant all on db.*/db.t to user`, the user will contains ownership privilege.
+                // Note if old version `grant all on db.*/db.t to user`, the user will contain ownership privilege.
                 // revoke all need to revoke it.
                 let principal: PrincipalIdentity = principal.clone().into();
                 let priv_types = match &principal {
@@ -152,11 +152,20 @@ impl Binder {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                if self
+                    .ctx
+                    .is_temp_table(&catalog_name, &database_name, table_name)
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "{}.{}.{} is a temporary table, cannot grant privileges on it",
+                        catalog_name, database_name, table_name
+                    )));
+                }
                 let db_id = catalog
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = catalog
                     .get_table(&tenant, &database_name, table_name)
@@ -172,7 +181,7 @@ impl Binder {
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 Ok(GrantObject::DatabaseById(catalog_name, db_id))
             }
@@ -197,11 +206,20 @@ impl Binder {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                if self
+                    .ctx
+                    .is_temp_table(&catalog_name, &database_name, table_name)
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "{}.{}.{} is a temporary table, cannot revoke privileges on it",
+                        catalog_name, database_name, table_name
+                    )));
+                }
                 let db_id = catalog
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = catalog
                     .get_table(&tenant, &database_name, table_name)
@@ -220,7 +238,7 @@ impl Binder {
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 Ok(vec![
                     GrantObject::DatabaseById(catalog_name.clone(), db_id),
