@@ -220,7 +220,7 @@ fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams>
         .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
         endpoint_url: secure_omission(endpoint),
-        root: "/ipfs/".to_string() + root.as_str(),
+        root: "/ipfs".to_string() + root.as_str(),
     });
 
     l.connection
