@@ -55,8 +55,11 @@ statement ok
 create stage ctas_stage url='fs:///tmp/ctas/';
 
 
-# the data of dropped table should be purged:
-# list the stage, an empty result-set should be return
+# The data of the dropped table should be purged:
+# Listing the stage should return an empty result set,
+# except for the verification key '_v_d77aa11285c22e0e1d4593a035c98c0d',
+# which is 1 byte in size.
+
 query TT
 SELECT name, size FROM LIST_STAGE(location => '@ctas_stage')
 ----
