@@ -192,7 +192,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     Ok(sp)
 }
 
-fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l
         .connection
         .get("endpoint_url")
@@ -201,7 +201,7 @@ fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
     let sp = StorageParams::Gcs(StorageGcsConfig {
         endpoint_url: secure_omission(endpoint),
         bucket: l.name.clone(),
-        root: l.path.clone(),
+        root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
     });
 
@@ -212,7 +212,7 @@ fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
-fn parse_ipfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l
         .connection
         .get("endpoint_url")
@@ -220,7 +220,7 @@ fn parse_ipfs_params(l: &mut UriLocation) -> Result<StorageParams> {
         .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
         endpoint_url: secure_omission(endpoint),
-        root: "/ipfs/".to_string() + l.name.as_str(),
+        root: "/ipfs/".to_string() + root.as_str(),
     });
 
     l.connection
@@ -336,7 +336,7 @@ fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
 /// For databend user can specify <namenode> in connection options.
 /// refer to https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/HadoopIntegrationGuide/libhdfs/HdfsURL.htm
 #[cfg(feature = "storage-hdfs")]
-fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_hdfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let name_node_from_uri = if l.name.is_empty() {
         None
     } else {
@@ -369,7 +369,7 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     };
     let sp = StorageParams::Hdfs(databend_common_meta_app::storage::StorageHdfsConfig {
         name_node,
-        root: l.path.clone(),
+        root,
     });
     l.connection
         .check()
@@ -379,7 +379,7 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
 
 // The FileSystem scheme of WebHDFS is “webhdfs://”. A WebHDFS FileSystem URI has the following format.
 // webhdfs://<HOST>:<HTTP_PORT>/<PATH>
-fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let is_https = l
         .connection
         .get("https")
@@ -396,8 +396,6 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
         })?;
     let prefix = if is_https { "https" } else { "http" };
     let endpoint_url = format!("{prefix}://{}", l.name);
-
-    let root = l.path.clone();
 
     let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
 
@@ -530,10 +528,10 @@ pub async fn parse_uri_location(
 
     let sp = match protocol {
         Scheme::Azblob => parse_azure_params(l, root)?,
-        Scheme::Gcs => parse_gcs_params(l)?,
+        Scheme::Gcs => parse_gcs_params(l, root)?,
         #[cfg(feature = "storage-hdfs")]
-        Scheme::Hdfs => parse_hdfs_params(l)?,
-        Scheme::Ipfs => parse_ipfs_params(l)?,
+        Scheme::Hdfs => parse_hdfs_params(l, root)?,
+        Scheme::Ipfs => parse_ipfs_params(l, root)?,
         Scheme::S3 => parse_s3_params(l, root)?,
         Scheme::Obs => parse_obs_params(l, root)?,
         Scheme::Oss => parse_oss_params(l, root)?,
@@ -565,7 +563,7 @@ pub async fn parse_uri_location(
                 StorageParams::Fs(cfg)
             }
         }
-        Scheme::Webhdfs => parse_webhdfs_params(l)?,
+        Scheme::Webhdfs => parse_webhdfs_params(l, root)?,
         Scheme::Huggingface => parse_huggingface_params(l, root)?,
         v => {
             return Err(Error::new(
