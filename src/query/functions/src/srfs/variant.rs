@@ -609,7 +609,7 @@ fn jaq_val_to_jsonb(val: &Val) -> Result<Vec<u8>> {
                 f.into()
             } else {
                 return Err(ErrorCode::BadBytes(format!(
-                    "paser string `{}` to f64 failed",
+                    "parse string `{}` to f64 failed",
                     n
                 )));
             }
