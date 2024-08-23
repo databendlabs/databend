@@ -26,6 +26,12 @@ set window_partition_spilling_memory_ratio = 1;
 statement ok
 set window_partition_spilling_bytes_threshold_per_proc = 1;
 
+statement ok
+set aggregate_spilling_memory_ratio = 1;
+
+statement ok
+set aggregate_spilling_bytes_threshold_per_proc = 1;
+
 # TPC-H TEST
 include ./queries.test
 
@@ -435,3 +441,9 @@ set window_partition_spilling_memory_ratio = 60;
 
 statement ok
 set window_partition_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set aggregate_spilling_memory_ratio = 60;
+
+statement ok
+set aggregate_spilling_bytes_threshold_per_proc = 0;
