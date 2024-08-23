@@ -27,7 +27,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -191,9 +190,8 @@ impl Processor for TransformSerializeSegment {
                 }
             }
             State::PreCommitSegment { location, segment } => {
-                if let Some(segment_cache) = SegmentInfo::cache() {
-                    segment_cache.insert(location.clone(), segment.as_ref().try_into()?);
-                }
+                let segment_cache = SegmentInfo::cache();
+                segment_cache.insert(location.clone(), segment.as_ref().try_into()?);
 
                 let format_version = SegmentInfo::VERSION;
 

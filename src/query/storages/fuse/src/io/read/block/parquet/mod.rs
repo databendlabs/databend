@@ -26,7 +26,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -62,11 +61,7 @@ impl BlockReader {
         let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache {
-            CacheManager::instance().get_table_data_array_cache()
-        } else {
-            None
-        };
+        let array_cache = CacheManager::instance().get_table_data_array_cache();
 
         for ((i, field), column_node) in self
             .projected_schema
@@ -97,14 +92,11 @@ impl BlockReader {
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
                         arrow_array.into();
-                    if !column_node.is_nested {
-                        if let Some(cache) = &array_cache {
-                            let meta = column_metas.get(&field.column_id).unwrap();
-                            let (offset, len) = meta.offset_length();
-                            let key =
-                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.insert(key.into(), (arrow2_array.clone(), data.len()));
-                        }
+                    if !column_node.is_nested && self.put_cache {
+                        let meta = column_metas.get(&field.column_id).unwrap();
+                        let (offset, len) = meta.offset_length();
+                        let key = TableDataCacheKey::new(block_path, field.column_id, offset, len);
+                        array_cache.insert(key.into(), (arrow2_array.clone(), data.len()));
                     }
                     Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)
                 }

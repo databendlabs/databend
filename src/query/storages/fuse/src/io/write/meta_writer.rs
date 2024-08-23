@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -58,9 +57,8 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     ) -> Result<()> {
         let bytes = self.marshal()?;
         data_accessor.write(location, bytes.clone()).await?;
-        if let Some(cache) = CompactSegmentInfo::cache() {
-            cache.insert(location.to_owned(), CompactSegmentInfo::try_from(&self)?);
-        }
+        let cache = CompactSegmentInfo::cache();
+        cache.insert(location.to_owned(), CompactSegmentInfo::try_from(&self)?);
         Ok(())
     }
 }

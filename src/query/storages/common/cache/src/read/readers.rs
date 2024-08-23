@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::read::cached_reader::CachedReader;
-use crate::InMemoryLruCache;
 
-pub type InMemoryItemCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
-pub type InMemoryCacheReader<T, L> = CachedReader<L, InMemoryLruCache<T>>;
+pub type InMemoryItemCacheReader<T, L> = CachedReader<L, T>;
+pub type InMemoryCacheReader<T, L> = CachedReader<L, T>;

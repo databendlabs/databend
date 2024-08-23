@@ -37,7 +37,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_storage::ColumnNode;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -160,15 +159,14 @@ impl BlockReader {
 
         // populate cache if necessary
         if self.put_cache {
-            if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-                // populate array cache items
-                for item in deserialized_column_arrays.into_iter() {
-                    if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                        let meta = column_metas.get(&column_id).unwrap();
-                        let (offset, len) = meta.offset_length();
-                        let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                        cache.insert(key.into(), (array, size));
-                    }
+            let cache = CacheManager::instance().get_table_data_array_cache();
+            // populate array cache items
+            for item in deserialized_column_arrays.into_iter() {
+                if let DeserializedArray::Deserialized((column_id, array, size)) = item {
+                    let meta = column_metas.get(&column_id).unwrap();
+                    let (offset, len) = meta.offset_length();
+                    let key = TableDataCacheKey::new(block_path, column_id, offset, len);
+                    cache.insert(key.into(), (array, size));
                 }
             }
         }

@@ -19,7 +19,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -126,9 +125,8 @@ impl SegmentsIO {
         let raw_bytes = serialized_segment.segment.to_bytes()?;
         let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
         dal.write(&serialized_segment.path, raw_bytes).await?;
-        if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.insert(serialized_segment.path, compact_segment_info);
-        }
+        let segment_cache = CacheManager::instance().get_table_segment_cache();
+        segment_cache.insert(serialized_segment.path, compact_segment_info);
         Ok(())
     }
 }

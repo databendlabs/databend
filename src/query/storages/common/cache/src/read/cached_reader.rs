@@ -21,55 +21,48 @@ use databend_common_metrics::cache::*;
 use super::loader::LoadParams;
 use crate::caches::CacheValue;
 use crate::CacheAccessor;
-use crate::InMemoryLruCache;
 use crate::Loader;
 
 /// A cache-aware reader
-pub struct CachedReader<L, C> {
-    cache: Option<C>,
+pub struct CachedReader<L, V> {
+    cache: Arc<dyn CacheAccessor<V = V>>,
     loader: L,
 }
 
-impl<V: Into<CacheValue<V>>, L> CachedReader<L, InMemoryLruCache<V>>
+impl<V: Send + Sync + Into<CacheValue<V>>, L> CachedReader<L, V>
 where L: Loader<V> + Sync
 {
-    pub fn new(cache: Option<InMemoryLruCache<V>>, loader: L) -> Self {
+    pub fn new(cache: Arc<dyn CacheAccessor<V = V>>, loader: L) -> Self {
         Self { cache, loader }
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     #[async_backtrace::framed]
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<V>> {
-        match &self.cache {
-            None => Ok(Arc::new(self.loader.load(params).await?)),
-            Some(cache) => {
-                let cache_key = self.loader.cache_key(params);
-                match cache.get(cache_key.as_str()) {
-                    Some(item) => Ok(item),
-                    None => {
-                        let start = Instant::now();
+        let cache_key = self.loader.cache_key(params);
 
-                        let v = self.loader.load(params).await?;
+        if let Some(item) = self.cache.get(&cache_key) {
+            return Ok(item);
+        }
 
-                        // Perf.
-                        {
-                            metrics_inc_cache_miss_load_millisecond(
-                                start.elapsed().as_millis() as u64,
-                                cache.name(),
-                            );
-                        }
+        let start = Instant::now();
+        let v = self.loader.load(params).await?;
 
-                        match params.put_cache {
-                            true => Ok(cache.insert(cache_key, v)),
-                            false => Ok(Arc::new(v)),
-                        }
-                    }
-                }
-            }
+        // Perf.
+        {
+            metrics_inc_cache_miss_load_millisecond(
+                start.elapsed().as_millis() as u64,
+                self.cache.name(),
+            );
+        }
+
+        match params.put_cache {
+            true => Ok(self.cache.insert(cache_key, v)),
+            false => Ok(Arc::new(v)),
         }
     }
 
     pub fn name(&self) -> &str {
-        self.cache.as_ref().map(|c| c.name()).unwrap_or("")
+        self.cache.name()
     }
 }

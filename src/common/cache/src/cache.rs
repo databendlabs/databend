@@ -28,20 +28,6 @@ pub trait Cache<K: Eq + Hash + MemSized, V: MemSized> {
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;
 
-    /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
-    /// not present in the cache. Unlike `get`, `peek` does not update the Cache state so the key's
-    /// position will be unchanged.
-    fn peek<Q>(&self, k: &Q) -> Option<&V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-
-    /// Returns the value corresponding to the item by policy or `None` if the
-    /// cache is empty. Like `peek`, `peek_by_policy` does not update the Cache state so the item's
-    /// position will be unchanged.
-    // TODO: change to fn peek_by_policy<'a>(&self) -> Option<(&'a K, &'a V)>;
-    fn peek_by_policy(&self) -> Option<(&K, &V)>;
-
     /// Inserts a key-value pair into the cache. If the key already existed, the old value is
     /// returned.
     fn insert(&mut self, k: K, v: V) -> Option<V>;

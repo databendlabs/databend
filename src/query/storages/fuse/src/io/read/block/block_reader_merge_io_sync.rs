@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_common_storage::parquet_rs::read_metadata_sync;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use opendal::Operator;
@@ -120,7 +119,7 @@ impl BlockReader {
                 // first, check column array object cache
                 let (offset, len) = column_meta.offset_length();
                 let column_cache_key = TableDataCacheKey::new(block_path, *column_id, offset, len);
-                if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
+                if let Some(cache_array) = column_array_cache.get(&column_cache_key.cache_key) {
                     cached_column_array.push((*column_id, cache_array));
                     continue;
                 }

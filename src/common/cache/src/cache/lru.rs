@@ -128,49 +128,6 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
         }
     }
 
-    /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
-    /// not present in the cache. Unlike `get`, `peek` does not update the LRU list so the key's
-    /// position will be unchanged.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache};
-    /// let mut cache = LruCache::new(2);
-    ///
-    /// cache.put(1, "a");
-    /// cache.put(2, "b");
-    ///
-    /// assert_eq!(cache.peek(&1), Some(&"a"));
-    /// assert_eq!(cache.peek(&2), Some(&"b"));
-    /// ```
-    fn peek<Q>(&self, k: &Q) -> Option<&V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
-        self.map.get(k)
-    }
-
-    /// Returns the value corresponding to the least recently used item or `None` if the
-    /// cache is empty. Like `peek`, `peek_by_policy` does not update the LRU list so the item's
-    /// position will be unchanged.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache};
-    /// let mut cache = LruCache::new(2);
-    ///
-    /// cache.put(1, "a");
-    /// cache.put(2, "b");
-    ///
-    /// assert_eq!(cache.peek_by_policy(), Some((&1, &"a")));
-    /// ```
-    fn peek_by_policy(&self) -> Option<(&K, &V)> {
-        self.map.front()
-    }
-
     /// Inserts a key-value pair into the cache. If the key already existed, the old value is
     /// returned.
     ///

@@ -321,7 +321,7 @@ impl DiskCache {
         self.cache.contains(&cache_key.0)
     }
 
-    pub fn get_cache_path(&mut self, key: &str) -> Option<PathBuf> {
+    pub fn get_cache_path(&mut self, key: &String) -> Option<PathBuf> {
         let cache_key = self.cache_key(key);
         self.cache
             .get(&cache_key.0)
@@ -330,7 +330,7 @@ impl DiskCache {
     }
 
     /// Remove the given key from the cache.
-    pub fn remove(&mut self, key: &str) -> Result<()> {
+    pub fn remove(&mut self, key: &String) -> Result<()> {
         let cache_key = self.cache_key(key);
         match self.cache.pop(&cache_key.0) {
             Some(_) => {

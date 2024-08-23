@@ -23,7 +23,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
@@ -581,14 +580,13 @@ impl FuseTable {
             counter.inverted_indexes += inverted_index_count;
 
             // if there is inverted index file cache, evict the cached items
-            if let Some(inverted_index_cache) = InvertedIndexFile::cache() {
-                for index_path in &inverted_indexes_to_be_purged {
-                    InvertedIndexReader::cache_key_of_index_columns(index_path)
-                        .iter()
-                        .for_each(|cache_key| {
-                            inverted_index_cache.evict(cache_key);
-                        })
-                }
+            let inverted_index_cache = InvertedIndexFile::cache();
+            for index_path in &inverted_indexes_to_be_purged {
+                InvertedIndexReader::cache_key_of_index_columns(index_path)
+                    .iter()
+                    .for_each(|cache_key| {
+                        inverted_index_cache.evict(cache_key);
+                    })
             }
 
             self.try_purge_location_files_and_cache::<InvertedIndexMeta>(
@@ -686,13 +684,14 @@ impl FuseTable {
         locations_to_be_purged: HashSet<String>,
     ) -> Result<()>
     where
-        T: CachedObject<T>,
+        T: Send + Sync + CachedObject<T>,
     {
-        if let Some(cache) = T::cache() {
-            for loc in locations_to_be_purged.iter() {
-                cache.evict(loc);
-            }
+        let object_cache = T::cache();
+
+        for purged in locations_to_be_purged.iter() {
+            object_cache.evict(purged);
         }
+
         self.try_purge_location_files(ctx, locations_to_be_purged)
             .await
     }

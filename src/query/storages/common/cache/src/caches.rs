@@ -70,82 +70,82 @@ pub type SizedColumnArray = (
 // - and implement `CacheAccessor` properly
 pub trait CachedObject<T> {
     type Cache: CacheAccessor<V = T>;
-    fn cache() -> Option<Self::Cache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = T>>;
 }
 
 impl CachedObject<CompactSegmentInfo> for CompactSegmentInfo {
-    type Cache = CompactSegmentInfoCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<CompactSegmentInfoCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = CompactSegmentInfo>> {
         CacheManager::instance().get_table_segment_cache()
     }
 }
 
 impl CachedObject<CompactSegmentInfo> for SegmentInfo {
-    type Cache = CompactSegmentInfoCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<CompactSegmentInfoCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = CompactSegmentInfo>> {
         CacheManager::instance().get_table_segment_cache()
     }
 }
 
 impl CachedObject<TableSnapshot> for TableSnapshot {
-    type Cache = TableSnapshotCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<TableSnapshotCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = TableSnapshot>> {
         CacheManager::instance().get_table_snapshot_cache()
     }
 }
 
 impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
-    type Cache = BlockMetaCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<BlockMetaCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = Vec<Arc<BlockMeta>>>> {
         CacheManager::instance().get_block_meta_cache()
     }
 }
 
 impl CachedObject<TableSnapshotStatistics> for TableSnapshotStatistics {
-    type Cache = TableSnapshotStatisticCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<TableSnapshotStatisticCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = TableSnapshotStatistics>> {
         CacheManager::instance().get_table_snapshot_statistics_cache()
     }
 }
 
 impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
-    type Cache = BloomIndexMetaCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<BloomIndexMetaCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = BloomIndexMeta>> {
         CacheManager::instance().get_bloom_index_meta_cache()
     }
 }
 
 impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions) {
-    type Cache = PrunePartitionsCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<PrunePartitionsCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = (PartStatistics, Partitions)>> {
         CacheManager::instance().get_prune_partitions_cache()
     }
 }
 
 impl CachedObject<Xor8Filter> for Xor8Filter {
-    type Cache = BloomIndexFilterCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<BloomIndexFilterCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = Xor8Filter>> {
         CacheManager::instance().get_bloom_index_filter_cache()
     }
 }
 
 impl CachedObject<FileMetaData> for FileMetaData {
-    type Cache = FileMetaDataCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<FileMetaDataCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = FileMetaData>> {
         CacheManager::instance().get_file_meta_data_cache()
     }
 }
 
 impl CachedObject<InvertedIndexFile> for InvertedIndexFile {
-    type Cache = InvertedIndexFileCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<InvertedIndexFileCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = InvertedIndexFile>> {
         CacheManager::instance().get_inverted_index_file_cache()
     }
 }
 
 impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
-    type Cache = InvertedIndexMetaCache;
-    fn cache() -> Option<Self::Cache> {
+    type Cache = Option<InvertedIndexMetaCache>;
+    fn cache() -> Arc<dyn CacheAccessor<V = InvertedIndexMeta>> {
         CacheManager::instance().get_inverted_index_meta_cache()
     }
 }

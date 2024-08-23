@@ -162,14 +162,16 @@ impl BlockReader {
 
                 // first, check in memory table data cache
                 // column_array_cache
-                if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len) {
+                if let Some(cache_array) =
+                    column_array_cache.get_sized(&column_cache_key.cache_key, len)
+                {
                     cached_column_array.push((*column_id, cache_array));
                     continue;
                 }
 
                 // and then, check on disk table data cache
                 if let Some(cached_column_raw_data) =
-                    column_data_cache.get_sized(&column_cache_key, len)
+                    column_data_cache.get_sized(&column_cache_key.cache_key, len)
                 {
                     cached_column_data.push((*column_id, cached_column_raw_data));
                     continue;

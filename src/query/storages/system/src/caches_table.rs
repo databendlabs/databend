@@ -34,8 +34,6 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheValue;
-use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::Unit;
 use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
 
 use crate::SyncOneBlockSystemTable;
@@ -51,8 +49,8 @@ struct CachesTableColumns {
     names: Vec<String>,
     num_items: Vec<u64>,
     size: Vec<u64>,
-    capacity: Vec<u64>,
-    unit: Vec<String>,
+    items_capacity: Vec<u64>,
+    bytes_capacity: Vec<u64>,
     access: Vec<u64>,
     hit: Vec<u64>,
     miss: Vec<u64>,
@@ -86,53 +84,28 @@ impl SyncSystemTable for CachesTable {
 
         let mut columns = CachesTableColumns::default();
 
-        if let Some(table_snapshot_cache) = table_snapshot_cache {
-            Self::append_row(&table_snapshot_cache, &local_node, &mut columns);
-        }
-        if let Some(table_snapshot_statistic_cache) = table_snapshot_statistic_cache {
-            Self::append_row(&table_snapshot_statistic_cache, &local_node, &mut columns);
-        }
+        // In memory cache
+        Self::append_row(&table_snapshot_cache, &local_node, &mut columns);
+        Self::append_row(&table_snapshot_statistic_cache, &local_node, &mut columns);
+        Self::append_row(&segment_info_cache, &local_node, &mut columns);
+        Self::append_row(&bloom_index_filter_cache, &local_node, &mut columns);
+        Self::append_row(&bloom_index_meta_cache, &local_node, &mut columns);
+        Self::append_row(&block_meta_cache, &local_node, &mut columns);
+        Self::append_row(&inverted_index_meta_cache, &local_node, &mut columns);
+        Self::append_row(&inverted_index_file_cache, &local_node, &mut columns);
+        Self::append_row(&prune_partitions_cache, &local_node, &mut columns);
+        Self::append_row(&file_meta_data_cache, &local_node, &mut columns);
+        Self::append_row(&table_column_array_cache, &local_node, &mut columns);
 
-        if let Some(segment_info_cache) = segment_info_cache {
-            Self::append_row(&segment_info_cache, &local_node, &mut columns);
-        }
-
-        if let Some(bloom_index_filter_cache) = bloom_index_filter_cache {
-            Self::append_row(&bloom_index_filter_cache, &local_node, &mut columns);
-        }
-
-        if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
-            Self::append_row(&bloom_index_meta_cache, &local_node, &mut columns);
-        }
-
-        if let Some(block_meta_cache) = block_meta_cache {
-            Self::append_row(&block_meta_cache, &local_node, &mut columns);
-        }
-
-        if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {
-            Self::append_row(&inverted_index_meta_cache, &local_node, &mut columns);
-        }
-
-        if let Some(inverted_index_file_cache) = inverted_index_file_cache {
-            Self::append_row(&inverted_index_file_cache, &local_node, &mut columns);
-        }
-
-        if let Some(prune_partitions_cache) = prune_partitions_cache {
-            Self::append_row(&prune_partitions_cache, &local_node, &mut columns);
-        }
-
-        if let Some(file_meta_data_cache) = file_meta_data_cache {
-            Self::append_row(&file_meta_data_cache, &local_node, &mut columns);
-        }
-
+        // In disk cache
         if let Some(cache) = table_data_cache {
             // table data cache is not a named cache yet
             columns.nodes.push(local_node.clone());
             columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
             columns.num_items.push(cache.len() as u64);
             columns.size.push(cache.bytes_size());
-            columns.capacity.push(cache.bytes_capacity());
-            columns.unit.push(Unit::Bytes.to_string());
+            columns.items_capacity.push(cache.items_capacity());
+            columns.bytes_capacity.push(cache.bytes_capacity());
             let access = get_cache_access_count(DISK_TABLE_DATA_CACHE_NAME);
             let hit = get_cache_hit_count(DISK_TABLE_DATA_CACHE_NAME);
             let miss = get_cache_miss_count(DISK_TABLE_DATA_CACHE_NAME);
@@ -141,17 +114,13 @@ impl SyncSystemTable for CachesTable {
             columns.miss.push(miss);
         }
 
-        if let Some(table_column_array_cache) = table_column_array_cache {
-            Self::append_row(&table_column_array_cache, &local_node, &mut columns);
-        }
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(columns.nodes),
             StringType::from_data(columns.names),
             UInt64Type::from_data(columns.num_items),
             UInt64Type::from_data(columns.size),
-            UInt64Type::from_data(columns.capacity),
-            StringType::from_data(columns.unit),
+            UInt64Type::from_data(columns.items_capacity),
+            UInt64Type::from_data(columns.bytes_capacity),
             UInt64Type::from_data(columns.access),
             UInt64Type::from_data(columns.hit),
             UInt64Type::from_data(columns.miss),
@@ -166,8 +135,14 @@ impl CachesTable {
             TableField::new("name", TableDataType::String),
             TableField::new("num_items", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("size", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("capacity", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("unit", TableDataType::String),
+            TableField::new(
+                "items_capacity",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_capacity",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
             TableField::new("access", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("hit", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("miss", TableDataType::Number(NumberDataType::UInt64)),
@@ -188,8 +163,8 @@ impl CachesTable {
         SyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    fn append_row<V: Into<CacheValue<V>>>(
-        cache: &InMemoryLruCache<V>,
+    fn append_row<V: Send + Sync + Into<CacheValue<V>>>(
+        cache: &Arc<dyn CacheAccessor<V = V>>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {
@@ -197,17 +172,8 @@ impl CachesTable {
         columns.names.push(cache.name().to_string());
         columns.num_items.push(cache.len() as u64);
         columns.size.push(cache.bytes_size());
-
-        match cache.unit() {
-            Unit::Bytes => {
-                columns.unit.push(cache.unit().to_string());
-                columns.capacity.push(cache.bytes_capacity());
-            }
-            Unit::Count => {
-                columns.unit.push(cache.unit().to_string());
-                columns.capacity.push(cache.items_capacity());
-            }
-        }
+        columns.bytes_capacity.push(cache.bytes_capacity());
+        columns.items_capacity.push(cache.items_capacity());
 
         let access = get_cache_access_count(cache.name());
         let hit = get_cache_hit_count(cache.name());

@@ -32,15 +32,16 @@ impl Display for Unit {
 }
 
 // The cache accessor, crate users usually working on this interface while manipulating caches
-pub trait CacheAccessor {
-    type V;
+pub trait CacheAccessor: Send + Sync {
+    type V: Send + Sync;
 
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>>;
-    fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>>;
+    fn get(&self, k: &String) -> Option<Arc<Self::V>>;
+    fn get_sized(&self, k: &String, len: u64) -> Option<Arc<Self::V>>;
 
     fn insert(&self, key: String, value: Self::V) -> Arc<Self::V>;
-    fn evict(&self, k: &str) -> bool;
-    fn contains_key(&self, k: &str) -> bool;
+    fn evict(&self, k: &String) -> bool;
+
+    fn contains_key(&self, k: &String) -> bool;
     fn bytes_size(&self) -> u64;
     fn items_capacity(&self) -> u64;
     fn bytes_capacity(&self) -> u64;

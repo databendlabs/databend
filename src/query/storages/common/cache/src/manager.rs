@@ -15,11 +15,22 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use databend_common_arrow::parquet::metadata::FileMetaData;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
+use databend_storages_common_index::filters::Xor8Filter;
+use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::InvertedIndexFile;
+use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use log::info;
 
 use crate::caches::BlockMetaCache;
@@ -34,7 +45,9 @@ use crate::caches::InvertedIndexMetaCache;
 use crate::caches::PrunePartitionsCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::CacheAccessor;
 use crate::InMemoryLruCache;
+use crate::SizedColumnArray;
 use crate::TableDataCache;
 use crate::TableDataCacheBuilder;
 
@@ -204,52 +217,56 @@ impl CacheManager {
         GlobalInstance::get()
     }
 
-    pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
-        self.table_snapshot_cache.clone()
+    pub fn get_table_snapshot_cache(&self) -> Arc<dyn CacheAccessor<V = TableSnapshot>> {
+        Arc::new(self.table_snapshot_cache.clone())
     }
 
-    pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
-        self.block_meta_cache.clone()
+    pub fn get_block_meta_cache(&self) -> Arc<dyn CacheAccessor<V = Vec<Arc<BlockMeta>>>> {
+        Arc::new(self.block_meta_cache.clone())
     }
 
-    pub fn get_table_snapshot_statistics_cache(&self) -> Option<TableSnapshotStatisticCache> {
-        self.table_statistic_cache.clone()
+    pub fn get_table_snapshot_statistics_cache(
+        &self,
+    ) -> Arc<dyn CacheAccessor<V = TableSnapshotStatistics>> {
+        Arc::new(self.table_statistic_cache.clone())
     }
 
-    pub fn get_table_segment_cache(&self) -> Option<CompactSegmentInfoCache> {
-        self.compact_segment_info_cache.clone()
+    pub fn get_table_segment_cache(&self) -> Arc<dyn CacheAccessor<V = CompactSegmentInfo>> {
+        Arc::new(self.compact_segment_info_cache.clone())
     }
 
-    pub fn get_bloom_index_filter_cache(&self) -> Option<BloomIndexFilterCache> {
-        self.bloom_index_filter_cache.clone()
+    pub fn get_bloom_index_filter_cache(&self) -> Arc<dyn CacheAccessor<V = Xor8Filter>> {
+        Arc::new(self.bloom_index_filter_cache.clone())
     }
 
-    pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
-        self.bloom_index_meta_cache.clone()
+    pub fn get_bloom_index_meta_cache(&self) -> Arc<dyn CacheAccessor<V = BloomIndexMeta>> {
+        Arc::new(self.bloom_index_meta_cache.clone())
     }
 
-    pub fn get_inverted_index_meta_cache(&self) -> Option<InvertedIndexMetaCache> {
-        self.inverted_index_meta_cache.clone()
+    pub fn get_inverted_index_meta_cache(&self) -> Arc<dyn CacheAccessor<V = InvertedIndexMeta>> {
+        Arc::new(self.inverted_index_meta_cache.clone())
     }
 
-    pub fn get_inverted_index_file_cache(&self) -> Option<InvertedIndexFileCache> {
-        self.inverted_index_file_cache.clone()
+    pub fn get_inverted_index_file_cache(&self) -> Arc<dyn CacheAccessor<V = InvertedIndexFile>> {
+        Arc::new(self.inverted_index_file_cache.clone())
     }
 
-    pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {
-        self.prune_partitions_cache.clone()
+    pub fn get_prune_partitions_cache(
+        &self,
+    ) -> Arc<dyn CacheAccessor<V = (PartStatistics, Partitions)>> {
+        Arc::new(self.prune_partitions_cache.clone())
     }
 
-    pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
-        self.parquet_file_meta_data_cache.clone()
+    pub fn get_file_meta_data_cache(&self) -> Arc<dyn CacheAccessor<V = FileMetaData>> {
+        Arc::new(self.parquet_file_meta_data_cache.clone())
     }
 
     pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
         self.table_data_cache.clone()
     }
 
-    pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
-        self.in_memory_table_data_cache.clone()
+    pub fn get_table_data_array_cache(&self) -> Arc<dyn CacheAccessor<V = SizedColumnArray>> {
+        Arc::new(self.in_memory_table_data_cache.clone())
     }
 
     pub fn new_named_items_cache<V: Into<CacheValue<V>>>(

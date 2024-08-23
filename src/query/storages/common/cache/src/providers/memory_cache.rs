@@ -76,13 +76,13 @@ mod impls {
     use crate::cache::CacheAccessor;
 
     // Wrap a Cache with RwLock, and impl CacheAccessor for it
-    impl<V: Into<CacheValue<V>>> CacheAccessor for InMemoryLruCache<V> {
+    impl<V: Send + Sync + Into<CacheValue<V>>> CacheAccessor for InMemoryLruCache<V> {
         type V = V;
 
-        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
+        fn get(&self, k: &String) -> Option<Arc<V>> {
             metrics_inc_cache_access_count(1, self.name());
             let mut guard = self.inner.write();
-            match guard.get(k.as_ref()) {
+            match guard.get(k) {
                 None => {
                     metrics_inc_cache_miss_count(1, &self.name);
                     None
@@ -94,7 +94,7 @@ mod impls {
             }
         }
 
-        fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+        fn get_sized(&self, k: &String, len: u64) -> Option<Arc<Self::V>> {
             let Some(cached_value) = self.get(k) else {
                 metrics_inc_cache_miss_bytes(len, &self.name);
                 return None;
@@ -111,14 +111,19 @@ mod impls {
             res
         }
 
-        fn evict(&self, k: &str) -> bool {
+        fn evict(&self, k: &String) -> bool {
             let mut guard = self.inner.write();
             guard.pop(k).is_some()
         }
 
-        fn contains_key(&self, k: &str) -> bool {
+        fn contains_key(&self, k: &String) -> bool {
             let guard = self.inner.read();
             guard.contains(k)
+        }
+
+        fn bytes_size(&self) -> u64 {
+            let guard = self.inner.read();
+            guard.bytes_size()
         }
 
         fn items_capacity(&self) -> u64 {
@@ -136,11 +141,6 @@ mod impls {
             guard.len()
         }
 
-        fn bytes_size(&self) -> u64 {
-            let guard = self.inner.read();
-            guard.bytes_size()
-        }
-
         fn name(&self) -> &str {
             &self.name
         }
@@ -151,14 +151,7 @@ mod impls {
     impl<T: CacheAccessor> CacheAccessor for Option<T> {
         type V = T::V;
 
-        fn name(&self) -> &str {
-            match self.as_ref() {
-                None => "Unknown",
-                Some(v) => v.name(),
-            }
-        }
-
-        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>> {
+        fn get(&self, k: &String) -> Option<Arc<Self::V>> {
             let Some(inner_cache) = self.as_ref() else {
                 metrics_inc_cache_access_count(1, self.name());
                 metrics_inc_cache_miss_count(1, self.name());
@@ -168,7 +161,7 @@ mod impls {
             inner_cache.get(k)
         }
 
-        fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+        fn get_sized(&self, k: &String, len: u64) -> Option<Arc<Self::V>> {
             let Some(inner_cache) = self.as_ref() else {
                 metrics_inc_cache_access_count(1, self.name());
                 metrics_inc_cache_miss_count(1, self.name());
@@ -186,7 +179,7 @@ mod impls {
             }
         }
 
-        fn evict(&self, k: &str) -> bool {
+        fn evict(&self, k: &String) -> bool {
             if let Some(cache) = self {
                 cache.evict(k)
             } else {
@@ -194,7 +187,7 @@ mod impls {
             }
         }
 
-        fn contains_key(&self, k: &str) -> bool {
+        fn contains_key(&self, k: &String) -> bool {
             if let Some(cache) = self {
                 cache.contains_key(k)
             } else {
@@ -217,6 +210,13 @@ mod impls {
             }
         }
 
+        fn bytes_capacity(&self) -> u64 {
+            match self.as_ref() {
+                None => 0,
+                Some(cache) => cache.bytes_capacity(),
+            }
+        }
+
         fn len(&self) -> usize {
             match self.as_ref() {
                 None => 0,
@@ -224,10 +224,10 @@ mod impls {
             }
         }
 
-        fn bytes_capacity(&self) -> u64 {
+        fn name(&self) -> &str {
             match self.as_ref() {
-                None => 0,
-                Some(cache) => cache.bytes_capacity(),
+                None => "Unknown",
+                Some(v) => v.name(),
             }
         }
     }

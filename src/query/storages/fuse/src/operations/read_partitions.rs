@@ -31,7 +31,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -154,15 +153,13 @@ impl FuseTable {
                 });
 
         if let Some(cache_key) = derterministic_cache_key.as_ref() {
-            if let Some(cache) = CacheItem::cache() {
-                if let Some(data) = cache.get(cache_key) {
-                    info!(
-                        "prune snapshot block from cache, final block numbers:{}, cost:{:?}",
-                        data.1.len(),
-                        start.elapsed()
-                    );
-                    return Ok((data.0.clone(), data.1.clone()));
-                }
+            if let Some(data) = CacheItem::cache().get(cache_key) {
+                info!(
+                    "prune snapshot block from cache, final block numbers:{}, cost:{:?}",
+                    data.1.len(),
+                    start.elapsed()
+                );
+                return Ok((data.0.clone(), data.1.clone()));
             }
         }
 
@@ -235,9 +232,7 @@ impl FuseTable {
         )?;
 
         if let Some(cache_key) = derterministic_cache_key {
-            if let Some(cache) = CacheItem::cache() {
-                cache.insert(cache_key, result.clone());
-            }
+            CacheItem::cache().insert(cache_key, result.clone());
         }
         Ok(result)
     }

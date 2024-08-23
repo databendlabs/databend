@@ -38,7 +38,7 @@ struct CacheItem {
 
 #[derive(Clone)]
 pub struct TableDataCacheKey {
-    cache_key: String,
+    pub cache_key: String,
 }
 
 impl TableDataCacheKey {
@@ -103,9 +103,8 @@ impl CacheAccessor for TableDataCache {
         DISK_TABLE_DATA_CACHE_NAME
     }
 
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
+    fn get(&self, k: &String) -> Option<Arc<Bytes>> {
         metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
-        let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
             Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
             metrics_inc_cache_hit_count(1, DISK_TABLE_DATA_CACHE_NAME);
@@ -116,7 +115,7 @@ impl CacheAccessor for TableDataCache {
         }
     }
 
-    fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+    fn get_sized(&self, k: &String, len: u64) -> Option<Arc<Self::V>> {
         let Some(cached_value) = self.get(k) else {
             metrics_inc_cache_miss_bytes(len, DISK_TABLE_DATA_CACHE_NAME);
             return None;
@@ -149,11 +148,11 @@ impl CacheAccessor for TableDataCache {
         Arc::new(v)
     }
 
-    fn evict(&self, k: &str) -> bool {
+    fn evict(&self, k: &String) -> bool {
         self.external_cache.evict(k)
     }
 
-    fn contains_key(&self, k: &str) -> bool {
+    fn contains_key(&self, k: &String) -> bool {
         self.external_cache.contains_key(k)
     }
 

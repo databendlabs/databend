@@ -35,8 +35,7 @@ impl CacheAccessor for LruDiskCacheHolder {
         "LruDiskCacheHolder"
     }
 
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
-        let k = k.as_ref();
+    fn get(&self, k: &String) -> Option<Arc<Bytes>> {
         {
             let mut cache = self.write();
             cache.get_cache_path(k)
@@ -82,7 +81,7 @@ impl CacheAccessor for LruDiskCacheHolder {
         })
     }
 
-    fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+    fn get_sized(&self, k: &String, len: u64) -> Option<Arc<Self::V>> {
         let Some(cached_value) = self.get(k) else {
             metrics_inc_cache_miss_bytes(len, self.name());
             return None;
@@ -101,7 +100,7 @@ impl CacheAccessor for LruDiskCacheHolder {
         Arc::new(value)
     }
 
-    fn evict(&self, k: &str) -> bool {
+    fn evict(&self, k: &String) -> bool {
         if let Err(e) = {
             let mut cache = self.write();
             cache.remove(k)
@@ -113,7 +112,7 @@ impl CacheAccessor for LruDiskCacheHolder {
         }
     }
 
-    fn contains_key(&self, k: &str) -> bool {
+    fn contains_key(&self, k: &String) -> bool {
         let cache = self.read();
         cache.contains_key(k)
     }
