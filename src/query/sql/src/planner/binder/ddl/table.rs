@@ -55,6 +55,8 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::CompactionLimits;
@@ -1697,35 +1699,51 @@ impl Binder {
 
 const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
 const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
+
 // verify that essential privileges has granted for accessing external location
+//
+// The permission check might fail for reasons other than the permissions themselves,
+// such as network communication issues.
 async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
-    // verify privilege to put
-    let mut errors = Vec::new();
-    if let Err(e) = dal.write(VERIFICATION_KEY, "V").await {
-        errors.push(format!("Permission check for [Write] failed: {}", e));
-    }
+    let verification_task = async move {
+        // verify privilege to put
+        let mut errors = Vec::new();
+        if let Err(e) = dal.write(VERIFICATION_KEY, "V").await {
+            errors.push(format!("Permission check for [Write] failed: {}", e));
+        }
 
-    // verify privilege to get
-    if let Err(e) = dal.read_with(VERIFICATION_KEY).range(0..1).await {
-        errors.push(format!("Permission check for [Read] failed: {}", e));
-    }
+        // verify privilege to get
+        if let Err(e) = dal.read_with(VERIFICATION_KEY).range(0..1).await {
+            errors.push(format!("Permission check for [Read] failed: {}", e));
+        }
 
-    // verify privilege to list
-    if let Err(e) = dal.list(VERIFICATION_KEY).await {
-        errors.push(format!("Permission check for [List] failed: {}", e));
-    }
+        // verify privilege to stat
+        if let Err(e) = dal.stat(VERIFICATION_KEY).await {
+            errors.push(format!("Permission check for [Stat] failed: {}", e));
+        }
 
-    // verify privilege to delete (del something not exist)
-    if let Err(e) = dal.delete(VERIFICATION_KEY_DEL).await {
-        errors.push(format!("Permission check for [Delete] failed: {}", e));
-    }
+        // verify privilege to list
+        if let Err(e) = dal.list(VERIFICATION_KEY).await {
+            errors.push(format!("Permission check for [List] failed: {}", e));
+        }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(ErrorCode::StorageOther(
-            "Checking essential permissions for the external location failed.",
-        )
-        .add_message(errors.join("\n")))
-    }
+        // verify privilege to delete (del something not exist)
+        if let Err(e) = dal.delete(VERIFICATION_KEY_DEL).await {
+            errors.push(format!("Permission check for [Delete] failed: {}", e));
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::StorageOther(
+                "Checking essential permissions for the external location failed.",
+            )
+            .add_message(errors.join("\n")))
+        }
+    };
+
+    GlobalIORuntime::instance()
+        .spawn(verification_task)
+        .await
+        .expect("join must succeed")
 }
