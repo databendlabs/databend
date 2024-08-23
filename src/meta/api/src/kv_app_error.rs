@@ -40,7 +40,7 @@ use tonic::Status;
 ///
 /// Either a local or remote meta-store will returns (1) AppError.
 /// An embedded meta-store only returns (1) and (2), while a remote meta-store service only returns (1) and (3)
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum KVAppError {
     /// An error that indicates something wrong for the application of kvapi::KVApi, but nothing wrong about meta.
     #[error(transparent)]

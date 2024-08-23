@@ -16,8 +16,6 @@ use std::fmt::Display;
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
-use serde::Deserialize;
-use serde::Serialize;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
@@ -26,7 +24,7 @@ pub trait AppErrorMessage: Display {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("Tenant is empty when: `{context}`")]
 pub struct TenantIsEmpty {
     context: String,
@@ -46,7 +44,7 @@ impl From<TenantIsEmpty> for ErrorCode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DatabaseAlreadyExists: `{db_name}` while `{context}`")]
 pub struct DatabaseAlreadyExists {
     db_name: String,
@@ -62,7 +60,7 @@ impl DatabaseAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CatalogAlreadyExists: `{catalog_name}` while `{context}`")]
 pub struct CatalogAlreadyExists {
     catalog_name: String,
@@ -78,7 +76,7 @@ impl CatalogAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DatamaskAlreadyExists: `{name}` while `{context}`")]
 pub struct DatamaskAlreadyExists {
     name: String,
@@ -94,7 +92,7 @@ impl DatamaskAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("BackgroundJobAlreadyExists: `{name}` while `{context}`")]
 pub struct BackgroundJobAlreadyExists {
     name: String,
@@ -110,7 +108,7 @@ impl BackgroundJobAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
 pub struct CreateDatabaseWithDropTime {
     db_name: String,
@@ -124,7 +122,7 @@ impl CreateDatabaseWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DropDbWithDropTime: drop {db_name} with drop_on time")]
 pub struct DropDbWithDropTime {
     db_name: String,
@@ -138,7 +136,7 @@ impl DropDbWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UndropDbWithNoDropTime: undrop {db_name} with no drop_on time")]
 pub struct UndropDbWithNoDropTime {
     db_name: String,
@@ -152,7 +150,7 @@ impl UndropDbWithNoDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UndropDbHasNoHistory: undrop {db_name} has no db id history")]
 pub struct UndropDbHasNoHistory {
     db_name: String,
@@ -166,7 +164,7 @@ impl UndropDbHasNoHistory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CommitTableMetaError: {table_name} while {context}")]
 pub struct CommitTableMetaError {
     table_name: String,
@@ -182,7 +180,7 @@ impl CommitTableMetaError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -198,7 +196,7 @@ impl TableAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ViewAlreadyExists: {view_name} while {context}")]
 pub struct ViewAlreadyExists {
     view_name: String,
@@ -214,7 +212,7 @@ impl ViewAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateTableWithDropTime: create {table_name} with drop time")]
 pub struct CreateTableWithDropTime {
     table_name: String,
@@ -228,7 +226,7 @@ impl CreateTableWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateAsDropTableWithoutDropTime: create as_drop {table_name} without drop time")]
 pub struct CreateAsDropTableWithoutDropTime {
     table_name: String,
@@ -242,7 +240,7 @@ impl CreateAsDropTableWithoutDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableAlreadyExists: undrop {table_name} already exists")]
 pub struct UndropTableAlreadyExists {
     table_name: String,
@@ -256,7 +254,7 @@ impl UndropTableAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableWithNoDropTime: undrop {table_name} with no drop_on time")]
 pub struct UndropTableWithNoDropTime {
     table_name: String,
@@ -270,7 +268,7 @@ impl UndropTableWithNoDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DropTableWithDropTime: drop {table_name} with drop_on time")]
 pub struct DropTableWithDropTime {
     table_name: String,
@@ -284,7 +282,7 @@ impl DropTableWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UndropTableHasNoHistory: undrop {table_name} has no table id history")]
 pub struct UndropTableHasNoHistory {
     table_name: String,
@@ -298,7 +296,7 @@ impl UndropTableHasNoHistory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableVersionMismatched: {table_id} expect `{expect}` but `{curr}`  while `{context}`")]
 pub struct TableVersionMismatched {
     table_id: u64,
@@ -318,7 +316,7 @@ impl TableVersionMismatched {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("StreamAlreadyExists: {name} while {context}")]
 pub struct StreamAlreadyExists {
     name: String,
@@ -334,7 +332,7 @@ impl StreamAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("StreamVersionMismatched: {stream_id} expect `{expect}` but `{curr}`  while `{context}`")]
 pub struct StreamVersionMismatched {
     stream_id: u64,
@@ -354,7 +352,7 @@ impl StreamVersionMismatched {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownStreamId: `{stream_id}` while `{context}`")]
 pub struct UnknownStreamId {
     stream_id: u64,
@@ -370,7 +368,7 @@ impl UnknownStreamId {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("MultiStmtTxnCommitFailed: {context}")]
 pub struct MultiStmtTxnCommitFailed {
     context: String,
@@ -384,7 +382,7 @@ impl MultiStmtTxnCommitFailed {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UpdateStreamMetasFailed: {message}")]
 pub struct UpdateStreamMetasFailed {
     message: String,
@@ -398,7 +396,7 @@ impl crate::app_error::UpdateStreamMetasFailed {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
     table_id: u64,
@@ -414,7 +412,7 @@ impl DuplicatedUpsertFiles {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabase: `{db_name}` while `{context}`")]
 pub struct UnknownDatabase {
     db_name: String,
@@ -430,7 +428,7 @@ impl UnknownDatabase {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownCatalog: `{catalog_name}` while `{context}`")]
 pub struct UnknownCatalog {
     catalog_name: String,
@@ -446,7 +444,7 @@ impl UnknownCatalog {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatamask: `{name}` while `{context}`")]
 pub struct UnknownDatamask {
     name: String,
@@ -462,7 +460,7 @@ impl UnknownDatamask {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownBackgroundJob: `{name}` while `{context}`")]
 pub struct UnknownBackgroundJob {
     name: String,
@@ -478,7 +476,7 @@ impl UnknownBackgroundJob {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabaseId: `{db_id}` while `{context}`")]
 pub struct UnknownDatabaseId {
     db_id: u64,
@@ -494,7 +492,7 @@ impl UnknownDatabaseId {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnmatchColumnDataType: `{name}`:`{data_type}` while `{context}`")]
 pub struct UnmatchColumnDataType {
     name: String,
@@ -516,7 +514,7 @@ impl UnmatchColumnDataType {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error(
     "UnmatchMaskPolicyReturnType: `{arg_name}`:`{arg_type}` mismatch with return type `{return_type}` while `{context}`"
 )]
@@ -543,7 +541,7 @@ impl UnmatchMaskPolicyReturnType {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTable: `{table_name}` while `{context}`")]
 pub struct UnknownTable {
     table_name: String,
@@ -559,7 +557,7 @@ impl UnknownTable {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTableId: `{table_id}` while `{context}`")]
 pub struct UnknownTableId {
     table_id: u64,
@@ -575,7 +573,7 @@ impl UnknownTableId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareAlreadyExists: {share_name} while {context}")]
 pub struct ShareAlreadyExists {
     share_name: String,
@@ -591,7 +589,7 @@ impl ShareAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareEndpointAlreadyExists: {endpoint} while {context}")]
 pub struct ShareEndpointAlreadyExists {
     endpoint: String,
@@ -607,7 +605,7 @@ impl ShareEndpointAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareAccountsAlreadyExists: {share_name} while {context}")]
 pub struct ShareAccountsAlreadyExists {
     share_name: String,
@@ -629,7 +627,7 @@ impl ShareAccountsAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShareAccounts: {share_id} while {context}")]
 pub struct UnknownShareAccounts {
     accounts: Vec<String>,
@@ -647,7 +645,7 @@ impl UnknownShareAccounts {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("WrongShareObject: {obj_name} does not belong to the database that is being shared")]
 pub struct WrongShareObject {
     obj_name: String,
@@ -661,7 +659,7 @@ impl WrongShareObject {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("WrongSharePrivileges: wrong share privileges of {obj_name}")]
 pub struct WrongSharePrivileges {
     obj_name: String,
@@ -675,7 +673,7 @@ impl WrongSharePrivileges {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareHasNoGrantedDatabase: {tenant}.{share_name} has no granted database")]
 pub struct ShareHasNoGrantedDatabase {
     pub tenant: String,
@@ -691,7 +689,7 @@ impl ShareHasNoGrantedDatabase {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareHasNoGrantedPrivilege: {tenant}.{share_name} has no proper granted privilege")]
 pub struct ShareHasNoGrantedPrivilege {
     pub tenant: String,
@@ -707,7 +705,7 @@ impl ShareHasNoGrantedPrivilege {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "CannotAccessShareTable: cannot access share table {table_name} from {tenant}.{share_name}"
 )]
@@ -731,7 +729,7 @@ impl CannotAccessShareTable {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("WrongShare: {share_name} has the wrong format")]
 pub struct WrongShare {
     share_name: String,
@@ -745,7 +743,7 @@ impl WrongShare {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShare: {share_name} while {context}")]
 pub struct UnknownShare {
     share_name: String,
@@ -761,7 +759,7 @@ impl UnknownShare {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShareID: {share_id} while {context}")]
 pub struct UnknownShareId {
     share_id: u64,
@@ -777,7 +775,7 @@ impl UnknownShareId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShareEndpoint: {endpoint} while {context}")]
 pub struct UnknownShareEndpoint {
     endpoint: String,
@@ -793,7 +791,7 @@ impl UnknownShareEndpoint {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownShareEndpointId: {share_endpoint_id} while {context}")]
 pub struct UnknownShareEndpointId {
     share_endpoint_id: u64,
@@ -809,7 +807,7 @@ impl UnknownShareEndpointId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableLockExpired: `{table_id}` while `{context}`")]
 pub struct TableLockExpired {
     table_id: u64,
@@ -825,7 +823,7 @@ impl TableLockExpired {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
 )]
@@ -843,7 +841,7 @@ impl CannotShareDatabaseCreatedFromShare {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TxnRetryMaxTimes: Txn {op} has retry {max_retry} times, abort.")]
 pub struct TxnRetryMaxTimes {
     op: String,
@@ -859,7 +857,7 @@ impl TxnRetryMaxTimes {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateIndexWithDropTime: create {index_name} with drop time")]
 pub struct CreateIndexWithDropTime {
     index_name: String,
@@ -873,7 +871,7 @@ impl CreateIndexWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("IndexAlreadyExists: `{index_name}` while `{context}`")]
 pub struct IndexAlreadyExists {
     index_name: String,
@@ -889,7 +887,7 @@ impl IndexAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownIndex: `{index_name}` while `{context}`")]
 pub struct UnknownIndex {
     index_name: String,
@@ -905,7 +903,7 @@ impl UnknownIndex {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DropIndexWithDropTime: drop {index_name} with drop time")]
 pub struct DropIndexWithDropTime {
     index_name: String,
@@ -919,7 +917,7 @@ impl DropIndexWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("GetIndexWithDropTime: get {index_name} with drop time")]
 pub struct GetIndexWithDropTime {
     index_name: String,
@@ -933,7 +931,7 @@ impl GetIndexWithDropTime {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedIndexColumnId: {column_id} is duplicated with index {index_name}")]
 pub struct DuplicatedIndexColumnId {
     column_id: u32,
@@ -949,7 +947,7 @@ impl DuplicatedIndexColumnId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("IndexColumnIdNotFound: index {index_name} column id {column_id} is not found")]
 pub struct IndexColumnIdNotFound {
     column_id: u32,
@@ -965,7 +963,7 @@ impl IndexColumnIdNotFound {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("VirtualColumnAlreadyExists: `{table_id}` while `{context}`")]
 pub struct VirtualColumnAlreadyExists {
     table_id: u64,
@@ -981,7 +979,7 @@ impl VirtualColumnAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("VirtualColumnNotFound: `{table_id}` while `{context}`")]
 pub struct VirtualColumnNotFound {
     table_id: u64,
@@ -997,7 +995,7 @@ impl VirtualColumnNotFound {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateSequenceError: `{name}` while `{context}`")]
 pub struct CreateSequenceError {
     name: String,
@@ -1013,7 +1011,7 @@ impl CreateSequenceError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("SequenceAlreadyExists: `{name}` while `{context}`")]
 pub struct SequenceAlreadyExists {
     name: String,
@@ -1029,7 +1027,7 @@ impl SequenceAlreadyExists {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownSequence: `{name}` while `{context}`")]
 pub struct UnknownSequence {
     name: String,
@@ -1045,7 +1043,7 @@ impl UnknownSequence {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("OutofSequenceRange: `{name}` while `{context}`")]
 pub struct OutofSequenceRange {
     name: String,
@@ -1061,7 +1059,7 @@ impl OutofSequenceRange {
     }
 }
 
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("WrongSequenceCount: `{name}`")]
 pub struct WrongSequenceCount {
     name: String,
@@ -1075,7 +1073,7 @@ impl WrongSequenceCount {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DictionaryAlreadyExists: `{dictionary_name}` while `{context}`")]
 pub struct DictionaryAlreadyExists {
     dictionary_name: String,
@@ -1091,7 +1089,7 @@ impl DictionaryAlreadyExists {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("UnknownDictionary: `{dictionary_name}` while `{context}`")]
 pub struct UnknownDictionary {
     dictionary_name: String,
@@ -1110,7 +1108,7 @@ impl UnknownDictionary {
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum AppError {
     #[error(transparent)]
     TenantIsEmpty(#[from] TenantIsEmpty),
@@ -1305,7 +1303,7 @@ pub enum AppError {
     UnknownDictionary(#[from] UnknownDictionary),
 }
 
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum SequenceError {
     #[error(transparent)]
     CreateSequenceError(#[from] CreateSequenceError),
