@@ -478,43 +478,63 @@ pub fn parse_hilbert_cluster_key(
         unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
     }
 
+    let expr_len = ast_exprs.len();
+    if !(2..=5).contains(&expr_len) {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "Hilbert clustering requires the dimension to be between 2 and 5",
+        ));
+    }
+
     let mut max_size = 0;
-    let mut exprs = Vec::with_capacity(ast_exprs.len());
+    let mut byte_sizes = Vec::with_capacity(expr_len);
+    let mut exprs = Vec::with_capacity(expr_len);
     for ast in ast_exprs {
         let (scalar, _) = *type_checker.resolve(&ast)?;
         let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
-        let inner_type = expr.data_type().remove_nullable();
-        max_size = max_size.max(hilbert_byte_size(&inner_type)?);
-        let expr = match inner_type {
-            DataType::Decimal(_) => {
-                check_function(None, "to_float64", &[], &[expr], &BUILTIN_FUNCTIONS)?
-            }
-            DataType::Date => check_function(None, "to_int32", &[], &[expr], &BUILTIN_FUNCTIONS)?,
-            DataType::Timestamp => {
-                check_function(None, "to_int64", &[], &[expr], &BUILTIN_FUNCTIONS)?
-            }
-            _ => expr,
-        };
+        let byte_size = hilbert_byte_size(expr.data_type())?;
+        max_size = max_size.max(byte_size);
+        byte_sizes.push(byte_size);
         exprs.push(expr);
     }
 
     let max_size = max_size.min(8);
+    let common_cast = match max_size {
+        1 => "to_int8",
+        2 => "to_int16",
+        4 => "to_int32",
+        8 => "to_int64",
+        _ => unreachable!(),
+    };
     let max_val = Expr::Constant {
         span: None,
         scalar: Scalar::Binary(vec![0xFF; max_size]),
         data_type: DataType::Binary,
     };
 
-    for expr in exprs.iter_mut() {
+    for (expr, byte_size) in exprs.iter_mut().zip(byte_sizes.into_iter()) {
+        let inner_type = expr.data_type().remove_nullable();
+        let cast_str = match inner_type {
+            DataType::Date | DataType::Timestamp | DataType::Boolean => Some(common_cast),
+            DataType::Decimal(_) => Some("to_float64"),
+            DataType::Number(t) if max_size > byte_size => {
+                if matches!(t, NumberDataType::Float32) {
+                    Some("to_float64")
+                } else {
+                    Some(common_cast)
+                }
+            }
+            _ => None,
+        };
+        *expr = if let Some(cast) = cast_str {
+            check_function(None, cast, &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?
+        } else {
+            expr.clone()
+        };
         *expr = check_function(
             None,
             "hilbert_key",
             &[],
-            &[expr.clone(), Expr::Constant {
-                span: None,
-                scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64)),
-                data_type: DataType::Number(NumberDataType::UInt64),
-            }],
+            &[expr.clone()],
             &BUILTIN_FUNCTIONS,
         )?;
         let data_type = expr.data_type();
@@ -553,7 +573,7 @@ pub fn parse_hilbert_cluster_key(
         &[],
         &[array, Expr::Constant {
             span: None,
-            scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64 * 8)),
+            scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64)),
             data_type: DataType::Number(NumberDataType::UInt64),
         }],
         &BUILTIN_FUNCTIONS,
@@ -568,7 +588,7 @@ fn hilbert_byte_size(data_type: &DataType) -> Result<usize> {
             Ok(data_type.numeric_byte_size().unwrap())
         }
         DataType::Boolean => Ok(1),
-        DataType::String => Ok(8),
+        DataType::String => Ok(24),
         _ => Err(ErrorCode::Internal("unsupported data type for hilbert")),
     }
 }
