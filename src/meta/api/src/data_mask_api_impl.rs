@@ -19,6 +19,7 @@ use databend_common_meta_app::app_error::DatamaskAlreadyExists;
 use databend_common_meta_app::app_error::UnknownDatamask;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DataMaskId;
 use databend_common_meta_app::data_mask::DataMaskIdIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
@@ -35,7 +36,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
@@ -186,7 +187,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let name_key = &req.name;
 
-        let (_id_seq, _id, _data_mask_seq, policy) = get_data_mask_or_err(
+        let (_seq_id, policy) = get_data_mask_or_err(
             self,
             name_key,
             format!("drop_data_mask: {}", name_key.display()),
@@ -202,34 +203,25 @@ async fn get_data_mask_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &DataMaskNameIdent,
     msg: impl Display,
-) -> Result<(u64, u64, u64, DatamaskMeta), KVAppError> {
-    let (id_seq, id) = get_u64_value(kv_api, name_key).await?;
-    assert_data_mask_exist(id_seq, name_key, &msg)?;
+) -> Result<(SeqV<DataMaskId>, SeqV<DatamaskMeta>), KVAppError> {
+    let seq_id = kv_api.get_pb(name_key).await?.ok_or_else(|| {
+        AppError::from(UnknownDatamask::new(
+            name_key.name(),
+            format!("{}: {}", msg, name_key.data_mask_name()),
+        ))
+    })?;
 
-    let id_ident = DataMaskIdIdent::new(name_key.tenant(), id);
+    let id_ident = DataMaskIdIdent::new_generic(name_key.tenant(), seq_id.data.into_inner());
 
-    let seq_v = kv_api.get_pb(&id_ident).await?;
-    assert_data_mask_exist(seq_v.seq(), name_key, msg)?;
+    let seq_v = kv_api.get_pb(&id_ident).await?.ok_or_else(|| {
+        AppError::from(UnknownDatamask::new(
+            name_key.name(),
+            format!("{}: {}", msg, name_key.data_mask_name()),
+        ))
+    })?;
 
     // Safe unwrap(): data_mask_seq > 0 implies data_mask is not None.
-    Ok((id_seq, id, seq_v.seq(), seq_v.unwrap().data))
-}
-
-pub fn assert_data_mask_exist(
-    seq: u64,
-    name_ident: &DataMaskNameIdent,
-    msg: impl Display,
-) -> Result<(), AppError> {
-    if seq == 0 {
-        debug!(seq = seq, name_ident :? =(name_ident); "data mask does not exist");
-
-        Err(AppError::UnknownDatamask(UnknownDatamask::new(
-            name_ident.name(),
-            format!("{}: {}", msg, name_ident.data_mask_name()),
-        )))
-    } else {
-        Ok(())
-    }
+    Ok((seq_id.map(|id| id.into_inner()), seq_v))
 }
 
 async fn clear_table_column_mask_policy(
@@ -289,8 +281,8 @@ async fn construct_drop_mask_policy_operations(
     )
     .await;
 
-    let (id_seq, id, data_mask_seq, _) = match result {
-        Ok((id_seq, id, data_mask_seq, meta)) => (id_seq, id, data_mask_seq, meta),
+    let (seq_id, seq_meta) = match result {
+        Ok((seq_id, seq_meta)) => (seq_id, seq_meta),
         Err(err) => {
             if let KVAppError::AppError(AppError::UnknownDatamask(_)) = err {
                 if drop_if_exists {
@@ -302,21 +294,20 @@ async fn construct_drop_mask_policy_operations(
         }
     };
 
-    let id_ident = DataMaskIdIdent::new(name_key.tenant(), id);
+    let id_ident = DataMaskIdIdent::new_generic(name_key.tenant(), seq_id.data);
 
-    txn.condition
-        .push(txn_cond_eq_seq(&id_ident, data_mask_seq));
+    txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
     txn.if_then.push(txn_op_del(&id_ident));
 
     if if_delete {
-        txn.condition.push(txn_cond_eq_seq(name_key, id_seq));
+        txn.condition.push(txn_cond_eq_seq(name_key, seq_id.seq));
         txn.if_then.push(txn_op_del(name_key));
         clear_table_column_mask_policy(kv_api, name_key, txn).await?;
     }
 
     debug!(
         name :? =(name_key),
-        id :? =id,
+        seq_id :? =seq_id,
         ctx = ctx;
         "construct_drop_mask_policy_operations"
     );

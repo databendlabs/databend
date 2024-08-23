@@ -107,7 +107,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for SequenceMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = super::SequenceIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

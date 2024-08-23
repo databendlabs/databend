@@ -1190,25 +1190,29 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DBIdTableName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }
 
     impl kvapi::Value for DBIdTableName {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableIdList {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdHistoryIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             self.id_list
                 .iter()
                 .map(|id| TableId::new(*id).to_string_key())
@@ -1216,13 +1220,15 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableCopiedFileInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableCopiedFileNameIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for LeastVisibleTime {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = LeastVisibleTimeKey;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

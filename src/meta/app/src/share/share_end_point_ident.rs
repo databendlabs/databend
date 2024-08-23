@@ -50,7 +50,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for ShareEndpointId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = super::ShareEndpointIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }

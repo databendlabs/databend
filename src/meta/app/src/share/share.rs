@@ -755,25 +755,30 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for ObjectSharedByShareIds {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareGrantObject;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for ShareNameIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for ShareEndpointMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareEndpointId;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for ShareEndpointIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareEndpointIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
