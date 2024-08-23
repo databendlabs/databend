@@ -14,11 +14,13 @@
 
 use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::raw::TIdentRaw;
 use crate::tenant_key::resource::TenantResource;
 use crate::KeyWithTenant;
@@ -130,6 +132,11 @@ impl<R, N> TIdent<R, N> {
     pub fn display(&self) -> impl fmt::Display + '_
     where N: fmt::Display {
         format!("'{}'/'{}'", self.tenant.tenant_name(), self.name)
+    }
+
+    pub fn unknown_error(&self, ctx: impl Display) -> UnknownError<R, N>
+    where N: Clone {
+        UnknownError::new(self.name.clone(), ctx)
     }
 }
 

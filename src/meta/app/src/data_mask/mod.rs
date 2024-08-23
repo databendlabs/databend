@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod data_mask_id;
 pub mod data_mask_id_ident;
 pub mod data_mask_name_ident;
 pub mod mask_policy_table_id_list_ident;
@@ -21,7 +20,7 @@ use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
-pub use data_mask_id::DataMaskId;
+pub use data_mask_id_ident::DataMaskId;
 pub use data_mask_id_ident::DataMaskIdIdent;
 pub use data_mask_name_ident::DataMaskNameIdent;
 use databend_common_meta_types::SeqV;
