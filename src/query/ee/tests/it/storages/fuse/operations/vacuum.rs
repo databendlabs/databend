@@ -148,9 +148,13 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
 }
 
 mod test_accessor {
+    use std::future::Future;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
 
+    use opendal::raw::oio;
+    use opendal::raw::oio::Entry;
+    use opendal::raw::MaybeSend;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
     use opendal::raw::RpDelete;
@@ -162,17 +166,48 @@ mod test_accessor {
     #[derive(Debug)]
     pub(crate) struct AccessorFaultyDeletion {
         hit_delete: AtomicBool,
+        hit_stat: AtomicBool,
+        inject_delete_faulty: bool,
+        inject_stat_faulty: bool,
     }
 
     impl AccessorFaultyDeletion {
-        pub(crate) fn new() -> Self {
+        pub(crate) fn with_delete_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
+                hit_stat: AtomicBool::new(false),
+                inject_delete_faulty: true,
+                inject_stat_faulty: false,
+            }
+        }
+
+        pub(crate) fn with_stat_fault() -> Self {
+            AccessorFaultyDeletion {
+                hit_delete: AtomicBool::new(false),
+                hit_stat: AtomicBool::new(false),
+                inject_delete_faulty: false,
+                inject_stat_faulty: true,
             }
         }
 
         pub(crate) fn hit_delete_operation(&self) -> bool {
             self.hit_delete.load(Ordering::Acquire)
+        }
+
+        pub(crate) fn hit_stat_operation(&self) -> bool {
+            self.hit_stat.load(Ordering::Acquire)
+        }
+    }
+
+    pub struct VecLister(Vec<&'static str>);
+    impl oio::List for VecLister {
+        fn next(&mut self) -> impl Future<Output = opendal::Result<Option<Entry>>> + MaybeSend {
+            let me = &mut self.0;
+            async move {
+                Ok(me
+                    .pop()
+                    .map(|v| Entry::new(v, Metadata::new(EntryMode::FILE))))
+            }
         }
     }
 
@@ -181,7 +216,7 @@ mod test_accessor {
         type BlockingReader = ();
         type Writer = ();
         type BlockingWriter = ();
-        type Lister = ();
+        type Lister = VecLister;
         type BlockingLister = ();
 
         fn info(&self) -> Arc<AccessorInfo> {
@@ -196,16 +231,28 @@ mod test_accessor {
         }
 
         async fn stat(&self, _path: &str, _args: OpStat) -> opendal::Result<RpStat> {
-            let stat = RpStat::new(Metadata::new(EntryMode::DIR));
-            Ok(stat)
+            self.hit_stat.store(true, Ordering::Release);
+            if self.inject_stat_faulty {
+                Err(opendal::Error::new(
+                    opendal::ErrorKind::Unexpected,
+                    "does not matter (stat)",
+                ))
+            } else {
+                let stat = RpStat::new(Metadata::new(EntryMode::DIR));
+                Ok(stat)
+            }
         }
 
         async fn delete(&self, _path: &str, _args: OpDelete) -> opendal::Result<RpDelete> {
             self.hit_delete.store(true, Ordering::Release);
-            Err(opendal::Error::new(
-                opendal::ErrorKind::Unexpected,
-                "does not matter (delete)",
-            ))
+            if self.inject_delete_faulty {
+                Err(opendal::Error::new(
+                    opendal::ErrorKind::Unexpected,
+                    "does not matter (delete)",
+                ))
+            } else {
+                Ok(RpDelete::default())
+            }
         }
 
         async fn list(
@@ -213,7 +260,7 @@ mod test_accessor {
             _path: &str,
             _args: OpList,
         ) -> opendal::Result<(RpList, Self::Lister)> {
-            Ok((RpList::default(), ()))
+            Ok((RpList::default(), VecLister(vec!["1/2/a", "1/2/b"])))
         }
     }
 }
@@ -234,7 +281,7 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     // Note that:
     // In real case, `Accessor::batch` will be called (instead of Accessor::delete)
     // but all that we need here is let Operator::remove_all failed
-    let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
+    let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
     let tables = vec![(table_info, operator)];
@@ -259,7 +306,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
 
     // Case 1: non-parallel vacuum dropped tables
     {
-        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
+        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
         let table = (table_info.clone(), operator);
@@ -277,7 +324,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
 
     // Case 2: parallel vacuum dropped tables
     {
-        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
+        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
         let table = (table_info, operator);
@@ -287,6 +334,53 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
+        // verify that errors of deletions are not swallowed
+        assert!(result.is_err());
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Result<()> {
+    let mut table_info = TableInfo::default();
+    table_info
+        .meta
+        .options
+        .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
+
+    use test_accessor::AccessorFaultyDeletion;
+
+    // Case 1: non-parallel vacuum dropped tables
+    {
+        let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
+        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+
+        let table = (table_info.clone(), operator);
+
+        // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
+        let tables = vec![table];
+        let num_threads = 1;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
+        // verify that accessor.stat() was called
+        assert!(faulty_accessor.hit_stat_operation());
+
+        // verify that errors of deletions are not swallowed
+        assert!(result.is_err());
+    }
+
+    // Case 2: parallel vacuum dropped tables
+    {
+        let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
+        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+
+        let table = (table_info, operator);
+        // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
+        let tables = vec![table.clone(), table];
+        let num_threads = 2;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
+        // verify that accessor.stat() was called
+        assert!(faulty_accessor.hit_stat_operation());
         // verify that errors of deletions are not swallowed
         assert!(result.is_err());
     }
@@ -310,7 +404,7 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     // Accessor passed in does NOT matter in this case, `do_vacuum_drop_table` should
     // return Ok(None) before accessor is used.
     use test_accessor::AccessorFaultyDeletion;
-    let accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
+    let accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
     let tables = vec![(table_info, operator)];
