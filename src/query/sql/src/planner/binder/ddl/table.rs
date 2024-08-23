@@ -469,7 +469,9 @@ impl Binder {
                     "".to_string()
                 };
 
-                // verify essential privileges
+                // Verify essential privileges.
+                // The permission check might fail for reasons other than the permissions themselves,
+                // such as network communication issues.
                 verify_external_location_privileges(data_operator.operator()).await?;
                 (Some(sp), fp)
             }
