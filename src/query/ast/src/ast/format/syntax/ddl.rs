@@ -84,8 +84,8 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
             RcDoc::line()
                 .append(RcDoc::text("CLUSTER BY "))
                 .append(match cluster_by.cluster_type {
-                    ClusterType::Linear => RcDoc::text("LINEAR "),
-                    ClusterType::Hilbert => RcDoc::text("HILBERT "),
+                    ClusterType::Linear => RcDoc::text("LINEAR"),
+                    ClusterType::Hilbert => RcDoc::text("HILBERT"),
                 })
                 .append(parenthesized(
                     interweave_comma(cluster_by.cluster_exprs.into_iter().map(pretty_expr)).group(),
@@ -214,8 +214,12 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             .append(RcDoc::text(column.to_string())),
         AlterTableAction::AlterTableClusterKey { cluster_by } => RcDoc::line()
             .append(RcDoc::text("CLUSTER BY "))
+            .append(match cluster_by.cluster_type {
+                ClusterType::Linear => RcDoc::text("LINEAR"),
+                ClusterType::Hilbert => RcDoc::text("HILBERT"),
+            })
             .append(parenthesized(
-                interweave_comma(cluster_by.into_iter().map(pretty_expr)).group(),
+                interweave_comma(cluster_by.cluster_exprs.into_iter().map(pretty_expr)).group(),
             )),
         AlterTableAction::DropTableClusterKey => {
             RcDoc::line().append(RcDoc::text("DROP CLUSTER KEY"))

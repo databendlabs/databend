@@ -3464,9 +3464,14 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let alter_table_cluster_key = map(
         rule! {
-            CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
-        |(_, _, _, cluster_by, _)| AlterTableAction::AlterTableClusterKey { cluster_by },
+        |(_, _, typ, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
+            cluster_by: ClusterOption {
+                cluster_type: typ.unwrap_or(ClusterType::Linear),
+                cluster_exprs,
+            },
+        },
     );
 
     let drop_table_cluster_key = map(

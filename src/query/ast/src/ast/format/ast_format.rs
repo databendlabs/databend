@@ -1640,9 +1640,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 FormatTreeNode::new(action_format_ctx)
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                let mut cluster_by_children = Vec::with_capacity(cluster_by.len());
-                for cluster_by_expr in cluster_by.iter() {
-                    self.visit_expr(cluster_by_expr);
+                let mut cluster_by_children = Vec::with_capacity(cluster_by.cluster_exprs.len());
+                for expr in cluster_by.cluster_exprs.iter() {
+                    self.visit_expr(expr);
                     cluster_by_children.push(self.children.pop().unwrap());
                 }
                 let cluster_by_name = "Action ClusterByList".to_string();

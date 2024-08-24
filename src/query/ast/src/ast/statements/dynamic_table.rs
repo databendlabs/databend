@@ -19,12 +19,11 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
+use crate::ast::ClusterOption;
 use crate::ast::CreateOption;
 use crate::ast::CreateTableSource;
-use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::WarehouseOptions;
@@ -98,7 +97,7 @@ pub struct CreateDynamicTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub source: Option<CreateTableSource>,
-    pub cluster_by: Vec<Expr>,
+    pub cluster_by: Option<ClusterOption>,
 
     pub target_lag: TargetLag,
     pub warehouse_opts: WarehouseOptions,
@@ -134,10 +133,8 @@ impl Display for CreateDynamicTableStmt {
             write!(f, " {source}")?;
         }
 
-        if !self.cluster_by.is_empty() {
-            write!(f, " CLUSTER BY (")?;
-            write_comma_separated_list(f, &self.cluster_by)?;
-            write!(f, ")")?
+        if let Some(cluster_by) = &self.cluster_by {
+            write!(f, " {cluster_by}")?;
         }
 
         write!(f, " TARGET_LAG = {}", self.target_lag)?;

@@ -21,6 +21,8 @@ use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
+use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -30,7 +32,6 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
@@ -659,12 +660,12 @@ impl Binder {
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(&cluster_opt.cluster_exprs, schema.clone())
+                .analyze_cluster_keys(cluster_opt, schema.clone())
                 .await?;
             if !keys.is_empty() {
                 options.insert(
                     OPT_KEY_CLUSTER_TYPE.to_owned(),
-                    format!("{}", cluster_opt.cluster_type).to_lowercase(),
+                    cluster_opt.cluster_type.to_string().to_lowercase(),
                 );
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
@@ -990,6 +991,7 @@ impl Binder {
                         database,
                         table,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().to_lowercase(),
                     },
                 )))
             }
@@ -1614,9 +1616,21 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_cluster_keys(
         &mut self,
-        cluster_by: &[Expr],
+        cluster_opt: &ClusterOption,
         schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
+        let ClusterOption {
+            cluster_type,
+            cluster_exprs,
+        } = cluster_opt;
+
+        let expr_len = cluster_exprs.len();
+        if matches!(cluster_type, ClusterType::Hilbert) && !(2..=5).contains(&expr_len) {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering requires the dimension to be between 2 and 5",
+            ));
+        }
+
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
         for (index, field) in schema.fields().iter().enumerate() {
@@ -1642,13 +1656,13 @@ impl Binder {
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
 
-        let mut cluster_keys = Vec::with_capacity(cluster_by.len());
-        for cluster_by in cluster_by.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_by)?;
+        let mut cluster_keys = Vec::with_capacity(expr_len);
+        for cluster_expr in cluster_exprs.iter() {
+            let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",
-                    cluster_by
+                    cluster_expr
                 )));
             }
 
@@ -1656,7 +1670,7 @@ impl Binder {
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
-                    cluster_by
+                    cluster_expr
                 )));
             }
 
@@ -1664,16 +1678,16 @@ impl Binder {
             if !Self::valid_cluster_key_type(data_type) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Unsupported data type '{}' for cluster by expression `{:#}`",
-                    data_type, cluster_by
+                    data_type, cluster_expr
                 )));
             }
 
-            let mut cluster_by = cluster_by.clone();
+            let mut cluster_expr = cluster_expr.clone();
             let mut normalizer = IdentifierNormalizer {
                 ctx: &self.name_resolution_ctx,
             };
-            cluster_by.drive_mut(&mut normalizer);
-            cluster_keys.push(format!("{:#}", &cluster_by));
+            cluster_expr.drive_mut(&mut normalizer);
+            cluster_keys.push(format!("{:#}", &cluster_expr));
         }
 
         Ok(cluster_keys)

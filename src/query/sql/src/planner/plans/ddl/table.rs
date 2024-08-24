@@ -443,6 +443,7 @@ pub struct AlterTableClusterKeyPlan {
     pub database: String,
     pub table: String,
     pub cluster_keys: Vec<String>,
+    pub cluster_type: String,
 }
 
 impl AlterTableClusterKeyPlan {

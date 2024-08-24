@@ -564,15 +564,25 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
+        cluster_type: String,
     ) -> Result<()> {
         // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str()
             && *old_cluster_key_str == cluster_key_str
         {
-            return Ok(());
+            let old_cluster_type = self
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
+                .to_string()
+                .to_lowercase();
+            if cluster_type == old_cluster_type {
+                return Ok(());
+            }
         }
         let mut new_table_meta = self.get_table_info().meta.clone();
+        new_table_meta
+            .options
+            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type);
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();

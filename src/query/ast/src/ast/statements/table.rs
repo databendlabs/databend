@@ -412,7 +412,7 @@ pub enum AlterTableAction {
         column: Identifier,
     },
     AlterTableClusterKey {
-        cluster_by: Vec<Expr>,
+        cluster_by: ClusterOption,
     },
     DropTableClusterKey,
     ReclusterTable {
@@ -458,9 +458,7 @@ impl Display for AlterTableAction {
                 write!(f, "DROP COLUMN {column}")?;
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                write!(f, "CLUSTER BY (")?;
-                write_comma_separated_list(f, cluster_by)?;
-                write!(f, ")")?;
+                write!(f, " {cluster_by}")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;

@@ -17,6 +17,8 @@ use nom::branch::permutation;
 use nom::combinator::map;
 use nom::combinator::value;
 
+use crate::ast::ClusterOption;
+use crate::ast::ClusterType;
 use crate::ast::CreateDynamicTableStmt;
 use crate::ast::InitializeMode;
 use crate::ast::RefreshMode;
@@ -30,6 +32,7 @@ use crate::parser::common::IResult;
 use crate::parser::expr::expr;
 use crate::parser::expr::literal_u64;
 use crate::parser::query::query;
+use crate::parser::statement::cluster_type;
 use crate::parser::statement::create_table_source;
 use crate::parser::statement::parse_create_option;
 use crate::parser::statement::table_option;
@@ -58,7 +61,7 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ TRANSIENT? ~ DYNAMIC ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
-            ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ #dynamic_table_options
             ~ (#table_option)?
             ~ (AS ~ ^#query)
@@ -86,9 +89,10 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
                 database,
                 table,
                 source,
-                cluster_by: opt_cluster_by
-                    .map(|(_, _, _, exprs, _)| exprs)
-                    .unwrap_or_default(),
+                cluster_by: opt_cluster_by.map(|(_, _, typ, _, cluster_exprs, _)| ClusterOption {
+                    cluster_type: typ.unwrap_or(ClusterType::Linear),
+                    cluster_exprs,
+                }),
                 target_lag,
                 warehouse_opts,
                 refresh_mode: refresh_mode_opt.unwrap_or(RefreshMode::Auto),

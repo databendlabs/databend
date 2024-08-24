@@ -261,7 +261,7 @@ impl ShowCreateTableInterpreter {
                 .options()
                 .get(OPT_KEY_CLUSTER_TYPE)
                 .cloned()
-                .unwrap_or("linear".to_string());
+                .unwrap_or("".to_string());
             table_create_sql
                 .push_str(format!(" CLUSTER BY {}{}", cluster_type, cluster_keys_str).as_str());
         }
