@@ -65,7 +65,7 @@ const ALTER_USER_PASSWORD_TOKENS: [TokenKind; 6] = [
 
 pub struct Session {
     client: Client,
-    conn: Box<dyn Connection>,
+    pub conn: Box<dyn Connection>,
     is_repl: bool,
 
     settings: Settings,
@@ -625,6 +625,7 @@ pub enum QueryKind {
     Put,
     Get,
     AlterUserPassword,
+    Graphical,
 }
 
 impl From<&str> for QueryKind {
@@ -632,7 +633,12 @@ impl From<&str> for QueryKind {
         let mut tz = Tokenizer::new(query);
         match tz.next() {
             Some(Ok(t)) => match t.kind {
-                TokenKind::EXPLAIN => QueryKind::Explain,
+                TokenKind::EXPLAIN => {
+                    if Tokenizer::contains_token(query, TokenKind::GRAPHICAL) {
+                        return QueryKind::Graphical;
+                    }
+                    QueryKind::Explain
+                },
                 TokenKind::PUT => QueryKind::Put,
                 TokenKind::GET => QueryKind::Get,
                 TokenKind::ALTER => {

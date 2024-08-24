@@ -21,6 +21,7 @@ mod display;
 mod helper;
 mod session;
 mod trace;
+mod web;
 
 use std::{
     collections::BTreeMap,

@@ -27,7 +27,9 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::{
     ast::{format_query, highlight_query},
     config::{ExpandMode, OutputFormat, OutputQuoteStyle, Settings},
+    helper::CliHelper,
     session::QueryKind,
+    web::start_server_and_open_browser,
 };
 
 #[async_trait::async_trait]
@@ -137,6 +139,21 @@ impl<'a> FormatDisplay<'a> {
 
         if self.kind == QueryKind::Explain {
             print_explain(&rows)?;
+            return Ok(());
+        }
+
+        if self.kind == QueryKind::Graphical {
+            let mut explain_results = Vec::new();
+            for result in &rows {
+                explain_results.push(result.values()[0].to_string());
+            }
+
+            tokio::spawn(async move {
+                if let Err(e) = start_server_and_open_browser(explain_results.join("")).await {
+                    eprintln!("Failed to start server: {}", e);
+                }
+            });
+
             return Ok(());
         }
 
@@ -274,6 +291,7 @@ impl<'a> FormatDisplay<'a> {
             stats.normalize();
 
             let (rows, mut rows_str, kind, total_rows, total_bytes) = match self.kind {
+                QueryKind::Graphical => (self.rows, "rows", "graphical", 0, 0),
                 QueryKind::Explain => (self.rows, "rows", "explain", 0, 0),
                 QueryKind::Query => (self.rows, "rows", "read", stats.read_rows, stats.read_bytes),
                 QueryKind::Update | QueryKind::AlterUserPassword => (

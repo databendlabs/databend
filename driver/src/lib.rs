@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod conn;
+
+pub mod conn;
 #[cfg(feature = "flight-sql")]
 mod flight_sql;
-mod rest_api;
+pub mod rest_api;
 
 pub use conn::{Client, Connection, ConnectionInfo};
 

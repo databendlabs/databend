@@ -33,6 +33,7 @@ tokio-retry = "0.3"
 tokio-util = { version = "0.7", features = ["io-util"] }
 url = { version = "2.5", default-features = false }
 uuid = { version = "1.6", features = ["v4"] }
+base64 = "0.22.1"
 
 [dev-dependencies]
 chrono = { workspace = true }

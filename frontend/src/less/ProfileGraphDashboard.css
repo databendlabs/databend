@@ -1,0 +1,109 @@
+.App {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.expensive-nodes-card {
+  margin-top: 20px;
+  background-color: white;
+  box-shadow: 0 3px 6px #010e291f;
+  width: 308px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 24px;
+  border: 1px solid rgba(1, 14, 41, .08);
+}
+
+.expensive-nodes-card-header {
+  margin-bottom: 8px;
+}
+.expensive-nodes-card-header h2 {
+  margin: 0;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.expensive-nodes-card-header span {
+  font-weight: normal;
+  color: #bdc3c7;
+
+}
+
+.expensive-nodes-node {
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.expensive-nodes-node.selected {
+  /*border-bottom: none;*/
+  border: 2px solid #0175f6 !important;
+  border-radius: 8px;
+}
+
+.expensive-nodes-node-name {
+  font-size: 12px;
+  color: #0c162b99;
+  font-weight: 600;
+
+}
+
+.block{
+  display: block;
+}
+.expensive-nodes-node-percentage {
+  font-size: 12px;
+  color: rgba(12, 22, 43, 0.8);
+  font-weight: bold;
+}
+.expensive-nodes-progress {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.expensive-nodes-progress .ant-progress-line {
+  flex: 1;
+}
+
+
+.expensive-nodes-percentage {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: bold;
+  margin-left: 8px;
+}
+.expensive-nodes-node-attributes{
+  display: block;
+}
+
+.expensive-nodes-node-title {
+  color: #0c162bcc;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 6px;
+}
+
+.custom-statistic {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px; /* 添加一些间距 */
+}
+
+.custom-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.statistic-title {
+  font-size: 14px;
+  color: #595959;
+}
