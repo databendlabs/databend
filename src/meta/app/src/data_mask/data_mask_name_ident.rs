@@ -38,9 +38,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::data_mask::DataMaskId;
-    use crate::data_mask::DataMaskIdIdent;
     use crate::data_mask::DataMaskNameIdent;
-    use crate::primitive::Id;
     use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
 
@@ -49,14 +47,14 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_datamask";
         const TYPE: &'static str = "DataMaskNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<DataMaskId>;
+        type ValueType = DataMaskId;
     }
 
-    impl kvapi::Value for Id<DataMaskId> {
+    impl kvapi::Value for DataMaskId {
         type KeyType = DataMaskNameIdent;
 
         fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [DataMaskIdIdent::new_generic(key.tenant(), self.into_inner()).to_string_key()]
+            [self.into_t_ident(key.tenant()).to_string_key()]
         }
     }
 }

@@ -17,6 +17,9 @@ use std::fmt::Display;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
 
+use crate::data_mask::data_mask_name_ident;
+use crate::tenant_key::errors::UnknownError;
+
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
     fn message(&self) -> String {
@@ -1256,7 +1259,7 @@ pub enum AppError {
     DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
 
     #[error(transparent)]
-    UnknownDatamask(#[from] UnknownDatamask),
+    UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
     BackgroundJobAlreadyExists(#[from] BackgroundJobAlreadyExists),
@@ -1848,7 +1851,7 @@ impl From<AppError> for ErrorCode {
             AppError::IndexColumnIdNotFound(err) => ErrorCode::IndexColumnIdNotFound(err.message()),
 
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
-            AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
+            AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
 
             AppError::BackgroundJobAlreadyExists(err) => {
                 ErrorCode::BackgroundJobAlreadyExists(err.message())
