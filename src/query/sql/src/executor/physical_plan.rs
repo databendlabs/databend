@@ -866,7 +866,11 @@ impl PhysicalPlan {
                 .zip(v.right_outputs.iter())
                 .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
                 .join(", "),
-            PhysicalPlan::AsyncFunction(async_func) => async_func.display_name.to_string(),
+            PhysicalPlan::AsyncFunction(v) => v
+                .async_func_descs
+                .iter()
+                .map(|x| x.display_name.clone())
+                .join(", "),
             _ => String::new(),
         })
     }
