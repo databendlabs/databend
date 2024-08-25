@@ -456,12 +456,18 @@ impl FuseTable {
         let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
             return vec![];
         };
-        let cluster_keys =
-            parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
-        cluster_keys
-            .into_iter()
-            .map(|v| v.data_type().clone())
-            .collect()
+        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        match cluster_type {
+            ClusterType::Hilbert => vec![DataType::Binary],
+            ClusterType::Linear => {
+                let cluster_keys =
+                    parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+                cluster_keys
+                    .into_iter()
+                    .map(|v| v.data_type().clone())
+                    .collect()
+            }
+        }
     }
 
     pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
