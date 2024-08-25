@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -772,36 +773,38 @@ impl FlattenGenerator {
             return columns;
         }
 
+        let validity = Some(Bitmap::new_constant(true, rows));
         // Generate an empty dummy column for columns that are not needed.
-        let seq_column = UInt64Type::upcast_column(vec![seq; rows].into()).wrap_nullable(None);
+        let seq_column =
+            UInt64Type::upcast_column(vec![seq; rows].into()).wrap_nullable(validity.clone());
         let key_column = if let Some(key_builder) = key_builder {
             NullableType::<StringType>::upcast_column(key_builder.build())
         } else {
             StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
         let path_column = if let Some(path_builder) = path_builder {
-            StringType::upcast_column(path_builder.build()).wrap_nullable(None)
+            StringType::upcast_column(path_builder.build()).wrap_nullable(validity.clone())
         } else {
             StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
         let index_column = if let Some(index_builder) = index_builder {
             NullableType::<UInt64Type>::upcast_column(index_builder.build())
         } else {
-            UInt64Type::upcast_column(vec![0u64; rows].into()).wrap_nullable(None)
+            UInt64Type::upcast_column(vec![0u64; rows].into()).wrap_nullable(validity.clone())
         };
         let value_column = if let Some(value_builder) = value_builder {
-            VariantType::upcast_column(value_builder.build()).wrap_nullable(None)
+            VariantType::upcast_column(value_builder.build()).wrap_nullable(validity.clone())
         } else {
             VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
         let this_column = if let Some(this_builder) = this_builder {
-            VariantType::upcast_column(this_builder.build()).wrap_nullable(None)
+            VariantType::upcast_column(this_builder.build()).wrap_nullable(validity.clone())
         } else {
             VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
 
         let columns = vec![

@@ -19,6 +19,10 @@ use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -39,14 +43,14 @@ use databend_common_sql::ColumnSet;
 
 /// Expand the input [`DataBlock`] with set-returning functions.
 pub struct TransformSRF {
-    func_ctx: FunctionContext,
+    input: Option<DataBlock>,
     projections: ColumnSet,
+    func_ctx: FunctionContext,
     srf_exprs: Vec<Expr>,
-    /// The output number of rows for each input row.
-    num_rows: VecDeque<usize>,
     /// The output of each set-returning function for each input row.
     srf_results: Vec<VecDeque<(Value<AnyType>, usize)>>,
-    input: Option<DataBlock>,
+    /// The output number of rows for each input row.
+    num_rows: VecDeque<usize>,
     max_block_size: usize,
 }
 
@@ -61,12 +65,12 @@ impl TransformSRF {
     ) -> Box<dyn Processor> {
         let srf_results = vec![VecDeque::new(); srf_exprs.len()];
         BlockingTransformer::create(input, output, TransformSRF {
-            func_ctx,
-            projections,
-            srf_exprs,
-            num_rows: VecDeque::new(),
-            srf_results,
             input: None,
+            projections,
+            func_ctx,
+            srf_exprs,
+            srf_results,
+            num_rows: VecDeque::new(),
             max_block_size,
         })
     }
@@ -92,12 +96,9 @@ impl BlockingTransform for TransformSRF {
         for (i, expr) in self.srf_exprs.iter().enumerate() {
             let res = eval.run_srf(expr, &mut max_nums_per_row)?;
             debug_assert_eq!(res.len(), input_num_rows);
-            debug_assert!(self.srf_results[i].is_empty());
             self.srf_results[i] = VecDeque::from(res);
         }
-
         debug_assert_eq!(max_nums_per_row.len(), input_num_rows);
-        debug_assert!(self.num_rows.is_empty());
         debug_assert!(self.input.is_none());
 
         self.num_rows = VecDeque::from(max_nums_per_row);
@@ -110,18 +111,17 @@ impl BlockingTransform for TransformSRF {
         if self.input.is_none() {
             return Ok(None);
         }
+
         let input = self.input.take().unwrap();
 
         let mut result_size = 0;
         let mut used = 0;
-
         for num_rows in self.num_rows.iter() {
-            result_size += num_rows;
-            used += 1;
-            // TBD: if we need to limit `result_size` under `max_block_size`.
-            if result_size >= self.max_block_size {
+            if result_size + num_rows > self.max_block_size && used > 0 {
                 break;
             }
+            used += 1;
+            result_size += num_rows;
         }
 
         // TODO: if there is only one row can be used, we can use `Value::Scalar` directly.
@@ -150,9 +150,12 @@ impl BlockingTransform for TransformSRF {
         for (srf_expr, srf_results) in self.srf_exprs.iter().zip(self.srf_results.iter_mut()) {
             if let Expr::FunctionCall { function, .. } = srf_expr {
                 match function.signature.name.as_str() {
-                    "json_path_query" => {
+                    "json_path_query" | "json_array_elements" => {
+                        // The function return type:
+                        // DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])
                         let mut builder: NullableColumnBuilder<VariantType> =
                             NullableColumnBuilder::with_capacity(result_size, &[]);
+
                         for (i, (row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
                         {
@@ -171,17 +174,14 @@ impl BlockingTransform for TransformSRF {
                                                     builder.push_null();
                                                 }
                                             }
-                                            _ => unreachable!(
-                                                "json_path_query's return type is: `DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])`"
-                                            ),
+                                            _ => unreachable!(),
                                         }
                                     }
-                                    _ => unreachable!(
-                                        "json_path_query's return type is: `DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])`"
-                                    ),
+                                    _ => unreachable!(),
                                 };
                             }
                         }
+
                         let column = builder.build().upcast();
                         let block_entry = BlockEntry::new(
                             DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
@@ -194,7 +194,283 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
-                    _ => {
+                    "json_each" => {
+                        // The function return type:
+                        // DataType::Tuple(vec![
+                        //   DataType::Nullable(Box::new(DataType::String)),
+                        //   DataType::Nullable(Box::new(DataType::Variant)),
+                        // ]).
+                        let mut key_builder =
+                            NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        let mut value_builder =
+                            NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+
+                        for (i, (row_result, repeat_times)) in
+                            srf_results.drain(0..used).enumerate()
+                        {
+                            if let Value::Column(Column::Tuple(fields)) = row_result {
+                                debug_assert!(fields.len() == 6);
+                                for (field_index, field) in fields.into_iter().enumerate() {
+                                    if field_index == 0 {
+                                        match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::String(string_column) => {
+                                                        for idx in 0..repeat_times {
+                                                            key_builder.push(unsafe {
+                                                                string_column.index_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            key_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        }
+                                    } else {
+                                        match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::Variant(variant_column) => {
+                                                        for idx in 0..repeat_times {
+                                                            value_builder.push(unsafe {
+                                                                variant_column.index_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            value_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        let block_entry = BlockEntry::new(
+                            DataType::Tuple(vec![
+                                DataType::Nullable(Box::new(DataType::String)),
+                                DataType::Nullable(Box::new(DataType::Variant)),
+                            ]),
+                            Value::Column(Column::Tuple(vec![
+                                Column::Nullable(Box::new(key_builder.build().upcast())),
+                                Column::Nullable(Box::new(value_builder.build().upcast())),
+                            ])),
+                        );
+                        if block_is_empty {
+                            result = DataBlock::new(vec![block_entry], result_size);
+                            block_is_empty = false;
+                        } else {
+                            result.add_column(block_entry);
+                        }
+                    }
+                    "flatten" => {
+                        // The function return type:
+                        // DataType::Tuple(vec![
+                        //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                        //   DataType::Nullable(Box::new(DataType::String)),
+                        //   DataType::Nullable(Box::new(DataType::String)),
+                        //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                        //   DataType::Nullable(Box::new(DataType::Variant)),
+                        //   DataType::Nullable(Box::new(DataType::Variant)),
+                        // ]).
+                        let mut seq_builder =
+                            NullableColumnBuilder::<NumberType<u64>>::with_capacity(
+                                result_size,
+                                &[],
+                            );
+                        let mut key_builder =
+                            NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        let mut path_builder =
+                            NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        let mut index_builder =
+                            NullableColumnBuilder::<NumberType<u64>>::with_capacity(
+                                result_size,
+                                &[],
+                            );
+                        let mut value_builder =
+                            NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+                        let mut this_builder =
+                            NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+
+                        for (i, (row_result, repeat_times)) in
+                            srf_results.drain(0..used).enumerate()
+                        {
+                            if let Value::Column(Column::Tuple(fields)) = row_result {
+                                debug_assert!(fields.len() == 6);
+                                for (field_index, field) in fields.into_iter().enumerate() {
+                                    match field_index {
+                                        0 => match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::Number(NumberColumn::UInt64(
+                                                        number_column,
+                                                    )) => {
+                                                        for idx in 0..repeat_times {
+                                                            seq_builder.push(unsafe {
+                                                                *number_column.get_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            seq_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        1 => match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::String(string_column) => {
+                                                        for idx in 0..repeat_times {
+                                                            key_builder.push(unsafe {
+                                                                string_column.index_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            key_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        2 => match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::String(string_column) => {
+                                                        for idx in 0..repeat_times {
+                                                            path_builder.push(unsafe {
+                                                                string_column.index_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            path_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        3 => match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::Number(NumberColumn::UInt64(
+                                                        number_column,
+                                                    )) => {
+                                                        for idx in 0..repeat_times {
+                                                            index_builder.push(unsafe {
+                                                                *number_column.get_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            index_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        4 => match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::Variant(variant_column) => {
+                                                        for idx in 0..repeat_times {
+                                                            value_builder.push(unsafe {
+                                                                variant_column.index_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            value_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        5 => match field {
+                                            Column::Nullable(box nullable_column) => {
+                                                match &nullable_column.column {
+                                                    Column::Variant(variant_column) => {
+                                                        for idx in 0..repeat_times {
+                                                            this_builder.push(unsafe {
+                                                                variant_column.index_unchecked(idx)
+                                                            });
+                                                        }
+                                                        for _ in
+                                                            0..(self.num_rows[i] - repeat_times)
+                                                        {
+                                                            this_builder.push_null();
+                                                        }
+                                                    }
+                                                    _ => unreachable!(),
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        _ => unreachable!(),
+                                    }
+                                }
+                            }
+                        }
+
+                        let block_entry = BlockEntry::new(
+                            DataType::Tuple(vec![
+                                DataType::Nullable(Box::new(DataType::Number(
+                                    NumberDataType::UInt64,
+                                ))),
+                                DataType::Nullable(Box::new(DataType::String)),
+                                DataType::Nullable(Box::new(DataType::String)),
+                                DataType::Nullable(Box::new(DataType::Number(
+                                    NumberDataType::UInt64,
+                                ))),
+                                DataType::Nullable(Box::new(DataType::Variant)),
+                                DataType::Nullable(Box::new(DataType::Variant)),
+                            ]),
+                            Value::Column(Column::Tuple(vec![
+                                Column::Nullable(Box::new(seq_builder.build().upcast())),
+                                Column::Nullable(Box::new(key_builder.build().upcast())),
+                                Column::Nullable(Box::new(path_builder.build().upcast())),
+                                Column::Nullable(Box::new(index_builder.build().upcast())),
+                                Column::Nullable(Box::new(value_builder.build().upcast())),
+                                Column::Nullable(Box::new(this_builder.build().upcast())),
+                            ])),
+                        );
+                        if block_is_empty {
+                            result = DataBlock::new(vec![block_entry], result_size);
+                            block_is_empty = false;
+                        } else {
+                            result.add_column(block_entry);
+                        }
+                    }
+                    "unnest" => {
                         let mut result_data_blocks = Vec::with_capacity(used);
                         for (i, (mut row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
@@ -264,9 +540,13 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
+                    _ => todo!(
+                        "unsupported set-returning function: {}",
+                        function.signature.name
+                    ),
                 }
             } else {
-                unreachable!("expr is not a set returning function: {srf_expr}");
+                unreachable!("expr is not a set-returning function: {srf_expr}");
             }
         }
 
