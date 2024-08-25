@@ -20,7 +20,7 @@ use databend_common_expression::hilbert_compact_state_list;
 
 pub fn codegen_hilbert_lut() {
     let dest = Path::new("src/query/expression/src/hilbert");
-    let path = dest.join("hilbert_lut.rs");
+    let path = dest.join("lut.rs");
 
     let mut file = File::create(path).expect("open");
 
