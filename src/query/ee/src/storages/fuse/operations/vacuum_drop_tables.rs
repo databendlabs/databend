@@ -65,16 +65,30 @@ pub async fn do_vacuum_drop_table(
                     .metakey(Metakey::ContentLength)
                     .await?;
 
-                while let Some(de) = ds.try_next().await? {
-                    let meta = de.metadata();
-                    if EntryMode::FILE == meta.mode() {
-                        list_files.push((
-                            table_info.name.clone(),
-                            de.name().to_string(),
-                            meta.content_length(),
-                        ));
-                        if list_files.len() >= dry_run_limit {
-                            break;
+                loop {
+                    let entry = ds.try_next().await;
+                    match entry {
+                        Ok(Some(de)) => {
+                            let meta = de.metadata();
+                            if EntryMode::FILE == meta.mode() {
+                                list_files.push((
+                                    table_info.name.clone(),
+                                    de.name().to_string(),
+                                    meta.content_length(),
+                                ));
+                                if list_files.len() >= dry_run_limit {
+                                    break;
+                                }
+                            }
+                        }
+                        Ok(None) => break,
+                        Err(e) => {
+                            if e.kind() == opendal::ErrorKind::NotFound {
+                                info!("target not found, ignored. {}", e);
+                                continue;
+                            } else {
+                                return Err(e.into());
+                            }
                         }
                     }
                 }
