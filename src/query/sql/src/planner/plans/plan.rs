@@ -24,6 +24,9 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::CreateDictionaryPlan;
+use super::DropDictionaryPlan;
+use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -377,6 +380,11 @@ pub enum Plan {
     // sequence
     CreateSequence(Box<CreateSequencePlan>),
     DropSequence(Box<DropSequencePlan>),
+
+    // Dictionary
+    CreateDictionary(Box<CreateDictionaryPlan>),
+    DropDictionary(Box<DropDictionaryPlan>),
+    ShowCreateDictionary(Box<ShowCreateDictionaryPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -460,6 +468,7 @@ impl Plan {
             Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
+            Plan::ShowCreateDictionary(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),

@@ -90,7 +90,6 @@ impl ToTenant for &Tenant {
 }
 
 mod kvapi_key_impl {
-    use std::convert::Infallible;
 
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
@@ -112,12 +111,23 @@ mod kvapi_key_impl {
         }
     }
 
+    #[derive(Debug)]
+    pub struct EmptyTenantValue;
+
     impl kvapi::Key for Tenant {
         const PREFIX: &'static str = "__fd_tenant";
-        type ValueType = Infallible;
+        type ValueType = EmptyTenantValue;
 
         fn parent(&self) -> Option<String> {
             None
+        }
+    }
+
+    impl kvapi::Value for EmptyTenantValue {
+        type KeyType = Tenant;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            []
         }
     }
 }

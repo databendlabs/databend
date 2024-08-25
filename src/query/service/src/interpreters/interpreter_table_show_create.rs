@@ -35,6 +35,7 @@ use databend_storages_common_table_meta::table::is_internal_opt_key;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -150,6 +151,13 @@ impl ShowCreateTableInterpreter {
         if table.options().contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
+                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+            )
+        }
+
+        if table.options().contains_key(OPT_KEY_TEMP_PREFIX) {
+            table_create_sql = format!(
+                "CREATE TEMP TABLE {} (\n",
                 display_ident(name, quoted_ident_case_sensitive, sql_dialect)
             )
         }

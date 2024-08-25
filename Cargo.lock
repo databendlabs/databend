@@ -3252,8 +3252,8 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-users",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "dyn-clone",
  "goldenfile",
  "log",
@@ -3487,6 +3487,10 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
+ "jaq-core",
+ "jaq-interpret",
+ "jaq-parse",
+ "jaq-std",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3673,6 +3677,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -4296,8 +4301,8 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-pruner",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "fastrace",
  "futures",
@@ -4728,6 +4733,7 @@ dependencies = [
  "cidr",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-grpc",
@@ -5167,8 +5173,8 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-io",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
  "fastrace",
@@ -5404,6 +5410,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-storages-common-session"
+version = "0.1.0"
+dependencies = [
+ "databend-common-exception",
+ "databend-common-meta-app",
+ "databend-common-meta-types",
+ "databend-common-storage",
+ "databend-storages-common-table-meta",
+ "log",
+ "parking_lot 0.12.3",
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
@@ -5439,17 +5460,6 @@ dependencies = [
  "snap",
  "typetag",
  "zstd 0.12.4",
-]
-
-[[package]]
-name = "databend-storages-common-txn"
-version = "0.1.0"
-dependencies = [
- "databend-common-meta-app",
- "databend-common-meta-types",
- "parking_lot 0.12.3",
- "serde",
- "uuid",
 ]
 
 [[package]]
@@ -8460,6 +8470,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hifijson"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9958ab3ce3170c061a27679916bd9b969eceeb5e8b120438e6751d0987655c42"
+
+[[package]]
 name = "highway"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9209,6 +9225,66 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52f5385394064fa2c886205dba02598013ce83d3e92d33dbdc0c52fe0e7bf4fc"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "jaq-core"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6fda09ee08c84c81293fdf811d9ebaa87b327557b5391f290c926d728c2ddd4"
+dependencies = [
+ "aho-corasick",
+ "base64 0.22.1",
+ "chrono",
+ "hifijson",
+ "jaq-interpret",
+ "libm",
+ "log",
+ "regex",
+ "urlencoding",
+]
+
+[[package]]
+name = "jaq-interpret"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fe95ec3c24af3fd9f3dd1091593f5e49b003a66c496a8aa39d764d0a06ae17b"
+dependencies = [
+ "ahash 0.8.11",
+ "dyn-clone",
+ "hifijson",
+ "indexmap 2.4.0",
+ "jaq-syn",
+ "once_cell",
+ "serde_json",
+]
+
+[[package]]
+name = "jaq-parse"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0346d7d3146cdda8acd929581f3d6626a332356c74d5c95aeaffaac2eb6dee82"
+dependencies = [
+ "chumsky",
+ "jaq-syn",
+]
+
+[[package]]
+name = "jaq-std"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfbaa55578fd3b70433b594a370741e0c364e4afff92cc0099623fce87311bc1"
+dependencies = [
+ "jaq-syn",
+]
+
+[[package]]
+name = "jaq-syn"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ba44fe4428c71304604261ecbae047ee9cfb60c4f1a6bd222ebbb31726d3948"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -10573,18 +10649,18 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
+checksum = "4e613fc340b2220f734a8595782c551f1250e969d87d3be1ae0579e8d4065179"
 dependencies = [
  "num_enum_derive",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
+checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

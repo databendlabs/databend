@@ -642,6 +642,8 @@ pub enum TokenKind {
     GENERATED,
     #[token("GEOMETRY", ignore(ascii_case))]
     GEOMETRY,
+    #[token("GEOGRAPHY", ignore(ascii_case))]
+    GEOGRAPHY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -1303,6 +1305,8 @@ pub enum TokenKind {
     ROLLBACK,
     #[token("TEMPORARY", ignore(ascii_case))]
     TEMPORARY,
+    #[token("TEMP", ignore(ascii_case))]
+    TEMP,
     #[token("SECONDS", ignore(ascii_case))]
     SECONDS,
     #[token("DAYS", ignore(ascii_case))]

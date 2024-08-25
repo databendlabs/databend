@@ -44,6 +44,7 @@ use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
@@ -79,7 +80,7 @@ impl Job for CompactionJob {
             .expect("failed to do compaction job");
     }
 
-    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+    async fn get_info(&self) -> Result<SeqV<BackgroundJobInfo>> {
         let job = self
             .meta_api
             .get_background_job(GetBackgroundJobReq {
@@ -165,7 +166,7 @@ impl CompactionJob {
         let ctx = session.create_query_context().await?;
         let job_info = self.get_info().await?;
 
-        let (params, manual) = Self::sync_compact_params(&job_info).await;
+        let (params, manual) = Self::sync_compact_params(&job_info.data).await;
         // guarantee at least once for maunal job
         self.update_job_params(params).await?;
 
@@ -308,7 +309,7 @@ impl CompactionJob {
         let job_info = self.get_info().await?;
         let id = Uuid::new_v4().to_string();
 
-        let status = self.sync_compact_status(id.clone(), &job_info).await?;
+        let status = self.sync_compact_status(id.clone(), &job_info.data).await?;
         if status.is_none() {
             return Ok(());
         }

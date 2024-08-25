@@ -12,21 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_expression::types::*;
+use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::wkb::make_point;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
     registry.register_aliases("st_makepoint", &["st_point"]);
+    registry.register_aliases("st_geographyfromewkt", &[
+        "st_geogfromewkt",
+        "st_geographyfromwkt",
+        "st_geogfromwkt",
+        "st_geographyfromtext",
+        "st_geogfromtext",
+    ]);
 
     registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeographyType, _, _>(
         "st_makepoint",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<NumberType<F64>,NumberType<F64>,GeographyType> (|lon,lat,builder,ctx|{
+        vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, GeographyType> (|lon,lat,builder,ctx|{
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(builder.len()) {
                     builder.commit_row();
@@ -34,12 +42,31 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             if let Err(e) = GeographyType::check_point(*lon, *lat) {
-                ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
+                ctx.set_error(builder.len(), e.to_string());
                 builder.commit_row()
             } else {
                 builder.put_slice(&make_point(*lon, *lat));
                 builder.commit_row()
             }
         })
+    );
+
+    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
+        "st_geographyfromewkt",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<StringType, GeographyType>(|wkt, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+
+            match geography_from_ewkt(wkt) {
+                Ok(data) => builder.put_slice(data.as_slice()),
+                Err(e) => ctx.set_error(builder.len(), e.to_string()),
+            }
+            builder.commit_row();
+        }),
     );
 }

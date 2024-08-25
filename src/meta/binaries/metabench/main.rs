@@ -198,7 +198,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     print_res(i, "create_db", &res);
     let db_id = match res {
-        Ok(res) => res.db_id,
+        Ok(res) => *res.db_id,
         Err(_) => 0,
     };
 

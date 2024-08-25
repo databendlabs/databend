@@ -167,10 +167,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         validity,
                     })) => {
                         let field_col = fields[idx].as_nullable().unwrap();
-                        Value::Column(Column::Nullable(Box::new(NullableColumn {
-                            column: field_col.column.clone(),
-                            validity: (&field_col.validity) & validity,
-                        })))
+                        Value::Column(NullableColumn::new_column(
+                            field_col.column.clone(),
+                            (&field_col.validity) & validity,
+                        ))
                     }
                     _ => unreachable!(),
                 }),

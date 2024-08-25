@@ -123,7 +123,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let catalogs = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.session_state())
             .await?
             .into_iter()
             .map(|cat| cat.disable_table_info_refresh())

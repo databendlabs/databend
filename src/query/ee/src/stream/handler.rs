@@ -68,6 +68,12 @@ impl StreamHandler for RealStreamHandler {
                 plan.table_database, plan.table_name
             )));
         }
+        if table.is_temp() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The table '{}.{}' is temporary, can't create stream",
+                plan.table_database, plan.table_name
+            )));
+        }
 
         let table_id = table_info.ident.table_id;
         if !table.change_tracking_enabled() {

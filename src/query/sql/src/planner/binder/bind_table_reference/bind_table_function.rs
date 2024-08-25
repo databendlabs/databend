@@ -132,7 +132,7 @@ impl Binder {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
                 .catalogs
-                .get_default_catalog(self.ctx.txn_mgr())?
+                .get_default_catalog(self.ctx.session_state())?
                 .get_table_function(&func_name.name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
@@ -348,10 +348,19 @@ impl Binder {
                             lambda: None,
                         },
                     };
-                    let srfs = vec![srf.clone()];
-                    let srf_expr = self.bind_project_set(&mut bind_context, &srfs, child)?;
+                    let select_list = vec![SelectTarget::AliasedExpr {
+                        expr: Box::new(srf.clone()),
+                        alias: None,
+                    }];
+                    let mut select_list =
+                        self.normalize_select_list(&mut bind_context, &select_list)?;
+                    // analyze set returning functions
+                    self.analyze_project_set_select(&mut bind_context, &mut select_list)?;
+                    // bind set returning functions
+                    let srf_expr = self.bind_project_set(&mut bind_context, child)?;
 
-                    if let Some((_, srf_result)) = bind_context.srfs.remove(&srf.to_string()) {
+                    if let Some(item) = select_list.items.pop() {
+                        let srf_result = item.scalar;
                         let column_binding =
                             if let ScalarExpr::BoundColumnRef(column_ref) = &srf_result {
                                 column_ref.column.clone()
@@ -408,7 +417,7 @@ impl Binder {
                         "The function '{}' is not supported for lateral joins. Lateral joins currently support only Set Returning Functions (SRFs).",
                         func_name
                     ))
-                        .set_span(*span))
+                    .set_span(*span))
                 }
             }
             _ => unreachable!(),

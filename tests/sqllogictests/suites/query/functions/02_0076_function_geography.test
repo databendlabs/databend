@@ -20,3 +20,21 @@ query T
 SELECT st_point(60,37);
 ----
 POINT(60 37)
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+SET enable_geo_create_table=1
+
+statement ok
+CREATE TABLE t1 (a int, g geography)
+
+statement ok
+INSERT INTO t1 VALUES(1, ST_GeogFromWkt('POINT(38.986635 58.1900303)')), (2, ST_GeogFromWkt('POINT(4.500212 -52.161170)'))
+
+query T
+SELECT a, g FROM t1
+----
+1 POINT(38.986635 58.1900303)
+2 POINT(4.500212 -52.16117)

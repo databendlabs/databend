@@ -30,3 +30,30 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : st_geographyfromewkt('POINT(1 2)')
+raw expr       : st_geographyfromewkt('POINT(1 2)')
+checked expr   : st_geographyfromewkt<String>("POINT(1 2)")
+optimized expr : "POINT(1 2)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(1 2)'
+
+
+ast            : st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')
+raw expr       : st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')
+checked expr   : st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)")
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'SRID=4326;POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')
+raw expr       : st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')
+checked expr   : st_geographyfromewkt<String>("LINESTRING(-124.2 42,-120.01 41.99)")
+optimized expr : "LINESTRING(-124.2 42,-120.01 41.99)"
+output type    : Geography
+output domain  : Undefined
+output         : 'LINESTRING(-124.2 42,-120.01 41.99)'
+
+

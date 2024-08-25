@@ -36,6 +36,11 @@ sha1 -> sha
 siphash -> siphash64
 st_asbinary -> st_aswkb
 st_astext -> st_aswkt
+st_geogfromewkt -> st_geographyfromewkt
+st_geogfromtext -> st_geographyfromewkt
+st_geogfromwkt -> st_geographyfromewkt
+st_geographyfromtext -> st_geographyfromewkt
+st_geographyfromwkt -> st_geographyfromewkt
 st_geom_point -> st_makegeompoint
 st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
@@ -2224,6 +2229,7 @@ Functions overloads:
 1 is_string(Variant NULL) :: Boolean NULL
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
+0 jq FACTORY
 0 json_array FACTORY
 0 json_array_elements FACTORY
 0 json_contains_in_left(Variant, Variant) :: Boolean
@@ -3562,6 +3568,8 @@ Functions overloads:
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry
 1 st_endpoint(Geometry NULL) :: Geometry NULL
+0 st_geographyfromewkt(String) :: Geography
+1 st_geographyfromewkt(String NULL) :: Geography NULL
 0 st_geohash(Geometry) :: String
 1 st_geohash(Geometry NULL) :: String NULL
 2 st_geohash(Geometry, Int32) :: String

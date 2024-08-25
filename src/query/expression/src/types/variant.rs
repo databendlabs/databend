@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use databend_common_io::deserialize_bitmap;
@@ -226,23 +227,21 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Map(col) => {
             let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(&col).unwrap();
-            let kvs = kv_col
-                .iter()
-                .map(|(k, v)| {
-                    let key = match k {
-                        ScalarRef::String(v) => v.to_string(),
-                        ScalarRef::Number(v) => v.to_string(),
-                        ScalarRef::Decimal(v) => v.to_string(),
-                        ScalarRef::Boolean(v) => v.to_string(),
-                        ScalarRef::Timestamp(v) => timestamp_to_string(v, inner_tz).to_string(),
-                        ScalarRef::Date(v) => date_to_string(v, inner_tz).to_string(),
-                        _ => unreachable!(),
-                    };
-                    let mut val = vec![];
-                    cast_scalar_to_variant(v, tz, &mut val);
-                    (key, val)
-                })
-                .collect::<Vec<_>>();
+            let mut kvs = BTreeMap::new();
+            for (k, v) in kv_col.iter() {
+                let key = match k {
+                    ScalarRef::String(v) => v.to_string(),
+                    ScalarRef::Number(v) => v.to_string(),
+                    ScalarRef::Decimal(v) => v.to_string(),
+                    ScalarRef::Boolean(v) => v.to_string(),
+                    ScalarRef::Timestamp(v) => timestamp_to_string(v, inner_tz).to_string(),
+                    ScalarRef::Date(v) => date_to_string(v, inner_tz).to_string(),
+                    _ => unreachable!(),
+                };
+                let mut val = vec![];
+                cast_scalar_to_variant(v, tz, &mut val);
+                kvs.insert(key, val);
+            }
             jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
                 .expect("failed to build jsonb object from map");
             return;

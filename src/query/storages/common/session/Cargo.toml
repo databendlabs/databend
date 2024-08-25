@@ -1,5 +1,5 @@
 [package]
-name = "databend-storages-common-txn"
+name = "databend-storages-common-session"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -7,11 +7,14 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+log = { workspace = true }
 parking_lot = { workspace = true }
 serde = { version = "1.0.194", features = ["derive"] }
 uuid = { workspace = true }
-
 [lints]
 workspace = true

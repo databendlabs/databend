@@ -1003,10 +1003,12 @@ where T: Number + ResultTypeOfUnary
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         if let Some(data) = data {
             let num_rows = data.num_rows();
-            self.blocks.push_back(WindowBlock {
-                block: data.convert_to_full(),
-                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-            });
+            if num_rows != 0 {
+                self.blocks.push_back(WindowBlock {
+                    block: data.convert_to_full(),
+                    builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
+                });
+            }
         }
 
         // Each loop will do:

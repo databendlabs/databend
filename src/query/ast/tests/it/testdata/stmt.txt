@@ -1654,7 +1654,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -1705,7 +1705,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -1756,7 +1756,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -1804,7 +1804,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -1887,7 +1887,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2031,7 +2031,7 @@ CreateTable(
                 ignore_result: false,
             },
         ),
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2132,7 +2132,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2209,7 +2209,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2362,7 +2362,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2492,7 +2492,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2597,7 +2597,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2657,7 +2657,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2701,7 +2701,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2773,7 +2773,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -2847,7 +2847,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -3186,7 +3186,7 @@ CreateTable(
             "storage_format": "native",
         },
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -3325,7 +3325,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -4734,7 +4734,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -4814,7 +4814,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -4875,7 +4875,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -4934,7 +4934,7 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -5033,7 +5033,7 @@ CreateTable(
                 ignore_result: false,
             },
         ),
-        transient: false,
+        table_type: Normal,
     },
 )
 
@@ -12771,7 +12771,7 @@ CreateTable(
             "comment": "table comment",
         },
         as_query: None,
-        transient: false,
+        table_type: Normal,
     },
 )
 

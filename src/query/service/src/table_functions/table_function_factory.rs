@@ -27,6 +27,8 @@ use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -34,8 +36,6 @@ use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
-use crate::catalogs::SYS_TBL_FUC_ID_END;
-use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;

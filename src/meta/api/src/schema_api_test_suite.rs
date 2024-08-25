@@ -490,7 +490,7 @@ impl SchemaApiTestSuite {
             info!("--- prepare db1,db3 and table");
             // prepare db1
             let res = self.create_database(mt, &tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.db_id);
+            assert_eq!(1, *res.db_id);
             db_id = res.db_id;
 
             let res = self.create_database(mt, &tenant, "db3", "eng1").await?;
@@ -499,7 +499,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_table(req).await?;
             table_id = res.table_id;
 
-            let db_id_name_key = DatabaseIdToName { db_id };
+            let db_id_name_key = DatabaseIdToName { db_id: *db_id };
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
             assert_eq!(
@@ -511,7 +511,7 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
-                db_id,
+                db_id: *db_id,
                 table_name: table_name.to_string(),
             });
         }
@@ -527,7 +527,7 @@ impl SchemaApiTestSuite {
             info!("rename database res: {:?}", res);
             assert!(res.is_ok());
 
-            let db_id_2_name_key = DatabaseIdToName { db_id };
+            let db_id_2_name_key = DatabaseIdToName { db_id: *db_id };
             let ret_db_name_ident: DatabaseNameIdentRaw =
                 get_kv_data(mt.as_kv_api(), &db_id_2_name_key).await?;
             assert_eq!(
@@ -539,7 +539,7 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
-                db_id,
+                db_id: *db_id,
                 table_name: table_name.to_string(),
             });
         }
@@ -564,7 +564,7 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
-                db_id,
+                db_id: *db_id,
                 table_name: table2_name.to_string(),
             });
         }
@@ -589,7 +589,7 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
-                db_id: db3_id,
+                db_id: *db3_id,
                 table_name: table3_name.to_string(),
             });
         }
@@ -618,7 +618,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         info!("--- create db1 again with if_not_exists=false");
@@ -655,7 +655,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.db_id, "db1 id is 1");
+            assert_eq!(1, *res.db_id, "db1 id is 1");
         }
 
         info!("--- get db1");
@@ -687,7 +687,7 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
-                6, res.db_id,
+                6, *res.db_id,
                 "second database id is 4: seq increment but no used"
             );
         }
@@ -831,7 +831,7 @@ impl SchemaApiTestSuite {
             .await?;
 
             // check that DatabaseMeta has been removed
-            let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
+            let res = is_all_db_data_removed(mt.as_kv_api(), *db_id).await?;
             assert!(res);
 
             // db has been removed, so undrop_database MUST return error
@@ -871,7 +871,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
             res.db_id
         };
 
@@ -987,11 +987,11 @@ impl SchemaApiTestSuite {
         let tenant = Tenant::new_or_err("tenant1", func_name!())?;
         {
             let res = self.create_database(mt, &tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.db_id);
+            assert_eq!(1, *res.db_id);
             db_ids.push(res.db_id);
 
             let res = self.create_database(mt, &tenant, "db2", "eng2").await?;
-            assert!(res.db_id > 1);
+            assert!(*res.db_id > 1);
             db_ids.push(res.db_id);
         }
 
@@ -1005,12 +1005,12 @@ impl SchemaApiTestSuite {
                 .await?;
 
             let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
-            assert_eq!(db_ids, got);
+            assert_eq!(db_ids.iter().map(|x| **x).collect::<Vec<_>>(), got);
 
             for (i, db_info) in dbs.iter().enumerate() {
                 assert_eq!(tenant.tenant_name(), db_info.name_ident.tenant_name());
                 assert_eq!(db_names[i], db_info.name_ident.database_name());
-                assert_eq!(db_ids[i], db_info.database_id.db_id);
+                assert_eq!(db_ids[i], db_info.database_id);
                 assert_eq!(engines[i], db_info.meta.engine);
             }
         }
@@ -1027,11 +1027,11 @@ impl SchemaApiTestSuite {
         let mut db_ids = vec![];
         {
             let res = self.create_database(mt, &tenant1, "db1", "eng1").await?;
-            assert_eq!(1, res.db_id);
+            assert_eq!(1, *res.db_id);
             db_ids.push(res.db_id);
 
             let res = self.create_database(mt, &tenant1, "db2", "eng2").await?;
-            assert!(res.db_id > 1);
+            assert!(*res.db_id > 1);
             db_ids.push(res.db_id);
         }
 
@@ -1049,7 +1049,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
-            assert_eq!(db_ids, got)
+            assert_eq!(db_ids.iter().map(|x| **x).collect::<Vec<_>>(), got)
         }
 
         info!("--- get_databases by tenant2");
@@ -1060,7 +1060,7 @@ impl SchemaApiTestSuite {
                     filter: None,
                 })
                 .await?;
-            let want: Vec<u64> = vec![db_id_3];
+            let want: Vec<u64> = vec![*db_id_3];
             let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
@@ -1096,7 +1096,7 @@ impl SchemaApiTestSuite {
         {
             // prepare db2
             let res = self.create_database(mt, &tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.db_id);
+            assert_eq!(1, *res.db_id);
 
             info!("--- rename not exists db4 to exists db1");
             {
@@ -1117,7 +1117,7 @@ impl SchemaApiTestSuite {
 
             // prepare db2
             let res = self.create_database(mt, &tenant, "db2", "eng1").await?;
-            assert!(res.db_id > 1);
+            assert!(*res.db_id > 1);
         }
 
         info!("--- rename exists db db1 to exists db db2");
@@ -1196,7 +1196,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
 
             let res = mt
                 .get_database_history(ListDatabaseReq {
@@ -1511,7 +1511,7 @@ impl SchemaApiTestSuite {
         mt.drop_table_by_id(DropTableByIdReq {
             if_exists: false,
             tenant: tenant.clone(),
-            db_id,
+            db_id: *db_id,
             table_name: table_name.to_string(),
             tb_id: table_id,
         })
@@ -1705,7 +1705,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
             res.db_id
         };
 
@@ -1841,7 +1841,7 @@ impl SchemaApiTestSuite {
                 let plan = DropTableByIdReq {
                     if_exists: false,
                     tenant: tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
                 };
@@ -1871,7 +1871,7 @@ impl SchemaApiTestSuite {
                 let plan = DropTableByIdReq {
                     if_exists: false,
                     tenant: tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
                 };
@@ -1890,7 +1890,7 @@ impl SchemaApiTestSuite {
                 let plan = DropTableByIdReq {
                     if_exists: true,
                     tenant: tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
                 };
@@ -1904,7 +1904,7 @@ impl SchemaApiTestSuite {
             let table = "test_replace";
 
             let key_dbid_tbname = DBIdTableName {
-                db_id,
+                db_id: *db_id,
                 table_name: table.to_string(),
             };
 
@@ -2526,7 +2526,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         info!("--- create and get table");
@@ -2830,7 +2830,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -3171,7 +3171,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         info!("--- create and get table");
@@ -3348,7 +3348,7 @@ impl SchemaApiTestSuite {
                 drop_on,
                 ..Default::default()
             };
-            let id_key = DatabaseId { db_id };
+            let id_key = db_id;
             let data = serialize_struct(&drop_data)?;
             upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
@@ -3394,7 +3394,7 @@ impl SchemaApiTestSuite {
                 drop_on,
                 ..Default::default()
             };
-            let id_key = DatabaseId { db_id };
+            let id_key = db_id;
             let data = serialize_struct(&drop_data)?;
             upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
@@ -3574,7 +3574,7 @@ impl SchemaApiTestSuite {
         let res = mt.create_database(plan).await?;
         info!("create database res: {:?}", res);
 
-        assert_eq!(1, res.db_id, "first database id is 1");
+        assert_eq!(1, *res.db_id, "first database id is 1");
         let one_day_before = Some(Utc::now() - Duration::days(1));
         let two_day_before = Some(Utc::now() - Duration::days(2));
 
@@ -3582,7 +3582,7 @@ impl SchemaApiTestSuite {
             mt,
             tbl_name_ident.clone(),
             DBIdTableName {
-                db_id: res.db_id,
+                db_id: *res.db_id,
                 table_name: tb1_name.to_string(),
             },
             one_day_before,
@@ -3594,7 +3594,7 @@ impl SchemaApiTestSuite {
                 mt,
                 tbl_name_ident.clone(),
                 DBIdTableName {
-                    db_id: res.db_id,
+                    db_id: *res.db_id,
                     table_name: tb1_name.to_string(),
                 },
                 two_day_before,
@@ -3650,7 +3650,7 @@ impl SchemaApiTestSuite {
         }
 
         let table_id_idlist = TableIdHistoryIdent {
-            database_id: res.db_id,
+            database_id: *res.db_id,
             table_name: tb1_name.to_string(),
         };
 
@@ -3838,7 +3838,7 @@ impl SchemaApiTestSuite {
             drop_on,
             ..Default::default()
         };
-        let id_key = DatabaseId { db_id };
+        let id_key = db_id;
         let data = serialize_struct(&drop_data)?;
         upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
@@ -3847,7 +3847,7 @@ impl SchemaApiTestSuite {
         assert_eq!(old_id_list.len(), 1);
 
         let table_id_idlist = TableIdHistoryIdent {
-            database_id: db_id,
+            database_id: *db_id,
             table_name: tb1_name.to_string(),
         };
 
@@ -3980,7 +3980,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -4077,11 +4077,11 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_database(req).await?;
             drop_ids_1.push(DroppedId::Db(
-                res.db_id,
+                *res.db_id,
                 db_name.database_name().to_string(),
             ));
             drop_ids_2.push(DroppedId::Db(
-                res.db_id,
+                *res.db_id,
                 db_name.database_name().to_string(),
             ));
 
@@ -4119,7 +4119,7 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_database(create_db_req.clone()).await?;
             let db_id = res.db_id;
-            drop_ids_2.push(DroppedId::Db(db_id, "db2".to_string()));
+            drop_ids_2.push(DroppedId::Db(*db_id, "db2".to_string()));
 
             info!("--- create and drop db2.tb1");
             {
@@ -4136,7 +4136,7 @@ impl SchemaApiTestSuite {
                 };
                 let resp = mt.create_table(req.clone()).await?;
                 drop_ids_1.push(DroppedId::Table(
-                    res.db_id,
+                    *res.db_id,
                     resp.table_id,
                     table_name.table_name.clone(),
                 ));
@@ -4144,7 +4144,7 @@ impl SchemaApiTestSuite {
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
@@ -4169,7 +4169,7 @@ impl SchemaApiTestSuite {
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
@@ -4205,7 +4205,7 @@ impl SchemaApiTestSuite {
             // change db meta to make this db drop time outof filter time
             let mut drop_db_meta = create_db_req.meta.clone();
             drop_db_meta.drop_on = Some(created_on + Duration::seconds(100));
-            let id_key = DatabaseId { db_id };
+            let id_key = db_id;
             let data = serialize_struct(&drop_db_meta)?;
             upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
         }
@@ -4238,12 +4238,12 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_1.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
-                drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
+                drop_ids_1.push(DroppedId::Table(*db_id, resp.table_id, "tb1".to_string()));
+                drop_ids_2.push(DroppedId::Table(*db_id, resp.table_id, "tb1".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
@@ -4265,11 +4265,11 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb2".to_string()));
+                drop_ids_2.push(DroppedId::Table(*db_id, resp.table_id, "tb2".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                 })
@@ -4475,7 +4475,7 @@ impl SchemaApiTestSuite {
             let db_id = res.db_id;
 
             let drop_ids =
-                create_dropped_table(mt, tenant_name, test_db_name, db_id, DEFAULT_MGET_SIZE + 1)
+                create_dropped_table(mt, tenant_name, test_db_name, *db_id, DEFAULT_MGET_SIZE + 1)
                     .await?;
             let case_drop_ids_vec = vec![
                 &mut case1_drop_ids,
@@ -4506,7 +4506,7 @@ impl SchemaApiTestSuite {
             let db_id = res.db_id;
 
             let drop_ids =
-                create_dropped_table(mt, tenant_name, test_db_name, db_id, DEFAULT_MGET_SIZE)
+                create_dropped_table(mt, tenant_name, test_db_name, *db_id, DEFAULT_MGET_SIZE)
                     .await?;
             let case_drop_ids_vec = vec![
                 &mut case1_drop_ids,
@@ -4534,7 +4534,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(req).await?;
             let db_id = res.db_id;
 
-            let drop_ids = create_dropped_table(mt, tenant_name, test_db_name, db_id, 1).await?;
+            let drop_ids = create_dropped_table(mt, tenant_name, test_db_name, *db_id, 1).await?;
             let case_drop_ids_vec = vec![&mut case1_drop_ids, &mut case5_drop_ids];
             for case_drop_ids in case_drop_ids_vec {
                 case_drop_ids.extend(drop_ids.clone());
@@ -4637,7 +4637,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -5054,7 +5054,7 @@ impl SchemaApiTestSuite {
             orphan_table_id_list.append(1);
             orphan_table_id_list.append(2);
             let key_table_id_list = TableIdHistoryIdent {
-                database_id: db_id,
+                database_id: *db_id,
                 table_name: create_table_as_dropped_resp
                     .orphan_table_name
                     .clone()
@@ -5087,7 +5087,7 @@ impl SchemaApiTestSuite {
             let mut orphan_table_id_list: TableIdList = TableIdList::new();
             orphan_table_id_list.append(1);
             let key_table_id_list = TableIdHistoryIdent {
-                database_id: db_id,
+                database_id: *db_id,
                 table_name: create_table_as_dropped_resp
                     .orphan_table_name
                     .clone()
@@ -5206,7 +5206,7 @@ impl SchemaApiTestSuite {
             let create_table_as_dropped_resp = mt.create_table(create_table_req.clone()).await?;
 
             let key_table_id_list = TableIdHistoryIdent {
-                database_id: db_id,
+                database_id: *db_id,
                 table_name: create_table_as_dropped_resp
                     .orphan_table_name
                     .clone()
@@ -5342,7 +5342,7 @@ impl SchemaApiTestSuite {
 
                 let commit_table_req = CommitTableMetaReq {
                     name_ident: create_table_req.name_ident.clone(),
-                    db_id,
+                    db_id: *db_id,
                     table_id: resp.table_id,
                     prev_table_id: resp.prev_table_id,
                     orphan_table_name: resp.orphan_table_name.clone(),
@@ -5412,7 +5412,7 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         info!("--- create and get table");
@@ -5538,9 +5538,9 @@ impl SchemaApiTestSuite {
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
 
-            let got = mt.get_db_name_by_id(res.db_id).await?;
+            let got = mt.get_db_name_by_id(*res.db_id).await?;
             assert_eq!(got, db_name.to_string())
         }
 
@@ -5889,7 +5889,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let res = self.create_database(mt, &tenant, db_name, "eng1").await?;
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         info!("--- create 2 tables: tb1 tb2");
@@ -6901,7 +6901,7 @@ impl SchemaApiTestSuite {
             let res = node_a.create_database(req).await;
             info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.db_id, "first database id is 1");
+            assert_eq!(1, *res.db_id, "first database id is 1");
         }
 
         info!("--- get db1 on node_b");
@@ -6972,9 +6972,9 @@ impl SchemaApiTestSuite {
             debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(db_ids[0], res[0].database_id.db_id, "db1 id");
+            assert_eq!(db_ids[0], res[0].database_id, "db1 id");
             assert_eq!("db1", res[0].name_ident.database_name(), "db1.name is db1");
-            assert_eq!(db_ids[1], res[1].database_id.db_id, "db3 id");
+            assert_eq!(db_ids[1], res[1].database_id, "db3 id");
             assert_eq!("db3", res[1].name_ident.database_name(), "db3.name is db3");
         }
 
@@ -7615,7 +7615,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
         };
 
         let res = self.mt.create_database(plan).await?;
-        self.db_id = res.db_id;
+        self.db_id = *res.db_id;
 
         Ok(())
     }

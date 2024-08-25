@@ -37,6 +37,8 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use crate::primitive::Id;
+    use crate::schema::database_name_ident::DatabaseNameIdent;
     use crate::schema::DatabaseId;
     use crate::tenant_key::resource::TenantResource;
 
@@ -45,12 +47,13 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_database";
         const TYPE: &'static str = "DatabaseNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = DatabaseId;
+        type ValueType = Id<DatabaseId>;
     }
 
-    impl kvapi::Value for DatabaseId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+    impl kvapi::Value for Id<DatabaseId> {
+        type KeyType = DatabaseNameIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            [self.inner().to_string_key()]
         }
     }
 

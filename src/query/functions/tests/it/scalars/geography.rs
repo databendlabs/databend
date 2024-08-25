@@ -25,6 +25,7 @@ fn test_geography() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geography.txt").unwrap();
     test_st_makepoint(file);
+    test_st_geographyfromewkt(file);
 }
 
 fn test_st_makepoint(file: &mut impl Write) {
@@ -35,4 +36,20 @@ fn test_st_makepoint(file: &mut impl Write) {
         ("lat", Float64Type::from_data(vec![0.0, 90.0, -45.0])),
     ];
     run_ast(file, "st_makepoint(lon, lat)", &columns);
+}
+
+fn test_st_geographyfromewkt(file: &mut impl Write) {
+    // todo
+    // run_ast(file, "st_geographyfromewkt('POINT EMPTY')", &[]);
+    run_ast(file, "st_geographyfromewkt('POINT(1 2)')", &[]);
+    run_ast(
+        file,
+        "st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')",
+        &[],
+    );
 }

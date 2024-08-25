@@ -29,11 +29,12 @@ use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::error;
 use log::info;
@@ -83,21 +84,31 @@ impl AsyncSink for CommitMultiTableInsert {
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         let mut update_table_metas = Vec::with_capacity(self.commit_metas.len());
+        let mut update_temp_tables = Vec::with_capacity(self.commit_metas.len());
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
-            update_table_metas.push((
-                build_update_table_meta_req(
-                    table.as_ref(),
-                    &snapshot_generator,
-                    self.ctx.txn_mgr(),
-                )
-                .await?,
-                table.get_table_info().clone(),
-            ));
+            if table.is_temp() {
+                update_temp_tables.push(UpdateTempTableReq {
+                    table_id,
+                    new_table_meta: table.get_table_info().meta.clone(),
+                    copied_files: Default::default(),
+                    desc: table.get_table_info().desc.clone(),
+                });
+            } else {
+                update_table_metas.push((
+                    build_update_table_meta_req(
+                        table.as_ref(),
+                        &snapshot_generator,
+                        self.ctx.txn_mgr(),
+                    )
+                    .await?,
+                    table.get_table_info().clone(),
+                ));
+            }
             snapshot_generators.insert(table_id, snapshot_generator);
         }
 
@@ -110,6 +121,7 @@ impl AsyncSink for CommitMultiTableInsert {
                 copied_files: vec![],
                 update_stream_metas: self.update_stream_meta.clone(),
                 deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
+                update_temp_tables: std::mem::take(&mut update_temp_tables),
             };
 
             let update_meta_result = match self

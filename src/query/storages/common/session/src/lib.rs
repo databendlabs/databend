@@ -12,7 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod manager;
-pub use manager::TxnManager;
-pub use manager::TxnManagerRef;
-pub use manager::TxnState;
+mod temp_table;
+mod transaction;
+pub use temp_table::TempTblMgr;
+pub use temp_table::TempTblMgrRef;
+pub use transaction::TxnManager;
+pub use transaction::TxnManagerRef;
+pub use transaction::TxnState;
+mod session_state;
+pub use session_state::SessionState;
+#[allow(unused_imports)]
+pub use temp_table::drop_all_temp_tables;
+pub use temp_table::drop_table_by_id;

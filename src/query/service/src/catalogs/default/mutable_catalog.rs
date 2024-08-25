@@ -25,11 +25,14 @@ use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
@@ -43,11 +46,11 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
@@ -65,6 +68,7 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -75,6 +79,7 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -98,6 +103,8 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -110,8 +117,8 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use fastrace::func_name;
 use log::info;
 
@@ -266,7 +273,7 @@ impl Catalog for MutableCatalog {
 
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
-            database_id: DatabaseId::new(res.db_id),
+            database_id: res.db_id,
             name_ident: req.name_ident.clone(),
             // TODO create_database should return meta seq
             meta: SeqV::new(0, req.meta.clone()),
@@ -653,5 +660,42 @@ impl Catalog for MutableCatalog {
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
         Ok(self.ctx.meta.drop_sequence(req).await?)
+    }
+
+    /// Dictionary
+    #[async_backtrace::framed]
+    async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        Ok(self.ctx.meta.create_dictionary(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        Ok(self.ctx.meta.update_dictionary(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_dictionary(
+        &self,
+        dict_ident: TenantDictionaryIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await?;
+        Ok(reply)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_dictionary(
+        &self,
+        req: TenantDictionaryIdent,
+    ) -> Result<Option<GetDictionaryReply>> {
+        let reply = self.ctx.meta.get_dictionary(req.clone()).await?;
+        Ok(reply)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
+        Ok(self.ctx.meta.list_dictionaries(req).await?)
     }
 }

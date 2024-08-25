@@ -44,13 +44,16 @@ SHOW CREATE TABLE `test`.`c`
 ----
 c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
+statement error 4000
+CREATE TABLE test.should_fail (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+
 statement ok
-CREATE TABLE test.d (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+CREATE TABLE test.d (a int not null) ENGINE=FUSE 'fs:///tmp/load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 query TT
 SHOW CREATE TABLE `test`.`d`
 ----
-d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet' LOCATION = 's3 | bucket=load,root=/files/,endpoint=https://s3.amazonaws.com'
+d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet' LOCATION = 'fs | root=/tmp/load/files/'
 
 query TT
 SHOW CREATE TABLE `test`.`c`

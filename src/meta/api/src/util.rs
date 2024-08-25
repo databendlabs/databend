@@ -75,6 +75,8 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
@@ -83,7 +85,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -181,13 +182,8 @@ where
     K: kvapi::Key,
     K::ValueType: FromToProto,
 {
-    let res = kv_api.get_kv(&k.to_string_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, Some(deserialize_struct(&seq_v.data)?)))
-    } else {
-        Ok((0, None))
-    }
+    let res = kv_api.get_pb(k).await?;
+    Ok((res.seq(), res.into_value()))
 }
 
 /// Batch get values that are encoded with FromToProto.
@@ -375,15 +371,22 @@ pub fn db_has_to_exist(
     if seq == 0 {
         debug!(seq = seq, db_name_ident :? =(db_name_ident); "db does not exist");
 
-        Err(KVAppError::AppError(AppError::UnknownDatabase(
-            UnknownDatabase::new(
-                db_name_ident.database_name(),
-                format!("{}: {}", msg, db_name_ident.display()),
-            ),
+        Err(KVAppError::AppError(unknown_database_error(
+            db_name_ident,
+            msg,
         )))
     } else {
         Ok(())
     }
+}
+
+pub fn unknown_database_error(db_name_ident: &DatabaseNameIdent, msg: impl Display) -> AppError {
+    let e = UnknownDatabase::new(
+        db_name_ident.database_name(),
+        format!("{}: {}", msg, db_name_ident.display()),
+    );
+
+    AppError::UnknownDatabase(e)
 }
 
 /// Return OK if a db_id to db_meta exists by checking the seq.

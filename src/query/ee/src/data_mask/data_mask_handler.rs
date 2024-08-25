@@ -58,7 +58,7 @@ impl DatamaskHandler for RealDatamaskHandler {
                 name: DataMaskNameIdent::new(tenant, name),
             })
             .await?;
-        Ok(resp.policy)
+        Ok(resp.policy.data)
     }
 }
 
