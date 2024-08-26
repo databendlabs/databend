@@ -22,8 +22,8 @@ databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sinks = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 databend-common-storage = { workspace = true }
-databend-storages-common-table-meta = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
