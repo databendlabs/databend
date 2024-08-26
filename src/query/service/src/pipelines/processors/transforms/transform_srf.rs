@@ -239,7 +239,7 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
-                    "flaatten" => {
+                    "flatten" => {
                         // The function return type:
                         // DataType::Tuple(vec![
                         //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
@@ -346,7 +346,7 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
-                    "unnest" | "flatten" => {
+                    "unnest" => {
                         let mut result_data_blocks = Vec::with_capacity(used);
                         for (i, (mut row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
