@@ -53,7 +53,7 @@ CREATE TABLE test.d (a int not null) ENGINE=FUSE 'fs:///tmp/load/files/' CONNECT
 query TT
 SHOW CREATE TABLE `test`.`d`
 ----
-d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet' LOCATION = 'fs | root=/tmp/load/files/'
+d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' STORAGE_FORMAT='parquet' LOCATION = 'fs | root=/tmp/load/files/'
 
 query TT
 SHOW CREATE TABLE `test`.`c`
