@@ -20,6 +20,7 @@ use std::hash::Hasher;
 
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::raw::TIdentRaw;
 use crate::tenant_key::resource::TenantResource;
@@ -137,6 +138,11 @@ impl<R, N> TIdent<R, N> {
     pub fn unknown_error(&self, ctx: impl Display) -> UnknownError<R, N>
     where N: Clone {
         UnknownError::new(self.name.clone(), ctx)
+    }
+
+    pub fn exist_error(&self, ctx: impl Display) -> ExistError<R, N>
+    where N: Clone {
+        ExistError::new(self.name.clone(), ctx)
     }
 }
 

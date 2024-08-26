@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaClientError;
@@ -84,6 +85,13 @@ impl From<MetaNetworkError> for KVAppError {
     fn from(e: MetaNetworkError) -> Self {
         let meta_err = MetaError::from(e);
         Self::MetaError(meta_err)
+    }
+}
+
+impl From<InvalidArgument> for KVAppError {
+    fn from(value: InvalidArgument) -> Self {
+        let network_error = MetaNetworkError::from(value);
+        Self::MetaError(MetaError::from(network_error))
     }
 }
 
