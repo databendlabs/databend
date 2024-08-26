@@ -8,13 +8,13 @@ statement ok
 USE db1
 
 statement ok
-CREATE TABLE test_table(id BIGINT, name VARCHAR, age INT)
+CREATE TABLE "test-table"(id BIGINT, name VARCHAR, age INT)
 
 statement ok
 CREATE TABLE test_ts_table(ts TIMESTAMP, name VARCHAR, age INT)
 
 statement ok
-insert into test_table (id,name,age) values (1676805481000000,'2',3), (1676805481000000, '5', 6)
+insert into "test-table" (id,name,age) values (1676805481000000,'2',3), (1676805481000000, '5', 6)
 
 statement ok
 DROP STAGE IF EXISTS test_10103
@@ -23,7 +23,7 @@ statement ok
 CREATE STAGE IF NOT EXISTS test_10103
 
 statement ok
-copy into @test_10103 from test_table FILE_FORMAT = (type = CSV)
+copy into @test_10103 from "test-table" FILE_FORMAT = (type = CSV)
 
 statement ok
 copy into test_ts_table from @test_10103 FILE_FORMAT = (type = CSV)
@@ -34,7 +34,7 @@ SELECT ts FROM test_ts_table LIMIT 1
 2023-02-19 11:18:01.000000
 
 statement ok
-drop table test_table all
+drop table "test-table" all
 
 statement ok
 drop table test_ts_table all

@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono_tz::Tz;
-use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
@@ -100,6 +99,8 @@ pub struct Binder {
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+
+    pub enable_result_cache: bool,
 }
 
 impl<'a> Binder {
@@ -110,6 +111,10 @@ impl<'a> Binder {
         metadata: MetadataRef,
     ) -> Self {
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        let enable_result_cache = ctx
+            .get_settings()
+            .get_enable_query_result_cache()
+            .unwrap_or_default();
         Binder {
             ctx,
             dialect,
@@ -121,6 +126,7 @@ impl<'a> Binder {
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            enable_result_cache,
         }
     }
 
@@ -165,9 +171,8 @@ impl<'a> Binder {
 
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-
-                let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    Some(format_statement(stmt.clone())?)
+                let formatted_ast = if self.enable_result_cache {
+                    Some(stmt.to_string())
                 } else {
                     None
                 };

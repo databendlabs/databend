@@ -217,6 +217,7 @@ arrow-schema = { version = "52", features = ["serde"] }
 arrow-select = { version = "52" }
 arrow-udf-js = "0.3.1"
 arrow-udf-python = "0.2.1"
+sha2 = "0.10.8"
 arrow-udf-wasm = "0.2.2"
 async-backtrace = "0.2"
 async-trait = { version = "0.1.77" }

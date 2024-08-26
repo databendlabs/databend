@@ -23,6 +23,7 @@ pub mod binder;
 pub mod dataframe;
 mod expression_parser;
 pub mod optimizer;
+mod planner_cache;
 pub mod plans;
 mod stream_column;
 mod udf_validator;
