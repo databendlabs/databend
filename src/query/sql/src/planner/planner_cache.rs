@@ -52,6 +52,10 @@ impl Planner {
         key: &str,
         stmt: &Statement,
     ) -> (bool, Option<(Plan, PlanExtras)>) {
+        if matches!(stmt, Statement::Query(_)) {
+            return (false, None);
+        }
+
         let mut visitor = TableRefVisitor {
             ctx: self.ctx.clone(),
             snapshots: vec![],

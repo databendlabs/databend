@@ -46,7 +46,6 @@ use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
-use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 
@@ -59,7 +58,6 @@ pub struct Planner {
 
 #[derive(Debug, Clone)]
 pub struct PlanExtras {
-    pub metadata: MetadataRef,
     pub format: Option<String>,
     pub statement: Statement,
 }
@@ -206,7 +204,6 @@ impl Planner {
 
                 let optimized_plan = optimize(opt_ctx, plan).await?;
                 let result = (optimized_plan, PlanExtras {
-                    metadata,
                     format,
                     statement: stmt,
                 });
