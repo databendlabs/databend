@@ -126,14 +126,14 @@ impl TableRefVisitor {
                 ident_type: IdentifierType::None,
             });
 
-            let catalog_nam = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
+            let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
             let table_name = normalize_identifier(&table, &self.name_resolution_ctx).name;
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self
                     .ctx
-                    .get_table(&catalog_nam, &database_name, &table_name)
+                    .get_table(&catalog_name, &database_name, &table_name)
                     .await
                 {
                     if let Some(sn) = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION) {
