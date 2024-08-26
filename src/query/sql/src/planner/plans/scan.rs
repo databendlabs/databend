@@ -287,7 +287,7 @@ impl Operator for Scan {
         };
 
         // If prewhere is not none, we can't get precise cardinality
-        let precise_cardinality = if self.prewhere.is_none() {
+        let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
             precise_cardinality
         } else {
             None

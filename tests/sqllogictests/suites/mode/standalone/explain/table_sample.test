@@ -92,7 +92,7 @@ Filter
 
 
 query
-select count(distinct number) < 10000000 from numbers(10000000) sample block(10);
+select count(number) < 10000000000 from numbers(10000000000) sample block(0.01);
 ----
 1
 
