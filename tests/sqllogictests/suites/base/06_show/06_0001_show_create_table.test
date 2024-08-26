@@ -42,7 +42,7 @@ CREATE TABLE test.c (a int not null) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STO
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement error 4000
 CREATE TABLE test.should_fail (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
@@ -58,7 +58,7 @@ d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, a % 3) COMPRESSIO
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement ok
 DROP TABLE `test`.`a`
