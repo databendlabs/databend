@@ -168,7 +168,7 @@ mod catalog_info {
     impl From<crate::schema::CatalogIdIdent> for CatalogId {
         fn from(value: crate::schema::CatalogIdIdent) -> Self {
             Self {
-                catalog_id: value.catalog_id(),
+                catalog_id: *value.catalog_id(),
             }
         }
     }

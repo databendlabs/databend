@@ -25,7 +25,6 @@ use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CannotAccessShareTable;
-use databend_common_meta_app::app_error::CatalogAlreadyExists;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
@@ -52,7 +51,6 @@ use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
-use databend_common_meta_app::app_error::UnknownCatalog;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::app_error::UnknownIndex;
@@ -64,13 +62,13 @@ use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -206,6 +204,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
@@ -267,6 +266,9 @@ use crate::util::get_virtual_column_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
+use crate::util::txn_delete_exact;
+use crate::util::txn_op_put_pb;
+use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
@@ -3907,31 +3909,23 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<CreateCatalogReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let name_key = &req.name_ident;
+        let name_ident = &req.name_ident;
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            // Get catalog by name to ensure absence
-            let (catalog_id_seq, catalog_id) = get_u64_value(self, name_key).await?;
-            debug!(
-                catalog_id_seq = catalog_id_seq,
-                catalog_id = catalog_id,
-                name_key :? =(name_key);
-                "get_catalog"
-            );
+            let res = self.get_id_and_value(name_ident).await?;
 
-            if catalog_id_seq > 0 {
+            debug!(res :? = res,name_ident :? =(name_ident);"get_catalog");
+
+            if let Some((seq_id, _seq_meta)) = res {
                 return if req.if_not_exists {
-                    Ok(CreateCatalogReply { catalog_id })
+                    Ok(CreateCatalogReply {
+                        catalog_id: *seq_id.data,
+                    })
                 } else {
-                    Err(KVAppError::AppError(AppError::CatalogAlreadyExists(
-                        CatalogAlreadyExists::new(
-                            name_key.name(),
-                            format!("create catalog: tenant: {}", name_key.tenant_name()),
-                        ),
-                    )))
+                    Err(AppError::exists(name_ident, func_name!()).into())
                 };
             }
 
@@ -3939,41 +3933,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (tenant, catalog_name) -> catalog_id
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
-            let catalog_id = fetch_id(self, IdGenerator::catalog_id()).await?;
-            let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
-            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
+            let id = fetch_id(self, IdGenerator::catalog_id()).await?;
+            let catalog_id = CatalogId::new(id);
+            let id_ident = CatalogIdIdent::new_generic(name_ident.tenant(), catalog_id);
+            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
 
-            debug!(catalog_id = catalog_id, name_key :? =(name_key); "new catalog id");
+            debug!(catalog_id :? = catalog_id, name_ident :? =(name_ident); "new catalog id");
 
-            {
-                let condition = vec![
-                    txn_cond_seq(name_key, Eq, 0),
-                    txn_cond_seq(&id_to_name_key, Eq, 0),
-                ];
-                let if_then = vec![
-                    txn_op_put(name_key, serialize_u64(catalog_id)?), /* (tenant, catalog_name) -> catalog_id */
-                    txn_op_put(&id_key, serialize_struct(&req.meta)?), /* (catalog_id) -> catalog_meta */
-                    txn_op_put(&id_to_name_key, serialize_struct(&name_key.to_raw())?), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-                ];
+            let mut txn = TxnRequest::default();
 
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
+            txn_replace_exact(&mut txn, name_ident, 0, &catalog_id)?; /* (tenant, catalog_name) -> catalog_id */
+            txn.if_then.extend([
+                txn_op_put_pb(&id_ident, &req.meta)?, /* (catalog_id) -> catalog_meta */
+                txn_op_put_pb(&id_to_name_ident, &name_ident.to_raw())?, /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
 
-                let (succ, _) = send_txn(self, txn_req).await?;
+            ]);
 
-                debug!(
-                    name :? =(name_key),
-                    id :? =(&id_key),
-                    succ = succ;
-                    "create_catalog"
-                );
+            let (succ, _) = send_txn(self, txn).await?;
 
-                if succ {
-                    return Ok(CreateCatalogReply { catalog_id });
-                }
+            debug!(name :? =(name_ident),id :? =(&id_ident),succ = succ;"create_catalog");
+
+            if succ {
+                return Ok(CreateCatalogReply {
+                    catalog_id: *catalog_id,
+                });
             }
         }
     }
@@ -3985,13 +3968,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let name_key = &req.inner;
 
-        let (_, catalog_id, _, catalog_meta) =
-            get_catalog_or_err(self, name_key, "get_catalog").await?;
+        let (seq_id, seq_meta) = self
+            .get_id_and_value(name_key)
+            .await?
+            .ok_or_else(|| AppError::unknown(name_key, func_name!()))?;
 
         let catalog = CatalogInfo {
-            id: CatalogIdIdent::new(name_key.tenant(), catalog_id).into(),
+            id: CatalogIdIdent::new_generic(name_key.tenant(), seq_id.data).into(),
             name_ident: name_key.clone().into(),
-            meta: catalog_meta,
+            meta: seq_meta.data,
         };
 
         Ok(Arc::new(catalog))
@@ -4002,29 +3987,25 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let name_key = &req.name_ident;
+        let name_ident = &req.name_ident;
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let res = get_catalog_or_err(
-                self,
-                name_key,
-                format!("drop_catalog: {}", name_key.display()),
-            )
-            .await;
+            let res = self
+                .get_id_and_value(name_ident)
+                .await?
+                .ok_or_else(|| AppError::unknown(name_ident, func_name!()));
 
-            let (_, catalog_id, catalog_meta_seq, _) = match res {
+            let (seq_id, seq_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
-                    if let KVAppError::AppError(AppError::UnknownCatalog(_)) = e {
-                        if req.if_exists {
-                            return Ok(DropCatalogReply {});
-                        }
+                    if req.if_exists {
+                        return Ok(DropCatalogReply {});
                     }
 
-                    return Err(e);
+                    return Err(e.into());
                 }
             };
 
@@ -4032,41 +4013,23 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (tenant, catalog_name) -> catalog_id
             // (catalog_id) -> catalog_meta
             // (catalog_id) -> (tenant, catalog_name)
-            let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
-            let id_to_name_key = CatalogIdToNameIdent::new(name_key.tenant(), catalog_id);
+            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
 
-            debug!(
-                catalog_id = catalog_id,
-                name_key :? =(&name_key);
-                "catalog keys to delete"
-            );
+            debug!(seq_id :? = seq_id, name_ident :? =(&name_ident); "{}", func_name!());
 
-            {
-                let condition = vec![txn_cond_seq(&id_key, Eq, catalog_meta_seq)];
-                let if_then = vec![
-                    txn_op_del(name_key),        // (tenant, catalog_name) -> catalog_id
-                    txn_op_del(&id_key),         // (catalog_id) -> catalog_meta
-                    txn_op_del(&id_to_name_key), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-                ];
+            let mut txn = TxnRequest::default();
 
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
+            txn_delete_exact(&mut txn, name_ident, seq_id.seq); // (tenant, catalog_name) -> catalog_id
+            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq); // (catalog_id) -> catalog_meta
+            txn.if_then.push(txn_op_del(&id_to_name_ident)); /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
 
-                let (succ, _) = send_txn(self, txn_req).await?;
+            let (succ, _) = send_txn(self, txn).await?;
 
-                debug!(
-                    name :? =(&name_key),
-                    id :? =(&id_key),
-                    succ = succ;
-                    "drop_catalog"
-                );
+            debug!(name_ident :? =(&name_ident),id :? =(&id_ident),succ = succ; "{}", func_name!());
 
-                if succ {
-                    break;
-                }
+            if succ {
+                break;
             }
         }
 
@@ -4082,37 +4045,46 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant = req.tenant;
-        let name_key = CatalogNameIdent::new(&tenant, "");
+        let name_key = CatalogNameIdent::new(&tenant, "dummy");
+
+        let dir = DirName::new(name_key);
 
         // Pairs of catalog-name and catalog_id with seq
-        let (tenant_catalog_names, catalog_ids) = list_u64_value(self, &name_key).await?;
+        let items = self.list_pb(&dir).await?.try_collect::<Vec<_>>().await?;
 
-        // Keys for fetching serialized CatalogMeta from kvapi::KVApi
-        let mut kv_keys = Vec::with_capacity(catalog_ids.len());
-
-        for catalog_id in catalog_ids.iter() {
-            let k = CatalogIdIdent::new(&tenant, *catalog_id).to_string_key();
-            kv_keys.push(k);
-        }
+        // Keys for fetching CatalogMeta from kvapi::KVApi
+        let kv_keys = items.iter().map(|x| x.seqv.data.into_t_ident(&tenant));
+        let kv_keys = kv_keys.collect::<Vec<_>>();
 
         // Batch get all catalog-metas.
         // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
+        #[allow(deprecated)]
+        let seq_metas = self.get_pb_values(kv_keys.clone()).await?;
+        let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
 
-        let seq_metas = self.mget_kv(&kv_keys).await?;
+        if seq_metas.len() != kv_keys.len() {
+            let err = InvalidReply::new(
+                "list_catalogs",
+                &AnyError::error(format!(
+                    "mismatched catalog-meta count: got: {}, expect: {}",
+                    seq_metas.len(),
+                    kv_keys.len()
+                )),
+            );
+            let meta_net_err = MetaNetworkError::from(err);
+            return Err(KVAppError::MetaError(meta_net_err.into()));
+        }
+
         let mut catalog_infos = Vec::with_capacity(kv_keys.len());
 
-        for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
-            if let Some(seq_meta) = seq_meta_opt {
-                let catalog_meta: CatalogMeta = deserialize_struct(&seq_meta.data)?;
+        for (i, seq_meta_opt) in seq_metas.into_iter().enumerate() {
+            let item = &items[i];
 
+            if let Some(seq_meta) = seq_meta_opt {
                 let catalog_info = CatalogInfo {
-                    id: CatalogIdIdent::new(&tenant, catalog_ids[i]).into(),
-                    name_ident: CatalogNameIdent::new(
-                        name_key.tenant().clone(),
-                        tenant_catalog_names[i].name(),
-                    )
-                    .into(),
-                    meta: catalog_meta,
+                    id: CatalogIdIdent::new(&tenant, *item.seqv.data).into(),
+                    name_ident: CatalogNameIdent::new(&tenant, item.key.name()).into(),
+                    meta: seq_meta.data,
                 };
                 catalog_infos.push(Arc::new(catalog_info));
             } else {
@@ -5720,51 +5692,6 @@ async fn gc_dropped_table_index(
     }
 
     Ok(())
-}
-
-/// Returns (catalog_id_seq, catalog_id, db_meta_seq, catalog_meta)
-pub(crate) async fn get_catalog_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &CatalogNameIdent,
-    msg: impl Display,
-) -> Result<(u64, u64, u64, CatalogMeta), KVAppError> {
-    let (catalog_id_seq, catalog_id) = get_u64_value(kv_api, name_key).await?;
-    catalog_has_to_exist(catalog_id_seq, name_key, &msg)?;
-
-    let id_key = CatalogIdIdent::new(name_key.tenant(), catalog_id);
-
-    let (catalog_meta_seq, catalog_meta) = get_pb_value(kv_api, &id_key).await?;
-    catalog_has_to_exist(catalog_meta_seq, name_key, msg)?;
-
-    Ok((
-        catalog_id_seq,
-        catalog_id,
-        catalog_meta_seq,
-        // Safe unwrap(): catalog_meta_seq > 0 implies db_meta is not None.
-        catalog_meta.unwrap(),
-    ))
-}
-
-/// Return OK if a catalog_id or catalog_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownCatalog error
-pub fn catalog_has_to_exist(
-    seq: u64,
-    catalog_name_ident: &CatalogNameIdent,
-    msg: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        debug!(seq = seq, catalog_name_ident :? =(catalog_name_ident); "catalog does not exist");
-
-        Err(KVAppError::AppError(AppError::UnknownCatalog(
-            UnknownCatalog::new(
-                catalog_name_ident.name(),
-                format!("{}: {}", msg, catalog_name_ident.display()),
-            ),
-        )))
-    } else {
-        Ok(())
-    }
 }
 
 async fn update_mask_policy(
