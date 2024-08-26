@@ -1651,7 +1651,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1702,7 +1702,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1753,7 +1753,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1801,7 +1801,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1884,7 +1884,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1967,7 +1967,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: Some(
             Query {
@@ -2129,7 +2129,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2206,7 +2206,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2359,7 +2359,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2489,7 +2489,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2594,7 +2594,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2654,7 +2654,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2698,7 +2698,7 @@ CreateTable(
             Memory,
         ),
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2770,7 +2770,7 @@ CreateTable(
                 },
             },
         ),
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2844,7 +2844,7 @@ CreateTable(
                 },
             },
         ),
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -3179,7 +3179,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {
             "bloom_index_columns": "a,b,c",
             "compression": "zstd",
@@ -3322,7 +3322,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4731,7 +4731,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4811,7 +4811,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4872,7 +4872,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4931,7 +4931,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4960,7 +4960,7 @@ CreateTable(
         source: None,
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: Some(
             Query {
@@ -11422,7 +11422,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t CLUSTER BY (c1)
+ALTER TABLE t  CLUSTER BY LINEAR(c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -11449,27 +11449,30 @@ AlterTable(
             sample: None,
         },
         action: AlterTableClusterKey {
-            cluster_by: [
-                ColumnRef {
-                    span: Some(
-                        25..27,
-                    ),
-                    column: ColumnRef {
-                        database: None,
-                        table: None,
-                        column: Name(
-                            Identifier {
-                                span: Some(
-                                    25..27,
-                                ),
-                                name: "c1",
-                                quote: None,
-                                ident_type: None,
-                            },
+            cluster_by: ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            25..27,
                         ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        25..27,
+                                    ),
+                                    name: "c1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
                     },
-                },
-            ],
+                ],
+            },
         },
     },
 )
@@ -12766,7 +12769,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {
             "comment": "table comment",
         },
@@ -19048,7 +19051,7 @@ CreateDynamicTable(
                 },
             },
         ),
-        cluster_by: [],
+        cluster_by: None,
         target_lag: IntervalSecs(
             10,
         ),
@@ -19194,7 +19197,7 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [],
+        cluster_by: None,
         target_lag: IntervalSecs(
             600,
         ),
@@ -19282,7 +19285,7 @@ CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
 AS
     SELECT c, d FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
+CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -19340,27 +19343,32 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [
-            ColumnRef {
-                span: Some(
-                    68..69,
-                ),
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    column: Name(
-                        Identifier {
-                            span: Some(
-                                68..69,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            68..69,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        68..69,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
                             ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
                         },
-                    ),
-                },
+                    },
+                ],
             },
-        ],
+        ),
         target_lag: IntervalSecs(
             36000,
         ),
@@ -19478,7 +19486,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -19527,27 +19535,32 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [
-            ColumnRef {
-                span: Some(
-                    89..90,
-                ),
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    column: Name(
-                        Identifier {
-                            span: Some(
-                                89..90,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            89..90,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        89..90,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
                             ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
                         },
-                    ),
-                },
+                    },
+                ],
             },
-        ],
+        ),
         target_lag: IntervalSecs(
             864000,
         ),
@@ -19708,7 +19721,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM db.t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -19757,27 +19770,32 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [
-            ColumnRef {
-                span: Some(
-                    89..90,
-                ),
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    column: Name(
-                        Identifier {
-                            span: Some(
-                                89..90,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            89..90,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        89..90,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
                             ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
                         },
-                    ),
-                },
+                    },
+                ],
             },
-        ],
+        ),
         target_lag: Downstream,
         warehouse_opts: WarehouseOptions {
             warehouse: None,
