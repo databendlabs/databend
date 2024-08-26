@@ -55,6 +55,27 @@ where
     }
 }
 
+impl<R, N> fmt::Display for TIdent<R, N>
+where
+    N: fmt::Display,
+    R: TenantResource,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let type_name = if R::TYPE.is_empty() {
+            "TIdent"
+        } else {
+            R::TYPE
+        };
+        write!(
+            f,
+            "{}({}/{})",
+            type_name,
+            self.tenant.tenant_name(),
+            self.name
+        )
+    }
+}
+
 /// `TIdent` to be Clone does not require `R` to be Clone.
 impl<R, N> Clone for TIdent<R, N>
 where N: Clone

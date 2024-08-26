@@ -19,8 +19,10 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::schema::catalog_name_ident;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
+use crate::tenant_key::ident::TIdent;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
@@ -60,22 +62,6 @@ impl DatabaseAlreadyExists {
     pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("CatalogAlreadyExists: `{catalog_name}` while `{context}`")]
-pub struct CatalogAlreadyExists {
-    catalog_name: String,
-    context: String,
-}
-
-impl CatalogAlreadyExists {
-    pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            catalog_name: catalog_name.into(),
             context: context.into(),
         }
     }
@@ -1107,7 +1093,7 @@ pub enum AppError {
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
-    CatalogAlreadyExists(#[from] CatalogAlreadyExists),
+    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::Resource>),
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
@@ -1125,7 +1111,7 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
-    UnknownCatalog(#[from] UnknownCatalog),
+    UnknownCatalog(#[from] UnknownError<catalog_name_ident::Resource>),
 
     #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),
@@ -1260,6 +1246,26 @@ pub enum AppError {
     UnknownDictionary(#[from] UnknownDictionary),
 }
 
+impl AppError {
+    /// Create an `unknown` TIdent error.
+    pub fn unknown<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    where
+        N: Clone,
+        AppError: From<UnknownError<R, N>>,
+    {
+        AppError::from(ident.unknown_error(ctx))
+    }
+
+    /// Create an `exist` TIdent error.
+    pub fn exists<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    where
+        N: Clone,
+        AppError: From<ExistError<R, N>>,
+    {
+        AppError::from(ident.exist_error(ctx))
+    }
+}
+
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum SequenceError {
     #[error(transparent)]
@@ -1290,21 +1296,9 @@ impl AppErrorMessage for UnknownDatabase {
     }
 }
 
-impl AppErrorMessage for UnknownCatalog {
-    fn message(&self) -> String {
-        format!("Unknown catalog '{}'", self.catalog_name)
-    }
-}
-
 impl AppErrorMessage for DatabaseAlreadyExists {
     fn message(&self) -> String {
         format!("Database '{}' already exists", self.db_name)
-    }
-}
-
-impl AppErrorMessage for CatalogAlreadyExists {
-    fn message(&self) -> String {
-        format!("Catalog '{}' already exists", self.catalog_name)
     }
 }
 
