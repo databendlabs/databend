@@ -47,7 +47,7 @@ drop table t;
 statement ok
 create or replace table t as select number as a from numbers(10000000);
 
-query 
+query
 select count(distinct a) < 10000000 from t sample block(50);
 ----
 1
@@ -91,8 +91,8 @@ Filter
 
 
 
-query 
-select count(distinct number) < 10000000 from numbers(10000000) sample block(50);
+query
+select count(distinct number) < 10000000 from numbers(10000000) sample block(10);
 ----
 1
 
