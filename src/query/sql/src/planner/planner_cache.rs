@@ -128,7 +128,7 @@ impl TableRefVisitor {
 
             let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
-            let table_name = normalize_identifier(&table, &self.name_resolution_ctx).name;
+            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self
