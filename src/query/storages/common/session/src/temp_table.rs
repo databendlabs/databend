@@ -322,15 +322,32 @@ pub async fn drop_table_by_id(
             op.remove_all(&dir).await?;
         }
         "MEMORY" => {
-            let mut in_mem_data = IN_MEMORY_DATA.write();
-            in_mem_data.remove(tb_id).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Table not found in memory data {:?}, drop table request: {:?}",
-                    in_mem_data, req
-                ))
-            })?;
+            let mut guard = mgr.lock();
+            let entry = guard.id_to_table.entry(*tb_id);
+            match entry {
+                Entry::Occupied(e) => {
+                    let table = e.remove();
+                    let desc = format!("{}.{}", table.db_name, table.table_name);
+                    guard.name_to_id.remove(&desc).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Table not found in temp table manager {:?}, drop table request: {:?}",
+                            guard, req
+                        ))
+                    })?;
+                    let mut in_mem_data = IN_MEMORY_DATA.write();
+                    in_mem_data.remove(tb_id).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Table not found in memory data {:?}, drop table request: {:?}",
+                            in_mem_data, req
+                        ))
+                    })?;
+                }
+                Entry::Vacant(_) => {
+                    return Ok(None);
+                }
+            }
         }
-        _ => unreachable!(),
+        _ => return Ok(None),
     };
     Ok(Some(DropTableReply { spec_vec: None }))
 }
