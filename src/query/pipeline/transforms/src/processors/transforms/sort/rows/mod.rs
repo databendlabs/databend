@@ -15,9 +15,12 @@
 mod common;
 mod simple;
 
+use std::fmt::Debug;
+
 pub use common::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -40,8 +43,9 @@ where Self: Sized
 pub trait Rows
 where Self: Sized + Clone
 {
-    type Item<'a>: Ord
+    type Item<'a>: Ord + Debug
     where Self: 'a;
+    type Type: ArgType;
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
@@ -56,11 +60,24 @@ where Self: Sized + Clone
             ))
         })
     }
+
     fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self>;
 
-    fn data_type() -> DataType;
+    fn data_type() -> DataType {
+        Self::Type::data_type()
+    }
 
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    fn first(&self) -> Self::Item<'_> {
+        self.row(0)
+    }
+
+    fn last(&self) -> Self::Item<'_> {
+        self.row(self.len() - 1)
+    }
+
+    fn slice(&self, range: std::ops::Range<usize>) -> Self;
 }

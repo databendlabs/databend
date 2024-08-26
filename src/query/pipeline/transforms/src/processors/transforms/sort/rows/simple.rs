@@ -14,11 +14,11 @@
 
 use std::cmp::Ordering;
 use std::marker::PhantomData;
+use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -38,7 +38,7 @@ pub type TimestampRows = SimpleRows<TimestampType>;
 pub type StringRows = SimpleRows<StringType>;
 
 /// Row structure for single simple types. (numbers, date, timestamp)
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SimpleRow<T: ValueType> {
     inner: T::Scalar,
     desc: bool,
@@ -98,6 +98,7 @@ where
     T::Scalar: Ord,
 {
     type Item<'a> = SimpleRow<T>;
+    type Type = T;
 
     fn len(&self) -> usize {
         T::column_len(&self.inner)
@@ -123,8 +124,11 @@ where
         })
     }
 
-    fn data_type() -> DataType {
-        T::data_type()
+    fn slice(&self, range: Range<usize>) -> Self {
+        Self {
+            inner: T::slice_column(&self.inner, range),
+            desc: self.desc,
+        }
     }
 }
 
