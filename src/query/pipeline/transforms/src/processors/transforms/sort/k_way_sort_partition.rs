@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
@@ -145,7 +144,7 @@ where
             .iter()
             .enumerate()
             .map(|(part_id, &(input, pp))| {
-                let (block, col) = self.slice(input, pp);
+                let (block, _) = self.slice(input, pp); // todo
 
                 let mut columns = Vec::with_capacity(block.num_columns() + 4);
                 columns.extend_from_slice(block.columns());

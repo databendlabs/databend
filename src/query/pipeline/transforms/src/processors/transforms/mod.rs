@@ -22,6 +22,7 @@ mod transform_block_compact_for_copy;
 mod transform_blocking;
 mod transform_compact;
 mod transform_dummy;
+mod transform_k_way_merge_sort;
 mod transform_multi_sort_merge;
 mod transform_pipeline_helper;
 mod transform_retry_async;
