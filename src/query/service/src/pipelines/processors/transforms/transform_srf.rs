@@ -150,7 +150,7 @@ impl BlockingTransform for TransformSRF {
         for (srf_expr, srf_results) in self.srf_exprs.iter().zip(self.srf_results.iter_mut()) {
             if let Expr::FunctionCall { function, .. } = srf_expr {
                 match function.signature.name.as_str() {
-                    "json_path_query" | "json_array_elements" => {
+                    "json_path_query" | "json_array_elements" | "jq" => {
                         // The function return type:
                         // DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])
                         let mut builder: NullableColumnBuilder<VariantType> =
@@ -160,25 +160,18 @@ impl BlockingTransform for TransformSRF {
                             srf_results.drain(0..used).enumerate()
                         {
                             if let Value::Column(Column::Tuple(fields)) = row_result {
-                                debug_assert!(fields.len() == 1);
-                                match &fields[0] {
-                                    Column::Nullable(box nullable_column) => {
-                                        match &nullable_column.column {
-                                            Column::Variant(string_column) => {
-                                                for idx in 0..repeat_times {
-                                                    builder.push(unsafe {
-                                                        string_column.index_unchecked(idx)
-                                                    });
-                                                }
-                                                for _ in 0..(self.num_rows[i] - repeat_times) {
-                                                    builder.push_null();
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        }
+                                for (field_index, field) in fields.into_iter().enumerate() {
+                                    if field_index == 0 {
+                                        push_variant_column(
+                                            field,
+                                            &mut builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        );
+                                    } else {
+                                        unreachable!();
                                     }
-                                    _ => unreachable!(),
-                                };
+                                }
                             }
                         }
 
@@ -209,50 +202,21 @@ impl BlockingTransform for TransformSRF {
                             srf_results.drain(0..used).enumerate()
                         {
                             if let Value::Column(Column::Tuple(fields)) = row_result {
-                                debug_assert!(fields.len() == 6);
                                 for (field_index, field) in fields.into_iter().enumerate() {
                                     if field_index == 0 {
-                                        match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::String(string_column) => {
-                                                        for idx in 0..repeat_times {
-                                                            key_builder.push(unsafe {
-                                                                string_column.index_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            key_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        }
+                                        push_string_column(
+                                            field,
+                                            &mut key_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        );
                                     } else {
-                                        match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::Variant(variant_column) => {
-                                                        for idx in 0..repeat_times {
-                                                            value_builder.push(unsafe {
-                                                                variant_column.index_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            value_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        }
+                                        push_variant_column(
+                                            field,
+                                            &mut value_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        );
                                     }
                                 }
                             }
@@ -275,7 +239,7 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
-                    "flatten" => {
+                    "flaatten" => {
                         // The function return type:
                         // DataType::Tuple(vec![
                         //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
@@ -311,130 +275,42 @@ impl BlockingTransform for TransformSRF {
                                 debug_assert!(fields.len() == 6);
                                 for (field_index, field) in fields.into_iter().enumerate() {
                                     match field_index {
-                                        0 => match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::Number(NumberColumn::UInt64(
-                                                        number_column,
-                                                    )) => {
-                                                        for idx in 0..repeat_times {
-                                                            seq_builder.push(unsafe {
-                                                                *number_column.get_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            seq_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
-                                        1 => match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::String(string_column) => {
-                                                        for idx in 0..repeat_times {
-                                                            key_builder.push(unsafe {
-                                                                string_column.index_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            key_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
-                                        2 => match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::String(string_column) => {
-                                                        for idx in 0..repeat_times {
-                                                            path_builder.push(unsafe {
-                                                                string_column.index_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            path_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
-                                        3 => match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::Number(NumberColumn::UInt64(
-                                                        number_column,
-                                                    )) => {
-                                                        for idx in 0..repeat_times {
-                                                            index_builder.push(unsafe {
-                                                                *number_column.get_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            index_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
-                                        4 => match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::Variant(variant_column) => {
-                                                        for idx in 0..repeat_times {
-                                                            value_builder.push(unsafe {
-                                                                variant_column.index_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            value_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
-                                        5 => match field {
-                                            Column::Nullable(box nullable_column) => {
-                                                match &nullable_column.column {
-                                                    Column::Variant(variant_column) => {
-                                                        for idx in 0..repeat_times {
-                                                            this_builder.push(unsafe {
-                                                                variant_column.index_unchecked(idx)
-                                                            });
-                                                        }
-                                                        for _ in
-                                                            0..(self.num_rows[i] - repeat_times)
-                                                        {
-                                                            this_builder.push_null();
-                                                        }
-                                                    }
-                                                    _ => unreachable!(),
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
+                                        0 => push_number_column(
+                                            field,
+                                            &mut seq_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        1 => push_string_column(
+                                            field,
+                                            &mut key_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        2 => push_string_column(
+                                            field,
+                                            &mut path_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        3 => push_number_column(
+                                            field,
+                                            &mut index_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        4 => push_variant_column(
+                                            field,
+                                            &mut value_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        5 => push_variant_column(
+                                            field,
+                                            &mut this_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
                                         _ => unreachable!(),
                                     }
                                 }
@@ -470,7 +346,7 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
-                    "unnest" => {
+                    "unnest" | "flatten" => {
                         let mut result_data_blocks = Vec::with_capacity(used);
                         for (i, (mut row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
@@ -563,5 +439,125 @@ impl BlockingTransform for TransformSRF {
         }
 
         Ok(Some(result))
+    }
+}
+
+pub fn push_string_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<StringType>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::String(string_column) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.unset_bits() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { string_column.index_unchecked(idx) });
+                }
+                for _ in 0..(num_rows - repeat_times) {
+                    builder.push_null();
+                }
+            } else if validity.unset_bits() == validity.len() {
+                for _ in 0..num_rows {
+                    builder.push_null();
+                }
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { string_column.index_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                for _ in 0..(num_rows - repeat_times) {
+                    builder.push_null();
+                }
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_variant_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<VariantType>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Variant(variant_column) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.unset_bits() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { variant_column.index_unchecked(idx) });
+                }
+                for _ in 0..(num_rows - repeat_times) {
+                    builder.push_null();
+                }
+            } else if validity.unset_bits() == validity.len() {
+                for _ in 0..num_rows {
+                    builder.push_null();
+                }
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { variant_column.index_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                for _ in 0..(num_rows - repeat_times) {
+                    builder.push_null();
+                }
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_number_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<NumberType<u64>>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Number(NumberColumn::UInt64(number_column)) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.unset_bits() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { *number_column.get_unchecked(idx) });
+                }
+                for _ in 0..(num_rows - repeat_times) {
+                    builder.push_null();
+                }
+            } else if validity.unset_bits() == validity.len() {
+                for _ in 0..num_rows {
+                    builder.push_null();
+                }
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { *number_column.get_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                for _ in 0..(num_rows - repeat_times) {
+                    builder.push_null();
+                }
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
     }
 }
