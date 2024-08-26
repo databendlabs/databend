@@ -4425,6 +4425,7 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-storage",
+ "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "parking_lot 0.12.3",
  "serde",
@@ -5324,6 +5325,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "parking_lot 0.12.3",
  "parquet",
 ]
 
@@ -5417,6 +5419,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-storage",
+ "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "log",
  "parking_lot 0.12.3",

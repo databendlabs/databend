@@ -12,8 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::LazyLock;
 
-mod parquet_rs;
-pub use parquet_rs::blocks_to_parquet;
-pub mod memory;
+use databend_common_expression::DataBlock;
+use parking_lot::RwLock;
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
+
+pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
+    LazyLock::new(|| Arc::new(Default::default()));
