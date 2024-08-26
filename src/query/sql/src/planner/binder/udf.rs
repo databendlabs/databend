@@ -37,7 +37,6 @@ use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
-use crate::AsyncFunctionRewriter;
 use crate::BindContext;
 use crate::Binder;
 use crate::UdfRewriter;
@@ -199,26 +198,16 @@ impl Binder {
         })))
     }
 
-    // Rewrite async function, udf script, udf server and its arguments as derived column.
-    // And add new plan in SExpr tree.
+    // Rewrite udf script, udf server and its arguments as derived column.
     pub(in crate::planner::binder) fn rewrite_udf(
         &mut self,
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
-        if !bind_context.have_async_func
-            && !bind_context.have_udf_script
-            && !bind_context.have_udf_server
-        {
+        if !bind_context.have_udf_script && !bind_context.have_udf_server {
             return Ok(s_expr);
         }
         let mut s_expr = s_expr.clone();
-
-        if bind_context.have_async_func {
-            // rewrite async function to async function plan
-            let mut async_func_rewriter = AsyncFunctionRewriter::new(self.metadata.clone());
-            s_expr = async_func_rewriter.rewrite(&s_expr)?;
-        }
         if bind_context.have_udf_script {
             // rewrite udf for interpreter udf
             let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
