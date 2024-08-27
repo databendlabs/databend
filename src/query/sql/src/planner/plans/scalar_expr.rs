@@ -25,8 +25,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Column;
+use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -778,6 +783,11 @@ pub enum AsyncFunctionArgument {
     // Used by `nextval` function to call meta's `get_sequence_next_value` api
     // to get incremental values.
     SequenceFunction(String),
+    // The first argument of dict_get function is dictionary name.
+    // The second argument is the list of dictionary fields.
+    // The third argument is value of primary key.
+    // Used by `dict_get` function to access data from source.
+    DictGetFunction(Expr::ColumnRef, Expr, Expr),
 }
 
 // Asynchronous functions are functions that need to call remote interfaces.
@@ -805,6 +815,12 @@ impl AsyncFunctionCall {
                 let reply = catalog.get_sequence_next_value(req).await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
+            AsyncFunctionArgument::DictGetFunction(dict_name, fields, pk_values) => {
+                Err(ErrorCode::Internal(
+                    "Cannot generate dict_get function",
+                ))
+            }
+
         }
     }
 }

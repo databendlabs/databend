@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use ahash::HashSet;
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
@@ -22,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::DictionaryMeta;
 
 use crate::plans::CreateDictionaryPlan;
@@ -61,13 +63,12 @@ impl Binder {
 
         let source = self.normalize_object_identifier(source_name);
 
-        if source.to_lowercase() != *"mysql" {
+        if source.to_lowercase() != *"mysql" && source.to_lowercase() != *"redis" {
             return Err(ErrorCode::UnsupportedDictionarySource(format!(
                 "The specified source '{}' is not currently supported.",
                 source.to_lowercase(),
             )));
         }
-        // TODO: Authentication to connect to MySQL database will be implemented later
 
         let options: BTreeMap<String, String> = source_options
             .iter()
@@ -92,12 +93,30 @@ impl Binder {
         let mut primary_column_ids = Vec::new();
 
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
+
+        let fields_names: Vec<String> = Vec::new();
         for table_field in schema.fields() {
             if table_field.default_expr.is_some() || table_field.computed_expr.is_some() {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
                     "The table field configuration is invalid. ".to_owned()
                         + "Default expressions and computed expressions for the table fields should not be set.",
                 ));
+            }
+            fields_names.append(table_field.name);
+        }
+        // Check for redis.
+        if source.to_lowercase() == *"redis" {
+            if fields_names.sort() != vec!["key", "value"] {
+                return Err(ErrorCode::WrongDictionaryFieldExpr(
+                    "If the source is redis, there must be two fields which are `key` and `value` whose type is String."
+                ));
+            }
+            for table_field in schema.fields() {
+                if table_field.data_type() != TableDataType::String {
+                    return Err(ErrorCode::WrongDictionaryFieldExpr(
+                        "If the source is redis, there must be two fields which are `key` and `value` whose type is String."
+                    ));
+                }
             }
         }
         for column in columns {

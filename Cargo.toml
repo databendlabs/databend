@@ -273,6 +273,7 @@ opendal = { version = "0.49.0", features = [
     "services-moka",
     "services-webhdfs",
     "services-huggingface",
+    "services-redis",
 ] }
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
     "serde",

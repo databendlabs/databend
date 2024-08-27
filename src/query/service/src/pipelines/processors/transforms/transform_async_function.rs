@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::str;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -25,6 +26,8 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_storages_fuse::TableContext;
+use opendal::services::Redis;
+use opendal::Operator;
 
 use crate::sessions::QueryContext;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
@@ -72,6 +75,18 @@ impl TransformAsyncFunction {
 
         Ok(())
     }
+
+    // connect to redis by opendal.
+    async fn connect_to_redis(
+        &self,
+        path: &str,
+    ) -> Result<String> {
+        let builder = Redis::default();
+        let op = Operator::new(builder)?.finish();
+        let buffer = op.read(path).await?;
+        let res = str::from_utf8(&buffer.current()).unwrap().to_string();
+        Ok(res)
+    }
 }
 
 #[async_trait::async_trait]
@@ -89,6 +104,9 @@ impl AsyncTransform for TransformAsyncFunction {
                         &async_func_desc.data_type,
                     )
                     .await?;
+                }
+                AsyncFunctionArgument::DictGetFunction(dict_name, fields, pk_values) => {
+                    // TODO
                 }
             }
         }
