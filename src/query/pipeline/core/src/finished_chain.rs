@@ -280,6 +280,7 @@ mod tests {
     use databend_common_exception::Result;
 
     use crate::always_callback;
+    use crate::basic_callback;
     use crate::ExecutionInfo;
     use crate::FinishedCallbackChain;
 
@@ -306,6 +307,70 @@ mod tests {
         chain.apply(ExecutionInfo::create(Ok(()), HashMap::new()))?;
 
         assert_eq!(seq.load(Ordering::SeqCst), 10);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_callback_order_with_basic_callback() -> Result<()> {
+        let mut chain = FinishedCallbackChain::create();
+
+        let seq = Arc::new(AtomicUsize::new(0));
+
+        for index in 0..10 {
+            chain.push_back(
+                Location::caller(),
+                Box::new({
+                    let seq = seq.clone();
+                    move |_info: &ExecutionInfo| {
+                        let seq = seq.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(3 + index, seq);
+                        Ok(())
+                    }
+                }),
+            );
+        }
+
+        chain.push_front(
+            Location::caller(),
+            Box::new({
+                let seq = seq.clone();
+                basic_callback(move |_info: &ExecutionInfo| {
+                    let seq = seq.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(1, seq);
+                    Ok(())
+                })
+            }),
+        );
+
+        chain.push_front(
+            Location::caller(),
+            Box::new({
+                let seq = seq.clone();
+                basic_callback(move |_info: &ExecutionInfo| {
+                    let seq = seq.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(0, seq);
+                    Ok(())
+                })
+            }),
+        );
+
+        // always callback after all callback
+        chain.push_back(
+            Location::caller(),
+            Box::new({
+                let seq = seq.clone();
+                basic_callback(move |_info: &ExecutionInfo| {
+                    let seq = seq.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(2, seq);
+                    Ok(())
+                })
+            }),
+        );
+
+        chain.apply(ExecutionInfo::create(Ok(()), HashMap::new()))?;
+
+        assert_eq!(seq.load(Ordering::SeqCst), 13);
 
         Ok(())
     }
