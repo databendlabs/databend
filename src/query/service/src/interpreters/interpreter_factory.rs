@@ -52,6 +52,8 @@ use crate::interpreters::interpreter_notification_create::CreateNotificationInte
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
 use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
+use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
@@ -627,6 +629,20 @@ impl InterpreterFactory {
                 ctx,
                 *drop_dict.clone(),
             )?)),
+            Plan::CreateProcedure(p) => Ok(Arc::new(CreateProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropProcedure(p) => Ok(Arc::new(DropProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            // Plan::ShowCreateProcedure(_) => {}
+            //
+            // Plan::RenameProcedure(p) => Ok(Arc::new(RenameProcedureInterpreter::try_create(
+            // ctx,
+            // p.clone(),
+            // )?)),
         }
     }
 }

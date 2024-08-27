@@ -1271,9 +1271,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExistsTable(_) => {}
             Plan::DescDatamaskPolicy(_) => {}
             Plan::Begin => {}
+            Plan::ExecuteImmediate(_)
+            | Plan::CreateProcedure(_)
+            | Plan::DropProcedure(_)
+            /*| Plan::ShowCreateProcedure(_)
+            | Plan::RenameProcedure(_)*/ => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
+            }
             Plan::Commit => {}
             Plan::Abort => {}
-            Plan::ExecuteImmediate(_) => {}
         }
 
         Ok(())
