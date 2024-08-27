@@ -66,7 +66,6 @@ use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
-use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReq;
@@ -76,7 +75,6 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
-use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
@@ -1399,12 +1397,12 @@ impl SchemaApiTestSuite {
             tenant: tenant_name.to_string(),
         };
 
-        let ident = CatalogNameIdent::new(tenant.clone(), catalog_name);
+        let name_ident = CatalogNameIdent::new(tenant.clone(), catalog_name);
 
         info!("--- create catalog1");
         let req = CreateCatalogReq {
             if_not_exists: false,
-            name_ident: ident.clone(),
+            name_ident: name_ident.clone(),
             meta: CatalogMeta {
                 catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Rest(
                     IcebergRestCatalogOption {
@@ -1417,11 +1415,13 @@ impl SchemaApiTestSuite {
             },
         };
 
-        let res = mt.create_catalog(req).await?;
+        let res = mt.create_catalog(&req.name_ident, &req.meta).await?;
         info!("create catalog res: {:?}", res);
 
-        let got = mt.get_catalog(GetCatalogReq::new(ident.clone())).await?;
-        assert_eq!(got.id.catalog_id, res.catalog_id);
+        let res = res.unwrap();
+
+        let got = mt.get_catalog(&name_ident).await?;
+        assert_eq!(got.id.catalog_id, *res);
         assert_eq!(got.name_ident.tenant, "tenant1");
         assert_eq!(got.name_ident.catalog_name, "catalog1");
 
@@ -1432,12 +1432,7 @@ impl SchemaApiTestSuite {
         assert_eq!(got[0].name_ident.tenant, "tenant1");
         assert_eq!(got[0].name_ident.catalog_name, "catalog1");
 
-        let _ = mt
-            .drop_catalog(DropCatalogReq {
-                if_exists: false,
-                name_ident: ident.clone(),
-            })
-            .await?;
+        let _ = mt.drop_catalog(&name_ident).await?;
 
         let got = mt
             .list_catalogs(ListCatalogReq::new(tenant.clone()))

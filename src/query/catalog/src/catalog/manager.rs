@@ -22,6 +22,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -30,7 +31,6 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::DropCatalogReq;
-use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::tenant::Tenant;
@@ -181,7 +181,7 @@ impl CatalogManager {
         let ident = CatalogNameIdent::new(tenant, catalog_name);
 
         // Get catalog from metasrv.
-        let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
+        let info = self.meta.get_catalog(&ident).await?;
 
         self.build_catalog(info, session_state)
     }
@@ -205,7 +205,14 @@ impl CatalogManager {
             ));
         }
 
-        let _ = self.meta.create_catalog(req).await;
+        let create_res = self.meta.create_catalog(&req.name_ident, &req.meta).await?;
+        if create_res.is_err() {
+            if req.if_not_exists {
+                // Alright
+            } else {
+                return Err(AppError::from(req.name_ident.exist_error("create_catalog")).into());
+            }
+        }
 
         Ok(())
     }
@@ -231,7 +238,12 @@ impl CatalogManager {
             ));
         }
 
-        let _ = self.meta.drop_catalog(req).await;
+        let dropped = self.meta.drop_catalog(&req.name_ident).await?;
+        if dropped.is_none() {
+            if req.if_exists {
+                return Err(AppError::from(req.name_ident.unknown_error("drop_catalog")).into());
+            }
+        }
 
         Ok(())
     }
@@ -249,7 +261,7 @@ impl CatalogManager {
             catalogs.push(ctl.clone());
         }
 
-        // fecth catalogs from metasrv.
+        // fetch catalogs from metasrv.
         let infos = self
             .meta
             .list_catalogs(ListCatalogReq::new(tenant.clone()))
