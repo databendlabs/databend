@@ -107,7 +107,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         self.initialized_all_inputs = true;
         // in a cluster where partitions are only 8 and 128,
         // we need to pull all data where the partition equals 8 until the partition changes to 128 or there is no data available.
-        if self.params.in_cluster {
+        if self.params.cluster_aggregator {
             for index in 0..self.inputs.len() {
                 if self.inputs[index].port.is_finished() {
                     continue;

@@ -15,6 +15,7 @@
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
+use databend_common_sql::executor::PhysicalPlan;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -39,6 +40,7 @@ impl PipelineBuilder {
     }
 
     pub fn build_exchange_sink(&mut self, exchange_sink: &ExchangeSink) -> Result<()> {
+        // PhysicalPlan::AggregatePartial()
         // ExchangeSink will be appended by `ExchangeManager::execute_pipeline`
         self.build_pipeline(&exchange_sink.input)
     }

@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileLabel;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -57,6 +58,8 @@ pub struct PipelineBuilder {
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
+    pub(crate) is_exchange_neighbor: bool,
+    pub(crate) before_exchange_plan_id: Option<u32>,
 }
 
 impl PipelineBuilder {
@@ -78,10 +81,17 @@ impl PipelineBuilder {
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
+            is_exchange_neighbor: false,
+            before_exchange_plan_id: None,
         }
     }
 
     pub fn finalize(mut self, plan: &PhysicalPlan) -> Result<PipelineBuildResult> {
+        // if self.is_exchange_neighbor {
+        //     self.is_exchange_neighbor = false;
+        //     self.before_exchange_id = Some(plan.get_id());
+        // }
+
         self.build_pipeline(plan)?;
 
         for source_pipeline in &self.pipelines {
@@ -133,9 +143,23 @@ impl PipelineBuilder {
         }
     }
 
+    fn is_exchange_neighbor(&self, plan: &PhysicalPlan) -> bool {
+        if let Some(before_exchange_id) = self.before_exchange_plan_id.as_ref() {
+            if *before_exchange_id == plan.get_id() {
+                return true;
+            }
+        }
+
+        plan.children()
+            .map(|x| matches!(x, PhysicalPlan::ExchangeSource(_)))
+            .all(|x| x)
+    }
+
     #[recursive::recursive]
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
+        self.is_exchange_neighbor = self.is_exchange_neighbor(plan);
+
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
