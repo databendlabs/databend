@@ -45,9 +45,9 @@ pub struct PlanCacheItem {
 static PLAN_CACHE: LazyLock<InMemoryLruCache<PlanCacheItem>> =
     LazyLock::new(|| InMemoryLruCache::with_items_capacity("planner_cache".to_string(), 512));
 
-impl Into<CacheValue<PlanCacheItem>> for PlanCacheItem {
-    fn into(self) -> CacheValue<PlanCacheItem> {
-        CacheValue::new(self, 1024)
+impl From<PlanCacheItem> for CacheValue<PlanCacheItem> {
+    fn from(val: PlanCacheItem) -> Self {
+        CacheValue::new(val, 1024)
     }
 }
 
