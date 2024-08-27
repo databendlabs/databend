@@ -334,18 +334,18 @@ pub async fn drop_table_by_id(
                             guard, req
                         ))
                     })?;
-                    let mut in_mem_data = IN_MEMORY_DATA.write();
-                    in_mem_data.remove(tb_id).ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "Table not found in memory data {:?}, drop table request: {:?}",
-                            in_mem_data, req
-                        ))
-                    })?;
                 }
                 Entry::Vacant(_) => {
                     return Ok(None);
                 }
             }
+            let mut in_mem_data = IN_MEMORY_DATA.write();
+            in_mem_data.remove(tb_id).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Table not found in memory data {:?}, drop table request: {:?}",
+                    in_mem_data, req
+                ))
+            })?;
         }
         _ => return Ok(None),
     };
