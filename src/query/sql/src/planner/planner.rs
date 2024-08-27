@@ -170,6 +170,8 @@ impl Planner {
                         info!("logical plan from cache, time used: {:?}", start.elapsed());
                         // update for clickhouse handler
                         plan.extras.format = format;
+                        self.ctx
+                            .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
                         return Ok((plan.plan, plan.extras));
                     }
                     enable_planner_cache = c;
