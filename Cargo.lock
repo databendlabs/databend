@@ -3172,7 +3172,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.0.3"
+version = "0.0.2"
 dependencies = [
  "criterion",
  "derive-visitor",
@@ -3309,8 +3309,8 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-users",
- "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "dyn-clone",
  "goldenfile",
  "log",
@@ -3544,10 +3544,6 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jaq-core",
- "jaq-interpret",
- "jaq-parse",
- "jaq-std",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3642,7 +3638,6 @@ dependencies = [
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
- "scroll 0.12.0",
  "serde",
  "wkt",
 ]
@@ -3734,7 +3729,6 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -3743,7 +3737,6 @@ dependencies = [
  "num-traits",
  "opendal",
  "paste",
- "prost 0.12.6",
  "serde",
  "serde_json",
  "sha1",
@@ -4358,8 +4351,8 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-pruner",
- "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "fastrace 0.7.1",
  "futures",
@@ -4596,9 +4589,9 @@ dependencies = [
 name = "databend-common-storages-result-cache"
 version = "0.1.0"
 dependencies = [
- "arrow",
  "async-backtrace",
  "async-trait",
+ "databend-common-arrow",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
@@ -4608,8 +4601,8 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
+ "databend-common-pipeline-sources",
  "databend-common-storage",
- "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "opendal",
@@ -4788,7 +4781,6 @@ dependencies = [
  "cidr",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-grpc",
@@ -5228,8 +5220,8 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-io",
- "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
  "fastrace 0.7.1",
@@ -5465,21 +5457,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-storages-common-session"
-version = "0.1.0"
-dependencies = [
- "databend-common-exception",
- "databend-common-meta-app",
- "databend-common-meta-types",
- "databend-common-storage",
- "databend-storages-common-table-meta",
- "log",
- "parking_lot 0.12.3",
- "serde",
- "uuid",
-]
-
-[[package]]
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
@@ -5515,6 +5492,17 @@ dependencies = [
  "snap",
  "typetag",
  "zstd 0.12.4",
+]
+
+[[package]]
+name = "databend-storages-common-txn"
+version = "0.1.0"
+dependencies = [
+ "databend-common-meta-app",
+ "databend-common-meta-types",
+ "parking_lot 0.12.3",
+ "serde",
+ "uuid",
 ]
 
 [[package]]
@@ -7323,7 +7311,7 @@ dependencies = [
  "geo-types",
  "geojson",
  "log",
- "scroll 0.11.0",
+ "scroll",
  "serde_json",
  "thiserror",
  "wkt",
@@ -7339,7 +7327,7 @@ dependencies = [
  "geojson",
  "geos",
  "log",
- "scroll 0.11.0",
+ "scroll",
  "serde_json",
  "thiserror",
  "wkt",
@@ -8543,12 +8531,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hifijson"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9958ab3ce3170c061a27679916bd9b969eceeb5e8b120438e6751d0987655c42"
-
-[[package]]
 name = "highway"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8901,8 +8883,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "651dfca7c429918e164607a549287cfdd1e7814d2e4cb577d0d6dc57fe19b785"
+source = "git+https://github.com/apache/iceberg-rust?rev=v0.3.0-rc.1#79711acc921b4d25c3583bc0ea9628fe64a057e1"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -8944,8 +8925,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a04f1f48f0f15e42c910fafb57edb0dd309c936cd285b1089fa3d4a07d1ef09"
+source = "git+https://github.com/apache/iceberg-rust?rev=v0.3.0-rc.1#79711acc921b4d25c3583bc0ea9628fe64a057e1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8964,8 +8944,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f351c7b964fa6f3b4f976f8de3f16f1bf84eea8478606aaebdfd6a871d6b082c"
+source = "git+https://github.com/apache/iceberg-rust?rev=v0.3.0-rc.1#79711acc921b4d25c3583bc0ea9628fe64a057e1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -9311,66 +9290,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52f5385394064fa2c886205dba02598013ce83d3e92d33dbdc0c52fe0e7bf4fc"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "jaq-core"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6fda09ee08c84c81293fdf811d9ebaa87b327557b5391f290c926d728c2ddd4"
-dependencies = [
- "aho-corasick",
- "base64 0.22.1",
- "chrono",
- "hifijson",
- "jaq-interpret",
- "libm",
- "log",
- "regex",
- "urlencoding",
-]
-
-[[package]]
-name = "jaq-interpret"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fe95ec3c24af3fd9f3dd1091593f5e49b003a66c496a8aa39d764d0a06ae17b"
-dependencies = [
- "ahash 0.8.11",
- "dyn-clone",
- "hifijson",
- "indexmap 2.4.0",
- "jaq-syn",
- "once_cell",
- "serde_json",
-]
-
-[[package]]
-name = "jaq-parse"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0346d7d3146cdda8acd929581f3d6626a332356c74d5c95aeaffaac2eb6dee82"
-dependencies = [
- "chumsky",
- "jaq-syn",
-]
-
-[[package]]
-name = "jaq-std"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfbaa55578fd3b70433b594a370741e0c364e4afff92cc0099623fce87311bc1"
-dependencies = [
- "jaq-syn",
-]
-
-[[package]]
-name = "jaq-syn"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ba44fe4428c71304604261ecbae047ee9cfb60c4f1a6bd222ebbb31726d3948"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -13563,12 +13482,6 @@ name = "scroll"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
-
-[[package]]
-name = "scroll"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
 
 [[package]]
 name = "scrypt"
