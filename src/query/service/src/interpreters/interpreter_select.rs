@@ -292,7 +292,7 @@ impl Interpreter for SelectInterpreter {
 
         if self.ctx.get_settings().get_enable_query_result_cache()?
             && self.ctx.get_cacheable()
-            && formatted_ast.is_some()
+            && self.formatted_ast.is_some()
         {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
