@@ -25,6 +25,15 @@ use log::info;
 
 use crate::PlanProfile;
 
+pub enum CallbackType {
+    // Complete the most basic callbacks for the query. Their invocation must be ensured priority, otherwise it may result in incorrect data.
+    Basic,
+    // Callbacks that need to be invoked after the pipeline completes a query, such as various hooks
+    Normal,
+    // Invoked ignore success or failure.
+    Always,
+}
+
 pub struct ExecutionInfo {
     pub res: Result<()>,
     pub profiling: HashMap<u32, PlanProfile>,
@@ -37,8 +46,8 @@ impl ExecutionInfo {
 }
 
 pub trait Callback: Send + Sync + 'static {
-    fn always_call(&self) -> bool {
-        false
+    fn typ(&self) -> CallbackType {
+        CallbackType::Normal
     }
 
     fn apply(self: Box<Self>, info: &ExecutionInfo) -> Result<()>;
@@ -75,16 +84,28 @@ impl FinishedCallbackChain {
         let chain = std::mem::take(&mut self.chain);
 
         let mut states = Vec::with_capacity(chain.len());
-        let mut callbacks = Vec::with_capacity(chain.len());
-        let mut always_callbacks = Vec::with_capacity(chain.len());
 
-        for (location, callback) in chain.into_iter() {
-            if !callback.always_call() {
-                callbacks.push((location, callback));
-            } else {
-                always_callbacks.push((location, callback));
+        let (callbacks, always_callbacks) = {
+            let mut basic_callback = vec![];
+            let mut normal_callbacks = vec![];
+            let mut always_callbacks = vec![];
+            for (location, callback) in chain.into_iter() {
+                match callback.typ() {
+                    CallbackType::Basic => {
+                        basic_callback.push((location, callback));
+                    }
+                    CallbackType::Normal => {
+                        normal_callbacks.push((location, callback));
+                    }
+                    CallbackType::Always => {
+                        always_callbacks.push((location, callback));
+                    }
+                }
             }
-        }
+
+            basic_callback.extend(normal_callbacks);
+            (basic_callback, always_callbacks)
+        };
 
         let mut apply_res = Ok(());
         for (location, callback) in callbacks {
@@ -212,8 +233,8 @@ pub struct AlwaysCallback<T: Callback> {
 }
 
 impl<T: Callback> Callback for AlwaysCallback<T> {
-    fn always_call(&self) -> bool {
-        true
+    fn typ(&self) -> CallbackType {
+        CallbackType::Always
     }
 
     fn apply(self: Box<Self>, info: &ExecutionInfo) -> Result<()> {
@@ -223,6 +244,26 @@ impl<T: Callback> Callback for AlwaysCallback<T> {
 
 pub fn always_callback<T: Callback>(inner: T) -> AlwaysCallback<T> {
     AlwaysCallback {
+        inner: Box::new(inner),
+    }
+}
+
+pub struct BasicCallback<T: Callback> {
+    inner: Box<T>,
+}
+
+impl<T: Callback> Callback for BasicCallback<T> {
+    fn typ(&self) -> CallbackType {
+        CallbackType::Basic
+    }
+
+    fn apply(self: Box<Self>, info: &ExecutionInfo) -> Result<()> {
+        self.inner.apply(info)
+    }
+}
+
+pub fn basic_callback<T: Callback>(inner: T) -> BasicCallback<T> {
+    BasicCallback {
         inner: Box::new(inner),
     }
 }
