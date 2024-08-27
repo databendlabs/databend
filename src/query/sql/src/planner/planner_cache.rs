@@ -74,7 +74,8 @@ impl Planner {
                 let metadata = metadata.read();
                 if visitor.snapshots.iter().all(|sn| {
                     metadata.tables().iter().any(|table| {
-                        table.table().options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(sn)
+                        !table.table().is_temp()
+                            && table.table().options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(sn)
                     })
                 }) {
                     return (!visitor.cache_miss, Some(plan.clone()));
@@ -140,7 +141,9 @@ impl TableRefVisitor {
                     .get_table(&catalog_name, &database_name, &table_name)
                     .await
                 {
-                    if let Some(sn) = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION) {
+                    if !table_meta.is_temp()
+                        && let Some(sn) = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION)
+                    {
                         self.snapshots.push(sn.clone());
                         return;
                     }
