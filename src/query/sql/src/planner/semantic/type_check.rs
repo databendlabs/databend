@@ -134,6 +134,8 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
+use crate::plans::DictGetFunctionArgument;
+use crate::plans::DictionarySource;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
@@ -3775,9 +3777,12 @@ impl<'a> TypeChecker<'a> {
         let original_context = self.bind_context.expr_context.clone();
         self.bind_context
             .set_expr_context(ExprContext::InAsyncFunction);
-
+        let tenant = self.ctx.get_tenant();
+        let cat_name = self.ctx.get_current_catalog();
+        let catalog = self.ctx.get_catalog(&cat_name).await?;
         let result = match func_name {
-            "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
+            "nextval" => self.resolve_nextval_async_function(span.clone(), func_name, arguments)?,
+            "dict_get" => self.resolve_dict_get(span.clone(), tenant, catalog, arguments)?,
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -4588,10 +4593,22 @@ impl<'a> TypeChecker<'a> {
 
         let dict_name = args[0];
         let field = args[1];
-        let pk_values = args[2];
+        let key_arg = args[2];
 
         // Get dict_name and dict_meta.
+        let box (dict_scalar, _dict_data_type) = self.resolve(dict_name)?;
+        let db_name: String ;
         let dict_name = if let Expr::ColumnRef { column, .. } = dict_name {
+            if column.database != None {
+                return Err(ErrorCode::SemanticError(
+                    "database's name should not exist.".to_string(),
+                )
+                .set_span(dict_name.span()));
+            }
+            db_name = match(column.table) {
+                Some(table) => table.name,
+                None => self.ctx.get_current_database(),
+            };
             if let ColumnID::Name(name) = &column.column {
                 name.name.clone()
             } else {
@@ -4607,7 +4624,6 @@ impl<'a> TypeChecker<'a> {
             .set_span(dict_name.span()));
         };
 
-        let db_name = self.ctx.get_current_database();
         let db_id = catalog
             .get_database(&tenant, db_name.as_str())
             .await?
@@ -4650,51 +4666,103 @@ impl<'a> TypeChecker<'a> {
         let return_type = Box::new(attr_type);
 
         // Get primary_key_values and check types.
-        let box (pk_values_scalar, pk_values_data_type) = self.resolve(pk_values)?;
-        let Ok(pk_values_expr) = ConstantExpr::try_from(pk_values_scalar.clone()) else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, id_exprs must be a constant string, but got {}",
-                pk_values,
-            )));
-        };
-        let Some(pk_values_text) = pk_values_expr.value.as_string() else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, id_exprs must be a constant string, but got {}",
-                pk_values
-            )));
-        };
-        let pk_ids_values: Vec<&str> = pk_values_text.split(',').collect();
+        // let primary_column_id = dict
 
-        let DataType::Tuple(pk_ids_types) = pk_values_data_type else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, id_expr must be a tuple, but got {}",
-                pk_values,
-            ))
-            .set_span(pk_values_scalar.span()));
-        };
-        // We only support one primary key.
-        // Check input primary key values' type.
-        let primary_column_id = dictionary.primary_column_ids.first().unwrap();
-        let pk_type = schema.field(*primary_column_id as usize).data_type();
-        for pk_ids_type in pk_ids_types {
-            if pk_ids_type != DataType::from(pk_type) {
-                return Err(ErrorCode::SemanticError(
-                    "the input primary key type does not match the primary key types in the dictionary",
-                )
-                .set_span(pk_values_scalar.span()));
-            }
+        let primary_column_id = dictionary.primary_column_ids[0];
+        let primary_field = schema.field_of_column_id(primary_column_id)?;
+        let primary_type: DataType = (&primary_field.data_type).into();
+
+        let mut args = Vec::with_capacity(1);
+        let box (key_scalar, key_type) = self.resolve(key_arg)?;
+        if primary_type != key_type {
+            args.push(wrap_cast(&key_scalar, &primary_type));
+        } else {
+            args.push(key_scalar);
         }
 
+        // 应该再加个判断
+        let url = "";
+        let dict_source: DictionarySource;
+        if dictionary.source.to_lowercase() == "mysql" {
+            let username = match (dictionary.options.get("username")) {
+                Some(user) => user,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `username`"
+                    ))
+                },
+            };
+            let password = match (dictionary.options.get("password")) {
+                Some(psw) => psw,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `password`"
+                    ))
+                },
+            };
+            let host = match (dictionary.options.get("host")) {
+                Some(host) => host,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `host`"
+                    ))
+                },
+            };
+            let port = match (dictionary.options.get("port")) {
+                Some(port) => port,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `port`"
+                    ))
+                },
+            };
+            let db = match (dictionary.options.get("db")) {
+                Some(db) => db,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `db`"
+                    ))
+                },
+            };
+            url += "mysql://" + username + ":" + password + "@" + host + ":" + port + "/" + db;
+            dict_source = DictionarySource::Mysql(url.to_string());
+        } else if dictionary.source.to_lowercase() == "redis" {
+            let host = match (dictionary.options.get("host")) {
+                Some(host) => host,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `host`"
+                    ))
+                },
+            };
+            let port = match (dictionary.options.get("port")) {
+                Some(port) => port,
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "Miss option `port`"
+                    ))
+                },
+            };
+            url += "tcp://" + host + ":" + port;
+            dict_source = DictionarySource::Redis(url.to_string());
+        }
+
+        let dict_get_func_arg = DictGetFunctionArgument {
+            dict_source,
+            table: Some(db_name),
+            key_field: Some(*primary_field.name()),
+            value_field: Some(attr_name),
+        };
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
                 func_name: "dict_get".to_string(),
-                display_name: format!("dict_get({},({}),({}))", dict_name, attr_name, pk_values_text),
-                return_type: Box::new(DataType::from(return_type.clone())),
-                arguments: vec![field, pk_values],
-                func_arg: AsyncFunctionArgument::DictGetFunction(*args[0], *field, *pk_values),
+                display_name: format!("dict_get({},({}),({}))", dict_name, attr_name, primary_field.name),
+                return_type: Box::new(DataType::from(attr_type)),
+                arguments: args,
+                func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
             }),
-            DataType::Array(Box::new(attr_type.clone())), // return_type
+            DataType::Array(Box::new(DataType::from(&attr_type))), // return_type
         )))
     }
 

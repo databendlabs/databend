@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use ahash::HashSet;
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
@@ -102,7 +101,7 @@ impl Binder {
                         + "Default expressions and computed expressions for the table fields should not be set.",
                 ));
             }
-            fields_names.push(table_field.name());
+            fields_names.push(table_field.name.clone());
         }
         // Check for redis.
         if source.to_lowercase() == *"redis" {

@@ -44,7 +44,7 @@ pub fn is_builtin_function(name: &str) -> bool {
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
-pub const ASYNC_FUNCTIONS: [&str; 1] = ["nextval"];
+pub const ASYNC_FUNCTIONS: [&str; 1] = ["nextval", "dict_get"];
 
 pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "row_number",

@@ -17,8 +17,8 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::BinaryOperator;
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::Range;
 use databend_common_ast::Span;
 use databend_common_catalog::catalog::Catalog;
@@ -26,13 +26,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Column;
-use databend_common_expression::Expr;
+use databend_common_expression::Expr as EExpr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
-use databend_common_meta_app::schema::DictionaryIdentity;
-use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -788,7 +784,21 @@ pub enum AsyncFunctionArgument {
     // The second argument is the list of dictionary fields.
     // The third argument is value of primary key.
     // Used by `dict_get` function to access data from source.
-    DictGetFunction(Expr, Expr, Expr),
+    DictGetFunction(DictGetFunctionArgument),
+}
+
+pub struct DictGetFunctionArgument {
+    pub dict_source: DictionarySource,
+    pub table: Option<String>,
+    pub key_field: Option<String>,
+    pub value_field: Option<String>,
+}
+
+pub enum DictionarySource {
+    // MySQL connection string `mysql://user:password@localhost:3306/db`
+    Mysql(String),
+    // Redis connection string `tcp://127.0.0.1:6379`
+    Redis(String),
 }
 
 // Asynchronous functions are functions that need to call remote interfaces.
@@ -816,7 +826,7 @@ impl AsyncFunctionCall {
                 let reply = catalog.get_sequence_next_value(req).await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
-            AsyncFunctionArgument::DictGetFunction(dict_name, fields, pk_values) => {
+            AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal(
                     "Cannot generate dict_get function",
                 ))
