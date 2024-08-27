@@ -190,7 +190,7 @@ async fn test_catalogs_table() -> Result<()> {
                 tenant: tenant.clone(),
                 table_name: "test_table".to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
-                db_id: db.get_db_info().ident.db_id,
+                db_id: db.get_db_info().database_id.db_id,
             })
             .await;
         assert!(res.is_ok());

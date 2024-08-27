@@ -38,6 +38,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
+use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_to_ewkb;
 use lexical_core::FromLexical;
@@ -103,6 +104,7 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, value),
             ColumnBuilder::Variant(c) => self.read_variant(c, value),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, value),
+            ColumnBuilder::Geography(c) => self.read_geography(c, value),
             _ => unimplemented!(),
         }
     }
@@ -346,12 +348,24 @@ impl FieldJsonAstDecoder {
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
-                let geom = parse_to_ewkb(v.as_bytes(), None)?;
+                let geom = parse_to_ewkb(v, None)?;
                 column.put_slice(&geom);
                 column.commit_row();
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect Geometry value")),
+        }
+    }
+
+    fn read_geography(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
+        match value {
+            Value::String(v) => {
+                let geog = geography_from_ewkt(v)?;
+                column.put_slice(&geog);
+                column.commit_row();
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect Geography value")),
         }
     }
 

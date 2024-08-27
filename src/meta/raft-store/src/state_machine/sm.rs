@@ -28,6 +28,8 @@ use databend_common_meta_sled_store::Store;
 use databend_common_meta_sled_store::TransactionSledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
@@ -46,8 +48,6 @@ use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
@@ -1054,8 +1054,8 @@ impl StateMachine {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_types::KVMeta;
-    use databend_common_meta_types::SeqV;
+    use databend_common_meta_types::seq_value::KVMeta;
+    use databend_common_meta_types::seq_value::SeqV;
 
     use crate::state_machine::StateMachine;
 

@@ -14,10 +14,10 @@
 
 use databend_common_exception::Result;
 use databend_query::catalogs::InMemoryMetas;
-use databend_query::catalogs::SYS_DB_ID_BEGIN;
-use databend_query::catalogs::SYS_TBL_ID_BEGIN;
 use databend_query::databases::SystemDatabase;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
 #[test]
 fn test_disable_system_table() -> Result<()> {

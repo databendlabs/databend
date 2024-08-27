@@ -165,7 +165,7 @@ impl IndexesTable {
                     visibility_checker.check_database_visibility(
                         &ctl_name,
                         db.name(),
-                        db.get_db_info().ident.db_id,
+                        db.get_db_info().database_id.db_id,
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -180,7 +180,7 @@ impl IndexesTable {
 
         let mut index_tables = Vec::new();
         for db in dbs {
-            let db_id = db.get_db_info().ident.db_id;
+            let db_id = db.get_db_info().database_id.db_id;
             let db_name = db.name();
 
             let tables = match catalog.list_tables(&tenant, db_name).await {

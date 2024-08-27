@@ -287,13 +287,15 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for IndexMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = IndexId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for IndexNameIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = IndexIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

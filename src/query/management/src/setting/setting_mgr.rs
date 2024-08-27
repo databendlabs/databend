@@ -22,13 +22,12 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::IntoSeqV;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 
 use crate::setting::SettingApi;
 
@@ -102,7 +101,7 @@ impl SettingApi for SettingMgr {
         })?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => Ok(seq_value.try_map(|d| d.try_into())?),
             Err(_) => Err(ErrorCode::UnknownVariable(format!(
                 "Setting '{}' does not exist.",
                 name

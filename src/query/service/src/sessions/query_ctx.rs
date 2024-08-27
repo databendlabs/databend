@@ -38,6 +38,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -105,9 +106,10 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -150,6 +152,9 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
+    // Each table will create a new QueryContext
+    // So partition_queue could be independent in each table context
+    // see `builder_join.rs` for more details
     pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
@@ -183,7 +188,7 @@ impl QueryContext {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.txn_mgr())?;
+            .build_catalog(table_info.catalog_info.clone(), self.session_state())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -585,7 +590,7 @@ impl TableContext for QueryContext {
             .get_catalog(
                 self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
-                self.txn_mgr(),
+                self.session_state(),
             )
             .await
     }
@@ -593,7 +598,7 @@ impl TableContext for QueryContext {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_default_catalog(self.txn_mgr())
+            .get_default_catalog(self.session_state())
     }
 
     fn get_id(&self) -> String {
@@ -690,12 +695,6 @@ impl TableContext for QueryContext {
 
     fn get_function_context(&self) -> Result<FunctionContext> {
         let settings = self.get_settings();
-        let external_server_connect_timeout_secs =
-            settings.get_external_server_connect_timeout_secs()?;
-        let external_server_request_timeout_secs =
-            settings.get_external_server_request_timeout_secs()?;
-        let external_server_request_batch_rows =
-            settings.get_external_server_request_batch_rows()?;
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
@@ -708,6 +707,7 @@ impl TableContext for QueryContext {
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
+        let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
             tz,
@@ -722,13 +722,11 @@ impl TableContext for QueryContext {
             openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
             openai_api_completion_model: query_config.openai_api_completion_model.clone(),
 
-            external_server_connect_timeout_secs,
-            external_server_request_timeout_secs,
-            external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
             enable_dst_hour_fix,
             enable_strict_datetime_parser,
+            random_function_seed,
         })
     }
 
@@ -1143,6 +1141,10 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.txn_mgr()
     }
 
+    fn session_state(&self) -> SessionState {
+        self.shared.session.session_ctx.session_state()
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1308,17 +1310,40 @@ impl TableContext for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if tbl.engine() != "FUSE" {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() {
+            return Ok(None);
+        }
+
+        if tbl.is_temp() {
             return Ok(None);
         }
 
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
-            LockTableOption::NoLock => Ok(None),
+        let lock_guard = match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self.clone(), false).await?,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self.clone(), true).await?,
+            LockTableOption::NoLock => None,
+        };
+        if lock_guard.is_some() {
+            self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
         }
+        Ok(lock_guard)
+    }
+
+    fn get_session_id(&self) -> String {
+        self.shared.session.id.clone()
+    }
+
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {
+        catalog_name == CATALOG_DEFAULT
+            && self
+                .shared
+                .session
+                .session_ctx
+                .temp_tbl_mgr()
+                .lock()
+                .is_temp_table(database_name, table_name)
     }
 }
 

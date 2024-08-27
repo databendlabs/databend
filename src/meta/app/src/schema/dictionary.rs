@@ -180,7 +180,8 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for DictionaryMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DictionaryId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

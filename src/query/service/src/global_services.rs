@@ -48,8 +48,8 @@ use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
-use crate::servers::http::v1::TokenManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
@@ -111,7 +111,7 @@ impl GlobalServices {
 
         QueriesQueueManager::init(config.query.max_running_queries as usize)?;
         HttpQueryManager::init(config).await?;
-        TokenManager::init(config).await?;
+        ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;

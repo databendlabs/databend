@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
@@ -48,6 +49,7 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::debug;
 use log::info;
 use log::warn;
@@ -226,19 +228,38 @@ impl FuseTable {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-        };
+        let mut update_temp_tables = vec![];
+        let mut update_table_metas = vec![];
+        let mut copied_files_req = vec![];
+        if new_table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            let req = UpdateTempTableReq {
+                table_id,
+                new_table_meta,
+                copied_files: copied_files
+                    .as_ref()
+                    .map(|c| c.file_info.clone())
+                    .unwrap_or_default(),
+                desc: table_info.desc.clone(),
+            };
+            update_temp_tables.push(req);
+        } else {
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                new_table_meta,
+            };
+            update_table_metas.push((req, table_info.clone()));
+            copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
+        }
 
         // 3. let's roll
         catalog
             .update_multi_table_meta(UpdateMultiTableMetaReq {
-                update_table_metas: vec![(req, table_info.clone())],
+                update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
-                copied_files: copied_files.iter().map(|c| (table_id, c.clone())).collect(),
+                copied_files: copied_files_req,
                 deduplicated_labels: deduplicated_label.into_iter().collect(),
+                update_temp_tables,
             })
             .await?;
 

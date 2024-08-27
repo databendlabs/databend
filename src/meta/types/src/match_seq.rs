@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::seq_value::SeqV;
 use crate::ConflictSeq;
-use crate::SeqV;
 
 /// Describes what `seq` an operation must match to take effect.
 /// Every value written to meta data has a unique `seq` bound.
@@ -92,10 +92,10 @@ impl MatchSeqExt<u64> for MatchSeq {
 #[cfg(test)]
 mod tests {
 
+    use crate::seq_value::SeqV;
     use crate::ConflictSeq;
     use crate::MatchSeq;
     use crate::MatchSeqExt;
-    use crate::SeqV;
 
     #[derive(serde::Serialize)]
     struct Foo {

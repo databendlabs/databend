@@ -45,6 +45,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -135,8 +136,7 @@ pub struct BindContext {
     pub view_info: Option<(String, String)>,
 
     /// Set-returning functions in current context.
-    /// The key is the `Expr::to_string` of the function.
-    pub srfs: DashMap<String, ScalarExpr>,
+    pub srfs: Vec<ScalarItem>,
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
@@ -177,7 +177,7 @@ impl BindContext {
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: DashMap::new(),
+            srfs: Vec::new(),
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -197,7 +197,7 @@ impl BindContext {
             cte_map_ref: parent.cte_map_ref.clone(),
             in_grouping: false,
             view_info: None,
-            srfs: DashMap::new(),
+            srfs: Vec::new(),
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,

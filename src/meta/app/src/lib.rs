@@ -23,6 +23,7 @@
 
 pub mod app_error;
 pub mod background;
+pub mod data_id;
 pub mod data_mask;
 pub mod primitive;
 pub mod principal;

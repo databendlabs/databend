@@ -21,13 +21,16 @@ mod upsert_pb;
 
 use std::future::Future;
 
+use databend_common_meta_app::data_id::DataId;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 use futures::future::FutureExt;
@@ -87,6 +90,35 @@ pub trait KVPbApi: KVApi {
                 .map_err(PbApiWriteError::KvApiError)?;
             let transition = decode_transition(reply)?;
             Ok(transition)
+        }
+    }
+
+    /// Query kvapi for a 2 level mapping: `name -> id -> value`.
+    ///
+    /// `K` is the key type for `name -> id`.
+    /// `R2` is the level 2 resource type and the level 2 key type is `DataId<R2>`.
+    fn get_id_and_value<K, R2>(
+        &self,
+        key: &K,
+    ) -> impl Future<Output = Result<Option<(SeqV<DataId<R2>>, SeqV<R2::ValueType>)>, Self::Error>> + Send
+    where
+        K: kvapi::Key<ValueType = DataId<R2>> + KeyWithTenant + Sync,
+        R2: TenantResource + Send + Sync,
+        R2::ValueType: FromToProto,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        async move {
+            let Some(seq_id) = self.get_pb(key).await? else {
+                return Ok(None);
+            };
+
+            let id_ident = seq_id.data.into_t_ident(key.tenant());
+
+            let Some(seq_v) = self.get_pb(&id_ident).await? else {
+                return Ok(None);
+            };
+
+            Ok(Some((seq_id, seq_v)))
         }
     }
 
@@ -341,9 +373,9 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
     use databend_common_meta_kvapi::kvapi::UpsertKVReq;
     use databend_common_meta_types::protobuf::StreamItem;
+    use databend_common_meta_types::seq_value::SeqV;
+    use databend_common_meta_types::seq_value::SeqValue;
     use databend_common_meta_types::MetaError;
-    use databend_common_meta_types::SeqV;
-    use databend_common_meta_types::SeqValue;
     use databend_common_meta_types::TxnReply;
     use databend_common_meta_types::TxnRequest;
     use databend_common_proto_conv::FromToProto;
@@ -363,7 +395,7 @@ mod tests {
         type Error = MetaError;
 
         async fn upsert_kv(&self, _req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
-            todo!()
+            unimplemented!()
         }
 
         async fn get_kv_stream(
@@ -384,11 +416,11 @@ mod tests {
         }
 
         async fn list_kv(&self, _prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-            todo!()
+            unimplemented!()
         }
 
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
-            todo!()
+            unimplemented!()
         }
     }
 

@@ -19,7 +19,6 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
-use databend_storages_common_txn::TxnManager;
 use fastrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
@@ -43,6 +42,7 @@ pub struct TenantTableInfo {
     pub engine: String,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+    pub is_local: bool,
     pub rows: u64,
     pub data_bytes: u64,
     pub compressed_data_bytes: u64,
@@ -54,7 +54,7 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
+    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
 
     let databases = catalog.list_databases(tenant).await?;
 
@@ -107,6 +107,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 engine: table.engine().to_string(),
                 created_on: table.get_table_info().meta.created_on,
                 updated_on: table.get_table_info().meta.updated_on,
+                is_local: table.is_local(),
                 rows: stats.number_of_rows,
                 data_bytes: stats.data_bytes,
                 compressed_data_bytes: stats.compressed_data_bytes,

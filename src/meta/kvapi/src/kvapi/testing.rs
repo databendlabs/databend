@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-
 use crate::kvapi;
 use crate::kvapi::Key;
 use crate::kvapi::KeyCodec;
 use crate::kvapi::KeyError;
 use crate::kvapi::KeyParser;
+use crate::kvapi::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FooKey {
@@ -42,11 +41,22 @@ impl KeyCodec for FooKey {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct FooValue;
+
 impl Key for FooKey {
     const PREFIX: &'static str = "pref";
-    type ValueType = Infallible;
+    type ValueType = FooValue;
 
     fn parent(&self) -> Option<String> {
         None
+    }
+}
+
+impl Value for FooValue {
+    type KeyType = FooKey;
+
+    fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+        []
     }
 }

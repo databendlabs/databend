@@ -25,9 +25,9 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::TryStreamExt;
 

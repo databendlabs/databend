@@ -105,7 +105,6 @@ build_exceptions! {
     BadBytes(1046),
     InitPrometheusFailure(1047),
     Overflow(1049),
-    AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
     SHA1CheckFailed(1057),
@@ -123,7 +122,6 @@ build_exceptions! {
     UnknownFormat(1074),
     UnknownCompressionType(1075),
     InvalidCompressionData(1076),
-    InvalidAuthInfo(1077),
     InvalidTimezone(1078),
     InvalidDate(1079),
     InvalidTimestamp(1080),
@@ -387,6 +385,11 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
+    UnknownDictionaryId(3115),
+    UnsupportedDictionaryOption(3116),
+    UnsupportedDictionarySource(3117),
+    MissingDictionaryOption(3118),
+    WrongDictionaryFieldExpr(3119),
 }
 
 // Storage errors [3001, 4000].
@@ -415,11 +418,14 @@ build_exceptions! {
 
 // Service errors [5001,6000].
 build_exceptions! {
-    // A task that already stopped and can not stopped twice.
+    // A task that already stopped and can not stop twice.
     AlreadyStopped(5002),
 
-    SessionTokenExpired(5100),
-    RefreshTokenExpired(5101),
-    SessionTokenNotFound(5102),
-    RefreshTokenNotFound(5103)
+    // auth related
+    AuthenticateFailure(5100),
+    // the flowing 4 code is used by clients
+    SessionTokenExpired(5101),
+    RefreshTokenExpired(5102),
+    SessionTokenNotFound(5103),
+    RefreshTokenNotFound(5104)
 }

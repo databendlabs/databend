@@ -1,0 +1,78 @@
+statement ok
+set join_spilling_memory_ratio = 1;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+statement ok
+create or replace table t1 as select number as a from numbers(10);
+
+statement ok
+create or replace table t2 as select number as a from numbers(1);
+
+# LEFT OUTER JOIN
+query I
+select * from t1 left join t2 on t1.a = t2.a order by t1.a;
+----
+0 0
+1 NULL
+2 NULL
+3 NULL
+4 NULL
+5 NULL
+6 NULL
+7 NULL
+8 NULL
+9 NULL
+
+# LEFT ANTI JOIN
+query I
+select * from t1 where not exists(select * from t2 where t1.a = t2.a) order by t1.a;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+insert into t2 select number as a from numbers(20);
+
+# FULL OUTER JOIN
+query I
+select * from t1 full outer join t2 on t1.a = t2.a order by t1.a, t2.a;
+----
+0 0
+0 0
+1 1
+2 2
+3 3
+4 4
+5 5
+6 6
+7 7
+8 8
+9 9
+NULL 10
+NULL 11
+NULL 12
+NULL 13
+NULL 14
+NULL 15
+NULL 16
+NULL 17
+NULL 18
+NULL 19
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;

@@ -285,6 +285,25 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     },
                 }
             }
+            DataType::Geography => {
+                let lng: f64 = self.rng.gen_range(-180.0..=180.0);
+                let lat: f64 = self.rng.gen_range(-90.0..=90.0);
+                let arg = Expr::Literal {
+                    span: None,
+                    value: Literal::String(format!("POINT({} {})", lng, lat)),
+                };
+                Expr::FunctionCall {
+                    span: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(None, "st_geographyfromewkt".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                }
+            }
             _ => Expr::Literal {
                 span: None,
                 value: Literal::Null,

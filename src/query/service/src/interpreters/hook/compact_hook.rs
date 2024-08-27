@@ -94,8 +94,9 @@ async fn do_hook_compact(
             // for mutations other than Insertions, we use an empirical value of 3 segments as the
             // limit for compaction. to be refined later.
                 {
+                    let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
                     CompactionLimits {
-                        segment_limit: Some(3),
+                        segment_limit: Some(auto_compaction_segments_limit as usize),
                         block_limit: None,
                     }
                 }

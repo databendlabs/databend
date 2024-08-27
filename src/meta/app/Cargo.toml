@@ -24,6 +24,7 @@ databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
+derive_more = { workspace = true }
 enumflags2 = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }
@@ -32,6 +33,7 @@ num-derive = "0.3.3"
 num-traits = "0.2.15"
 opendal = { workspace = true }
 paste = { workspace = true }
+prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = "0.10.5"

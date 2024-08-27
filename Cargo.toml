@@ -52,7 +52,7 @@ members = [
     "src/query/storages/common/io",
     "src/query/storages/common/pruner",
     "src/query/storages/common/stage",
-    "src/query/storages/common/txn",
+    "src/query/storages/common/session",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
     "src/query/storages/factory",
@@ -197,9 +197,9 @@ databend-storages-common-cache = { path = "src/query/storages/common/cache" }
 databend-storages-common-index = { path = "src/query/storages/common/index" }
 databend-storages-common-io = { path = "src/query/storages/common/io" }
 databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
+databend-storages-common-session = { path = "src/query/storages/common/session" }
 databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
-databend-storages-common-txn = { path = "src/query/storages/common/txn" }
 
 # Crates.io dependencies
 anyerror = { version = "=0.1.10" }
@@ -287,6 +287,9 @@ parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
 # TODO: let's use native tls instead.
+iceberg = { version = "0.3.0" }
+iceberg-catalog-hms = { version = "0.3.0" }
+iceberg-catalog-rest = { version = "0.3.0" }
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
 proj4rs = { version = "0.1.3", features = ["geo-types", "crs-definitions"] }
 prometheus-client = "0.22"

@@ -203,10 +203,7 @@ where T: Clone
                     let bitmap = col.not();
                     column.push_fix_len_binaries(&reader[offsize..], step, rows)?;
                     let inner = column.build();
-                    Column::Nullable(Box::new(NullableColumn {
-                        column: inner,
-                        validity: bitmap,
-                    }))
+                    NullableColumn::new_column(inner, bitmap)
                 }
             };
 

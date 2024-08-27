@@ -224,14 +224,16 @@ impl ShareMetaV1 {
     }
 }
 
+// it is not a value of any key
 mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::share::ShareMetaV1;
-
-    impl kvapi::Value for ShareMetaV1 {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
+    // use databend_common_meta_kvapi::kvapi;
+    //
+    // use crate::share::ShareMetaV1;
+    //
+    // impl kvapi::Value for ShareMetaV1 {
+    //     type KeyType = todo!();
+    //     fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+    //         []
+    //     }
+    // }
 }

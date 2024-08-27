@@ -44,6 +44,7 @@ use databend_common_ast::ast::ShowTablesStatusStmt;
 use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
@@ -54,6 +55,8 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::CompactionLimits;
@@ -86,8 +89,10 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use derive_visitor::DriveMut;
 use log::debug;
+use opendal::Operator;
 
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
@@ -420,7 +425,7 @@ impl Binder {
             table_options,
             cluster_by,
             as_query,
-            transient,
+            table_type,
             engine,
             uri_location,
         } = stmt;
@@ -457,7 +462,7 @@ impl Binder {
                 .await?;
 
                 // create a temporary op to check if params is correct
-                DataOperator::try_create(&sp).await?;
+                let data_operator = DataOperator::try_create(&sp).await?;
 
                 // Path ends with "/" means it's a directory.
                 let fp = if uri.path.ends_with('/') {
@@ -466,6 +471,10 @@ impl Binder {
                     "".to_string()
                 };
 
+                // Verify essential privileges.
+                // The permission check might fail for reasons other than the permissions themselves,
+                // such as network communication issues.
+                verify_external_location_privileges(data_operator.operator()).await?;
                 (Some(sp), fp)
             }
             (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
@@ -475,20 +484,30 @@ impl Binder {
             _ => (None, "".to_string()),
         };
 
-        // If table is TRANSIENT, set a flag in table option
-        if *transient {
-            options.insert("TRANSIENT".to_owned(), "T".to_owned());
-        }
+        match table_type {
+            TableType::Normal => {}
+            TableType::Transient => {
+                let _ = options.insert("TRANSIENT".to_owned(), "T".to_owned());
+            }
+            TableType::Temporary => {
+                if engine != Engine::Fuse {
+                    return Err(ErrorCode::BadArguments(
+                        "Temporary table is only supported for FUSE engine",
+                    ));
+                }
+                let _ = options.insert(OPT_KEY_TEMP_PREFIX.to_string(), self.ctx.get_session_id());
+            }
+        };
 
         // todo(geometry): remove this when geometry stable.
         if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
             {
                 return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry type is an experimental feature. \
+                    "Create table using the geometry/geography type is an experimental feature. \
                     You can `set enable_geo_create_table=1` to use this feature. \
                     We do not guarantee its compatibility until we doc this feature.",
                 ));
@@ -586,7 +605,7 @@ impl Binder {
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
-            let db_id = db.get_db_info().ident.db_id;
+            let db_id = db.get_db_info().database_id.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
 
             let config = GlobalConfig::instance();
@@ -1386,7 +1405,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn analyze_create_table_schema_by_columns(
+    pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<String>)> {
@@ -1676,4 +1695,55 @@ impl Binder {
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
     }
+}
+
+const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
+const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
+
+// verify that essential privileges has granted for accessing external location
+//
+// The permission check might fail for reasons other than the permissions themselves,
+// such as network communication issues.
+async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+    let verification_task = async move {
+        // verify privilege to put
+        let mut errors = Vec::new();
+        if let Err(e) = dal.write(VERIFICATION_KEY, "V").await {
+            errors.push(format!("Permission check for [Write] failed: {}", e));
+        }
+
+        // verify privilege to get
+        if let Err(e) = dal.read_with(VERIFICATION_KEY).range(0..1).await {
+            errors.push(format!("Permission check for [Read] failed: {}", e));
+        }
+
+        // verify privilege to stat
+        if let Err(e) = dal.stat(VERIFICATION_KEY).await {
+            errors.push(format!("Permission check for [Stat] failed: {}", e));
+        }
+
+        // verify privilege to list
+        if let Err(e) = dal.list(VERIFICATION_KEY).await {
+            errors.push(format!("Permission check for [List] failed: {}", e));
+        }
+
+        // verify privilege to delete (del something not exist)
+        if let Err(e) = dal.delete(VERIFICATION_KEY_DEL).await {
+            errors.push(format!("Permission check for [Delete] failed: {}", e));
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::StorageOther(
+                "Checking essential permissions for the external location failed.",
+            )
+            .add_message(errors.join("\n")))
+        }
+    };
+
+    GlobalIORuntime::instance()
+        .spawn(verification_task)
+        .await
+        .expect("join must succeed")
 }

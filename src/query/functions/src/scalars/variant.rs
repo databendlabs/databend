@@ -904,10 +904,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         };
                         let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
                         if let Some(validity) = validity {
-                            Value::Column(Column::Nullable(Box::new(NullableColumn {
+                            Value::Column(NullableColumn::new_column(
+                                Column::Variant(new_col),
                                 validity,
-                                column: Column::Variant(new_col),
-                            })))
+                            ))
                         } else {
                             Value::Column(Column::Variant(new_col))
                         }
@@ -945,10 +945,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     _ => Bitmap::new_constant(true, col.len()),
                 };
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
-                Value::Column(NullableColumn {
-                    validity,
-                    column: new_col,
-                })
+                Value::Column(NullableColumn::new(new_col, validity))
             }
         },
     );

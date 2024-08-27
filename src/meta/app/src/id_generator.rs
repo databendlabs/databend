@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-
 use databend_common_meta_kvapi::kvapi;
 
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
@@ -124,10 +122,21 @@ impl kvapi::KeyCodec for IdGenerator {
 impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = "__fd_id_gen";
 
-    type ValueType = Infallible;
+    type ValueType = IdGeneratorValue;
 
     fn parent(&self) -> Option<String> {
         None
+    }
+}
+
+#[derive(Debug)]
+pub struct IdGeneratorValue;
+
+impl kvapi::Value for IdGeneratorValue {
+    type KeyType = IdGenerator;
+
+    fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+        []
     }
 }
 

@@ -85,10 +85,7 @@ impl HashJoinProbeState {
             row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
-        let marker_column = Column::Nullable(Box::new(NullableColumn {
-            column: boolean_column,
-            validity: validity.into(),
-        }));
+        let marker_column = NullableColumn::new_column(boolean_column, validity.into());
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
@@ -137,10 +134,12 @@ impl HashJoinProbeState {
 
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
-            other => Ok(Column::Nullable(Box::new(NullableColumn {
-                validity: Bitmap::new_constant(true, other.len()),
-                column: other,
-            }))),
+            other => {
+                let validity = Bitmap::new_constant(true, other.len());
+                Ok(Column::Nullable(Box::new(NullableColumn::new(
+                    other, validity,
+                ))))
+            }
         }
     }
 }
@@ -196,10 +195,7 @@ pub(crate) fn wrap_true_validity(
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        let col = Column::Nullable(Box::new(NullableColumn {
-            column: col,
-            validity,
-        }));
+        let col = NullableColumn::new_column(col, validity);
         BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }

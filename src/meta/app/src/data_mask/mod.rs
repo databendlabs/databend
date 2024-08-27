@@ -20,8 +20,10 @@ use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
+pub use data_mask_id_ident::DataMaskId;
 pub use data_mask_id_ident::DataMaskIdIdent;
 pub use data_mask_name_ident::DataMaskNameIdent;
+use databend_common_meta_types::SeqV;
 pub use mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
 
 use crate::schema::CreateOption;
@@ -82,7 +84,7 @@ pub struct GetDatamaskReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetDatamaskReply {
-    pub policy: DatamaskMeta,
+    pub policy: SeqV<DatamaskMeta>,
 }
 
 /// A list of table ids

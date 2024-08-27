@@ -28,6 +28,7 @@ use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
+use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -41,6 +42,7 @@ use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberColumnVec;
 use crate::types::NumberType;
@@ -374,10 +376,10 @@ impl Column {
                     result_size,
                 );
 
-                Column::Nullable(Box::new(NullableColumn {
-                    column: inner_column,
-                    validity: BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                }))
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             Column::Tuple { .. } => {
                 let inner_ty = datatype.as_tuple().unwrap();
@@ -410,6 +412,10 @@ impl Column {
             Column::Geometry(_) => {
                 let builder = GeometryType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<GeometryType>(columns, builder, indices)
+            }
+            Column::Geography(_) => {
+                let builder = GeographyType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<GeographyType>(columns, builder, indices)
             }
         }
     }
@@ -626,6 +632,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Geometry(columns)
             }
+            Column::Geography(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| GeographyType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Geography(columns)
+            }
         }
     }
 
@@ -737,10 +750,10 @@ impl Column {
                     binary_items_buf,
                 );
 
-                Column::Nullable(Box::new(NullableColumn {
-                    column: inner_column,
-                    validity: BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                }))
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             ColumnVec::Tuple(columns) => {
                 let inner_data_type = data_type.as_tuple().unwrap();
@@ -766,6 +779,14 @@ impl Column {
             ColumnVec::Geometry(columns) => GeometryType::upcast_column(
                 Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
+            ColumnVec::Geography(columns) => {
+                let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
+                GeographyType::upcast_column(GeographyColumn(Self::take_block_vec_binary_types(
+                    &columns,
+                    indices,
+                    binary_items_buf.as_mut(),
+                )))
+            }
         }
     }
 

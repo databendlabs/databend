@@ -75,7 +75,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
 
         let catalog_mgr = CatalogManager::instance();
         let ctls = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.session_state())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -151,7 +151,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     visibility_checker.check_database_visibility(
                         ctl_name,
                         db.name(),
-                        db.get_db_info().ident.db_id,
+                        db.get_db_info().database_id.db_id,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -165,7 +165,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             let mut source_db_ids = vec![];
             let mut source_tb_ids = vec![];
             for db in final_dbs {
-                let db_id = db.get_db_info().ident.db_id;
+                let db_id = db.get_db_info().database_id.db_id;
                 let db_name = db.name();
                 let tables = match ctl.list_tables(&tenant, db_name).await {
                     Ok(tables) => tables,

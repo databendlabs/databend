@@ -208,7 +208,7 @@ impl Binder {
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: Default::default(),
+            srfs: vec![],
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -682,7 +682,7 @@ impl Binder {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.txn_mgr())
+            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.session_state())
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))

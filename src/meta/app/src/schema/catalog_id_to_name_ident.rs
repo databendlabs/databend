@@ -36,6 +36,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::CatalogIdToNameIdent;
     use crate::schema::CatalogNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
@@ -49,7 +50,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for CatalogNameIdent {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = CatalogIdToNameIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

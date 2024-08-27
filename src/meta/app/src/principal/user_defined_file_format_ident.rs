@@ -24,6 +24,7 @@ mod kvapi_impl {
     use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::principal::user_defined_file_format_ident::UserDefinedFileFormatIdent;
     use crate::principal::UserDefinedFileFormat;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
@@ -38,7 +39,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for UserDefinedFileFormat {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = UserDefinedFileFormatIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

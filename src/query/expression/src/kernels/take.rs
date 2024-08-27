@@ -25,6 +25,7 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -35,6 +36,7 @@ use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -175,10 +177,10 @@ impl Column {
             Column::Nullable(c) => {
                 let column = c.column.take(indices, string_items_buf);
                 let validity = Column::Boolean(Self::take_boolean_types(&c.validity, indices));
-                Column::Nullable(Box::new(NullableColumn {
+                Column::Nullable(Box::new(NullableColumn::new(
                     column,
-                    validity: BooleanType::try_downcast_column(&validity).unwrap(),
-                }))
+                    BooleanType::try_downcast_column(&validity).unwrap(),
+                )))
             }
             Column::Tuple(fields) => {
                 let fields = fields
@@ -196,6 +198,9 @@ impl Column {
                 column,
                 indices,
                 string_items_buf.as_mut(),
+            )),
+            Column::Geography(column) => GeographyType::upcast_column(GeographyColumn(
+                Self::take_binary_types(&column.0, indices, string_items_buf.as_mut()),
             )),
         }
     }

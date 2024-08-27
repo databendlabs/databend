@@ -34,9 +34,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::DataOperator;
 use databend_common_storages_result_cache::ResultCacheMetaManager;
-use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_users::UserApiProvider;
 
@@ -134,7 +132,7 @@ impl Binder {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
                 .catalogs
-                .get_default_catalog(self.ctx.txn_mgr())?
+                .get_default_catalog(self.ctx.session_state())?
                 .get_table_function(&func_name.name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
@@ -187,14 +185,8 @@ impl Binder {
         databend_common_base::runtime::block_on(async move {
             let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
             let meta_key = meta_key.unwrap();
-            let (table_schema, block_raw_data) = match result_cache_mgr
-                .get(meta_key.clone())
-                .await?
-            {
-                Some(value) => {
-                    let op = DataOperator::instance().operator();
-                    ResultCacheReader::read_table_schema_and_data(op, &value.location).await?
-                }
+            let location = match result_cache_mgr.get(meta_key.clone()).await? {
+                Some(value) => value.location,
                 None => {
                     return Err(ErrorCode::EmptyData(format!(
                         "`RESULT_SCAN` failed: Unable to fetch cached data for query ID '{}'. The data may have exceeded its TTL or been cleaned up. Cache key: '{}'",
@@ -202,7 +194,7 @@ impl Binder {
                     )).set_span(*span));
                 }
             };
-            let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
+            let table = ResultScan::try_create(query_id, location).await?;
 
             let table_alias_name = if let Some(table_alias) = alias {
                 Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
@@ -356,10 +348,19 @@ impl Binder {
                             lambda: None,
                         },
                     };
-                    let srfs = vec![srf.clone()];
-                    let srf_expr = self.bind_project_set(&mut bind_context, &srfs, child)?;
+                    let select_list = vec![SelectTarget::AliasedExpr {
+                        expr: Box::new(srf.clone()),
+                        alias: None,
+                    }];
+                    let mut select_list =
+                        self.normalize_select_list(&mut bind_context, &select_list)?;
+                    // analyze set returning functions
+                    self.analyze_project_set_select(&mut bind_context, &mut select_list)?;
+                    // bind set returning functions
+                    let srf_expr = self.bind_project_set(&mut bind_context, child)?;
 
-                    if let Some((_, srf_result)) = bind_context.srfs.remove(&srf.to_string()) {
+                    if let Some(item) = select_list.items.pop() {
+                        let srf_result = item.scalar;
                         let column_binding =
                             if let ScalarExpr::BoundColumnRef(column_ref) = &srf_result {
                                 column_ref.column.clone()
@@ -416,7 +417,7 @@ impl Binder {
                         "The function '{}' is not supported for lateral joins. Lateral joins currently support only Set Returning Functions (SRFs).",
                         func_name
                     ))
-                        .set_span(*span))
+                    .set_span(*span))
                 }
             }
             _ => unreachable!(),

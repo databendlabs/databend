@@ -65,6 +65,12 @@ impl Binder {
                 "Virtual Column only support FUSE engine",
             ));
         }
+        if table_info.is_temp() {
+            return Err(ErrorCode::SemanticError(format!(
+                "Table {} is temporary table, creating virtual column not allowed",
+                table_info.name()
+            )));
+        }
         let schema = table_info.schema();
 
         let virtual_columns = self

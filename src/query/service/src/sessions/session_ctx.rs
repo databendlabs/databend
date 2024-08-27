@@ -26,8 +26,11 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use databend_storages_common_txn::TxnManager;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TempTblMgr;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManager;
+use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -73,6 +76,13 @@ pub struct SessionContext {
     variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
+    temp_tbl_mgr: Mutex<TempTblMgrRef>,
+    /// The uniq id for session from the perspective of client.
+    /// for HTTP handler, client session lives longer then the `Session` object. the uniq id is
+    /// http handler: should set the id in session token, if token is not used, session id is not available,
+    ///
+    /// for mysql handler: simple use set id of `Session`
+    client_session_id: RwLock<Option<String>>,
 }
 
 impl SessionContext {
@@ -94,6 +104,8 @@ impl SessionContext {
             variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
+            client_session_id: Default::default(),
+            temp_tbl_mgr: Mutex::new(TempTblMgr::init()),
         })
     }
 
@@ -301,8 +313,16 @@ impl SessionContext {
         self.txn_mgr.lock().clone()
     }
 
+    pub fn temp_tbl_mgr(&self) -> TempTblMgrRef {
+        self.temp_tbl_mgr.lock().clone()
+    }
+
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         *self.txn_mgr.lock() = txn_mgr;
+    }
+
+    pub fn set_temp_tbl_mgr(&self, temp_tbl_mgr: TempTblMgrRef) {
+        *self.temp_tbl_mgr.lock() = temp_tbl_mgr;
     }
 
     pub fn set_variable(&self, key: String, value: Scalar) {
@@ -321,5 +341,20 @@ impl SessionContext {
     }
     pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
         *self.variables.write() = variables
+    }
+
+    pub fn session_state(&self) -> SessionState {
+        SessionState {
+            txn_mgr: self.txn_mgr(),
+            temp_tbl_mgr: self.temp_tbl_mgr(),
+        }
+    }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.client_session_id.read().clone()
+    }
+
+    pub fn set_client_session_id(&self, id: String) {
+        *self.client_session_id.write() = Some(id);
     }
 }

@@ -3466,7 +3466,7 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
             let column = func(ValueRef::Column(arg1.column), ctx)
                 .into_column()
                 .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
@@ -3502,7 +3502,7 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
             let column = func(ValueRef::Column(arg1.column), ValueRef::Scalar(arg2), ctx)
                 .into_column()
                 .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
             let and_validity = arg2.validity;
@@ -3515,7 +3515,7 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
             let column = func(ValueRef::Scalar(arg1), ValueRef::Column(arg2.column), ctx)
                 .into_column()
                 .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let and_validity =
@@ -3533,7 +3533,7 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
@@ -3591,7 +3591,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
             let and_validity = arg2.validity;
@@ -3609,7 +3609,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
             let and_validity =
@@ -3628,7 +3628,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
             let and_validity = arg3.validity;
@@ -3646,7 +3646,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
             let and_validity =
@@ -3665,7 +3665,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
             let and_validity =
@@ -3684,7 +3684,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
             let and_validity = databend_common_arrow::arrow::bitmap::and(
@@ -3705,7 +3705,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
@@ -3780,7 +3780,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -3804,7 +3804,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -3829,7 +3829,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -3853,7 +3853,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -3878,7 +3878,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -3903,7 +3903,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -3930,7 +3930,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -3954,7 +3954,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -3979,7 +3979,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4004,7 +4004,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4031,7 +4031,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4056,7 +4056,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4083,7 +4083,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4110,7 +4110,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4140,7 +4140,7 @@ pub fn passthrough_nullable_4_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
@@ -4223,7 +4223,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4249,7 +4249,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4276,7 +4276,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4302,7 +4302,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4329,7 +4329,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4356,7 +4356,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4385,7 +4385,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4411,7 +4411,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4438,7 +4438,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4465,7 +4465,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4494,7 +4494,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4521,7 +4521,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4550,7 +4550,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4579,7 +4579,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4611,7 +4611,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4637,7 +4637,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4664,7 +4664,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4691,7 +4691,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4720,7 +4720,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4747,7 +4747,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4776,7 +4776,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4805,7 +4805,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4837,7 +4837,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4864,7 +4864,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4893,7 +4893,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4922,7 +4922,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -4954,7 +4954,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -4983,7 +4983,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -5015,7 +5015,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5047,7 +5047,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
         (
             ValueRef::Column(arg1),
@@ -5082,7 +5082,7 @@ pub fn passthrough_nullable_5_arg<
             )
             .into_column()
             .unwrap();
-            Value::Column(NullableColumn { column, validity })
+            Value::Column(NullableColumn::new(column, validity))
         }
     }
 }
@@ -5114,10 +5114,10 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
                 .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
     }
 }
@@ -5159,10 +5159,10 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2)) => {
             let and_validity = arg2.validity;
@@ -5177,10 +5177,10 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                 .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
             let and_validity =
@@ -5200,10 +5200,10 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
     }
 }
@@ -5263,10 +5263,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
             let and_validity = arg2.validity;
@@ -5286,10 +5286,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Scalar(Some(arg3))) => {
             let and_validity =
@@ -5310,10 +5310,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
             let and_validity = arg3.validity;
@@ -5333,10 +5333,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(Some(arg2)), ValueRef::Column(arg3)) => {
             let and_validity =
@@ -5357,10 +5357,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Scalar(Some(arg1)), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
             let and_validity =
@@ -5381,10 +5381,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (ValueRef::Column(arg1), ValueRef::Column(arg2), ValueRef::Column(arg3)) => {
             let and_validity = databend_common_arrow::arrow::bitmap::and(
@@ -5407,10 +5407,10 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
     }
 }
@@ -5481,10 +5481,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5510,10 +5510,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5540,10 +5540,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5569,10 +5569,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5599,10 +5599,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5629,10 +5629,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5661,10 +5661,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5690,10 +5690,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5720,10 +5720,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5750,10 +5750,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5782,10 +5782,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5812,10 +5812,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5844,10 +5844,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -5876,10 +5876,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -5911,10 +5911,10 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
     }
 }
@@ -5999,10 +5999,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6030,10 +6030,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6062,10 +6062,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6093,10 +6093,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6125,10 +6125,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6157,10 +6157,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6191,10 +6191,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6222,10 +6222,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6254,10 +6254,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6286,10 +6286,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6320,10 +6320,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6352,10 +6352,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6386,10 +6386,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6420,10 +6420,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6457,10 +6457,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6488,10 +6488,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6520,10 +6520,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6552,10 +6552,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6586,10 +6586,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6618,10 +6618,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6652,10 +6652,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6686,10 +6686,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6723,10 +6723,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6755,10 +6755,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6789,10 +6789,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6823,10 +6823,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6860,10 +6860,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6894,10 +6894,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -6931,10 +6931,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Scalar(Some(arg1)),
@@ -6968,10 +6968,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
         (
             ValueRef::Column(arg1),
@@ -7008,10 +7008,10 @@ pub fn combine_nullable_5_arg<
             .unwrap();
             let combine_validity =
                 databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-            Value::Column(NullableColumn {
-                column: nullable_column.column,
-                validity: combine_validity,
-            })
+            Value::Column(NullableColumn::new(
+                nullable_column.column,
+                combine_validity,
+            ))
         }
     }
 }

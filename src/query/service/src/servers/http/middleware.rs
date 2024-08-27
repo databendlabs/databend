@@ -22,6 +22,7 @@ use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
@@ -30,7 +31,6 @@ use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
 use databend_common_metrics::http::metrics_incr_http_slow_request_count;
 use databend_common_metrics::http::metrics_observe_http_response_duration;
-use databend_common_storages_fuse::TableContext;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -45,10 +45,10 @@ use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
-use poem::error::Error as PoemError;
+use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::Addr;
-use poem::Body;
 use poem::Endpoint;
 use poem::IntoResponse;
 use poem::Middleware;
@@ -60,6 +60,9 @@ use super::v1::HttpQueryContext;
 use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
+use crate::servers::http::error::JsonErrorCode;
+use crate::servers::http::error::JsonErrorOnly;
+use crate::servers::http::error::QueryError;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -67,6 +70,7 @@ use crate::sessions::SessionType;
 #[derive(Copy, Clone)]
 pub enum EndpointKind {
     Login,
+    Logout,
     Refresh,
     StartQuery,
     PollQuery,
@@ -144,12 +148,7 @@ fn get_credential(
             ))
         }
     } else {
-        auth_by_header(
-            &std_auth_headers,
-            client_ip,
-            endpoint_kind,
-            req.uri().path(),
-        )
+        auth_by_header(&std_auth_headers, client_ip, endpoint_kind)
     }
 }
 
@@ -184,7 +183,6 @@ fn auth_by_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
     endpoint_kind: EndpointKind,
-    path: &str,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
@@ -210,11 +208,18 @@ fn auth_by_header(
                     let (token_type, set_user) = match endpoint_kind {
                         EndpointKind::Refresh => (TokenType::Refresh, true),
                         EndpointKind::StartQuery => (TokenType::Session, true),
-                        EndpointKind::PollQuery => (TokenType::Session, false),
-                        _ => {
-                            return Err(ErrorCode::AuthenticateFailure(format!(
-                                "should not use databend auth when accessing {path}"
-                            )));
+                        EndpointKind::PollQuery | EndpointKind::Logout => {
+                            (TokenType::Session, false)
+                        }
+                        EndpointKind::Login => {
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "should not use databend token for login",
+                            ));
+                        }
+                        EndpointKind::Clickhouse => {
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "clickhouse handler should not use databend auth",
+                            ));
                         }
                     };
                     Ok(Credential::DatabendToken {
@@ -298,7 +303,7 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant);
         }
 
-        self.auth_manager.auth(&mut session, &credential).await?;
+        let client_session_id = self.auth_manager.auth(&mut session, &credential).await?;
         let databend_token = match credential {
             Credential::DatabendToken { token, .. } => Some(token),
             _ => None,
@@ -328,8 +333,7 @@ impl<E> HTTPSessionEndpoint<E> {
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
         let client_host = get_client_ip(req);
 
-        let ctx = session.create_query_context().await?;
-        let node_id = ctx.get_cluster().local_id.clone();
+        let node_id = GlobalConfig::instance().query.node_id.clone();
 
         Ok(HttpQueryContext {
             session,
@@ -344,6 +348,7 @@ impl<E> HTTPSessionEndpoint<E> {
             uri: req.uri().to_string(),
             client_host,
             databend_token,
+            client_session_id,
         })
     }
 }
@@ -373,35 +378,23 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     req.extensions_mut().insert(ctx);
                     self.ep.call(req).await.map(|v| v.into_response())
                 }
-                Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE
-                    | ErrorCode::SESSION_TOKEN_EXPIRED
-                    | ErrorCode::SESSION_TOKEN_NOT_FOUND
-                    | ErrorCode::REFRESH_TOKEN_EXPIRED
-                    | ErrorCode::REFRESH_TOKEN_NOT_FOUND
-                    | ErrorCode::UNKNOWN_USER => {
+                Err(err) => {
+                    let err = JsonErrorCode(err);
+                    if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
-                        Err(PoemError::from_string(
-                            err.message(),
-                            StatusCode::UNAUTHORIZED,
-                        ))
-                    }
-                    _ => {
+                    } else {
                         error!(
                             "http request err: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
-                        Err(PoemError::from_string(
-                            err.message(),
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                        ))
                     }
-                },
+                    Ok(err.as_response())
+                }
             }
         })
         .await
@@ -487,22 +480,19 @@ impl poem::middleware::PanicHandler for PanicHandler {
     }
 }
 pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
-    let res = next.call(req).await;
-
-    match res {
-        Ok(resp) => {
-            let resp = resp.into_response();
-            Ok(resp)
-        }
-        Err(err) => {
-            let body = Body::from_json(serde_json::json!({
-                "error": {
-                    "code": err.status().as_str(),
-                    "message": err.to_string(),
-                }
-            }))
-            .unwrap();
-            Ok(Response::builder().status(err.status()).body(body))
-        }
-    }
+    let resp = match next.call(req).await {
+        Ok(resp) => resp.into_response(),
+        Err(err) => (
+            err.status(),
+            Json(JsonErrorOnly {
+                error: QueryError {
+                    code: err.status().as_u16(),
+                    message: err.to_string(),
+                    detail: None,
+                },
+            }),
+        )
+            .into_response(),
+    };
+    Ok(resp)
 }
