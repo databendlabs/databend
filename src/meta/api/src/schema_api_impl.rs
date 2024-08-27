@@ -69,11 +69,10 @@ use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryI
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
-use databend_common_meta_app::schema::CreateCatalogReply;
-use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
@@ -102,8 +101,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryId;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
-use databend_common_meta_app::schema::DropCatalogReply;
-use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
@@ -118,7 +115,6 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
-use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
@@ -3905,28 +3901,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn create_catalog(
         &self,
-        req: CreateCatalogReq,
-    ) -> Result<CreateCatalogReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let name_ident = &req.name_ident;
+        name_ident: &CatalogNameIdent,
+        meta: &CatalogMeta,
+    ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
+        debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
             let res = self.get_id_and_value(name_ident).await?;
-
             debug!(res :? = res,name_ident :? =(name_ident);"get_catalog");
 
             if let Some((seq_id, _seq_meta)) = res {
-                return if req.if_not_exists {
-                    Ok(CreateCatalogReply {
-                        catalog_id: *seq_id.data,
-                    })
-                } else {
-                    Err(AppError::exists(name_ident, func_name!()).into())
-                };
+                return Ok(Err(seq_id));
             }
 
             // Create catalog by inserting these record:
@@ -3944,38 +3932,36 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             txn_replace_exact(&mut txn, name_ident, 0, &catalog_id)?; /* (tenant, catalog_name) -> catalog_id */
             txn.if_then.extend([
-                txn_op_put_pb(&id_ident, &req.meta)?, /* (catalog_id) -> catalog_meta */
+                txn_op_put_pb(&id_ident, meta)?, /* (catalog_id) -> catalog_meta */
                 txn_op_put_pb(&id_to_name_ident, &name_ident.to_raw())?, /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
 
             ]);
 
             let (succ, _) = send_txn(self, txn).await?;
-
             debug!(name :? =(name_ident),id :? =(&id_ident),succ = succ;"create_catalog");
 
             if succ {
-                return Ok(CreateCatalogReply {
-                    catalog_id: *catalog_id,
-                });
+                return Ok(Ok(catalog_id));
             }
         }
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let name_key = &req.inner;
+    async fn get_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+    ) -> Result<Arc<CatalogInfo>, KVAppError> {
+        debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
 
         let (seq_id, seq_meta) = self
-            .get_id_and_value(name_key)
+            .get_id_and_value(name_ident)
             .await?
-            .ok_or_else(|| AppError::unknown(name_key, func_name!()))?;
+            .ok_or_else(|| AppError::unknown(name_ident, func_name!()))?;
 
         let catalog = CatalogInfo {
-            id: CatalogIdIdent::new_generic(name_key.tenant(), seq_id.data).into(),
-            name_ident: name_key.clone().into(),
+            id: CatalogIdIdent::new_generic(name_ident.tenant(), seq_id.data).into(),
+            name_ident: name_ident.clone().into(),
             meta: seq_meta.data,
         };
 
@@ -3984,29 +3970,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let name_ident = &req.name_ident;
+    async fn drop_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+    ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError> {
+        debug!(req :? =(&name_ident); "SchemaApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let res = self
-                .get_id_and_value(name_ident)
-                .await?
-                .ok_or_else(|| AppError::unknown(name_ident, func_name!()));
+            let res = self.get_id_and_value(name_ident).await?;
 
-            let (seq_id, seq_meta) = match res {
-                Ok(x) => x,
-                Err(e) => {
-                    if req.if_exists {
-                        return Ok(DropCatalogReply {});
-                    }
-
-                    return Err(e.into());
-                }
+            let Some((seq_id, seq_meta)) = res else {
+                return Ok(None);
             };
 
             // Delete catalog by deleting these record:
@@ -4029,11 +4006,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(name_ident :? =(&name_ident),id :? =(&id_ident),succ = succ; "{}", func_name!());
 
             if succ {
-                break;
+                return Ok(Some((seq_id, seq_meta)));
             }
         }
-
-        Ok(DropCatalogReply {})
     }
 
     #[logcall::logcall]
