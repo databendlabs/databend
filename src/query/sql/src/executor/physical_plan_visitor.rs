@@ -111,6 +111,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
+            PhysicalPlan::AsyncFunction(plan) => self.replace_async_function(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
             PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
             PhysicalPlan::ChunkFilter(plan) => self.replace_chunk_filter(plan),
@@ -120,7 +121,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
             PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
-            PhysicalPlan::AsyncFunction(plan) => Ok(PhysicalPlan::AsyncFunction(plan.clone())),
         }
     }
 
@@ -549,6 +549,16 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_async_function(&mut self, plan: &Udf) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::AsyncFunction(AsyncFunction {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            async_func_descs: plan.async_func_descs.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
     fn replace_duplicate(&mut self, plan: &Duplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::Duplicate(Box::new(Duplicate {
@@ -651,8 +661,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::Recluster(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::MutationSource(_)
-                | PhysicalPlan::AsyncFunction(_) => {}
+                | PhysicalPlan::MutationSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -750,6 +759,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Udf(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AsyncFunction(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Duplicate(plan) => {

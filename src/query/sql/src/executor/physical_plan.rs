@@ -594,7 +594,6 @@ impl PhysicalPlan {
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
-            | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -640,6 +639,7 @@ impl PhysicalPlan {
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AsyncFunction(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -671,6 +671,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::AsyncFunction(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
@@ -707,7 +708,6 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)
             | PhysicalPlan::ChunkMerge(_)
-            | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
     }
