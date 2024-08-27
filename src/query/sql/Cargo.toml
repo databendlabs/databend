@@ -45,10 +45,10 @@ databend-common-settings = { workspace = true }
 databend-common-sharing = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
-databend-storages-common-cache = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 educe = "0.4"
