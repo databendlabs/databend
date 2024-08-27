@@ -17,7 +17,9 @@ use std::fmt::Display;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
 
+use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 
 /// Output message for end users, with sensitive info stripped.
@@ -74,38 +76,6 @@ impl CatalogAlreadyExists {
     pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             catalog_name: catalog_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DatamaskAlreadyExists: `{name}` while `{context}`")]
-pub struct DatamaskAlreadyExists {
-    name: String,
-    context: String,
-}
-
-impl DatamaskAlreadyExists {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("BackgroundJobAlreadyExists: `{name}` while `{context}`")]
-pub struct BackgroundJobAlreadyExists {
-    name: String,
-    context: String,
-}
-
-impl BackgroundJobAlreadyExists {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
             context: context.into(),
         }
     }
@@ -455,22 +425,6 @@ pub struct UnknownDatamask {
 }
 
 impl UnknownDatamask {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("UnknownBackgroundJob: `{name}` while `{context}`")]
-pub struct UnknownBackgroundJob {
-    name: String,
-    context: String,
-}
-
-impl UnknownBackgroundJob {
     pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -1256,16 +1210,16 @@ pub enum AppError {
     IndexColumnIdNotFound(#[from] IndexColumnIdNotFound),
 
     #[error(transparent)]
-    DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
+    DatamaskAlreadyExists(#[from] ExistError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
-    BackgroundJobAlreadyExists(#[from] BackgroundJobAlreadyExists),
+    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::Resource>),
 
     #[error(transparent)]
-    UnknownBackgroundJob(#[from] UnknownBackgroundJob),
+    UnknownBackgroundJob(#[from] UnknownError<job_ident::Resource>),
 
     #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
@@ -1327,18 +1281,6 @@ pub enum SequenceError {
 impl AppErrorMessage for TenantIsEmpty {
     fn message(&self) -> String {
         self.to_string()
-    }
-}
-
-impl AppErrorMessage for UnknownBackgroundJob {
-    fn message(&self) -> String {
-        format!("Unknown background job '{}'", self.name)
-    }
-}
-
-impl AppErrorMessage for BackgroundJobAlreadyExists {
-    fn message(&self) -> String {
-        format!("Background job '{}' already exists", self.name)
     }
 }
 
@@ -1649,12 +1591,6 @@ impl AppErrorMessage for IndexColumnIdNotFound {
             "index '{}' column id {} is not found",
             self.index_name, self.column_id
         )
-    }
-}
-
-impl AppErrorMessage for DatamaskAlreadyExists {
-    fn message(&self) -> String {
-        format!("Datamask '{}' already exists", self.name)
     }
 }
 

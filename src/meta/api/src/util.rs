@@ -326,9 +326,33 @@ pub async fn send_txn(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     txn_req: TxnRequest,
 ) -> Result<(bool, Vec<TxnOpResponse>), KVAppError> {
+    debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
     let (succ, responses) = txn_reply_to_api_result(tx_reply)?;
     Ok((succ, responses))
+}
+
+/// Add a delete operation by key and exact seq to [`TxnRequest`].
+pub fn txn_delete_exact(txn: &mut TxnRequest, key: &impl kvapi::Key, seq: u64) {
+    txn.condition.push(txn_cond_eq_seq(key, seq));
+    txn.if_then.push(txn_op_del(key));
+}
+
+/// Add a replace operation by key and exact seq to [`TxnRequest`].
+pub fn txn_replace_exact<K>(
+    txn: &mut TxnRequest,
+    key: &K,
+    seq: u64,
+    value: &K::ValueType,
+) -> Result<(), InvalidArgument>
+where
+    K: kvapi::Key,
+    K::ValueType: FromToProto + 'static,
+{
+    txn.condition.push(txn_cond_eq_seq(key, seq));
+    txn.if_then.push(txn_op_put_pb(key, value)?);
+
+    Ok(())
 }
 
 /// Build a TxnCondition that compares the seq of a record.
@@ -343,6 +367,19 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
         expected: op as i32,
         target: Some(Target::Seq(seq)),
     }
+}
+
+pub fn txn_op_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
+where
+    K: kvapi::Key,
+    K::ValueType: FromToProto + 'static,
+{
+    let p = value.to_pb().map_err(|e| InvalidArgument::new(e, ""))?;
+
+    let mut buf = vec![];
+    prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
+
+    Ok(TxnOp::put(key.to_string_key(), buf))
 }
 
 /// Build a txn operation that puts a record.

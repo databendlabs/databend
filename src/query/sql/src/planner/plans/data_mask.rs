@@ -22,6 +22,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
+use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -45,16 +46,19 @@ impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
         CreateDatamaskReq {
             create_option: p.create_option,
             name: DataMaskNameIdent::new(p.tenant.clone(), &p.name),
-            args: p
-                .policy
-                .args
-                .iter()
-                .map(|arg| (arg.arg_name.to_string(), arg.arg_type.to_string()))
-                .collect(),
-            return_type: p.policy.return_type.to_string(),
-            body: p.policy.body.to_string(),
-            comment: p.policy.comment,
-            create_on: Utc::now(),
+            data_mask_meta: DatamaskMeta {
+                args: p
+                    .policy
+                    .args
+                    .iter()
+                    .map(|arg| (arg.arg_name.to_string(), arg.arg_type.to_string()))
+                    .collect(),
+                return_type: p.policy.return_type.to_string(),
+                body: p.policy.body.to_string(),
+                comment: p.policy.comment,
+                create_on: Utc::now(),
+                update_on: None,
+            },
         }
     }
 }
