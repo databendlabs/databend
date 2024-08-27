@@ -455,13 +455,9 @@ pub fn push_string_column(
                 for idx in 0..repeat_times {
                     builder.push(unsafe { string_column.index_unchecked(idx) });
                 }
-                for _ in 0..(num_rows - repeat_times) {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows - repeat_times);
             } else if validity.unset_bits() == validity.len() {
-                for _ in 0..num_rows {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows);
             } else {
                 for idx in 0..repeat_times {
                     if validity.get_bit(idx) {
@@ -470,9 +466,7 @@ pub fn push_string_column(
                         builder.push_null();
                     }
                 }
-                for _ in 0..(num_rows - repeat_times) {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows - repeat_times);
             }
         } else {
             unreachable!();
@@ -495,13 +489,9 @@ fn push_variant_column(
                 for idx in 0..repeat_times {
                     builder.push(unsafe { variant_column.index_unchecked(idx) });
                 }
-                for _ in 0..(num_rows - repeat_times) {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows - repeat_times);
             } else if validity.unset_bits() == validity.len() {
-                for _ in 0..num_rows {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows);
             } else {
                 for idx in 0..repeat_times {
                     if validity.get_bit(idx) {
@@ -510,9 +500,7 @@ fn push_variant_column(
                         builder.push_null();
                     }
                 }
-                for _ in 0..(num_rows - repeat_times) {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows - repeat_times);
             }
         } else {
             unreachable!();
@@ -535,13 +523,9 @@ fn push_number_column(
                 for idx in 0..repeat_times {
                     builder.push(unsafe { *number_column.get_unchecked(idx) });
                 }
-                for _ in 0..(num_rows - repeat_times) {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows - repeat_times);
             } else if validity.unset_bits() == validity.len() {
-                for _ in 0..num_rows {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows);
             } else {
                 for idx in 0..repeat_times {
                     if validity.get_bit(idx) {
@@ -550,9 +534,7 @@ fn push_number_column(
                         builder.push_null();
                     }
                 }
-                for _ in 0..(num_rows - repeat_times) {
-                    builder.push_null();
-                }
+                builder.push_repeat_null(num_rows - repeat_times);
             }
         } else {
             unreachable!();
