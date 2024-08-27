@@ -19,13 +19,14 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
-use databend_common_cache::Cache;
-use databend_common_cache::LruCache;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheValue;
+use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
-use parking_lot::RwLock;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -35,9 +36,20 @@ use crate::NameResolutionContext;
 use crate::PlanExtras;
 use crate::Planner;
 
-type PlanCache = LruCache<String, (Plan, PlanExtras)>;
-static PLAN_CACHE: LazyLock<Arc<RwLock<PlanCache>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(LruCache::with_items_capacity(512))));
+#[derive(Clone)]
+pub struct PlanCacheItem {
+    pub(crate) plan: Plan,
+    pub(crate) extras: PlanExtras,
+}
+
+static PLAN_CACHE: LazyLock<InMemoryLruCache<PlanCacheItem>> =
+    LazyLock::new(|| InMemoryLruCache::with_items_capacity("planner_cache".to_string(), 512));
+
+impl Into<CacheValue<PlanCacheItem>> for PlanCacheItem {
+    fn into(self) -> CacheValue<PlanCacheItem> {
+        CacheValue::new(self, 1024)
+    }
+}
 
 impl Planner {
     pub fn planner_cache_key(format_sql: &str) -> String {
@@ -51,34 +63,35 @@ impl Planner {
         name_resolution_ctx: NameResolutionContext,
         key: &str,
         stmt: &Statement,
-    ) -> (bool, Option<(Plan, PlanExtras)>) {
+    ) -> (bool, Option<PlanCacheItem>) {
         if !matches!(stmt, Statement::Query(_)) {
             return (false, None);
         }
 
         let mut visitor = TableRefVisitor {
             ctx: self.ctx.clone(),
-            snapshots: vec![],
+            schema_snapshots: vec![],
             name_resolution_ctx,
             cache_miss: false,
         };
         stmt.drive(&mut visitor);
 
-        if visitor.snapshots.is_empty() || visitor.cache_miss {
+        if visitor.schema_snapshots.is_empty() || visitor.cache_miss {
             return (false, None);
         }
 
-        let mut cache = PLAN_CACHE.write();
+        let cache = LazyLock::force(&PLAN_CACHE);
         if let Some(plan) = cache.get(key) {
-            if let Plan::Query { metadata, .. } = &plan.0 {
+            if let Plan::Query { metadata, .. } = &plan.plan {
                 let metadata = metadata.read();
-                if visitor.snapshots.iter().all(|sn| {
+                if visitor.schema_snapshots.iter().all(|ss| {
                     metadata.tables().iter().any(|table| {
                         !table.table().is_temp()
-                            && table.table().options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(sn)
+                            && table.table().options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(&ss.1)
+                            && table.table().schema().eq(&ss.0)
                     })
                 }) {
-                    return (!visitor.cache_miss, Some(plan.clone()));
+                    return (!visitor.cache_miss, Some(plan.as_ref().clone()));
                 }
             }
             (!visitor.cache_miss, None)
@@ -87,8 +100,8 @@ impl Planner {
         }
     }
 
-    pub fn set_cache(&self, key: String, plan: (Plan, PlanExtras)) {
-        let mut cache = PLAN_CACHE.write();
+    pub fn set_cache(&self, key: String, plan: PlanCacheItem) {
+        let cache = LazyLock::force(&PLAN_CACHE);
         cache.insert(key, plan);
     }
 }
@@ -97,7 +110,7 @@ impl Planner {
 #[visitor(TableReference(enter))]
 struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
-    snapshots: Vec<String>,
+    schema_snapshots: Vec<(TableSchemaRef, String)>,
     name_resolution_ctx: NameResolutionContext,
     cache_miss: bool,
 }
@@ -144,7 +157,8 @@ impl TableRefVisitor {
                     if !table_meta.is_temp()
                         && let Some(sn) = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION)
                     {
-                        self.snapshots.push(sn.clone());
+                        self.schema_snapshots
+                            .push((table_meta.schema(), sn.clone()));
                         return;
                     }
                 }

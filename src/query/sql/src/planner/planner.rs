@@ -25,7 +25,6 @@ use databend_common_ast::parser::token::Token;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::token::Tokenizer;
 use databend_common_ast::parser::Dialect;
-use databend_common_cache::MemSized;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -36,6 +35,7 @@ use log::info;
 use log::warn;
 use parking_lot::RwLock;
 
+use super::planner_cache::PlanCacheItem;
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
@@ -60,13 +60,6 @@ pub struct Planner {
 pub struct PlanExtras {
     pub format: Option<String>,
     pub statement: Statement,
-}
-
-impl MemSized for PlanExtras {
-    fn mem_bytes(&self) -> usize {
-        // fake
-        1024
-    }
 }
 
 impl Planner {
@@ -173,9 +166,11 @@ impl Planner {
                         planner_cache_key.as_ref().unwrap(),
                         &stmt,
                     );
-                    if let Some(plan) = plan {
+                    if let Some(mut plan) = plan {
                         info!("logical plan from cache, time used: {:?}", start.elapsed());
-                        return Ok(plan);
+                        // update for clickhouse handler
+                        plan.extras.format = format;
+                        return Ok((plan.plan, plan.extras));
                     }
                     enable_planner_cache = c;
                 }
@@ -209,7 +204,10 @@ impl Planner {
                 });
 
                 if enable_planner_cache {
-                    self.set_cache(planner_cache_key.clone().unwrap(), result.clone());
+                    self.set_cache(planner_cache_key.clone().unwrap(), PlanCacheItem {
+                        plan: result.0.clone(),
+                        extras: result.1.clone(),
+                    });
                     Ok(result)
                 } else {
                     Ok(result)

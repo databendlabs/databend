@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
-use databend_common_cache::MemSized;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -534,13 +533,5 @@ impl Plan {
             }
         }
         self.clone()
-    }
-}
-
-/// The size of the plan in memory.
-/// This is used for plan cache, we set a fixed size for each plan cause we limit the plan by cnt in lrucache
-impl MemSized for Plan {
-    fn mem_bytes(&self) -> usize {
-        1024
     }
 }
