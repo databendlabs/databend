@@ -25,6 +25,7 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -549,7 +550,7 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_async_function(&mut self, plan: &Udf) -> Result<PhysicalPlan> {
+    fn replace_async_function(&mut self, plan: &AsyncFunction) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::AsyncFunction(AsyncFunction {
             plan_id: plan.plan_id,
