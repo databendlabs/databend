@@ -117,6 +117,9 @@ struct TableRefVisitor {
 
 impl TableRefVisitor {
     fn enter_table_reference(&mut self, table_ref: &TableReference) {
+        if self.cache_miss {
+            return;
+        }
         if let TableReference::Table {
             catalog,
             database,
