@@ -21,12 +21,33 @@ use crate::app_error::AppErrorMessage;
 use crate::tenant_key::resource::TenantResource;
 
 /// Error occurred when a record already exists for a key.
-#[derive(Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(thiserror::Error)]
 pub struct ExistError<R, N = String> {
     name: N,
     ctx: String,
     _p: std::marker::PhantomData<R>,
 }
+
+impl<R, N> Clone for ExistError<R, N>
+where N: Clone
+{
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            ctx: self.ctx.clone(),
+            _p: Default::default(),
+        }
+    }
+}
+
+impl<R, N> PartialEq for ExistError<R, N>
+where N: PartialEq
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.ctx == other.ctx
+    }
+}
+impl<R, N> Eq for ExistError<R, N> where N: PartialEq {}
 
 impl<R, N> ExistError<R, N> {
     pub fn new(name: N, ctx: impl ToString) -> Self {
@@ -71,6 +92,13 @@ where
         let typ = type_name::<R>();
         write!(f, "{typ} '{}' already exists: {}", self.name, self.ctx)
     }
+}
+
+impl<R, N> AppErrorMessage for ExistError<R, N>
+where
+    R: TenantResource,
+    N: fmt::Display,
+{
 }
 
 /// Error occurred when a record not found for a key.

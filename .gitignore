@@ -44,6 +44,7 @@ dist/
 test/
 tests/longrun/_*.csv
 tests/longrun/**/_*.csv
+tests/sqllogictests/data/*
 
 # fuzz
 hfuzz_target/

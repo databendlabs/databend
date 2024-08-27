@@ -28,6 +28,7 @@ mod pipeline_display;
 mod unsafe_cell_wrap;
 
 pub use finished_chain::always_callback;
+pub use finished_chain::basic_callback;
 pub use finished_chain::Callback;
 pub use finished_chain::ExecutionInfo;
 pub use finished_chain::FinishedCallbackChain;
