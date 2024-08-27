@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono_tz::Tz;
-use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
@@ -167,7 +166,7 @@ impl<'a> Binder {
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
 
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    Some(format_statement(stmt.clone())?)
+                    Some(stmt.to_string())
                 } else {
                     None
                 };
