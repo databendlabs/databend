@@ -27,7 +27,6 @@ cron = "0.12.0"
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
-databend-common-async-functions = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-compress = { workspace = true }

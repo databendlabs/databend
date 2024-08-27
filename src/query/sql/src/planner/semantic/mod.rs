@@ -30,7 +30,7 @@ pub use aggregate_rewriter::AggregateRewriter;
 pub use aggregating_index_visitor::AggregatingIndexChecker;
 pub use aggregating_index_visitor::AggregatingIndexRewriter;
 pub use aggregating_index_visitor::RefreshAggregatingIndexRewriter;
-pub use async_function_rewriter::AsyncFunctionRewriter;
+pub(crate) use async_function_rewriter::AsyncFunctionRewriter;
 pub use count_set_ops::CountSetOps;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;

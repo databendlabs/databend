@@ -3115,7 +3115,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "criterion",
  "derive-visitor",
@@ -3143,18 +3143,6 @@ dependencies = [
  "strum_macros 0.24.3",
  "unindent",
  "url",
-]
-
-[[package]]
-name = "databend-common-async-functions"
-version = "0.1.0"
-dependencies = [
- "databend-common-ast",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "educe",
 ]
 
 [[package]]
@@ -4132,7 +4120,6 @@ dependencies = [
  "ctor 0.2.8",
  "dashmap",
  "databend-common-ast",
- "databend-common-async-functions",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-compress",
