@@ -17,7 +17,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::Range;
 use databend_common_ast::Span;
@@ -26,7 +25,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Expr as EExpr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -787,6 +785,8 @@ pub enum AsyncFunctionArgument {
     DictGetFunction(DictGetFunctionArgument),
 }
 
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct DictGetFunctionArgument {
     pub dict_source: DictionarySource,
     pub table: Option<String>,
@@ -794,6 +794,8 @@ pub struct DictGetFunctionArgument {
     pub value_field: Option<String>,
 }
 
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
 pub enum DictionarySource {
     // MySQL connection string `mysql://user:password@localhost:3306/db`
     Mysql(String),

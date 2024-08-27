@@ -3762,7 +3762,7 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
-    fn resolve_async_function(
+    async fn resolve_async_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -4605,7 +4605,7 @@ impl<'a> TypeChecker<'a> {
                 )
                 .set_span(dict_name.span()));
             }
-            db_name = match(column.table) {
+            db_name = match column.table {
                 Some(table) => table.name,
                 None => self.ctx.get_current_database(),
             };
@@ -4684,7 +4684,7 @@ impl<'a> TypeChecker<'a> {
         let url = "";
         let dict_source: DictionarySource;
         if dictionary.source.to_lowercase() == "mysql" {
-            let username = match (dictionary.options.get("username")) {
+            let username = match dictionary.options.get("username") {
                 Some(user) => user,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4692,7 +4692,7 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            let password = match (dictionary.options.get("password")) {
+            let password = match dictionary.options.get("password") {
                 Some(psw) => psw,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4700,7 +4700,7 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            let host = match (dictionary.options.get("host")) {
+            let host = match dictionary.options.get("host") {
                 Some(host) => host,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4708,7 +4708,7 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            let port = match (dictionary.options.get("port")) {
+            let port = match dictionary.options.get("port") {
                 Some(port) => port,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4716,7 +4716,7 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            let db = match (dictionary.options.get("db")) {
+            let db = match dictionary.options.get("db") {
                 Some(db) => db,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4724,10 +4724,10 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            url += "mysql://" + username + ":" + password + "@" + host + ":" + port + "/" + db;
+            url += "mysql://".to_string() + username + ":" + password + "@" + host + ":" + port + "/" + db;
             dict_source = DictionarySource::Mysql(url.to_string());
         } else if dictionary.source.to_lowercase() == "redis" {
-            let host = match (dictionary.options.get("host")) {
+            let host = match dictionary.options.get("host") {
                 Some(host) => host,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4735,7 +4735,7 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            let port = match (dictionary.options.get("port")) {
+            let port = match dictionary.options.get("port") {
                 Some(port) => port,
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
@@ -4743,7 +4743,7 @@ impl<'a> TypeChecker<'a> {
                     ))
                 },
             };
-            url += "tcp://" + host + ":" + port;
+            url += "tcp://".to_string() + host + ":" + port;
             dict_source = DictionarySource::Redis(url.to_string());
         }
 
@@ -4751,18 +4751,19 @@ impl<'a> TypeChecker<'a> {
             dict_source,
             table: Some(db_name),
             key_field: Some(*primary_field.name()),
-            value_field: Some(attr_name),
+            value_field: Some(*attr_name),
         };
+        
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
                 func_name: "dict_get".to_string(),
                 display_name: format!("dict_get({},({}),({}))", dict_name, attr_name, primary_field.name),
-                return_type: Box::new(DataType::from(attr_type)),
+                return_type: Box::new(*attr_type as DataType),
                 arguments: args,
                 func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
             }),
-            DataType::Array(Box::new(DataType::from(&attr_type))), // return_type
+            DataType::Array(Box::new(*attr_type as DataType)), // return_type
         )))
     }
 
