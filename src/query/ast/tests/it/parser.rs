@@ -826,6 +826,7 @@ fn test_statement() {
         // Stored Procedure
         r#"describe PROCEDURE p1()"#,
         r#"drop PROCEDURE p1()"#,
+        r#"call PROCEDURE p1()"#,
         r#"show PROCEDURES like 'p1%'"#,
         r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
             BEGIN
@@ -966,6 +967,7 @@ fn test_statement_error() {
         // Stored Procedure
         r#"desc procedure p1"#,
         r#"drop procedure p1"#,
+        r#"call procedure p1"#,
         r#"create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
             BEGIN
                 LET sum := 0;

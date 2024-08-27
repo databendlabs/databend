@@ -315,6 +315,7 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     DescProcedure(DescProcedureStmt),
+    CallProcedure(CallProcedureStmt),
 
     // Sequence
     CreateSequence(CreateSequenceStmt),
@@ -796,6 +797,7 @@ impl Display for Statement {
                 write!(f, " '{object_id}'")?;
             }
             Statement::System(stmt) => write!(f, "{stmt}")?,
+            Statement::CallProcedure(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

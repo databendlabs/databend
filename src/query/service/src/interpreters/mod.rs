@@ -72,6 +72,8 @@ mod interpreter_password_policy_drop;
 mod interpreter_presign;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;
+mod interpreter_procedure_create;
+mod interpreter_procedure_drop;
 mod interpreter_replace;
 mod interpreter_role_create;
 mod interpreter_role_drop;
