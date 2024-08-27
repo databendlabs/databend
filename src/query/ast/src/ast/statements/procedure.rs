@@ -19,6 +19,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_list;
 use crate::ast::CreateOption;
 use crate::ast::TypeName;
 
@@ -68,6 +69,7 @@ pub struct CreateProcedureStmt {
     pub create_option: CreateOption,
     pub name: String,
     pub language: ProcedureLanguage,
+    // TODO(eason): Now args is alwarys none, but maybe we also need to consider arg name?
     pub args: Option<Vec<TypeName>>,
     pub return_type: Vec<ProcedureReturnType>,
     pub comment: Option<String>,
@@ -170,6 +172,21 @@ impl Display for DescProcedureStmt {
         } else {
             write!(f, "() ")?;
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct CallProcedureStmt {
+    pub name: String,
+    pub args: Vec<String>,
+}
+
+impl Display for CallProcedureStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CALL PROCEDURE {}(", self.name)?;
+        write_comma_separated_string_list(f, self.args.clone())?;
+        write!(f, ")")?;
         Ok(())
     }
 }

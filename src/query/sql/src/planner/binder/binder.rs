@@ -640,7 +640,7 @@ impl<'a> Binder {
                 return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
             }  }
             Statement::ShowProcedures { show_options } => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                self.show_procedures(show_options).await?
+                self.bind_show_procedures(bind_context, show_options).await?
             } else {
                 return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
             }  }
@@ -649,6 +649,13 @@ impl<'a> Binder {
             } else {
                 return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
             }  }
+            Statement::CallProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_call_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+                }
+                }
         };
 
         match plan.kind() {

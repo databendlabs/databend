@@ -23446,6 +23446,19 @@ DropProcedure(
 
 
 ---------- Input ----------
+call PROCEDURE p1()
+---------- Output ---------
+CALL PROCEDURE p1()
+---------- AST ------------
+CallProcedure(
+    CallProcedureStmt {
+        name: "p1",
+        args: [],
+    },
+)
+
+
+---------- Input ----------
 show PROCEDURES like 'p1%'
 ---------- Output ---------
 SHOW PROCEDURES LIKE 'p1%'

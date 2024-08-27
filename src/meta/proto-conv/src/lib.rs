@@ -78,6 +78,7 @@ mod least_visible_time_from_to_protobuf_impl;
 mod lock_from_to_protobuf_impl;
 mod owner_from_to_protobuf_impl;
 mod ownership_from_to_protobuf_impl;
+mod procedure_from_to_protobuf_impl;
 mod role_from_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
 mod sequence_from_to_protobuf_impl;

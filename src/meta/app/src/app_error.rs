@@ -68,6 +68,22 @@ impl DatabaseAlreadyExists {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("ProcedureAlreadyExists: `{procedure_name}` while `{context}`")]
+pub struct ProcedureAlreadyExists {
+    procedure_name: String,
+    context: String,
+}
+
+impl ProcedureAlreadyExists {
+    pub fn new(procedure_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            procedure_name: procedure_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
 pub struct CreateDatabaseWithDropTime {
     db_name: String,
@@ -382,6 +398,22 @@ impl UnknownDatabase {
     pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownProcedure: `{procedure_name}` while `{context}`")]
+pub struct UnknownProcedure {
+    procedure_name: String,
+    context: String,
+}
+
+impl UnknownProcedure {
+    pub fn new(procedure_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            procedure_name: procedure_name.into(),
             context: context.into(),
         }
     }
@@ -1244,6 +1276,13 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownDictionary(#[from] UnknownDictionary),
+
+    // Procedure
+    #[error(transparent)]
+    UnknownProcedure(#[from] UnknownProcedure),
+
+    #[error(transparent)]
+    ProcedureAlreadyExists(#[from] ProcedureAlreadyExists),
 }
 
 impl AppError {
@@ -1293,6 +1332,18 @@ impl AppErrorMessage for TenantIsEmpty {
 impl AppErrorMessage for UnknownDatabase {
     fn message(&self) -> String {
         format!("Unknown database '{}'", self.db_name)
+    }
+}
+
+impl AppErrorMessage for UnknownProcedure {
+    fn message(&self) -> String {
+        format!("Unknown procedure '{}'", self.procedure_name)
+    }
+}
+
+impl AppErrorMessage for ProcedureAlreadyExists {
+    fn message(&self) -> String {
+        format!("Procedure '{}' already exists", self.procedure_name)
     }
 }
 
@@ -1805,6 +1856,10 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::DictionaryAlreadyExists(err.message())
             }
             AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
+            AppError::UnknownProcedure(err) => ErrorCode::UnknownProcedure(err.message()),
+            AppError::ProcedureAlreadyExists(err) => {
+                ErrorCode::ProcedureAlreadyExists(err.message())
+            }
         }
     }
 }

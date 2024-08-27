@@ -2247,6 +2247,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, show_options)| Statement::ShowProcedures { show_options },
     );
 
+    let call_procedure = map(
+        rule! {
+            CALL ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+        },
+        |(_, _, name, _, _)| {
+            Statement::CallProcedure(CallProcedureStmt {
+                name: name.to_string(),
+                args: vec![],
+            })
+        },
+    );
+
     let describe_procedure = map(
         rule! {
             ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ "(" ~ ")"
@@ -2479,6 +2491,7 @@ AS
             | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
             | #show_procedures : "`SHOW PROCEDURES [<show_options>]()`"
             | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
+            | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
     ))(i)
 }

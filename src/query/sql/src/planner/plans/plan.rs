@@ -54,6 +54,7 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
+use crate::plans::CreateProcedurePlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
 use crate::plans::CreateShareEndpointPlan;
@@ -85,6 +86,7 @@ use crate::plans::DropIndexPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
+use crate::plans::DropProcedurePlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropSequencePlan;
 use crate::plans::DropShareEndpointPlan;
@@ -376,6 +378,10 @@ pub enum Plan {
 
     // Stored procedures
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
+    // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
+    DropProcedure(Box<DropProcedurePlan>),
+    CreateProcedure(Box<CreateProcedurePlan>),
+    // RenameProcedure(Box<RenameProcedurePlan>),
 
     // sequence
     CreateSequence(Box<CreateSequencePlan>),
@@ -419,6 +425,7 @@ pub enum RewriteKind {
     ShowGrants,
 
     Call,
+    ShowProcedures,
 }
 
 impl Plan {

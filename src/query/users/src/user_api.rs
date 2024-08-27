@@ -25,6 +25,7 @@ use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
 use databend_common_management::PasswordPolicyMgr;
+use databend_common_management::ProcedureMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
 use databend_common_management::RoleApi;
@@ -153,6 +154,9 @@ impl UserApiProvider {
 
     pub fn setting_api(&self, tenant: &Tenant) -> Arc<dyn SettingApi> {
         Arc::new(SettingMgr::create(self.client.clone(), tenant))
+    }
+    pub fn procedure_api(&self, tenant: &Tenant) -> ProcedureMgr {
+        ProcedureMgr::create(self.client.clone(), tenant)
     }
 
     pub fn network_policy_api(&self, tenant: &Tenant) -> NetworkPolicyMgr {

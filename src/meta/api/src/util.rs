@@ -21,6 +21,7 @@ use databend_common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use databend_common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
+use databend_common_meta_app::app_error::UnknownProcedure;
 use databend_common_meta_app::app_error::UnknownShare;
 use databend_common_meta_app::app_error::UnknownShareAccounts;
 use databend_common_meta_app::app_error::UnknownShareEndpoint;
@@ -31,6 +32,7 @@ use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::VirtualColumnNotFound;
 use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::primitive::Id;
+use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -439,6 +441,28 @@ pub fn db_id_has_to_exist(seq: u64, db_id: u64, msg: impl Display) -> Result<(),
         ));
 
         Err(KVAppError::AppError(app_err))
+    } else {
+        Ok(())
+    }
+}
+
+/// Return OK if a procedure_id or procedure_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownProcedure error
+pub fn procedure_has_to_exist(
+    seq: u64,
+    procedure_name_ident: &ProcedureNameIdent,
+    msg: impl Display,
+) -> Result<(), KVAppError> {
+    if seq == 0 {
+        debug!(seq = seq, db_name_ident :? =(procedure_name_ident); "procedure does not exist");
+
+        Err(KVAppError::AppError(AppError::UnknownProcedure(
+            UnknownProcedure::new(
+                procedure_name_ident.procedure_name(),
+                format!("{}: {}", msg, procedure_name_ident.display()),
+            ),
+        )))
     } else {
         Ok(())
     }
