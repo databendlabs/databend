@@ -666,7 +666,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, name);
         databend_common_base::runtime::block_on(async move {
             let stream = self.ctx.get_table(&catalog, &database, &name).await?;
-            if stream.engine() != "STREAM" {
+            if !stream.is_stream() {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{database}.{name} is not STREAM",
                 )));

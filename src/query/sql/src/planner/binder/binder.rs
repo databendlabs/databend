@@ -176,11 +176,7 @@ impl<'a> Binder {
 
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-                let formatted_ast = if self.enable_result_cache {
-                    Some(stmt.to_string())
-                } else {
-                    None
-                };
+                let formatted_ast =  Some(stmt.to_string());
                 Plan::Query {
                     s_expr: Box::new(s_expr),
                     metadata: self.metadata.clone(),

@@ -35,7 +35,6 @@ use log::info;
 use log::warn;
 use parking_lot::RwLock;
 
-use super::planner_cache::PlanCacheItem;
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
@@ -206,10 +205,11 @@ impl Planner {
                 });
 
                 if enable_planner_cache {
-                    self.set_cache(planner_cache_key.clone().unwrap(), PlanCacheItem {
-                        plan: result.0.clone(),
-                        extras: result.1.clone(),
-                    });
+                    self.set_cache(
+                        planner_cache_key.clone().unwrap(),
+                        result.0.clone(),
+                        result.1.clone(),
+                    );
                     Ok(result)
                 } else {
                     Ok(result)
