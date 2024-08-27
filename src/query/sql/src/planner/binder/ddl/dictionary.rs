@@ -94,7 +94,7 @@ impl Binder {
 
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
 
-        let fields_names: Vec<String> = Vec::new();
+        let mut fields_names: Vec<String> = Vec::new();
         for table_field in schema.fields() {
             if table_field.default_expr.is_some() || table_field.computed_expr.is_some() {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
@@ -102,17 +102,18 @@ impl Binder {
                         + "Default expressions and computed expressions for the table fields should not be set.",
                 ));
             }
-            fields_names.append(table_field.name);
+            fields_names.push(table_field.name());
         }
         // Check for redis.
         if source.to_lowercase() == *"redis" {
-            if fields_names.sort() != vec!["key", "value"] {
+            fields_names.sort();
+            if fields_names != vec!["key", "value"] {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
                     "If the source is redis, there must be two fields which are `key` and `value` whose type is String."
                 ));
             }
             for table_field in schema.fields() {
-                if table_field.data_type() != TableDataType::String {
+                if *table_field.data_type() != TableDataType::String {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(
                         "If the source is redis, there must be two fields which are `key` and `value` whose type is String."
                     ));

@@ -18,6 +18,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::Range;
 use databend_common_ast::Span;
 use databend_common_catalog::catalog::Catalog;
@@ -787,7 +788,7 @@ pub enum AsyncFunctionArgument {
     // The second argument is the list of dictionary fields.
     // The third argument is value of primary key.
     // Used by `dict_get` function to access data from source.
-    DictGetFunction(Expr::ColumnRef, Expr, Expr),
+    DictGetFunction(Expr, Expr, Expr),
 }
 
 // Asynchronous functions are functions that need to call remote interfaces.

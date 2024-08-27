@@ -4571,17 +4571,17 @@ impl<'a> TypeChecker<'a> {
         None
     }
 
-    fn resolve_dict_get(
+    async fn resolve_dict_get(
         &mut self,
         span: Span,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
         args: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if arguments.len() != 3 {
+        if args.len() != 3 {
             return Err(ErrorCode::SemanticError(format!(
                 "dict_get function need three arguments but got {}",
-                arguments.len()
+                args.len()
             ))
             .set_span(span));
         }
@@ -4591,9 +4591,9 @@ impl<'a> TypeChecker<'a> {
         let pk_values = args[2];
 
         // Get dict_name and dict_meta.
-        let (dict_name, column) = if let Expr::ColumnRef { column, .. } = dict_name {
+        let dict_name = if let Expr::ColumnRef { column, .. } = dict_name {
             if let ColumnID::Name(name) = &column.column {
-                (name.name.clone(), column)
+                name.name.clone()
             } else {
                 return Err(ErrorCode::SemanticError(
                     "async function can only used as column".to_string(),
@@ -4660,7 +4660,7 @@ impl<'a> TypeChecker<'a> {
         let Some(pk_values_text) = pk_values_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for dict_get function, id_exprs must be a constant string, but got {}",
-                pk_ids
+                pk_values
             )));
         };
         let pk_ids_values: Vec<&str> = pk_values_text.split(',').collect();
@@ -4674,13 +4674,14 @@ impl<'a> TypeChecker<'a> {
         };
         // We only support one primary key.
         // Check input primary key values' type.
-        let pk_type = schema.field(*(dictionary.primary_column_ids.first()?) as usize).data_type();
+        let primary_column_id = dictionary.primary_column_ids.first().unwrap();
+        let pk_type = schema.field(*primary_column_id as usize).data_type();
         for pk_ids_type in pk_ids_types {
-            if pk_ids_type != *pk_type {
+            if pk_ids_type != DataType::from(pk_type) {
                 return Err(ErrorCode::SemanticError(
                     "the input primary key type does not match the primary key types in the dictionary",
                 )
-                .set_span(pk_ids_scalar.span()));
+                .set_span(pk_values_scalar.span()));
             }
         }
 
@@ -4688,12 +4689,12 @@ impl<'a> TypeChecker<'a> {
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
                 func_name: "dict_get".to_string(),
-                display_name: format!("dict_get({},({}),({}))", dict_name, field_text, pk_ids_text),
-                return_type: return_type.clone(),
-                arguments: vec![field_text, pk_ids_text],
-                func_arg: AsyncFunctionArgument::DictGetFunction(column, field, pk_values),
+                display_name: format!("dict_get({},({}),({}))", dict_name, attr_name, pk_values_text),
+                return_type: Box::new(DataType::from(return_type.clone())),
+                arguments: vec![field, pk_values],
+                func_arg: AsyncFunctionArgument::DictGetFunction(*args[0], *field, *pk_values),
             }),
-            DataType::Tuple(attribute_types.clone()), // return_type
+            DataType::Array(Box::new(attr_type.clone())), // return_type
         )))
     }
 
