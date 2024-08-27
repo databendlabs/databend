@@ -32,8 +32,6 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -43,7 +41,6 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
-use crate::UdfRewriter;
 use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
@@ -228,32 +225,22 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite async function to async function plan
-        let mut async_func_rewriter = AsyncFunctionRewriter::new();
-        s_expr = async_func_rewriter.rewrite(&s_expr)?;
+        if from_context.have_async_func {
+            // rewrite async function to async function plan
+            let mut async_func_rewriter = AsyncFunctionRewriter::new(self.metadata.clone());
+            s_expr = async_func_rewriter.rewrite(&s_expr)?;
+        }
 
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
-
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
         // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
 
-        // check inverted index license
-        if !from_context.inverted_index_map.is_empty() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
-        }
         // add internal column binding into expr
-        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
+        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;

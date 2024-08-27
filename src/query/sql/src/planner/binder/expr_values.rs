@@ -67,12 +67,10 @@ impl ExprValuesRewriter {
 impl<'a> VisitorMut<'a> for ExprValuesRewriter {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::AsyncFunctionCall(async_func) = &expr {
+            let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_default_catalog()?;
             let value = databend_common_base::runtime::block_on(async move {
-                async_func
-                    .function
-                    .generate(catalog.clone(), async_func)
-                    .await
+                async_func.generate(tenant.clone(), catalog.clone()).await
             })?;
 
             *expr = ScalarExpr::ConstantExpr(ConstantExpr {
