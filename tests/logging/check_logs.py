@@ -29,9 +29,8 @@ def check_queries(sql: str):
     assert len(queries) == 2
     for query in queries:
         assert query["tenant"] == "test_tenant"
-        # TODO(andylokandy): support log meta
-        # assert query["qkey1"] == "qvalue1"
-        # assert query["qkey2"] == "qvalue2"
+        assert query["qkey1"] == "qvalue1"
+        assert query["qkey2"] == "qvalue2"
         assert query["query_text"] == sql
 
 
@@ -51,9 +50,8 @@ def check_profiles():
     assert len(profiles) == 1
     for profile in profiles:
         assert profile["tenant"] == "test_tenant"
-        # TODO(andylokandy): support log meta
-        # assert profile["pkey1"] == "pvalue1"
-        # assert profile["pkey2"] == "pvalue2"
+        assert profile["pkey1"] == "pvalue1"
+        assert profile["pkey2"] == "pvalue2"
         assert profile["source_type"] == "opentelemetry"
 
 
