@@ -14,10 +14,11 @@
 
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
-use databend_common_meta_app::data_mask::DropDatamaskReply;
-use databend_common_meta_app::data_mask::DropDatamaskReq;
-use databend_common_meta_app::data_mask::GetDatamaskReply;
-use databend_common_meta_app::data_mask::GetDatamaskReq;
+use databend_common_meta_app::data_mask::DataMaskId;
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
+use databend_common_meta_app::data_mask::DatamaskMeta;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 
@@ -28,7 +29,15 @@ pub trait DatamaskApi: Send + Sync {
         req: CreateDatamaskReq,
     ) -> Result<CreateDatamaskReply, KVAppError>;
 
-    async fn drop_data_mask(&self, req: DropDatamaskReq) -> Result<DropDatamaskReply, KVAppError>;
+    /// On success, returns the dropped id and data mask.
+    /// Returning None, means nothing is removed.
+    async fn drop_data_mask(
+        &self,
+        name_ident: &DataMaskNameIdent,
+    ) -> Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, KVAppError>;
 
-    async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<GetDatamaskReply, KVAppError>;
+    async fn get_data_mask(
+        &self,
+        name_ident: &DataMaskNameIdent,
+    ) -> Result<Option<SeqV<DatamaskMeta>>, MetaError>;
 }
