@@ -61,16 +61,21 @@ impl TaskInput {
             let task_id = get_task_id(&before);
             assert_eq!(task_id, get_task_id(&block));
 
-            let total_part = get_total_part(&before);
-            debug_assert_eq!(total_part, get_total_part(&block));
+            let task_rows = get_task_rows(&before);
+            debug_assert_eq!(task_rows, get_task_rows(&block));
 
-            debug_assert_eq!(self.buffer.len(), get_part_id(&block) as usize);
-            self.buffer.push(block);
+            let rows = self.buffer.iter().map(|b| b.num_rows() as u32).sum::<u32>()
+                + block.num_rows() as u32;
 
-            if self.buffer.len() == total_part as usize {
+            if task_rows > rows {
+                self.buffer.push(block);
+                continue;
+            } else if task_rows == rows {
                 self.input.set_not_need_data();
                 self.ready = true;
                 return Ok((true, false));
+            } else {
+                unreachable!()
             }
         }
         self.ready = false;
@@ -84,28 +89,21 @@ impl TaskInput {
 
 fn get_task_id(block: &DataBlock) -> u32 {
     let n = block.num_columns();
-    debug_assert!(n > 5);
-    let cols = block.columns();
-    unwrap_u32(&cols[n - 4])
-}
-
-fn get_total_part(block: &DataBlock) -> u32 {
-    let n = block.num_columns();
-    debug_assert!(n > 5);
+    debug_assert!(n >= 4);
     let cols = block.columns();
     unwrap_u32(&cols[n - 3])
 }
 
-fn get_part_id(block: &DataBlock) -> u32 {
+fn get_task_rows(block: &DataBlock) -> u32 {
     let n = block.num_columns();
-    debug_assert!(n > 5);
+    debug_assert!(n >= 4);
     let cols = block.columns();
     unwrap_u32(&cols[n - 2])
 }
 
 fn get_input_id(block: &DataBlock) -> u32 {
     let n = block.num_columns();
-    debug_assert!(n > 5);
+    debug_assert!(n >= 4);
     let cols = block.columns();
     unwrap_u32(&cols[n - 1])
 }
@@ -153,11 +151,21 @@ impl SortedStream for TaskStream {
                 continue;
             }
             let mut block = input.buffer.remove(i);
-            block.pop_columns(3);
 
             let n = block.num_columns();
-            let col = block.columns()[n - 2].value.as_column().unwrap().clone();
-            return Ok((Some((block, col)), false));
+            let columns = block.columns();
+            let task_rows = columns[n - 2].clone();
+            let task_id = columns[n - 3].clone();
+            let sort_col = columns[n - 4].value.as_column().unwrap().clone();
+            if self.remove_order_col {
+                block.pop_columns(4);
+            } else {
+                block.pop_columns(3);
+            }
+            block.add_column(task_id);
+            block.add_column(task_rows);
+
+            return Ok((Some((block, sort_col)), false));
         }
         unreachable!()
     }

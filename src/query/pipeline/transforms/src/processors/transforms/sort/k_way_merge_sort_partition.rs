@@ -41,7 +41,9 @@ where
     buffer: Vec<DataBlock>,
     rows: Vec<Option<R>>,
     pending_streams: VecDeque<usize>,
+    limit: Option<usize>,
 
+    total_rows: usize,
     cur_task: u32,
 }
 
@@ -55,7 +57,7 @@ where
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         // batch_rows: usize,
-        // limit: Option<usize>,
+        limit: Option<usize>,
     ) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
@@ -71,6 +73,8 @@ where
             buffer,
             rows,
             pending_streams,
+            limit,
+            total_rows: 0,
             cur_task: 1,
         }
     }
@@ -98,18 +102,29 @@ where
     }
 
     pub fn calc_partition_point(&self) -> Vec<(usize, usize)> {
-        let task_max = (0..self.buffer.len())
-            .skip(1)
-            .fold(self.last(0), |acc, i| self.last(i).min(acc));
+        let task_max: Option<R::Item<'_>> =
+            (0..self.buffer.len()).fold(None, |acc, i| match (acc, self.last(i)) {
+                (Some(acc), Some(last)) => Some(acc.min(last)),
+                (None, v @ Some(_)) | (v @ Some(_), None) => v,
+                (None, None) => None,
+            });
 
         let mut task = Vec::new();
+        let task_max = match task_max {
+            Some(task_max) => task_max,
+            None => return task,
+        };
 
         for i in 0..self.buffer.len() {
-            if self.first(i) > task_max {
-                continue;
+            match self.first(i) {
+                None => continue,
+                Some(first) if first > task_max => {
+                    continue;
+                }
+                _ => (),
             }
 
-            if self.last(i) <= task_max {
+            if self.last(i).unwrap() <= task_max {
                 task.push((i, self.buffer[i].num_rows()))
             } else {
                 let pp = self.rows_partition_point(i, &task_max);
@@ -138,19 +153,19 @@ where
         let partition_points = self.calc_partition_point();
 
         let task_id = self.next_task_id();
-        let total_part = u32_entry(partition_points.len() as u32);
+        let rows: usize = partition_points.iter().map(|(_, pp)| *pp).sum();
+        self.total_rows += rows;
+        let rows = u32_entry(rows as u32);
 
         let task: Vec<_> = partition_points
             .iter()
-            .enumerate()
-            .map(|(part_id, &(input, pp))| {
-                let (block, _) = self.slice(input, pp); // todo
+            .map(|&(input, pp)| {
+                let block = self.slice(input, pp);
 
                 let mut columns = Vec::with_capacity(block.num_columns() + 4);
                 columns.extend_from_slice(block.columns());
                 columns.push(task_id.clone());
-                columns.push(total_part.clone());
-                columns.push(u32_entry(part_id as u32));
+                columns.push(rows.clone());
                 columns.push(u32_entry(input as u32));
 
                 DataBlock::new(columns, block.num_rows())
@@ -165,30 +180,31 @@ where
         u32_entry(id)
     }
 
-    fn first(&self, i: usize) -> R::Item<'_> {
-        self.rows[i].as_ref().unwrap().first()
+    fn first(&self, i: usize) -> Option<R::Item<'_>> {
+        self.rows[i].as_ref().map(|rows| rows.first())
     }
 
-    fn last(&self, i: usize) -> R::Item<'_> {
-        self.rows[i].as_ref().unwrap().last()
+    fn last(&self, i: usize) -> Option<R::Item<'_>> {
+        self.rows[i].as_ref().map(|rows| rows.last())
     }
 
-    fn slice(&mut self, i: usize, pp: usize) -> (DataBlock, Column) {
+    fn slice(&mut self, i: usize, pp: usize) -> DataBlock {
         let block = &self.buffer[i];
         let rows = self.rows[i].as_ref();
         let n = block.num_rows();
 
-        let first_block = block.slice(0..pp);
-        let second_block = block.slice(pp..n);
-
-        self.buffer[i] = second_block;
-
-        let first_rows = rows.unwrap().slice(0..pp);
-        let second_rows = rows.unwrap().slice(pp..n);
-
-        self.rows[i] = Some(second_rows);
-
-        (first_block, first_rows.to_column())
+        if pp < n {
+            let first_block = block.slice(0..pp);
+            self.buffer[i] = block.slice(pp..n);
+            self.rows[i] = Some(rows.unwrap().slice(pp..n));
+            first_block
+        } else {
+            let first_block = block.clone();
+            self.buffer[i] = DataBlock::empty_with_schema(self.schema.clone());
+            self.rows[i] = None;
+            self.pending_streams.push_back(i);
+            first_block
+        }
     }
 
     fn rows_partition_point<'a>(&'a self, i: usize, target: &R::Item<'a>) -> usize {

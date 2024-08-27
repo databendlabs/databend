@@ -45,7 +45,7 @@ pub struct SimpleRow<T: ValueType> {
 }
 
 /// Rows structure for single simple types. (numbers, date, timestamp)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SimpleRows<T: ValueType> {
     inner: T::Column,
     desc: bool,
