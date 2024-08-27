@@ -14,15 +14,16 @@
 
 pub mod algorithm;
 mod cursor;
+mod k_way_merge_sort_partition;
 mod loser_tree;
 pub mod merge_path;
 mod merger;
 mod rows;
 mod spill;
 pub mod utils;
-pub mod k_way_merge_sort_partition;
 
 pub use cursor::*;
+pub use k_way_merge_sort_partition::KWaySortPartition;
 pub use merger::*;
 pub use rows::*;
 pub use spill::*;

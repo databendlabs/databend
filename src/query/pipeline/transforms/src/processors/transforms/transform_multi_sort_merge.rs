@@ -171,13 +171,13 @@ fn create_processor(
     })
 }
 
-struct BlockStream {
+pub struct InputBlockStream {
     input: Arc<InputPort>,
     remove_order_col: bool,
 }
 
-impl BlockStream {
-    fn new(input: Arc<InputPort>, remove_order_col: bool) -> Self {
+impl InputBlockStream {
+    pub fn new(input: Arc<InputPort>, remove_order_col: bool) -> Self {
         Self {
             input,
             remove_order_col,
@@ -185,7 +185,7 @@ impl BlockStream {
     }
 }
 
-impl SortedStream for BlockStream {
+impl SortedStream for InputBlockStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.input.has_data() {
             let mut block = self.input.pull_data().unwrap()?;
@@ -208,7 +208,7 @@ impl SortedStream for BlockStream {
 pub struct MultiSortMergeProcessor<A>
 where A: SortAlgorithm
 {
-    merger: Merger<A, BlockStream>,
+    merger: Merger<A, InputBlockStream>,
 
     /// This field is used to drive the processor's state.
     ///
@@ -233,10 +233,10 @@ where A: SortAlgorithm
     ) -> Result<Self> {
         let streams = inputs
             .iter()
-            .map(|i| BlockStream::new(i.clone(), remove_order_col))
+            .map(|i| InputBlockStream::new(i.clone(), remove_order_col))
             .collect::<Vec<_>>();
         let merger =
-            Merger::<A, BlockStream>::create(schema, streams, sort_desc, block_size, limit);
+            Merger::<A, InputBlockStream>::create(schema, streams, sort_desc, block_size, limit);
         Ok(Self {
             merger,
             inputs,

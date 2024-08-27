@@ -21,7 +21,6 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -134,7 +133,7 @@ where
         task
     }
 
-    pub fn next_block(&mut self) -> Result<Vec<DataBlock>> {
+    pub fn next_task(&mut self) -> Result<Vec<DataBlock>> {
         // if self.is_finished() {
         //     return Ok(None);
         // }

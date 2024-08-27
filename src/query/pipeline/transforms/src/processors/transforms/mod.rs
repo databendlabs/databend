@@ -22,7 +22,6 @@ mod transform_block_compact_for_copy;
 mod transform_blocking;
 mod transform_compact;
 mod transform_dummy;
-mod transform_k_way_merge_sort;
 mod transform_multi_sort_merge;
 mod transform_pipeline_helper;
 mod transform_retry_async;
@@ -30,6 +29,8 @@ mod transform_sort_merge;
 mod transform_sort_merge_base;
 mod transform_sort_merge_limit;
 
+pub mod transform_k_way_merge_sort;
+pub use transform_k_way_merge_sort::*;
 pub mod transform_sort_partial;
 pub use transform::*;
 pub use transform_accumulating::*;
