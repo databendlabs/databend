@@ -33,6 +33,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use fastrace::prelude::*;
@@ -469,16 +470,16 @@ impl DataExchangeManager {
                     Mutex::new(statistics_receiver);
 
                 // Interrupting the execution of finished callback if network error
-                build_res
-                    .main_pipeline
-                    .lift_on_finished(move |info: &ExecutionInfo| {
+                build_res.main_pipeline.set_on_finished(basic_callback(
+                    move |info: &ExecutionInfo| {
                         let query_id = ctx.get_id();
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
                         ctx.get_exchange_manager().on_finished_query(&query_id);
                         statistics_receiver.wait_shutdown()
-                    });
+                    },
+                ));
 
                 // Return if it‘s an error returned by another query node
                 build_res
