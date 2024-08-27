@@ -263,17 +263,17 @@ impl ScalarExpr {
                 scalar.as_raw_expr()
             }
 
-            ScalarExpr::AsyncFunctionCall(table_func) => RawExpr::ColumnRef {
+            ScalarExpr::AsyncFunctionCall(async_func) => RawExpr::ColumnRef {
                 span: None,
                 id: ColumnBindingBuilder::new(
-                    table_func.display_name.clone(),
+                    async_func.display_name.clone(),
                     usize::MAX,
-                    Box::new(table_func.return_type.as_ref().clone()),
+                    Box::new(async_func.return_type.as_ref().clone()),
                     Visibility::Visible,
                 )
                 .build(),
-                data_type: table_func.return_type.as_ref().clone(),
-                display_name: table_func.display_name.clone(),
+                data_type: async_func.return_type.as_ref().clone(),
+                display_name: async_func.display_name.clone(),
             },
         }
     }

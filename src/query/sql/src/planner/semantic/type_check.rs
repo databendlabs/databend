@@ -46,7 +46,6 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::Span;
-use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -94,6 +93,8 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -123,6 +124,8 @@ use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
+use crate::plans::AsyncFunctionArgument;
+use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -230,18 +233,6 @@ impl<'a> TypeChecker<'a> {
 
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
-            if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-                return Err(ErrorCode::SemanticError(
-                    "set-returning functions are only allowed in SELECT clause",
-                )
-                .set_span(expr.span()));
-            }
-            // Found a SRF, return it directly.
-            // See `Binder::bind_project_set` for more details.
-            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
-        }
-
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
@@ -751,6 +742,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
@@ -800,40 +792,6 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
-
-                // Check assumptions if it is a set returning function
-                if BUILTIN_FUNCTIONS
-                    .get_property(func_name)
-                    .map(|property| property.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InSetReturningFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions cannot be nested".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
-                    if self.in_window_function {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions cannot be used in window spec",
-                        )
-                        .set_span(*span));
-                    }
-
-                    if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions can only be used in SELECT".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
-                    // Should have been handled with `BindContext::srfs`
-                    return Err(ErrorCode::Internal("Logical error, there is a bug!"));
-                }
 
                 if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
                     // general window function
@@ -915,17 +873,23 @@ impl<'a> TypeChecker<'a> {
                         "score" => self.resolve_score_search_function(*span, func_name, &args)?,
                         "match" => self.resolve_match_search_function(*span, func_name, &args)?,
                         "query" => self.resolve_query_search_function(*span, func_name, &args)?,
-                        _ => unreachable!(),
+                        _ => {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "cannot find search function {}",
+                                func_name
+                            ))
+                            .set_span(*span));
+                        }
                     }
                 } else if ASYNC_FUNCTIONS.contains(&func_name) {
-                    let catalog = self.ctx.get_default_catalog()?;
-                    let tenant = self.ctx.get_tenant();
-                    let async_func = databend_common_base::runtime::block_on(
-                        resolve_async_function(*span, tenant, catalog, func_name, &args),
-                    )?;
-
-                    let data_type = async_func.return_type.as_ref().clone();
-                    Box::new((async_func.into(), data_type))
+                    self.resolve_async_function(*span, func_name, &args)?
+                } else if BUILTIN_FUNCTIONS
+                    .get_property(func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    // Set returning function
+                    self.resolve_set_returning_function(*span, func_name, &args)?
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -940,7 +904,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for scalar function, expected constant",
                                 ))
-                                    .set_span(*span)
+                                .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -2519,8 +2483,80 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((scalar_expr, data_type)))
     }
 
-    /// Resolve function call.
+    /// Resolve set returning function.
+    pub fn resolve_set_returning_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+        if self.in_window_function {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions cannot be used in window spec",
+            )
+            .set_span(span));
+        }
+        if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions can only be used in SELECT".to_string(),
+            )
+            .set_span(span));
+        }
 
+        let original_context = self.bind_context.expr_context.clone();
+        self.bind_context
+            .set_expr_context(ExprContext::InSetReturningFunction);
+
+        let mut arguments = Vec::with_capacity(args.len());
+        for arg in args.iter() {
+            let box (scalar, _) = self.resolve(arg)?;
+            arguments.push(scalar);
+        }
+
+        // Restore the original context
+        self.bind_context.set_expr_context(original_context);
+
+        let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            span,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments,
+        });
+        let srf_expr = srf_scalar.as_expr()?;
+        let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "The return type of srf should be tuple, but got {}",
+                srf_expr.data_type()
+            ))
+        })?;
+
+        // If tuple has more than one field, return the tuple column,
+        // otherwise, extract the tuple field to top level column.
+        let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
+            (srf_scalar, srf_expr.data_type().clone())
+        } else {
+            let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
+                span,
+                func_name: "get".to_string(),
+                params: vec![Scalar::Number(NumberScalar::Int64(1))],
+                arguments: vec![srf_scalar],
+            });
+            (child_scalar, srf_tuple_types[0].clone())
+        };
+
+        Ok(Box::new((return_scalar, return_type)))
+    }
+
+    /// Resolve function call.
     pub fn resolve_function(
         &mut self,
         span: Span,
@@ -3541,6 +3577,7 @@ impl<'a> TypeChecker<'a> {
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
+        self.bind_context.have_udf_server = true;
         self.ctx.set_cacheable(false);
         Ok(Box::new((
             UDFCall {
@@ -3653,6 +3690,7 @@ impl<'a> TypeChecker<'a> {
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
+        self.bind_context.have_udf_script = true;
         self.ctx.set_cacheable(false);
         Ok(Box::new((
             UDFCall {
@@ -3716,6 +3754,99 @@ impl<'a> TypeChecker<'a> {
             .into(),
             scalar.1,
         )))
+    }
+
+    fn resolve_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        arguments: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(self.bind_context.expr_context, ExprContext::InAsyncFunction) {
+            return Err(
+                ErrorCode::SemanticError("async functions cannot be nested".to_string())
+                    .set_span(span),
+            );
+        }
+        let original_context = self.bind_context.expr_context.clone();
+        self.bind_context
+            .set_expr_context(ExprContext::InAsyncFunction);
+
+        let result = match func_name {
+            "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
+            _ => {
+                return Err(ErrorCode::SemanticError(format!(
+                    "cannot find async function {}",
+                    func_name
+                ))
+                .set_span(span));
+            }
+        };
+        // Restore the original context
+        self.bind_context.set_expr_context(original_context);
+        self.bind_context.have_async_func = true;
+        Ok(result)
+    }
+
+    fn resolve_nextval_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        arguments: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if arguments.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "nextval function need one argument but got {}",
+                arguments.len()
+            ))
+            .set_span(span));
+        }
+        let sequence_name = if let Expr::ColumnRef { column, .. } = arguments[0] {
+            if column.database.is_some() || column.table.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "nextval function argument identifier should only contain one part".to_string(),
+                )
+                .set_span(span));
+            }
+            match &column.column {
+                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                ColumnID::Position(pos) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "nextval function argument don't support identifier {}",
+                        pos
+                    ))
+                    .set_span(span));
+                }
+            }
+        } else {
+            return Err(ErrorCode::SemanticError(format!(
+                "nextval function argument don't support expr {}",
+                arguments[0]
+            ))
+            .set_span(span));
+        };
+
+        let catalog = self.ctx.get_default_catalog()?;
+        let req = GetSequenceReq {
+            ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
+        };
+
+        databend_common_base::runtime::block_on(catalog.get_sequence(req))?;
+
+        let display_name = format!("{}({})", func_name, sequence_name);
+        let return_type = DataType::Number(NumberDataType::UInt64);
+        let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
+
+        let async_func = AsyncFunctionCall {
+            span,
+            func_name: func_name.to_string(),
+            display_name,
+            return_type: Box::new(return_type.clone()),
+            arguments: vec![],
+            func_arg,
+        };
+
+        Ok(Box::new((async_func.into(), return_type)))
     }
 
     fn resolve_cast_to_variant(

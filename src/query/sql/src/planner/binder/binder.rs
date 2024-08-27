@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
 use chrono_tz::Tz;
-use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
@@ -33,7 +33,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
+use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -167,7 +171,7 @@ impl<'a> Binder {
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
 
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    Some(format_statement(stmt.clone())?)
+                    Some(stmt.to_string())
                 } else {
                     None
                 };
@@ -906,5 +910,54 @@ impl<'a> Binder {
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
+    }
+
+    pub(crate) fn add_internal_column_into_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if bind_context.bound_internal_columns.is_empty() {
+            return Ok(s_expr);
+        }
+        // check inverted index license
+        if !bind_context.inverted_index_map.is_empty() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
+        let bound_internal_columns = &bind_context.bound_internal_columns;
+        let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
+        let mut s_expr = s_expr;
+
+        let mut has_score = false;
+        let mut has_matched = false;
+        for column_id in bound_internal_columns.keys() {
+            if *column_id == SEARCH_SCORE_COLUMN_ID {
+                has_score = true;
+            } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
+                has_matched = true;
+            }
+        }
+        if has_score && !has_matched {
+            return Err(ErrorCode::SemanticError(
+                "score function must run with match or query function".to_string(),
+            ));
+        }
+
+        for (table_index, column_index) in bound_internal_columns.values() {
+            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
+                i.has_score = has_score;
+                i
+            });
+            s_expr = SExpr::add_internal_column_index(
+                &s_expr,
+                *table_index,
+                *column_index,
+                &inverted_index,
+            );
+        }
+        Ok(s_expr)
     }
 }

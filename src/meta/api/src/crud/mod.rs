@@ -122,7 +122,7 @@ where
 
         if let CreateOption::Create = create_option {
             if res.prev.is_some() {
-                return Err(ExistError::new(value.name(), "Exist when add").into());
+                return Err(ExistError::new(value.name().to_string(), "Exist when add").into());
             }
         }
 
@@ -168,7 +168,12 @@ where
         if res.is_changed() {
             Ok(res.result.seq())
         } else {
-            Err(UnknownError::new(value.name(), match_seq, "NotFound when update").into())
+            Err(UnknownError::new_match_seq(
+                value.name().to_string(),
+                match_seq,
+                "NotFound when update",
+            )
+            .into())
         }
     }
 
@@ -216,8 +221,8 @@ where
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
         res.removed_or_else(|e| {
-            UnknownError::new(
-                name,
+            UnknownError::new_match_seq(
+                name.to_string(),
                 seq,
                 format_args!("NotFound when remove, seq of existing record: {}", e.seq()),
             )
@@ -237,13 +242,18 @@ where
 
         let res = self.kv_api.get_pb(&ident).await?;
 
-        let seq_value = res.ok_or_else(|| UnknownError::new(name, seq, "NotFound when get"))?;
+        let seq_value = res.ok_or_else(|| {
+            UnknownError::new_match_seq(name.to_string(), seq, "NotFound when get")
+        })?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value),
-            Err(e) => {
-                Err(UnknownError::new(name, seq, format_args!("NotFound when get: {}", e)).into())
-            }
+            Err(e) => Err(UnknownError::new_match_seq(
+                name.to_string(),
+                seq,
+                format_args!("NotFound when get: {}", e),
+            )
+            .into()),
         }
     }
 

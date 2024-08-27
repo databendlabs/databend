@@ -30,8 +30,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
-use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_meta_app::schema::ShareDBParams;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
@@ -43,8 +41,8 @@ use crate::binder::column_binding::ColumnBinding;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -65,6 +63,7 @@ pub enum ExprContext {
     InSetReturningFunction,
     InAggregateFunction,
     InLambdaFunction,
+    InAsyncFunction,
 
     #[default]
     Unknown,
@@ -135,8 +134,14 @@ pub struct BindContext {
     pub view_info: Option<(String, String)>,
 
     /// Set-returning functions in current context.
-    /// The key is the `Expr::to_string` of the function.
-    pub srfs: DashMap<String, ScalarExpr>,
+    pub srfs: Vec<ScalarItem>,
+
+    /// True if there is async function in current context, need rewrite.
+    pub have_async_func: bool,
+    /// True if there is udf script in current context, need rewrite.
+    pub have_udf_script: bool,
+    /// True if there is udf server in current context, need rewrite.
+    pub have_udf_server: bool,
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
@@ -177,7 +182,10 @@ impl BindContext {
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: DashMap::new(),
+            srfs: Vec::new(),
+            have_async_func: false,
+            have_udf_script: false,
+            have_udf_server: false,
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -197,7 +205,10 @@ impl BindContext {
             cte_map_ref: parent.cte_map_ref.clone(),
             in_grouping: false,
             view_info: None,
-            srfs: DashMap::new(),
+            srfs: Vec::new(),
+            have_async_func: false,
+            have_udf_script: false,
+            have_udf_server: false,
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -558,41 +569,6 @@ impl BindContext {
         }
 
         Ok(column_binding)
-    }
-
-    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> Result<SExpr> {
-        let bound_internal_columns = &self.bound_internal_columns;
-        let mut inverted_index_map = self.inverted_index_map.clone();
-        let mut s_expr = s_expr;
-
-        let mut has_score = false;
-        let mut has_matched = false;
-        for column_id in bound_internal_columns.keys() {
-            if *column_id == SEARCH_SCORE_COLUMN_ID {
-                has_score = true;
-            } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
-                has_matched = true;
-            }
-        }
-        if has_score && !has_matched {
-            return Err(ErrorCode::SemanticError(
-                "score function must run with match or query function".to_string(),
-            ));
-        }
-
-        for (table_index, column_index) in bound_internal_columns.values() {
-            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
-                i.has_score = has_score;
-                i
-            });
-            s_expr = SExpr::add_internal_column_index(
-                &s_expr,
-                *table_index,
-                *column_index,
-                &inverted_index,
-            );
-        }
-        Ok(s_expr)
     }
 
     pub fn column_set(&self) -> ColumnSet {

@@ -38,6 +38,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::principal::RoleIdent;
     use crate::principal::RoleInfo;
     use crate::tenant_key::resource::TenantResource;
 
@@ -50,7 +51,9 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for RoleInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = RoleIdent;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

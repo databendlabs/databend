@@ -17,6 +17,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 
 use databend_common_meta_app as mt;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 
 use crate::FromToProto;
 use crate::Incompatible;
@@ -41,5 +42,25 @@ where
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(self.clone())
+    }
+}
+
+impl<R> FromToProto for mt::data_id::DataId<R>
+where R: TenantResource + Sync + Send
+{
+    type PB = Self;
+
+    /// Id is actually json encoded and does not have a version.
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        VER
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(p)
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(*self)
     }
 }

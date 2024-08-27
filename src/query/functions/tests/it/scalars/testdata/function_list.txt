@@ -2229,6 +2229,7 @@ Functions overloads:
 1 is_string(Variant NULL) :: Boolean NULL
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
+0 jq FACTORY
 0 json_array FACTORY
 0 json_array_elements FACTORY
 0 json_contains_in_left(Variant, Variant) :: Boolean
