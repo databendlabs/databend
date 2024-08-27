@@ -52,7 +52,7 @@ impl Planner {
         key: &str,
         stmt: &Statement,
     ) -> (bool, Option<(Plan, PlanExtras)>) {
-        if matches!(stmt, Statement::Query(_)) {
+        if !matches!(stmt, Statement::Query(_)) {
             return (false, None);
         }
 
