@@ -3064,14 +3064,11 @@ impl<'a> TypeChecker<'a> {
                     arg_x,
                 ]))
             }
-            ("ifnull", &[arg_x, arg_y]) => {
+            ("ifnull" | "nvl", args) => {
                 // Rewrite ifnull(x, y) to coalesce(x, y)
-                Some(self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y]))
-            }
-            ("nvl", &[arg_x, arg_y]) => {
                 // Rewrite nvl(x, y) to coalesce(x, y)
                 // nvl is essentially an alias for ifnull.
-                Some(self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y]))
+                Some(self.resolve_function(span, "coalesce", vec![], args))
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
                 // Rewrite nvl2(x, y, z) to if(is_not_null(x), y, z)
