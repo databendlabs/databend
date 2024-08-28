@@ -40,7 +40,7 @@ where
     buffer: Vec<DataBlock>,
     rows: Vec<Option<R>>,
     pending_streams: VecDeque<usize>,
-    limit: Option<usize>,
+    _limit: Option<usize>, // todo
 
     total_rows: usize,
     cur_task: u32,
@@ -72,7 +72,7 @@ where
             buffer,
             rows,
             pending_streams,
-            limit,
+            _limit: limit,
             total_rows: 0,
             cur_task: 1,
         }

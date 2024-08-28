@@ -20,6 +20,7 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
@@ -118,15 +119,34 @@ impl PipelineBuilder {
                 // as the data is already sorted in each cluster node.
                 // The input number of the transform is equal to the number of cluster nodes.
                 if self.main_pipeline.output_len() > 1 {
-                    try_add_multi_sort_merge(
-                        &mut self.main_pipeline,
-                        plan_schema,
-                        block_size,
-                        limit,
-                        sort_desc,
-                        true,
-                        self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
-                    )
+                    let enable_loser_tree =
+                        self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
+                    if self
+                        .ctx
+                        .get_settings()
+                        .get_enable_parallel_multi_merge_sort()?
+                    {
+                        add_k_way_merge_sort(
+                            &mut self.main_pipeline,
+                            plan_schema,
+                            3,
+                            block_size,
+                            limit,
+                            sort_desc,
+                            true,
+                            enable_loser_tree,
+                        )
+                    } else {
+                        try_add_multi_sort_merge(
+                            &mut self.main_pipeline,
+                            plan_schema,
+                            block_size,
+                            limit,
+                            sort_desc,
+                            true,
+                            enable_loser_tree,
+                        )
+                    }
                 } else {
                     builder = builder.remove_order_col_at_last();
                     builder.build_merge_sort_pipeline(&mut self.main_pipeline, true)
@@ -305,8 +325,28 @@ impl SortPipelineBuilder {
             })?;
         }
 
-        if need_multi_merge {
-            // Multi-pipelines merge sort
+        if !need_multi_merge {
+            return Ok(());
+        }
+
+        // Multi-pipelines merge sort
+        let enable_loser_tree = self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_parallel_multi_merge_sort()?
+        {
+            add_k_way_merge_sort(
+                pipeline,
+                self.schema.clone(),
+                3,
+                self.final_block_size,
+                self.limit,
+                self.sort_desc,
+                self.remove_order_col_at_last,
+                enable_loser_tree,
+            )
+        } else {
             try_add_multi_sort_merge(
                 pipeline,
                 self.schema.clone(),
@@ -314,10 +354,8 @@ impl SortPipelineBuilder {
                 self.limit,
                 self.sort_desc,
                 self.remove_order_col_at_last,
-                self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
-            )?;
+                enable_loser_tree,
+            )
         }
-
-        Ok(())
     }
 }

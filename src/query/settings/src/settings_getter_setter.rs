@@ -682,6 +682,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
     }
 
+    pub fn get_enable_parallel_multi_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parallel_multi_merge_sort")? == 1)
+    }
+
     pub fn get_format_null_as_str(&self) -> Result<bool> {
         Ok(self.try_get_u64("format_null_as_str")? == 1)
     }

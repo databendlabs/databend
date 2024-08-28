@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
@@ -202,9 +203,7 @@ where
     }
 
     fn build(&self, pipeline: &mut Pipeline) -> Result<()> {
-        let pipe = self.create_partition(self.stream_count);
-
-        pipeline.add_pipe(pipe);
+        pipeline.add_pipe(self.create_partition(self.stream_count));
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(self.create_worker(
@@ -284,7 +283,7 @@ impl<R: Rows> KWayMergePartitionProcessor<R> {
         let n = self.outputs.len();
         for mut i in self.next..self.next + n {
             if i >= n {
-                i = i - n;
+                i -= n;
             }
             if self.outputs[i].can_push() {
                 self.cur = Some(i);
@@ -354,7 +353,7 @@ where R: Rows + Send + 'static
 
     fn process(&mut self) -> Result<()> {
         let task = self.partition.next_task()?;
-        self.task.extend(task.into_iter());
+        self.task.extend(task);
         Ok(())
     }
 }
@@ -373,6 +372,7 @@ where A: SortAlgorithm
     buffer: Vec<DataBlock>,
     ready: bool,
     output_data: VecDeque<DataBlock>,
+    _a: PhantomData<A>,
 }
 
 impl<A> KWayMergeWorkerProcessor<A>
@@ -398,6 +398,7 @@ where A: SortAlgorithm
             remove_order_col,
             buffer: Vec::new(),
             ready: false,
+            _a: Default::default(),
         }
     }
 
@@ -416,26 +417,28 @@ where A: SortAlgorithm
             const TASK_ID_POS: usize = 3;
             const TASK_ROWS_POS: usize = 2;
 
-            let task_id = get_u32(&before, TASK_ID_POS);
+            let task_id = get_u32(before, TASK_ID_POS);
             assert_eq!(task_id, get_u32(&block, TASK_ID_POS));
 
-            let task_rows = get_u32(&before, TASK_ROWS_POS);
+            let task_rows = get_u32(before, TASK_ROWS_POS);
             debug_assert_eq!(task_rows, get_u32(&block, TASK_ROWS_POS));
 
             let rows = self.buffer.iter().map(|b| b.num_rows() as u32).sum::<u32>()
                 + block.num_rows() as u32;
 
-            if task_rows > rows {
-                self.buffer.push(block);
-                return Ok(Event::NeedData);
-            } else if task_rows == rows {
-                self.buffer.push(block);
-                self.input.set_not_need_data();
-                self.ready = true;
-                return Ok(Event::Sync);
-            } else {
-                unreachable!()
-            }
+            return match task_rows.cmp(&rows) {
+                Ordering::Equal => {
+                    self.buffer.push(block);
+                    self.input.set_not_need_data();
+                    self.ready = true;
+                    Ok(Event::Sync)
+                }
+                Ordering::Greater => {
+                    self.buffer.push(block);
+                    Ok(Event::NeedData)
+                }
+                Ordering::Less => unreachable!(),
+            };
         }
         self.ready = false;
         if self.input.is_finished() {
@@ -724,8 +727,7 @@ impl SortedStream for BlockStream {
 
 fn get_u32(block: &DataBlock, i: usize) -> u32 {
     let n = block.num_columns();
-    let cols = block.columns();
-    unwrap_u32(&cols[n - i])
+    unwrap_u32(block.get_by_offset(n - i))
 }
 
 fn unwrap_u32(entry: &BlockEntry) -> u32 {
