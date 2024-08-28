@@ -326,8 +326,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 for (i, d) in lhs.iter().filter(|x| x.is_some()).enumerate() {
                     if i != 0  {
                         output.put_str(rhs);
-                        output.put_str(d.unwrap());
                     }
+                    output.put_str(d.unwrap());
                 }
                 output.commit_row();
             },
