@@ -42,11 +42,11 @@ use databend_common_pipeline_core::Pipeline;
 use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
+use super::sort::utils::ORDER_COL_NAME;
 use super::sort::Merger;
 use super::sort::Rows;
 use super::sort::SimpleRows;
 use super::sort::SortedStream;
-use crate::processors::sort::utils::ORDER_COL_NAME;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,

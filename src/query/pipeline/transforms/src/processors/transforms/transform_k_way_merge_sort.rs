@@ -14,12 +14,15 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -35,23 +38,200 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
 
+use super::sort::algorithm::HeapSort;
+use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::KWaySortPartition;
 use super::sort::Merger;
 use super::sort::Rows;
+use super::sort::SimpleRows;
 use super::sort::SortedStream;
 use super::transform_multi_sort_merge::InputBlockStream;
 
-pub fn create_pipe<R: Rows + Send + 'static>(
+pub fn add_k_way_merge_sort(
+    pipeline: &mut Pipeline,
+    schema: DataSchemaRef,
+    worker: usize,
+    block_size: usize,
+    limit: Option<usize>,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+) -> Result<()> {
+    if pipeline.is_empty() {
+        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+    }
+
+    struct Args {
+        schema: DataSchemaRef,
+        stream_count: usize,
+        worker: usize,
+        sort_desc: Arc<Vec<SortColumnDescription>>,
+        block_size: usize,
+        limit: Option<usize>,
+        remove_order_col: bool,
+        enable_loser_tree: bool,
+    }
+
+    fn add<R>(args: Args, pipeline: &mut Pipeline) -> Result<()>
+    where R: Rows + Send + 'static {
+        if args.enable_loser_tree {
+            let b = Builder::<LoserTreeSort<R>> {
+                schema: args.schema,
+                stream_count: args.stream_count,
+                worker: args.worker,
+                sort_desc: args.sort_desc,
+                block_size: args.block_size,
+                limit: args.limit,
+                remove_order_col: args.remove_order_col,
+                _a: Default::default(),
+            };
+            b.build(pipeline)
+        } else {
+            let b = Builder::<HeapSort<R>> {
+                schema: args.schema,
+                stream_count: args.stream_count,
+                worker: args.worker,
+                sort_desc: args.sort_desc,
+                block_size: args.block_size,
+                limit: args.limit,
+                remove_order_col: args.remove_order_col,
+                _a: Default::default(),
+            };
+            b.build(pipeline)
+        }
+    }
+
+    match pipeline.output_len() {
+        0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+        1 => Ok(()),
+        pipe_size => {
+            let args = Args {
+                schema,
+                stream_count: pipe_size,
+                worker,
+                sort_desc,
+                block_size,
+                limit,
+                remove_order_col,
+                enable_loser_tree,
+            };
+
+            if args.sort_desc.len() == 1 {
+                let sort_type = args.schema.field(args.sort_desc[0].offset).data_type();
+                match sort_type {
+                    DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                        NumberDataType::NUM_TYPE =>
+                            add::<SimpleRows<NumberType<NUM_TYPE>>>(args, pipeline),
+                    }),
+                    DataType::Date => add::<SimpleRows<DateType>>(args, pipeline),
+                    DataType::Timestamp => add::<SimpleRows<TimestampType>>(args, pipeline),
+                    DataType::String => add::<SimpleRows<StringType>>(args, pipeline),
+                    _ => add::<BinaryColumn>(args, pipeline),
+                }
+            } else {
+                add::<BinaryColumn>(args, pipeline)
+            }
+        }
+    }
+}
+
+struct Builder<A>
+where A: SortAlgorithm
+{
+    schema: DataSchemaRef,
+    stream_count: usize,
+    worker: usize,
+    sort_desc: Arc<Vec<SortColumnDescription>>,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    _a: PhantomData<A>,
+}
+
+impl<A> Builder<A>
+where
+    A: SortAlgorithm + Send + 'static,
+    <A as SortAlgorithm>::Rows: Send + 'static,
+{
+    fn create_partition(&self, input: usize) -> Pipe {
+        create_partition_pipe::<A::Rows>(
+            vec![InputPort::create(); input],
+            self.worker,
+            self.schema.clone(),
+            self.sort_desc.clone(),
+            self.limit,
+        )
+    }
+
+    fn create_worker(
+        &self,
+        input: Arc<InputPort>,
+        stream_count: usize,
+        output: Arc<OutputPort>,
+        block_size: usize,
+    ) -> KWayMergeWorkerProcessor<A> {
+        KWayMergeWorkerProcessor::<A>::new(
+            input,
+            stream_count,
+            output,
+            self.schema.clone(),
+            block_size,
+            self.sort_desc.clone(),
+            self.remove_order_col,
+        )
+    }
+
+    fn create_combine(&self) -> Pipe {
+        let input_ports = vec![InputPort::create(); self.worker];
+        let output = OutputPort::create();
+
+        let processor = ProcessorPtr::create(Box::new(KWayMergeCombineProcessor::new(
+            input_ports.clone(),
+            output.clone(),
+            self.limit,
+        )));
+
+        Pipe::create(self.worker, 1, vec![PipeItem::create(
+            processor,
+            input_ports,
+            vec![output],
+        )])
+    }
+
+    fn build(&self, pipeline: &mut Pipeline) -> Result<()> {
+        let pipe = self.create_partition(self.stream_count);
+
+        pipeline.add_pipe(pipe);
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Box::new(self.create_worker(
+                input,
+                self.stream_count,
+                output,
+                self.block_size,
+            ))))
+        })?;
+
+        pipeline.add_pipe(self.create_combine());
+        Ok(())
+    }
+}
+
+pub fn create_partition_pipe<R>(
     input_ports: Vec<Arc<InputPort>>,
     worker: usize,
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     limit: Option<usize>,
-) -> Pipe {
+) -> Pipe
+where
+    R: Rows + Send + 'static,
+{
     let output_ports = vec![OutputPort::create(); worker];
-    let processor = ProcessorPtr::create(Box::new(KWayMergePartitionProcessor::<R>::create(
+    let processor = ProcessorPtr::create(Box::new(KWayMergePartitionProcessor::<R>::new(
         input_ports.clone(),
         output_ports.clone(),
         schema,
@@ -77,7 +257,7 @@ pub struct KWayMergePartitionProcessor<R: Rows> {
 }
 
 impl<R: Rows> KWayMergePartitionProcessor<R> {
-    pub fn create(
+    pub fn new(
         inputs: Vec<Arc<InputPort>>,
         outputs: Vec<Arc<OutputPort>>,
         schema: DataSchemaRef,
@@ -91,7 +271,7 @@ impl<R: Rows> KWayMergePartitionProcessor<R> {
             .collect::<Vec<_>>();
 
         Self {
-            partition: KWaySortPartition::create(schema, streams, sort_desc, limit),
+            partition: KWaySortPartition::new(schema, streams, sort_desc, limit),
             inputs,
             outputs,
             task: VecDeque::new(),
@@ -192,14 +372,13 @@ where A: SortAlgorithm
 
     buffer: Vec<DataBlock>,
     ready: bool,
-    merger: Option<Merger<A, BlockStream>>,
     output_data: VecDeque<DataBlock>,
 }
 
 impl<A> KWayMergeWorkerProcessor<A>
 where A: SortAlgorithm
 {
-    pub fn create(
+    pub fn new(
         input: Arc<InputPort>,
         stream_count: usize,
         output: Arc<OutputPort>,
@@ -207,9 +386,8 @@ where A: SortAlgorithm
         block_size: usize,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
-    ) -> Result<Self> {
-        Ok(Self {
-            merger: None,
+    ) -> Self {
+        Self {
             input,
             output,
             output_data: VecDeque::new(),
@@ -220,7 +398,7 @@ where A: SortAlgorithm
             remove_order_col,
             buffer: Vec::new(),
             ready: false,
-        })
+        }
     }
 
     fn pull(&mut self) -> Result<Event> {
@@ -365,21 +543,21 @@ struct Info {
 }
 
 impl KWayMergeCombineProcessor {
-    pub fn create(
+    pub fn new(
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
-        limit: Option<usize>,
-    ) -> Result<Self> {
+        _limit: Option<usize>,
+    ) -> Self {
         let buffer = vec![VecDeque::new(); inputs.len()];
         let info = vec![None; inputs.len()];
-        Ok(Self {
+        Self {
             inputs,
             output,
             cur: None,
             next_task: 1,
             buffer,
             info,
-        })
+        }
     }
 
     fn pull(&mut self, i: usize) -> Result<PullEvent> {

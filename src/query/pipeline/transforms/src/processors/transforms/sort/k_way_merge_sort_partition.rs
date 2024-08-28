@@ -51,7 +51,7 @@ where
     R: Rows,
     S: SortedStream,
 {
-    pub fn create(
+    pub fn new(
         schema: DataSchemaRef,
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
