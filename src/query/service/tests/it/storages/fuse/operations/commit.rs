@@ -726,6 +726,10 @@ impl TableContext for CtxDelegation {
         None
     }
 
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
+    }
+
     fn set_materialized_cte(
         &self,
         _idx: (usize, usize),

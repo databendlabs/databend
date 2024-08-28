@@ -47,6 +47,7 @@ databend-common-storages-result-cache = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 educe = "0.4"
@@ -69,6 +70,7 @@ recursive = "0.1.1"
 regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
+sha2 = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
 url = "2.3.1"

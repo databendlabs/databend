@@ -31,7 +31,7 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 

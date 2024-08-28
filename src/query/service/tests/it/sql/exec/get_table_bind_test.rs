@@ -880,6 +880,10 @@ impl TableContext for CtxDelegation {
         None
     }
 
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
+    }
+
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
@@ -1018,10 +1022,12 @@ async fn test_get_same_table_once() -> Result<()> {
             .load(std::sync::atomic::Ordering::SeqCst),
         1
     );
-    assert_eq!(
+
+    // plan cache need get table
+    assert!(
         ctx.table_from_cache
-            .load(std::sync::atomic::Ordering::SeqCst),
-        2
+            .load(std::sync::atomic::Ordering::SeqCst)
+            >= 2
     );
 
     Ok(())
