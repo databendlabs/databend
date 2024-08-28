@@ -81,8 +81,8 @@ impl Default for DictionaryMeta {
 
 impl DictionaryMeta {
     pub fn build_connection_url(&self) -> Result<String> {
-        let url: String;
-        if self.source.to_lowercase() == "mysql".to_string() {
+        let mut url = String::new();
+        if self.source.to_lowercase() == *"mysql" {
             let username = match self.options.get("username") {
                 Some(user) => user,
                 None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
@@ -104,7 +104,7 @@ impl DictionaryMeta {
                 None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
             };
             url = format!("mysql://{}:{}@{}:{}/{}", username, password, host, port, db).to_string();
-        } else if self.source.to_lowercase() == "redis".to_string() {
+        } else if self.source.to_lowercase() == *"redis" {
             let host = match self.options.get("host") {
                 Some(host) => host,
                 None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
@@ -115,7 +115,7 @@ impl DictionaryMeta {
             };
             url = format!("tcp://{}:{}", host, port).to_string();
         }
-        return Ok(url)
+        Ok(url)
     }
 }
 

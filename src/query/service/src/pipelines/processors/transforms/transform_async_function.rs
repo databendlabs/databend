@@ -102,7 +102,7 @@ impl AsyncTransform for TransformAsyncFunction {
                     )
                     .await?;
                 }
-                AsyncFunctionArgument::DictGetFunction(dict_name, fields, pk_values) => {
+                AsyncFunctionArgument::DictGetFunction(_dict_arg) => {
                     // TODO
                 }
             }

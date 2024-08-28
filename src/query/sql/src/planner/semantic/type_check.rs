@@ -3777,9 +3777,7 @@ impl<'a> TypeChecker<'a> {
             .set_expr_context(ExprContext::InAsyncFunction);
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span.clone(), func_name, arguments)?,
-            "dict_get" => {
-                self.resolve_dict_get(span.clone(), func_name, arguments)?
-            }
+            "dict_get" => self.resolve_dict_get(span.clone(), func_name, arguments)?,
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -4623,16 +4621,14 @@ impl<'a> TypeChecker<'a> {
             .set_span(dict_name.span()));
         };
         let db = databend_common_base::runtime::block_on(
-            catalog.get_database(&tenant, db_name.as_str())
+            catalog.get_database(&tenant, db_name.as_str()),
         )?;
         let db_id = db.get_db_info().database_id.db_id;
         let req = TenantDictionaryIdent::new(
             tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name.clone()),
         );
-        let reply = databend_common_base::runtime::block_on(
-            catalog.get_dictionary(req)
-        )?;
+        let reply = databend_common_base::runtime::block_on(catalog.get_dictionary(req))?;
         let dictionary = if let Some(r) = reply {
             r.dictionary_meta
         } else {
