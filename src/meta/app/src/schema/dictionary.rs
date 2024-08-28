@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use super::tenant_dictionary_ident::TenantDictionaryIdent;
@@ -74,6 +76,46 @@ impl Default for DictionaryMeta {
             comment: "".to_string(),
             field_comments: BTreeMap::new(),
         }
+    }
+}
+
+impl DictionaryMeta {
+    pub fn build_connection_url(&self) -> Result<String> {
+        let url: String;
+        if self.source.to_lowercase() == "mysql".to_string() {
+            let username = match self.options.get("username") {
+                Some(user) => user,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
+            };
+            let password = match self.options.get("password") {
+                Some(psw) => psw,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `password`")),
+            };
+            let host = match self.options.get("host") {
+                Some(host) => host,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+            };
+            let port = match self.options.get("port") {
+                Some(port) => port,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+            };
+            let db = match self.options.get("db") {
+                Some(db) => db,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
+            };
+            url = format!("mysql://{}:{}@{}:{}/{}", username, password, host, port, db).to_string();
+        } else if self.source.to_lowercase() == "redis".to_string() {
+            let host = match self.options.get("host") {
+                Some(host) => host,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+            };
+            let port = match self.options.get("port") {
+                Some(port) => port,
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+            };
+            url = format!("tcp://{}:{}", host, port).to_string();
+        }
+        return Ok(url)
     }
 }
 

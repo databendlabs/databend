@@ -46,7 +46,6 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::Span;
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -98,7 +97,6 @@ use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryI
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -888,7 +886,7 @@ impl<'a> TypeChecker<'a> {
                         }
                     }
                 } else if ASYNC_FUNCTIONS.contains(&func_name) {
-                    self.resolve_async_function(*span, func_name, &args).await?
+                    self.resolve_async_function(*span, func_name, &args)?
                 } else if BUILTIN_FUNCTIONS
                     .get_property(func_name)
                     .map(|property| property.kind == FunctionKind::SRF)
@@ -3762,7 +3760,7 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
-    async fn resolve_async_function(
+    fn resolve_async_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -3777,14 +3775,10 @@ impl<'a> TypeChecker<'a> {
         let original_context = self.bind_context.expr_context.clone();
         self.bind_context
             .set_expr_context(ExprContext::InAsyncFunction);
-        let tenant = self.ctx.get_tenant();
-        let cat_name = self.ctx.get_current_catalog();
-        let catalog = self.ctx.get_catalog(&cat_name).await?;
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span.clone(), func_name, arguments)?,
             "dict_get" => {
-                self.resolve_dict_get(span.clone(), tenant, catalog, arguments)
-                    .await?
+                self.resolve_dict_get(span.clone(), func_name, arguments)?
             }
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
@@ -4579,11 +4573,10 @@ impl<'a> TypeChecker<'a> {
         None
     }
 
-    async fn resolve_dict_get(
+    fn resolve_dict_get(
         &mut self,
         span: Span,
-        tenant: Tenant,
-        catalog: Arc<dyn Catalog>,
+        _func_name: &str,
         args: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if args.len() != 3 {
@@ -4594,12 +4587,15 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_default_catalog()?;
+
         let dict_name = args[0];
         let field = args[1];
         let key_arg = args[2];
 
         // Get dict_name and dict_meta.
-        let box (dict_scalar, _dict_data_type) = self.resolve(dict_name)?;
+        let box (_dict_scalar, _dict_data_type) = self.resolve(dict_name)?;
         let db_name: String;
         let dict_name = if let Expr::ColumnRef { column, .. } = dict_name {
             if column.database != None {
@@ -4608,8 +4604,8 @@ impl<'a> TypeChecker<'a> {
                 )
                 .set_span(dict_name.span()));
             }
-            db_name = match column.table {
-                Some(table) => table.name,
+            db_name = match column.table.clone() {
+                Some(t) => t.name,
                 None => self.ctx.get_current_database(),
             };
             if let ColumnID::Name(name) = &column.column {
@@ -4626,18 +4622,17 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(dict_name.span()));
         };
-
-        let db_id = catalog
-            .get_database(&tenant, db_name.as_str())
-            .await?
-            .get_db_info()
-            .database_id
-            .db_id;
+        let db = databend_common_base::runtime::block_on(
+            catalog.get_database(&tenant, db_name.as_str())
+        )?;
+        let db_id = db.get_db_info().database_id.db_id;
         let req = TenantDictionaryIdent::new(
             tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name.clone()),
         );
-        let reply = catalog.get_dictionary(req).await?;
+        let reply = databend_common_base::runtime::block_on(
+            catalog.get_dictionary(req)
+        )?;
         let dictionary = if let Some(r) = reply {
             r.dictionary_meta
         } else {
@@ -4646,10 +4641,10 @@ impl<'a> TypeChecker<'a> {
                 dict_name.clone(),
             )));
         };
-        let schema = dictionary.schema;
+        let schema = dictionary.clone().schema;
 
         // Get attr_name, attr_type and return_type.
-        let box (field_scalar, field_data_type) = self.resolve(field)?;
+        let box (field_scalar, _field_data_type) = self.resolve(field)?;
         let Ok(field_expr) = ConstantExpr::try_from(field_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for dict_get function, attr_names must be a constant string, but got {}",
@@ -4666,7 +4661,6 @@ impl<'a> TypeChecker<'a> {
         };
         let attr_index = schema.index_of(attr_name)?;
         let attr_type = schema.field(attr_index).data_type();
-        let return_type = Box::new(attr_type);
 
         // Get primary_key_values and check types.
         // let primary_column_id = dict
@@ -4682,49 +4676,18 @@ impl<'a> TypeChecker<'a> {
             args.push(key_scalar);
         }
 
-        let url: String;
-        let dict_source: DictionarySource;
-        if dictionary.source.to_lowercase() == "mysql" {
-            let username = match dictionary.options.get("username") {
-                Some(user) => user,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
-            };
-            let password = match dictionary.options.get("password") {
-                Some(psw) => psw,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `password`")),
-            };
-            let host = match dictionary.options.get("host") {
-                Some(host) => host,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
-            };
-            let port = match dictionary.options.get("port") {
-                Some(port) => port,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
-            };
-            let db = match dictionary.options.get("db") {
-                Some(db) => db,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
-            };
-            url = format!("mysql://{}:{}@{}:{}/{}", username, password, host, port, db).to_string();
-            dict_source = DictionarySource::Mysql(url);
-        } else if dictionary.source.to_lowercase() == "redis" {
-            let host = match dictionary.options.get("host") {
-                Some(host) => host,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
-            };
-            let port = match dictionary.options.get("port") {
-                Some(port) => port,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
-            };
-            url = format!("tcp://{}:{}", host, port).to_string();
-            dict_source = DictionarySource::Redis(url);
-        }
+        let url = dictionary.build_connection_url()?;
+        let dict_source = if dictionary.source.to_lowercase() == "mysql".to_string() {
+            DictionarySource::Mysql(url)
+        } else {
+            DictionarySource::Redis(url)
+        };
 
         let dict_get_func_arg = DictGetFunctionArgument {
             dict_source,
             table: Some(db_name),
-            key_field: Some(*primary_field.name()),
-            value_field: Some(*attr_name),
+            key_field: Some(primary_field.name().clone()),
+            value_field: Some(attr_name.clone()),
         };
 
         Ok(Box::new((
@@ -4735,11 +4698,12 @@ impl<'a> TypeChecker<'a> {
                     "dict_get({},({}),({}))",
                     dict_name, attr_name, primary_field.name
                 ),
-                return_type: Box::new(*attr_type as DataType),
+                // ERROR: Type mismatched.
+                return_type: Box::new(attr_type.into()),
                 arguments: args,
                 func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
             }),
-            DataType::Array(Box::new(*attr_type as DataType)), // return_type
+            DataType::Array(Box::new(attr_type.into())), // return_type
         )))
     }
 }
