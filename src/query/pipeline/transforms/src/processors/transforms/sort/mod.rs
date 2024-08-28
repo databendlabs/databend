@@ -16,7 +16,6 @@ pub mod algorithm;
 mod cursor;
 mod k_way_merge_sort_partition;
 mod loser_tree;
-pub mod merge_path;
 mod merger;
 mod rows;
 mod spill;
