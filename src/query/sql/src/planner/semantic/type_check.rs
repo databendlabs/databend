@@ -4574,7 +4574,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_dict_get(
         &mut self,
         span: Span,
-        _func_name: &str,
+        func_name: &str,
         args: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if args.len() != 3 {
@@ -4588,37 +4588,39 @@ impl<'a> TypeChecker<'a> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_default_catalog()?;
 
-        let dict_name = args[0];
+        let dict_name_arg = args[0];
         let field = args[1];
         let key_arg = args[2];
 
         // Get dict_name and dict_meta.
-        let box (_dict_scalar, _dict_data_type) = self.resolve(dict_name)?;
-        let db_name: String;
-        let dict_name = if let Expr::ColumnRef { column, .. } = dict_name {
-            if column.database != None {
+        let (db_name, dict_name) = if let Expr::ColumnRef { column, .. } = dict_name_arg {
+            if column.database.is_some() {
                 return Err(ErrorCode::SemanticError(
-                    "database's name should not exist.".to_string(),
+                    "dict_get function argument identifier should contain one or two parts"
+                    .to_string(),
                 )
-                .set_span(dict_name.span()));
+                .set_span(dict_name_arg.span()));
             }
-            db_name = match column.table.clone() {
-                Some(t) => t.name,
+            let db_name = match &column.table {
+                Some(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
                 None => self.ctx.get_current_database(),
             };
-            if let ColumnID::Name(name) = &column.column {
-                name.name.clone()
-            } else {
-                return Err(ErrorCode::SemanticError(
-                    "async function can only used as column".to_string(),
-                )
-                .set_span(dict_name.span()));
-            }
+            let dict_name = match &column.column {
+                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                ColumnID::Position(pos) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "dict_get function argument don't support identifier {}",
+                        pos
+                    ))
+                    .set_span(dict_name_arg.span()));
+                }
+            };
+            (db_name, dict_name)
         } else {
             return Err(ErrorCode::SemanticError(
-                "async function can only used as column".to_string(),
+            "async function can only used as column".to_string(),
             )
-            .set_span(dict_name.span()));
+            .set_span(dict_name_arg.span()));
         };
         let db = databend_common_base::runtime::block_on(
             catalog.get_database(&tenant, db_name.as_str()),
@@ -4689,17 +4691,13 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
-                func_name: "dict_get".to_string(),
-                display_name: format!(
-                    "dict_get({},({}),({}))",
-                    dict_name, attr_name, primary_field.name
-                ),
-                // ERROR: Type mismatched.
+                func_name: func_name.to_string(),
+                display_name,
                 return_type: Box::new(attr_type.into()),
                 arguments: args,
                 func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
             }),
-            DataType::Array(Box::new(attr_type.into())), // return_type
+            attr_type.into(),
         )))
     }
 }

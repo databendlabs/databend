@@ -5200,6 +5200,7 @@ dependencies = [
  "jsonb",
  "jwt-simple 0.11.9",
  "jwt-simple 0.12.9",
+ "lazy_static",
  "log",
  "lz4",
  "maplit",
