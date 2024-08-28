@@ -198,7 +198,7 @@ impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTa
 #[async_trait::async_trait]
 pub trait AsyncSystemTable: Send + Sync {
     const NAME: &'static str;
-    const IS_LOCAL: bool = true;
+    const DATA_IN_LOCAL: bool = true;
 
     fn get_table_info(&self) -> &TableInfo;
     async fn get_full_data(
@@ -213,7 +213,7 @@ pub trait AsyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        match Self::IS_LOCAL {
+        match Self::DATA_IN_LOCAL {
             true => Ok((
                 PartStatistics::default(),
                 Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
@@ -276,6 +276,12 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        // avoid duplicate read in cluster mode.
+        if plan.parts.partitions.is_empty() {
+            pipeline.add_source(EmptySource::create, 1)?;
+            return Ok(());
+        }
+
         let inner_table = self.inner_table.clone();
         let push_downs = plan.push_downs.clone();
         pipeline.add_source(
