@@ -57,7 +57,7 @@ impl PartInfo for SystemTablePart {
 
 pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
-    const IS_LOCAL: bool = true;
+    const DATA_IN_LOCAL: bool = true;
     const BROADCAST_TRUNCATE: bool = false;
 
     fn get_table_info(&self) -> &TableInfo;
@@ -68,7 +68,7 @@ pub trait SyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        match Self::IS_LOCAL {
+        match Self::DATA_IN_LOCAL {
             true => Ok((
                 PartStatistics::default(),
                 Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
@@ -110,7 +110,8 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     }
 
     fn is_local(&self) -> bool {
-        TTable::IS_LOCAL
+        // When querying a memory table, we send the partition to one node for execution. The other nodes send empty partitions.
+        false
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -250,7 +251,8 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
     }
 
     fn is_local(&self) -> bool {
-        TTable::IS_LOCAL
+        // When querying a memory table, we send the partition to one node for execution. The other nodes send empty partitions.
+        false
     }
 
     fn get_table_info(&self) -> &TableInfo {
