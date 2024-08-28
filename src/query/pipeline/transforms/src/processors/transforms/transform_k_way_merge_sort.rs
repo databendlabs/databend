@@ -14,13 +14,18 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
@@ -95,20 +100,6 @@ impl<R: Rows> KWayMergePartitionProcessor<R> {
         }
     }
 
-    fn try_push(&self) -> Result<Event> {
-        // let output = &self.outputs[self.cur];
-
-        todo!()
-
-        // if output.is_finished() {
-        //     todo!()
-        // }
-
-        // if !output.can_push() {
-        //     return Ok(Event::NeedConsume);
-        // }
-    }
-
     fn find_output(&mut self) -> Option<usize> {
         let n = self.outputs.len();
         for mut i in self.next..self.next + n {
@@ -137,13 +128,10 @@ where R: Rows + Send + 'static
     }
 
     fn event(&mut self) -> Result<Event> {
-        // todo!()
-        // if self.outputs.is_finished() {
-        //     for input in self.inputs.iter() {
-        //         input.finish();
-        //     }
-        //     return Ok(Event::Finished);
-        // }
+        if self.outputs.iter().all(|o| o.is_finished()) {
+            self.inputs.iter().for_each(|i| i.finish());
+            return Ok(Event::Finished);
+        }
 
         if !self.task.is_empty() {
             let output = match self.cur {
@@ -158,27 +146,23 @@ where R: Rows + Send + 'static
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(block) = self.task.pop_front() {
-                output.push_data(Ok(block));
-                if self.task.is_empty() {
-                    self.cur = None;
-                }
-                return Ok(Event::NeedConsume);
+            let block = self.task.pop_front().unwrap();
+            output.push_data(Ok(block));
+            if self.task.is_empty() {
+                self.cur = None;
             }
-        } else {
-            match self.find_output() {
-                Some(_) => (),
-                None => return Ok(Event::NeedConsume),
-            };
+            return Ok(Event::NeedConsume);
         }
 
-        // if self.merger.is_finished() {
-        //     self.output.finish();
-        //     for input in self.inputs.iter() {
-        //         input.finish();
-        //     }
-        //     return Ok(Event::Finished);
-        // }
+        if self.partition.is_finished() {
+            self.outputs.iter().for_each(|o| o.finish());
+            self.inputs.iter().for_each(|i| i.finish());
+            return Ok(Event::Finished);
+        }
+
+        if self.find_output().is_none() {
+            return Ok(Event::NeedConsume);
+        }
 
         self.partition.poll_pending_stream()?;
         if self.partition.has_pending_stream() {
@@ -186,12 +170,6 @@ where R: Rows + Send + 'static
         } else {
             Ok(Event::Sync)
         }
-
-        // match self.pull()? {
-        //     (_, true) => return Ok(Event::NeedData),
-        //     (false, false) => return Ok(Event::Finished),
-        //     (true, false) => Ok(Event::Sync),
-        // }
     }
 
     fn process(&mut self) -> Result<()> {
@@ -236,7 +214,7 @@ where A: SortAlgorithm
             output,
             output_data: VecDeque::new(),
             stream_count,
-            schema,
+            schema: add_task_fields(schema),
             block_size,
             sort_desc,
             remove_order_col,
@@ -245,14 +223,14 @@ where A: SortAlgorithm
         })
     }
 
-    fn pull(&mut self) -> Result<(bool, bool)> {
+    fn pull(&mut self) -> Result<Event> {
         if self.input.has_data() {
             let block = self.input.pull_data().unwrap()?;
             self.input.set_need_data();
 
             if self.buffer.is_empty() {
                 self.buffer.push(block);
-                return Ok((false, true));
+                return Ok(Event::NeedData);
             }
 
             let before = &self.buffer[0];
@@ -271,22 +249,22 @@ where A: SortAlgorithm
 
             if task_rows > rows {
                 self.buffer.push(block);
-                return Ok((false, true));
+                return Ok(Event::NeedData);
             } else if task_rows == rows {
                 self.buffer.push(block);
                 self.input.set_not_need_data();
                 self.ready = true;
-                return Ok((true, false));
+                return Ok(Event::Sync);
             } else {
                 unreachable!()
             }
         }
         self.ready = false;
         if self.input.is_finished() {
-            return Ok((false, false));
+            return Ok(Event::Finished);
         }
         self.input.set_need_data();
-        Ok((false, true))
+        Ok(Event::NeedData)
     }
 
     fn streams(&mut self) -> Vec<BlockStream> {
@@ -348,12 +326,7 @@ where A: SortAlgorithm + Send + 'static
         if self.ready {
             return Ok(Event::Sync);
         }
-
-        match self.pull()? {
-            (_, true) => Ok(Event::NeedData),
-            (false, false) => Ok(Event::Finished),
-            (true, false) => Ok(Event::Sync),
-        }
+        self.pull()
     }
 
     fn process(&mut self) -> Result<()> {
@@ -409,7 +382,7 @@ impl KWayMergeCombineProcessor {
         })
     }
 
-    fn pull(&mut self, i: usize) -> Result<(bool, bool)> {
+    fn pull(&mut self, i: usize) -> Result<PullEvent> {
         let input = &self.inputs[i];
         let buffer = &mut self.buffer[i];
         let info = &mut self.info[i];
@@ -435,10 +408,10 @@ impl KWayMergeCombineProcessor {
                     buffer.push_back(block);
 
                     if task_id > self.next_task {
-                        return Ok((false, true));
+                        return Ok(PullEvent::Pending);
                     } else {
                         input.set_need_data();
-                        return Ok((true, false));
+                        return Ok(PullEvent::Data);
                     }
                 }
                 Some(info) => {
@@ -451,7 +424,7 @@ impl KWayMergeCombineProcessor {
                         buffer.push_back(block);
                         input.set_need_data();
                         info.remain -= rows;
-                        return Ok((true, false));
+                        return Ok(PullEvent::Data);
                     } else {
                         unreachable!()
                     }
@@ -460,27 +433,13 @@ impl KWayMergeCombineProcessor {
         }
 
         if input.is_finished() {
-            return Ok((false, false));
+            return Ok(PullEvent::Finished);
         }
         input.set_need_data();
-        Ok((false, true))
+        Ok(PullEvent::Pending)
     }
 
-    fn find(&mut self) -> Result<Event> {
-        for i in 0..self.inputs.len() {
-            match self.pull(i)? {
-                (_, true) => return Ok(Event::NeedData),
-                (false, false) => todo!(),
-                (true, false) => {
-                    self.cur = Some(i);
-                    return Ok(self.push());
-                }
-            }
-        }
-        Ok(Event::NeedData)
-    }
-
-    fn push(&mut self) -> Event {
+    fn push(&mut self) -> bool {
         let cur = self.cur.unwrap();
         let buffer = &mut self.buffer[cur];
         let info = &mut self.info[cur];
@@ -491,9 +450,27 @@ impl KWayMergeCombineProcessor {
                 info.take();
                 self.cur = None;
             }
-            Event::NeedConsume
+            true
         } else {
-            Event::NeedData
+            false
+        }
+    }
+
+    fn find(&mut self) -> Result<PullEvent> {
+        let event =
+            (0..self.inputs.len()).try_fold(PullEvent::Finished, |e, i| match self.pull(i) {
+                Ok(PullEvent::Data) => {
+                    self.cur = Some(i);
+                    ControlFlow::Break(None)
+                }
+                Ok(PullEvent::Pending) => ControlFlow::Continue(PullEvent::Pending),
+                Ok(PullEvent::Finished) => ControlFlow::Continue(e),
+                Err(e) => ControlFlow::Break(Some(e)),
+            });
+        match event {
+            ControlFlow::Continue(e) => Ok(e),
+            ControlFlow::Break(None) => Ok(PullEvent::Data),
+            ControlFlow::Break(Some(e)) => Err(e),
         }
     }
 }
@@ -509,9 +486,7 @@ impl Processor for KWayMergeCombineProcessor {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
-            for input in self.inputs.iter() {
-                input.finish();
-            }
+            self.inputs.iter().for_each(|i| i.finish());
             return Ok(Event::Finished);
         }
 
@@ -519,32 +494,45 @@ impl Processor for KWayMergeCombineProcessor {
             return Ok(Event::NeedConsume);
         }
 
-        match self.cur {
-            Some(cur) => match self.push() {
-                Event::NeedConsume => return Ok(Event::NeedConsume),
-                Event::NeedData => match self.pull(cur)? {
-                    (_, true) => return Ok(Event::NeedData),
-                    (true, false) => return Ok(self.push()),
-                    (false, false) => todo!(),
-                },
-                _ => unreachable!(),
-            },
-            None => self.find(),
+        if self.cur.is_none() {
+            match self.find()? {
+                PullEvent::Pending => return Ok(Event::NeedData),
+                PullEvent::Finished => {
+                    self.output.finish();
+                    return Ok(Event::Finished);
+                }
+                PullEvent::Data => (),
+            }
         }
 
-        // match self.pull()? {
-        //     (_, true) => return Ok(Event::NeedData),
-        //     (false, false) => {
-        //         return Ok(Event::Finished);
-        //         // todo
-        //     }
-        //     (true, false) => {
-        //         while let Some(block) = self.buffer.pop_front() {
-        //             self.output.push_data(Ok(block));
-        //         }
-        //         return Ok(Event::NeedConsume);
-        //     }
-        // }
+        let pushed = self.push();
+        match self.cur {
+            Some(cur) => match (pushed, self.pull(cur)?) {
+                (true, PullEvent::Pending | PullEvent::Data) => Ok(Event::NeedConsume),
+                (true, PullEvent::Finished) => {
+                    self.cur = None;
+                    Ok(Event::NeedConsume)
+                }
+                (false, PullEvent::Pending) => Ok(Event::NeedData),
+                (false, PullEvent::Data) => {
+                    if self.push() {
+                        Ok(Event::NeedConsume)
+                    } else {
+                        unreachable!()
+                    }
+                }
+                (false, PullEvent::Finished) => {
+                    todo!("unexpected finish")
+                }
+            },
+            None => match self.find()? {
+                PullEvent::Pending | PullEvent::Data => Ok(Event::NeedConsume),
+                PullEvent::Finished => {
+                    self.output.finish();
+                    Ok(Event::NeedConsume)
+                }
+            },
+        }
     }
 }
 
@@ -567,4 +555,26 @@ fn unwrap_u32(entry: &BlockEntry) -> u32 {
         Value::Scalar(scalar) => *scalar.as_number().unwrap().as_u_int32().unwrap(),
         Value::Column(column) => column.as_number().unwrap().as_u_int32().unwrap()[0],
     }
+}
+
+const TASK_ID_NAME: &str = "_task_id";
+const TASK_ROWS_NAME: &str = "_task_rows";
+
+fn add_task_fields(schema: DataSchemaRef) -> DataSchemaRef {
+    let mut fields = schema.fields().clone();
+    fields.push(DataField::new(
+        TASK_ID_NAME,
+        DataType::Number(NumberDataType::UInt32),
+    ));
+    fields.push(DataField::new(
+        TASK_ROWS_NAME,
+        DataType::Number(NumberDataType::UInt32),
+    ));
+    DataSchemaRefExt::create(fields)
+}
+
+enum PullEvent {
+    Data,
+    Pending,
+    Finished,
 }

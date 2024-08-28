@@ -78,6 +78,12 @@ where
         }
     }
 
+    pub fn is_finished(&self) -> bool {
+        self.buffer.iter().all(|b| b.is_empty()) && !self.has_pending_stream()
+        // && self.temp_sorted_num_rows == 0)
+        // || self.limit == Some(0)
+    }
+
     pub fn has_pending_stream(&self) -> bool {
         !self.pending_streams.is_empty()
     }
