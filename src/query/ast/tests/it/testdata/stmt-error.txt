@@ -1,0 +1,954 @@
+---------- Input ----------
+create table a.b (c integer not null 1, b float(10))
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | create table a.b (c integer not null 1, b float(10))
+  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
+  | |                                     
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+create table a (c float(10))
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | create table a (c float(10))
+  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
+  | |                       
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+create table a (c varch)
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | create table a (c varch)
+  | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `GEOGRAPHY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
+  | |               |  
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+create table a (c tuple())
+---------- Output ---------
+error: 
+  --> SQL:1:25
+  |
+1 | create table a (c tuple())
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  | |               | |      
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+create table a (c decimal)
+---------- Output ---------
+error: 
+  --> SQL:1:26
+  |
+1 | create table a (c decimal)
+  | ------          - -------^ unexpected `)`, expecting `(`
+  | |               | |       
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+create table a (b tuple(c int, uint64));
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | create table a (b tuple(c int, uint64));
+  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, or `NULLABLE`
+  | |               | |                   
+  | |               | while parsing TUPLE(<name> <type>, ...)
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
+  | ------         -- ^^^^^^^^ ambiguous NOT NULL constraint
+  | |              |   
+  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
+drop table if a.b
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | drop table if a.b
+  | ----          ^ unexpected `a`, expecting `EXISTS`
+  | |              
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+truncate table a.b.c.d
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | truncate table a.b.c.d
+  |                     ^ unexpected `.`, expecting `FORMAT` or `;`
+
+
+---------- Input ----------
+truncate a
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | truncate a
+  | -------- ^ unexpected `a`, expecting `TABLE`
+  | |         
+  | while parsing `TRUNCATE TABLE [<database>.]<table>`
+
+
+---------- Input ----------
+drop a
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop a
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
+
+
+---------- Input ----------
+insert into t format
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | insert into t format
+  | ------        ^^^^^^ unexpected `format`, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, or `.`
+  | |              
+  | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
+
+
+---------- Input ----------
+show tables format
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | show tables format
+  |                   ^ unexpected end of input, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
+
+
+---------- Input ----------
+alter database system x rename to db
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | alter database system x rename to db
+  | -----                 ^ unexpected `x`, expecting `RENAME` or `.`
+  | |                      
+  | while parsing `ALTER DATABASE [IF EXISTS] <action>`
+
+
+---------- Input ----------
+create user 'test-e' identified bi 'password';
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | create user 'test-e' identified bi 'password';
+  |                                 ^^ unexpected `bi`, expecting `BY`, `WITH`, `FORMAT`, or `;`
+
+
+---------- Input ----------
+create user 'test-e'@'localhost' identified by 'password';
+---------- Output ---------
+error: 
+  --> SQL:1:22
+  |
+1 | create user 'test-e'@'localhost' identified by 'password';
+  | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expecting `'%'` or `IDENTIFIED`
+  | |                     
+  | while parsing `CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
+
+
+---------- Input ----------
+drop usar if exists 'test-j';
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop usar if exists 'test-j';
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
+
+
+---------- Input ----------
+alter user 'test-e' identifies by 'new-password';
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | alter user 'test-e' identifies by 'new-password';
+  |                     ^^^^^^^^^^ unexpected `identifies`, expecting `IDENTIFIED`, `WITH`, `FORMAT`, `@`, or `;`
+
+
+---------- Input ----------
+create role 'test'@'%';
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | create role 'test'@'%';
+  |                   ^ unexpected `@`, expecting `FORMAT` or `;`
+
+
+---------- Input ----------
+drop role 'test'@'%';
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | drop role 'test'@'%';
+  |                 ^ unexpected `@`, expecting `FORMAT` or `;`
+
+
+---------- Input ----------
+SHOW GRANT FOR ROLE 'role1';
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | SHOW GRANT FOR ROLE 'role1';
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
+
+
+---------- Input ----------
+GRANT ROLE 'test' TO ROLE test-user;
+---------- Output ---------
+error: 
+  --> SQL:1:31
+  |
+1 | GRANT ROLE 'test' TO ROLE test-user;
+  |                               ^ unexpected `-`, expecting `FORMAT` or `;`
+
+
+---------- Input ----------
+GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
+  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
+  | |     |        
+  | |     while parsing <privileges> ON <privileges_level>
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT SELECT, CREATE ON *.c TO 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:27
+  |
+1 | GRANT SELECT, CREATE ON *.c TO 'test-grant';
+  | -----                     ^ unexpected `c`, expecting `TO` or `*`
+  | |                          
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+GRANT select ON UDF a TO 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | GRANT select ON UDF a TO 'test-grant';
+  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, `TABLE`, or `VIEW`
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
+  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
+  | |      |                
+  | |      while parsing <privileges> ON <privileges_level>
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+REVOKE SELECT, CREATE ON * TO 'test-grant';
+---------- Output ---------
+error: 
+  --> SQL:1:28
+  |
+1 | REVOKE SELECT, CREATE ON * TO 'test-grant';
+  | ------                     ^^ unexpected `TO`, expecting `FROM` or `.`
+  | |                           
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+
+
+---------- Input ----------
+COPY INTO mytable FROM 's3://bucket' CONECTION= ();
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `RETURN_FAILED_ONLY`, `LOCATION_PREFIX`, `FORMAT`, `VALIDATION_MODE`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
+
+
+---------- Input ----------
+COPY INTO mytable FROM @mystage CONNECTION = ();
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | COPY INTO mytable FROM @mystage CONNECTION = ();
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `VALIDATION_MODE`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
+
+
+---------- Input ----------
+CALL system$test
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | CALL system$test
+  | ----            ^ unexpected end of input, expecting `(`
+  | |               
+  | while parsing `CALL <procedure_name>(<parameter>, ...)`
+
+
+---------- Input ----------
+CALL system$test(a
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | CALL system$test(a
+  | ----              ^ unexpected end of input, expecting `)` or `,`
+  | |                 
+  | while parsing `CALL <procedure_name>(<parameter>, ...)`
+
+
+---------- Input ----------
+show settings ilike 'enable%'
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | show settings ilike 'enable%'
+  |               ^^^^^ unexpected `ilike`, expecting `LIKE`, `LIMIT`, `WHERE`, `FORMAT`, or `;`
+
+
+---------- Input ----------
+PRESIGN INVALID @my_stage/path/to/file
+---------- Output ---------
+error: 
+  --> SQL:1:9
+  |
+1 | PRESIGN INVALID @my_stage/path/to/file
+  | ------- ^^^^^^^ unexpected `INVALID`, expecting `DOWNLOAD`, <LiteralString>, `UPLOAD`, or `LiteralAtString`
+  | |        
+  | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
+
+
+---------- Input ----------
+SELECT c a as FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT c a as FROM t
+  |            ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+
+
+---------- Input ----------
+SELECT c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT c a as b FROM t
+  |            ^^ an alias without `AS` keyword has already been defined before this one, please remove one of them
+
+
+---------- Input ----------
+SELECT top -1 c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT top -1 c a as b FROM t
+  | ------ --- ^ expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, please quote it like `"top"`
+  | |      |    
+  | |      while parsing TOP <limit>
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+SELECT top c a as b FROM t
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | SELECT top c a as b FROM t
+  | ------ --- ^ expecting a literal number after keyword `TOP`, if you were referring to a column with name `top`, please quote it like `"top"`
+  | |      |    
+  | |      while parsing TOP <limit>
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS a, b
+---------- Output ---------
+error: 
+  --> SQL:1:35
+  |
+1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
+  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ()
+---------- Output ---------
+error: 
+  --> SQL:1:41
+  |
+1 | SELECT * FROM t GROUP BY GROUPING SETS ()
+  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, or 30 more ...
+  | |                                        
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10 order by bb;
+---------- Output ---------
+error: 
+  --> SQL:1:30
+  |
+1 | select * from aa.bb limit 10 order by bb;
+  | ------                       ^^^^^ ORDER BY must appear before LIMIT
+  | |                             
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb offset 10 order by bb;
+---------- Output ---------
+error: 
+  --> SQL:1:31
+  |
+1 | select * from aa.bb offset 10 order by bb;
+  | ------                        ^^^^^ ORDER BY must appear before OFFSET
+  | |                              
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb offset 10 limit 1;
+---------- Output ---------
+error: 
+  --> SQL:1:31
+  |
+1 | select * from aa.bb offset 10 limit 1;
+  | ------                        ^^^^^ LIMIT must appear before OFFSET
+  | |                              
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb order by a order by b;
+---------- Output ---------
+error: 
+  --> SQL:1:32
+  |
+1 | select * from aa.bb order by a order by b;
+  | ------                         ^^^^^ duplicated ORDER BY clause
+  | |                               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb offset 10 offset 20;
+---------- Output ---------
+error: 
+  --> SQL:1:31
+  |
+1 | select * from aa.bb offset 10 offset 20;
+  | ------                        ^^^^^^ duplicated OFFSET clause
+  | |                              
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10 limit 20;
+---------- Output ---------
+error: 
+  --> SQL:1:30
+  |
+1 | select * from aa.bb limit 10 limit 20;
+  | ------                       ^^^^^ duplicated LIMIT clause
+  | |                             
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2 offset 2;
+---------- Output ---------
+error: 
+  --> SQL:1:32
+  |
+1 | select * from aa.bb limit 10,2 offset 2;
+  | ------                         ^^^^^^ LIMIT n,m should not appear OFFSET
+  | |                               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2,3;
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | select * from aa.bb limit 10,2,3;
+  | ------              ^^^^^ [LIMIT n OFFSET m] or [LIMIT n,m]
+  | |                    
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+with a as (select 1) with b as (select 2) select * from aa.bb;
+---------- Output ---------
+error: 
+  --> SQL:1:43
+  |
+1 | with a as (select 1) with b as (select 2) select * from aa.bb;
+  | ----                                      ^^^^^^ duplicated WITH clause
+  | |                                          
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+with as t2(tt) as (select a from t) select t2.tt from t2
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | with as t2(tt) as (select a from t) select t2.tt from t2
+  | ---- ^^ unexpected `as`, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
+  | |     
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+copy into t1 from "" FILE
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
+---------- Output ---------
+error: 
+  --> SQL:1:57
+  |
+1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
+  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
+  | |                                                        
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE_FORMAT
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = 
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE_FORMAT = 
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE_FORMAT = (
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (TYPE
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE_FORMAT = (TYPE
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (TYPE =
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE_FORMAT = (TYPE =
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (TYPE =
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | copy into t1 from "" FILE_FORMAT = (TYPE =
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
+  | ----              ^^ unexpected `""`, expecting <LiteralString>, `LiteralAtString`, or `(`
+  | |                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = CSV,
+                    error_on_column_count_mismatch = 1
+                )
+---------- Output ---------
+error: 
+  --> SQL:5:54
+  |
+1 | COPY INTO mytable
+  | ---- while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+2 |                 FROM @my_stage
+3 |                 FILE_FORMAT = (
+4 |                     type = CSV,
+5 |                     error_on_column_count_mismatch = 1
+  |                                                      ^ unexpected `1`, expecting `TRUE` or `FALSE`
+
+
+---------- Input ----------
+CREATE CONNECTION IF NOT EXISTS my_conn
+---------- Output ---------
+error: 
+  --> SQL:1:40
+  |
+1 | CREATE CONNECTION IF NOT EXISTS my_conn
+  | ------                                 ^ unexpected end of input, expecting `STORAGE_TYPE`
+  | |                                      
+  | while parsing `CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`
+
+
+---------- Input ----------
+select $0 from t1
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | select $0 from t1
+  | ------ ^^
+  | |      |
+  | |      column position must be greater than 0
+  | |      while parsing expression
+  | |      while parsing <column>
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';
+  | -----          ^ unexpected `,`, expecting `ON`
+  | |               
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON d20_0014.* TO USER A;
+---------- Output ---------
+error: 
+  --> SQL:1:34
+  |
+1 | GRANT OWNERSHIP ON d20_0014.* TO USER A;
+  | -----                            ^^^^ unexpected `USER`, expecting `ROLE`
+  | |                                 
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
+
+
+---------- Input ----------
+REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
+  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+
+
+---------- Input ----------
+REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
+  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+
+
+---------- Input ----------
+REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
+  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';
+  | -----               ^ unexpected `.`, expecting `TO`
+  | |                    
+  | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
+---------- Output ---------
+error: 
+  --> SQL:1:65
+  |
+1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
+  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `IGNORE`, `RESPECT`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, or 35 more ...
+  | |                                        |        |  |          
+  | |                                        |        |  while parsing `(<expr> [, ...])`
+  | |                                        |        while parsing expression
+  | |                                        while parsing AS (<parameter>, ...) -> <definition expr>
+  | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`
+
+
+---------- Input ----------
+drop table :a
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | drop table :a
+  | ----       ^ unexpected `:`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, or `IF`
+  | |           
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+drop table IDENTIFIER(a)
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | drop table IDENTIFIER(a)
+  | ----                  ^ unexpected `a`, expecting `$` or `:`
+  | |                      
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+drop table IDENTIFIER(:a)
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | drop table IDENTIFIER(:a)
+  | ----                  ^ variable is only available in SQL template
+  | |                      
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+SHOW GRANTS ON task t1;
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | SHOW GRANTS ON task t1;
+  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `DATABASE`, or `UDF`
+
+
+---------- Input ----------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            );
+---------- Output ---------
+error: 
+  --> SQL:5:14
+  |
+1 | CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+  | ------ while parsing `CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `
+2 |             (
+3 |                 user_name String,
+4 |                 age Int16
+5 |             );
+  |              ^ unexpected `;`, expecting `PRIMARY`
+
+
+---------- Input ----------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+        (
+            user_name tuple(),
+            age Int16
+        )
+        PRIMARY KEY username
+        SOURCE ()
+        COMMENT 'This is a comment';
+---------- Output ---------
+error: 
+  --> SQL:3:29
+  |
+1 | CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+  | ------ while parsing `CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `
+2 |         (
+3 |             user_name tuple(),
+  |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  |             |         |      
+  |             |         while parsing type name
+  |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+
+

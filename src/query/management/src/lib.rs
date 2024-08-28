@@ -27,8 +27,10 @@ mod stage;
 pub mod udf;
 mod user;
 
+mod client_session;
 pub mod errors;
 
+pub use client_session::ClientSessionMgr;
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use connection::ConnectionMgr;

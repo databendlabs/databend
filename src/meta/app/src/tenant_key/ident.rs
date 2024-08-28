@@ -14,11 +14,14 @@
 
 use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+use crate::tenant_key::errors::ExistError;
+use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::raw::TIdentRaw;
 use crate::tenant_key::resource::TenantResource;
 use crate::KeyWithTenant;
@@ -49,6 +52,27 @@ where
             .field("tenant", &self.tenant)
             .field("name", &self.name)
             .finish()
+    }
+}
+
+impl<R, N> fmt::Display for TIdent<R, N>
+where
+    N: fmt::Display,
+    R: TenantResource,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let type_name = if R::TYPE.is_empty() {
+            "TIdent"
+        } else {
+            R::TYPE
+        };
+        write!(
+            f,
+            "{}({}/{})",
+            type_name,
+            self.tenant.tenant_name(),
+            self.name
+        )
     }
 }
 
@@ -130,6 +154,16 @@ impl<R, N> TIdent<R, N> {
     pub fn display(&self) -> impl fmt::Display + '_
     where N: fmt::Display {
         format!("'{}'/'{}'", self.tenant.tenant_name(), self.name)
+    }
+
+    pub fn unknown_error(&self, ctx: impl Display) -> UnknownError<R, N>
+    where N: Clone {
+        UnknownError::new(self.name.clone(), ctx)
+    }
+
+    pub fn exist_error(&self, ctx: impl Display) -> ExistError<R, N>
+    where N: Clone {
+        ExistError::new(self.name.clone(), ctx)
     }
 }
 
@@ -213,8 +247,8 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
 
+    use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::tenant::Tenant;
@@ -225,10 +259,20 @@ mod tests {
     fn test_tenant_ident() {
         struct Foo;
 
+        #[derive(Debug)]
+        struct FooValue;
+
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
-            type ValueType = Infallible;
+            type ValueType = FooValue;
+        }
+
+        impl kvapi::Value for FooValue {
+            type KeyType = TIdent<Foo>;
+            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+                []
+            }
         }
 
         let tenant = Tenant::new_literal("test");
@@ -244,10 +288,20 @@ mod tests {
     fn test_tenant_ident_u64() {
         struct Foo;
 
+        #[derive(Debug)]
+        struct FooValue;
+
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
-            type ValueType = Infallible;
+            type ValueType = FooValue;
+        }
+
+        impl kvapi::Value for FooValue {
+            type KeyType = TIdent<Foo, u64>;
+            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+                []
+            }
         }
 
         let tenant = Tenant::new_literal("test");

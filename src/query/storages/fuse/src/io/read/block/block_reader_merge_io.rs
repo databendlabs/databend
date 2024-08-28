@@ -21,9 +21,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::TableDataCacheKey;
-use databend_storages_common_cache_manager::SizedColumnArray;
 use enum_as_inner::EnumAsInner;
 
 type ChunkIndex = usize;
@@ -147,7 +147,7 @@ impl MergeIOReadResult {
                     column_range.end - column_range.start,
                 );
                 let data = chunk_data.slice(range.clone());
-                table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data));
+                table_data_cache.insert(cache_key.as_ref().to_owned(), data);
             }
         }
         self.columns_chunk_offsets

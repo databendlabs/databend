@@ -41,7 +41,7 @@ impl FromStr for AuthType {
             DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleSha1Password),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
             JWT_AUTH_STR => Ok(AuthType::JWT),
-            _ => Err(ErrorCode::InvalidAuthInfo(AuthType::bad_auth_types(s))),
+            _ => Err(ErrorCode::AuthenticateFailure(AuthType::bad_auth_types(s))),
         }
     }
 }
@@ -133,7 +133,7 @@ impl AuthInfo {
                         need_change,
                     })
                 }
-                None => Err(ErrorCode::InvalidAuthInfo("need password".to_string())),
+                None => Err(ErrorCode::AuthenticateFailure("need password".to_string())),
             },
         }
     }
@@ -156,6 +156,22 @@ impl AuthInfo {
         let default = AuthType::DoubleSha1Password;
         let auth_type = auth_type.clone().unwrap_or(default);
         AuthInfo::new(auth_type, auth_string, need_change)
+    }
+
+    // create `AuthInfo` and only modify `need_change` field.
+    pub fn create_with_need_change(&self, need_change: bool) -> AuthInfo {
+        match self {
+            AuthInfo::Password {
+                hash_value,
+                hash_method,
+                ..
+            } => AuthInfo::Password {
+                hash_value: hash_value.clone(),
+                hash_method: *hash_method,
+                need_change,
+            },
+            _ => self.clone(),
+        }
     }
 
     pub fn alter(

@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_base::base::tokio;
-use databend_query::auth::AuthMgr;
+use databend_query::servers::http::middleware::EndpointKind;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
@@ -321,7 +321,7 @@ struct Server {
 impl Server {
     pub async fn new() -> Self {
         let session_middleware =
-            HTTPSessionMiddleware::create(HttpHandlerKind::Clickhouse, AuthMgr::instance());
+            HTTPSessionMiddleware::create(HttpHandlerKind::Clickhouse, EndpointKind::Clickhouse);
         let endpoint = Route::new()
             .nest("/", clickhouse_router())
             .with(session_middleware);

@@ -608,6 +608,61 @@ impl Display for TemporalClause {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum SampleLevel {
+    ROW,
+    BLOCK,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SampleConfig {
+    Probability(f64),
+    RowsNum(f64),
+}
+
+impl Eq for SampleConfig {}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct Sample {
+    pub sample_level: SampleLevel,
+    pub sample_conf: SampleConfig,
+}
+
+impl Sample {
+    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Option<f64> {
+        let rand = match &self.sample_conf {
+            SampleConfig::Probability(probability) => probability / 100.0,
+            SampleConfig::RowsNum(rows) => {
+                if let Some(row_num) = stats_rows {
+                    if row_num > 0 {
+                        rows / row_num as f64
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+        };
+        Some(rand)
+    }
+}
+
+impl Display for Sample {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SAMPLE ")?;
+        match self.sample_level {
+            SampleLevel::ROW => write!(f, "ROW ")?,
+            SampleLevel::BLOCK => write!(f, "BLOCK ")?,
+        }
+        match &self.sample_conf {
+            SampleConfig::Probability(prob) => write!(f, "({})", prob)?,
+            SampleConfig::RowsNum(rows) => write!(f, "({} ROWS)", rows)?,
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
@@ -623,6 +678,7 @@ pub enum TableReference {
         consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
+        sample: Option<Sample>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -633,6 +689,7 @@ pub enum TableReference {
         params: Vec<Expr>,
         named_params: Vec<(Identifier, Expr)>,
         alias: Option<TableAlias>,
+        sample: Option<Sample>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -697,6 +754,7 @@ impl Display for TableReference {
                 consume,
                 pivot,
                 unpivot,
+                sample,
             } => {
                 write_dot_separated_list(
                     f,
@@ -721,6 +779,10 @@ impl Display for TableReference {
                 if let Some(unpivot) = unpivot {
                     write!(f, " {unpivot}")?;
                 }
+
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
+                }
             }
             TableReference::TableFunction {
                 span: _,
@@ -729,6 +791,7 @@ impl Display for TableReference {
                 params,
                 named_params,
                 alias,
+                sample,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -747,6 +810,9 @@ impl Display for TableReference {
                 write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
                 }
             }
             TableReference::Subquery {

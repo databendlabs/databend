@@ -53,7 +53,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
-use crate::UdfRewriter;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MutationType {
@@ -296,7 +295,7 @@ impl Binder {
             database_name,
             table_name,
             table_name_alias,
-            bind_context: Box::new(bind_context),
+            bind_context: Box::new(bind_context.clone()),
             metadata: self.metadata.clone(),
             mutation_type,
             required_columns: Box::new(required_columns),
@@ -306,7 +305,7 @@ impl Binder {
             field_index_map,
             strategy: mutation_strategy.clone(),
             distributed: false,
-            change_join_order: false,
+            row_id_shuffle: true,
             row_id_index: target_table_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,
@@ -325,13 +324,8 @@ impl Binder {
         let mut s_expr =
             SExpr::create_unary(Arc::new(RelOperator::Mutation(mutation)), Arc::new(input));
 
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
-
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut bind_context, s_expr)?;
 
         Ok(Plan::DataMutation {
             s_expr: Box::new(s_expr),

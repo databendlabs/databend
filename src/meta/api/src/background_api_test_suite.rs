@@ -231,7 +231,7 @@ impl BackgroundApiTestSuite {
             let res = res.unwrap();
             assert_eq!(
                 BackgroundJobState::RUNNING,
-                res.info.job_status.unwrap().job_state,
+                res.info.data.job_status.unwrap().job_state,
                 "first state is started"
             );
         }
@@ -320,7 +320,7 @@ impl BackgroundApiTestSuite {
             );
             assert_eq!(
                 Some("newid".to_string()),
-                res.info.job_status.unwrap().last_task_id
+                res.info.data.job_status.unwrap().last_task_id
             )
         }
 

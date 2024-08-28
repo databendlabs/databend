@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+use databend_common_ast::ast::Sample;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::DataSchema;
@@ -71,6 +72,22 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+/// Inverted index option for additional search functions configuration.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct InvertedIndexOption {
+    /// Fuzzy query match terms within Levenshtein distance
+    /// https://en.wikipedia.org/wiki/Levenshtein_distance
+    /// For example: if fuzziness is 1, and query text if `fox`,
+    /// the term `box` will be matched.
+    pub fuzziness: Option<u8>,
+    /// Operator: true is AND, false is OR, default is OR.
+    /// For example: query text `happy tax payer` is equals to `happy OR tax OR payer`,
+    /// but if operator is true, it will equals to `happy AND tax AND payer`.
+    pub operator: bool,
+    /// Parse a query leniently, ignore invalid query, default is false.
+    pub lenient: bool,
+}
+
 /// Information about inverted index.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InvertedIndexInfo {
@@ -90,8 +107,10 @@ pub struct InvertedIndexInfo {
     pub query_fields: Vec<(String, Option<F32>)>,
     /// The search query text with query syntax.
     pub query_text: String,
-    /// whether search with score function
+    /// Whether search with score function.
     pub has_score: bool,
+    /// Optional search configuration option, like fuzziness, lenient, ..
+    pub inverted_index_option: Option<InvertedIndexOption>,
 }
 
 /// Extras is a wrapper for push down items.
@@ -123,6 +142,8 @@ pub struct PushDownInfo {
     /// Identifies the type of data change we are looking for
     pub change_type: Option<ChangeType>,
     pub inverted_index: Option<InvertedIndexInfo>,
+    /// Used by table sample
+    pub sample: Option<Sample>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

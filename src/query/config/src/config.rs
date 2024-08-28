@@ -1547,6 +1547,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub internal_enable_sandbox_tenant: bool,
 
+    #[clap(long, value_name = "VALUE")]
+    pub enable_meta_data_upgrade_json_to_pb_from_v307: bool,
+
     /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
     #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
@@ -1663,6 +1666,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
 
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub udf_server_allow_insecure: bool,
+
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
 
@@ -1743,6 +1749,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            upgrade_to_pb: self.enable_meta_data_upgrade_json_to_pb_from_v307,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             data_retention_time_in_days_max: self.data_retention_time_in_days_max,
@@ -1755,6 +1762,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
+            udf_server_allow_insecure: self.udf_server_allow_insecure,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             max_cached_queries_profiles: self.max_cached_queries_profiles,
@@ -1828,6 +1836,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            enable_meta_data_upgrade_json_to_pb_from_v307: inner.upgrade_to_pb,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
             data_retention_time_in_days_max: 90,
@@ -1854,6 +1863,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
+            udf_server_allow_insecure: inner.udf_server_allow_insecure,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,

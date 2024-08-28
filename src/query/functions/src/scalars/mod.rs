@@ -26,6 +26,7 @@ mod datetime;
 mod decimal;
 mod geo;
 mod geo_h3;
+mod geography;
 mod geometry;
 mod hash;
 mod map;
@@ -38,6 +39,7 @@ mod variant;
 mod vector;
 
 pub use comparison::ALL_COMP_FUNC_NAMES;
+pub use string::ALL_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
@@ -61,4 +63,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     vector::register(registry);
     bitmap::register(registry);
     geometry::register(registry);
+    geography::register(registry);
 }

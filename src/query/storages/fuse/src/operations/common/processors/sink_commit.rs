@@ -180,7 +180,7 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn do_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
-        if table.transient() {
+        if table.is_transient() {
             return true;
         }
 
@@ -369,6 +369,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 match FuseTable::update_table_meta(
+                    self.ctx.as_ref(),
                     catalog.clone(),
                     &table_info,
                     &self.location_gen,

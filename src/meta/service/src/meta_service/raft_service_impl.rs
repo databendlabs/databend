@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio::sync::Mutex;
-use databend_common_base::future::TimingFutureExt;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
@@ -120,7 +120,7 @@ impl RaftServiceImpl {
 
         let res = self
             .receive_chunked_snapshot_v1(install_snapshot_req)
-            .timed(observe_snapshot_recv_spent(&addr))
+            .with_timing(observe_snapshot_recv_spent(&addr))
             .await;
 
         raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());

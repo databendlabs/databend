@@ -127,6 +127,8 @@ pub enum ShareGrantObjectName {
     Database(String),
     // database name, table name
     Table(String, String),
+    // database name, view name
+    View(String, String),
 }
 
 impl Display for ShareGrantObjectName {
@@ -137,6 +139,9 @@ impl Display for ShareGrantObjectName {
             }
             ShareGrantObjectName::Table(db, table) => {
                 write!(f, "TABLE {}.{}", db, table)
+            }
+            ShareGrantObjectName::View(db, view) => {
+                write!(f, "VIEW {}.{}", db, view)
             }
         }
     }
@@ -151,6 +156,9 @@ impl From<databend_common_ast::ast::ShareGrantObjectName> for ShareGrantObjectNa
             databend_common_ast::ast::ShareGrantObjectName::Table(db_name, table_name) => {
                 ShareGrantObjectName::Table(db_name.name, table_name.name)
             }
+            databend_common_ast::ast::ShareGrantObjectName::View(db_name, table_name) => {
+                ShareGrantObjectName::View(db_name.name, table_name.name)
+            }
         }
     }
 }
@@ -161,6 +169,8 @@ pub enum ShareGrantObjectSeqAndId {
     Database(u64, u64, DatabaseMeta),
     // db_id, table_meta_seq, table_id, table_meta
     Table(u64, u64, u64, TableMeta),
+    // db_id, table_meta_seq, table_id, table_meta
+    View(u64, u64, u64, TableMeta),
 }
 
 // share name and shared (table name, table info) map
@@ -175,13 +185,17 @@ pub struct GrantShareObjectReq {
     pub object: ShareGrantObjectName,
     pub grant_on: DateTime<Utc>,
     pub privilege: ShareGrantObjectPrivilege,
+    // reference tables used in view, if any
+    pub reference_tables: Option<Vec<(String, String)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReply {
     pub share_id: u64,
     pub share_spec: Option<ShareSpec>,
+    // (db id, TableInfo)
     pub grant_share_table: Option<(u64, TableInfo)>,
+    pub reference_tables: Option<Vec<(u64, TableInfo)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -559,6 +573,8 @@ pub enum ShareGrantObject {
     Database(u64),
     // table id
     Table(u64),
+    // view id
+    View(u64),
 }
 
 impl ShareGrantObject {
@@ -566,6 +582,7 @@ impl ShareGrantObject {
         match object {
             ShareObject::Database(_db_name, db_id) => ShareGrantObject::Database(*db_id),
             ShareObject::Table(_table_name, _db_id, table_id) => ShareGrantObject::Table(*table_id),
+            ShareObject::View(_table_name, _db_id, table_id) => ShareGrantObject::View(*table_id),
         }
     }
 }
@@ -578,6 +595,9 @@ impl Display for ShareGrantObject {
             }
             ShareGrantObject::Table(table_id) => {
                 write!(f, "table/{}", *table_id)
+            }
+            ShareGrantObject::View(table_id) => {
+                write!(f, "view/{}", *table_id)
             }
         }
     }
@@ -604,6 +624,7 @@ mod kvapi_key_impl {
             match self {
                 ShareGrantObject::Database(db_id) => b.push_raw("db").push_u64(*db_id),
                 ShareGrantObject::Table(table_id) => b.push_raw("table").push_u64(*table_id),
+                ShareGrantObject::View(table_id) => b.push_raw("table").push_u64(*table_id),
             }
         }
 
@@ -633,6 +654,7 @@ mod kvapi_key_impl {
             let k = match self {
                 ShareGrantObject::Database(db_id) => DatabaseId::new(*db_id).to_string_key(),
                 ShareGrantObject::Table(table_id) => TableId::new(*table_id).to_string_key(),
+                ShareGrantObject::View(table_id) => TableId::new(*table_id).to_string_key(),
             };
             Some(k)
         }
@@ -733,25 +755,30 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for ObjectSharedByShareIds {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareGrantObject;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for ShareNameIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for ShareEndpointMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareEndpointId;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for ShareEndpointIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareEndpointIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

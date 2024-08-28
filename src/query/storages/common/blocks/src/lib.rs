@@ -16,3 +16,4 @@
 
 mod parquet_rs;
 pub use parquet_rs::blocks_to_parquet;
+pub mod memory;

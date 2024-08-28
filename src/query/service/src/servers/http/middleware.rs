@@ -22,14 +22,15 @@ use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
 use databend_common_metrics::http::metrics_incr_http_slow_request_count;
 use databend_common_metrics::http::metrics_observe_http_response_duration;
-use databend_common_storages_fuse::TableContext;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -44,10 +45,10 @@ use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
-use poem::error::Error as PoemError;
+use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::Addr;
-use poem::Body;
 use poem::Endpoint;
 use poem::IntoResponse;
 use poem::Middleware;
@@ -56,23 +57,43 @@ use poem::Response;
 use uuid::Uuid;
 
 use super::v1::HttpQueryContext;
+use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
+use crate::servers::http::error::JsonErrorCode;
+use crate::servers::http::error::JsonErrorOnly;
+use crate::servers::http::error::QueryError;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+
+#[derive(Copy, Clone)]
+pub enum EndpointKind {
+    Login,
+    Logout,
+    Refresh,
+    StartQuery,
+    PollQuery,
+    Clickhouse,
+}
 
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
+    pub endpoint_kind: EndpointKind,
     pub auth_manager: Arc<AuthMgr>,
 }
 
 impl HTTPSessionMiddleware {
-    pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
-        HTTPSessionMiddleware { kind, auth_manager }
+    pub fn create(kind: HttpHandlerKind, endpoint_kind: EndpointKind) -> HTTPSessionMiddleware {
+        let auth_manager = AuthMgr::instance();
+        HTTPSessionMiddleware {
+            kind,
+            endpoint_kind,
+            auth_manager,
+        }
     }
 }
 
@@ -107,7 +128,11 @@ fn extract_baggage_from_headers(headers: &HeaderMap) -> Option<Vec<(String, Stri
     Some(result)
 }
 
-fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
+fn get_credential(
+    req: &Request,
+    kind: HttpHandlerKind,
+    endpoint_kind: EndpointKind,
+) -> Result<Credential> {
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
@@ -123,7 +148,7 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, client_ip)
+        auth_by_header(&std_auth_headers, client_ip, endpoint_kind)
     }
 }
 
@@ -157,6 +182,7 @@ pub fn get_client_ip(req: &Request) -> Option<String> {
 fn auth_by_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
+    endpoint_kind: EndpointKind,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
@@ -176,10 +202,35 @@ fn auth_by_header(
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
-            Some(bearer) => Ok(Credential::Jwt {
-                token: bearer.token().to_string(),
-                client_ip,
-            }),
+            Some(bearer) => {
+                let token = bearer.token().to_string();
+                if SessionClaim::is_databend_token(&token) {
+                    let (token_type, set_user) = match endpoint_kind {
+                        EndpointKind::Refresh => (TokenType::Refresh, true),
+                        EndpointKind::StartQuery => (TokenType::Session, true),
+                        EndpointKind::PollQuery | EndpointKind::Logout => {
+                            (TokenType::Session, false)
+                        }
+                        EndpointKind::Login => {
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "should not use databend token for login",
+                            ));
+                        }
+                        EndpointKind::Clickhouse => {
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "clickhouse handler should not use databend auth",
+                            ));
+                        }
+                    };
+                    Ok(Credential::DatabendToken {
+                        token,
+                        token_type,
+                        set_user,
+                    })
+                } else {
+                    Ok(Credential::Jwt { token, client_ip })
+                }
+            }
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
     } else {
@@ -224,6 +275,7 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
         HTTPSessionEndpoint {
             ep,
             kind: self.kind,
+            endpoint_kind: self.endpoint_kind,
             auth_manager: self.auth_manager.clone(),
         }
     }
@@ -232,13 +284,14 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
 pub struct HTTPSessionEndpoint<E> {
     ep: E,
     pub kind: HttpHandlerKind,
+    pub endpoint_kind: EndpointKind,
     pub auth_manager: Arc<AuthMgr>,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
-        let credential = get_credential(req, self.kind)?;
+        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
 
         let session_manager = SessionManager::instance();
 
@@ -250,7 +303,11 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant);
         }
 
-        self.auth_manager.auth(&mut session, &credential).await?;
+        let client_session_id = self.auth_manager.auth(&mut session, &credential).await?;
+        let databend_token = match credential {
+            Credential::DatabendToken { token, .. } => Some(token),
+            _ => None,
+        };
 
         let session = session_manager.register_session(session)?;
 
@@ -276,8 +333,7 @@ impl<E> HTTPSessionEndpoint<E> {
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
         let client_host = get_client_ip(req);
 
-        let ctx = session.create_query_context().await?;
-        let node_id = ctx.get_cluster().local_id.clone();
+        let node_id = GlobalConfig::instance().query.node_id.clone();
 
         Ok(HttpQueryContext {
             session,
@@ -291,6 +347,8 @@ impl<E> HTTPSessionEndpoint<E> {
             http_method: req.method().to_string(),
             uri: req.uri().to_string(),
             client_host,
+            databend_token,
+            client_session_id,
         })
     }
 }
@@ -315,48 +373,28 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         ThreadTracker::tracking_future(async move {
-            let res = match self.auth(&req, query_id).await {
+            match self.auth(&req, query_id).await {
                 Ok(ctx) => {
                     req.extensions_mut().insert(ctx);
-                    self.ep.call(req).await
+                    self.ep.call(req).await.map(|v| v.into_response())
                 }
-                Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE | ErrorCode::UNKNOWN_USER => {
+                Err(err) => {
+                    let err = JsonErrorCode(err);
+                    if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
-                        Err(PoemError::from_string(
-                            err.message(),
-                            StatusCode::UNAUTHORIZED,
-                        ))
-                    }
-                    _ => {
+                    } else {
                         error!(
                             "http request err: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
-                        Err(PoemError::from_string(
-                            err.message(),
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                        ))
                     }
-                },
-            };
-            match res {
-                Err(err) => {
-                    let body = Body::from_json(serde_json::json!({
-                        "error": {
-                            "code": err.status().as_str(),
-                            "message": err.to_string(),
-                        }
-                    }))
-                    .unwrap();
-                    Ok(Response::builder().status(err.status()).body(body))
+                    Ok(err.as_response())
                 }
-                Ok(res) => Ok(res.into_response()),
             }
         })
         .await
@@ -440,4 +478,21 @@ impl poem::middleware::PanicHandler for PanicHandler {
         metrics_incr_http_response_panics_count();
         (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
     }
+}
+pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
+    let resp = match next.call(req).await {
+        Ok(resp) => resp.into_response(),
+        Err(err) => (
+            err.status(),
+            Json(JsonErrorOnly {
+                error: QueryError {
+                    code: err.status().as_u16(),
+                    message: err.to_string(),
+                    detail: None,
+                },
+            }),
+        )
+            .into_response(),
+    };
+    Ok(resp)
 }

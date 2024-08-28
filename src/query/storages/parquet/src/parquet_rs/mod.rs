@@ -34,3 +34,4 @@ pub use parquet_reader::ParquetRSRowGroupReader;
 pub use parquet_table::ParquetRSTable;
 pub use partition::ParquetRSRowGroupPart;
 pub use pruning::ParquetRSPruner;
+pub use source::ParquetSource;

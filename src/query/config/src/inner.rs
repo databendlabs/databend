@@ -214,6 +214,8 @@ pub struct QueryConfig {
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
+    // enable_meta_data_upgrade_json_to_pb_from_v307
+    pub upgrade_to_pb: bool,
     pub internal_enable_sandbox_tenant: bool,
     pub internal_merge_on_read_mutation: bool,
     /// Disable some system load(For example system.configs) for cloud security.
@@ -232,6 +234,7 @@ pub struct QueryConfig {
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
+    pub udf_server_allow_insecure: bool,
 
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
@@ -293,6 +296,7 @@ impl Default for QueryConfig {
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
+            upgrade_to_pb: false,
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
@@ -305,6 +309,7 @@ impl Default for QueryConfig {
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
+            udf_server_allow_insecure: false,
             cloud_control_grpc_server_address: None,
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,

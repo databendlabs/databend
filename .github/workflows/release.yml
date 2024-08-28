@@ -2,7 +2,7 @@ name: Release
 
 on:
   schedule:
-    - cron: "0 22 * * *"
+    - cron: "0 22 * * 0"
   workflow_dispatch:
     inputs:
       tag:
@@ -107,8 +107,6 @@ jobs:
         include:
           - { target: x86_64-unknown-linux-gnu, runner: X64 }
           - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
-          - { target: x86_64-unknown-linux-musl, runner: X64 }
-          - { target: aarch64-unknown-linux-musl, runner: X64 }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,7 +122,6 @@ jobs:
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier
       - name: Basic Sqllogic Test
-        if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash
         env:
           TEST_HANDLERS: http
@@ -198,12 +195,6 @@ jobs:
           - category: default
             target: aarch64-unknown-linux-gnu
             runner: ARM64
-          - category: default
-            target: x86_64-unknown-linux-musl
-            runner: X64
-          - category: default
-            target: aarch64-unknown-linux-musl
-            runner: X64
           - category: hdfs
             target: x86_64-unknown-linux-gnu
             runner: X64
@@ -654,33 +645,33 @@ jobs:
             const script = require('./.github/scripts/notify_failure.js')
             await script({context, core})
 
-  sharing:
-    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
-    needs: [create_release, notify]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.create_release.outputs.sha }}
-      - name: checkout share endpoint
-        uses: actions/checkout@v4
-        with:
-          repository: datafuselabs/share-endpoint
-          token: ${{ secrets.DATABEND_BOT_TOKEN }}
-          path: share-endpoint
-      - name: Download artifacts
-        uses: ./.github/actions/artifact_download
-        with:
-          sha: ${{ github.sha }}
-          target: x86_64-unknown-linux-gnu
-          category: default
-          artifacts: metactl,meta,query
-      - uses: ./.github/actions/test_share_integration
-        timeout-minutes: 10
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-integration-sharing
+  # sharing:
+  #   runs-on: [self-hosted, X64, Linux, 4c8g, aws]
+  #   needs: [create_release, notify]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ needs.create_release.outputs.sha }}
+  #     - name: checkout share endpoint
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: datafuselabs/share-endpoint
+  #         token: ${{ secrets.DATABEND_BOT_TOKEN }}
+  #         path: share-endpoint
+  #     - name: Download artifacts
+  #       uses: ./.github/actions/artifact_download
+  #       with:
+  #         sha: ${{ github.sha }}
+  #         target: x86_64-unknown-linux-gnu
+  #         category: default
+  #         artifacts: metactl,meta,query
+  #     - uses: ./.github/actions/test_share_integration
+  #       timeout-minutes: 10
+  #     - name: Upload failure
+  #       if: failure()
+  #       uses: ./.github/actions/artifact_failure
+  #       with:
+  #         name: test-integration-sharing
 
   benchmark:
     needs: [create_release, docker_service, notify]

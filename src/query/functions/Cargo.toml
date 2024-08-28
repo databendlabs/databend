@@ -38,6 +38,10 @@ geozero = { workspace = true }
 h3o = "0.4.0"
 hex = "0.4.3"
 itertools = { workspace = true }
+jaq-core = "1.5.1"
+jaq-interpret = "1.5.0"
+jaq-parse = "1.0.3"
+jaq-std = "1.6.0"
 jsonb = { workspace = true }
 lexical-core = "0.8.5"
 libm = "0.2.6"
@@ -51,13 +55,14 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
+proj4rs = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = "0.10.5"
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 simdutf8 = "0.1.4"
 simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
 siphasher = "0.3"

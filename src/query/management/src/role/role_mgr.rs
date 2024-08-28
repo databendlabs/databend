@@ -35,12 +35,12 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
@@ -59,16 +59,19 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
+    upgrade_to_pb: bool,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
+        upgrade_to_pb: bool,
     ) -> Self {
         RoleMgr {
             kv_api,
             tenant: tenant.clone(),
+            upgrade_to_pb,
         }
     }
 
@@ -165,7 +168,7 @@ impl RoleApi for RoleMgr {
 
         match seq.match_seq(&seq_value) {
             Ok(_) => {
-                let mut quota = Quota::new(func_name!());
+                let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
                 let u = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
                     .await?;
@@ -187,7 +190,7 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
 
-        let mut quota = Quota::new(func_name!());
+        let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
         for (key, val) in values {
             let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await?;
@@ -215,7 +218,7 @@ impl RoleApi for RoleMgr {
 
         let mut r = vec![];
 
-        let mut quota = Quota::new(func_name!());
+        let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
         for (key, val) in values {
             match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
@@ -343,7 +346,6 @@ impl RoleApi for RoleMgr {
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
-
             let owner_value = serialize_struct(
                 &OwnershipInfo {
                     object: object.clone(),
@@ -409,7 +411,7 @@ impl RoleApi for RoleMgr {
             None => return Ok(None),
         };
 
-        let mut quota = Quota::new(func_name!());
+        let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
         // if can not get ownership, will directly return None.
         let seq_val =
@@ -513,5 +515,14 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         } => GrantObject::TableById(catalog_name.to_string(), *db_id, *table_id),
         OwnershipObject::Stage { name } => GrantObject::Stage(name.to_string()),
         OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
+    }
+}
+
+fn quota(target: impl ToString, upgrade_to_pb: bool) -> Quota {
+    if upgrade_to_pb {
+        Quota::new_limit(target, 10)
+    } else {
+        // Do not serialize to protobuf format
+        Quota::new_limit(target, 0)
     }
 }

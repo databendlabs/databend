@@ -104,8 +104,9 @@ impl_history_aware!(true, false, "views_with_history");
 impl_history_aware!(false, false, "views");
 
 #[async_trait::async_trait]
-impl<const T: bool, const U: bool> AsyncSystemTable for TablesTable<T, U>
-where TablesTable<T, U>: HistoryAware
+impl<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> AsyncSystemTable
+    for TablesTable<WITH_HISTORY, WITHOUT_VIEW>
+where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 {
     const NAME: &'static str = Self::TABLE_NAME;
 
@@ -122,7 +123,7 @@ where TablesTable<T, U>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let catalogs = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.session_state())
             .await?
             .into_iter()
             .map(|cat| cat.disable_table_info_refresh())
@@ -134,11 +135,11 @@ where TablesTable<T, U>: HistoryAware
     }
 }
 
-impl<const T: bool, const U: bool> TablesTable<T, U>
-where TablesTable<T, U>: HistoryAware
+impl<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> TablesTable<WITH_HISTORY, WITHOUT_VIEW>
+where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 {
     pub fn schema() -> TableSchemaRef {
-        if U {
+        if WITHOUT_VIEW {
             TableSchemaRefExt::create(vec![
                 TableField::new("catalog", TableDataType::String),
                 TableField::new("database", TableDataType::String),
@@ -196,6 +197,7 @@ where TablesTable<T, U>: HistoryAware
                     TableDataType::Nullable(Box::new(TableDataType::String)),
                 ),
                 TableField::new("comment", TableDataType::String),
+                TableField::new("table_type", TableDataType::String),
             ])
         } else {
             TableSchemaRefExt::create(vec![
@@ -254,7 +256,7 @@ where TablesTable<T, U>: HistoryAware
         let mut get_ownership = true;
         let mut owner_field_indexes: HashSet<usize> = HashSet::new();
         let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
-        let schema = TablesTable::<T, U>::schema();
+        let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
         for (i, name) in schema.fields.iter().enumerate() {
             match name.name().as_str() {
                 "num_rows"
@@ -335,7 +337,7 @@ where TablesTable<T, U>: HistoryAware
                         }
                     }
 
-                    if !T {
+                    if !WITH_HISTORY {
                         match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
@@ -374,7 +376,7 @@ where TablesTable<T, U>: HistoryAware
                     visibility_checker.check_database_visibility(
                         ctl_name,
                         db.name(),
-                        db.get_db_info().ident.db_id,
+                        db.get_db_info().database_id.db_id,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -385,15 +387,16 @@ where TablesTable<T, U>: HistoryAware
                 HashMap::new()
             };
             for db in final_dbs {
-                let db_id = db.get_db_info().ident.db_id;
+                let db_id = db.get_db_info().database_id.db_id;
                 let db_name = db.name();
                 let tables = if tables_names.is_empty()
                     || tables_names.len() > 10
-                    || T
+                    || WITH_HISTORY
                     || invalid_tables_ids
                     || invalid_optimize
                 {
-                    match Self::list_tables(ctl, &tenant, db_name, T, U).await {
+                    match Self::list_tables(ctl, &tenant, db_name, WITH_HISTORY, WITHOUT_VIEW).await
+                    {
                         Ok(tables) => tables,
                         Err(err) => {
                             // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
@@ -441,9 +444,9 @@ where TablesTable<T, U>: HistoryAware
                         table.name(),
                         db_id,
                         table_id,
-                    ) && table.engine() != "STREAM"
+                    ) && !table.is_stream()
                     {
-                        if !U && table.get_table_info().engine() == "VIEW" {
+                        if !WITHOUT_VIEW && table.get_table_info().engine() == "VIEW" {
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
@@ -460,7 +463,9 @@ where TablesTable<T, U>: HistoryAware
                                         .map(|role| role.to_string()),
                                 );
                             }
-                        } else if U && table.get_table_info().engine() != "VIEW" {
+                        } else if WITHOUT_VIEW {
+                            // system.tables store view name but not store view query
+                            // decrease information_schema.tables union.
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
@@ -490,7 +495,7 @@ where TablesTable<T, U>: HistoryAware
         let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
-        if U {
+        if WITHOUT_VIEW {
             for tbl in &database_tables {
                 // For performance considerations, allows using stale statistics data.
                 let require_fresh = false;
@@ -532,6 +537,16 @@ where TablesTable<T, U>: HistoryAware
         let engines: Vec<String> = database_tables
             .iter()
             .map(|v| v.engine().to_string())
+            .collect();
+        let tables_type: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if v.engine().to_uppercase() == "VIEW" {
+                    "VIEW".to_string()
+                } else {
+                    "BASE TABLE".to_string()
+                }
+            })
             .collect();
         let engines_full: Vec<String> = engines.clone();
         let created_on: Vec<i64> = database_tables
@@ -604,7 +619,7 @@ where TablesTable<T, U>: HistoryAware
             })
             .collect();
 
-        if U {
+        if WITHOUT_VIEW {
             Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
@@ -626,6 +641,7 @@ where TablesTable<T, U>: HistoryAware
                 UInt64Type::from_opt_data(number_of_blocks),
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
+                StringType::from_data(tables_type),
             ]))
         } else {
             Ok(DataBlock::new_from_columns(vec![
@@ -652,7 +668,7 @@ where TablesTable<T, U>: HistoryAware
             name: Self::NAME.to_owned(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema: TablesTable::<T, U>::schema(),
+                schema: TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema(),
                 engine: "SystemTables".to_string(),
 
                 ..Default::default()
@@ -660,6 +676,6 @@ where TablesTable<T, U>: HistoryAware
             ..Default::default()
         };
 
-        AsyncOneBlockSystemTable::create(TablesTable::<T, U> { table_info })
+        AsyncOneBlockSystemTable::create(TablesTable::<WITH_HISTORY, WITHOUT_VIEW> { table_info })
     }
 }

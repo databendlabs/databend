@@ -14,7 +14,7 @@
 
 use crate::protobuf as pb;
 use crate::protobuf::StreamItem;
-use crate::SeqV;
+use crate::seq_value::SeqV;
 
 impl StreamItem {
     pub fn new(key: String, value: Option<pb::SeqV>) -> Self {

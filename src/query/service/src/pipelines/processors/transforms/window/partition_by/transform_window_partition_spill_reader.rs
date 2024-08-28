@@ -224,10 +224,12 @@ impl Processor for TransformWindowPartitionSpillReader {
                         }
                     };
 
-                    info!(
-                        "Read {} window partition spills successfully, total elapsed: {:?}",
-                        processed_count, total_elapsed
-                    );
+                    if processed_count > 0 {
+                        info!(
+                            "Read {} window partition spills successfully, total elapsed: {:?}",
+                            processed_count, total_elapsed
+                        );
+                    }
                 }
             }
         }

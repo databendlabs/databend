@@ -57,7 +57,7 @@ derive-visitor = { workspace = true }
 env_logger = "0.10"
 futures = { workspace = true }
 futures-util = { workspace = true }
-jwt-simple = "0.11.0"
+jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 tempfile = "3.4.0"

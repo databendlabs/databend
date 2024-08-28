@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use chrono::DateTime;
-use chrono::Duration;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
@@ -220,8 +219,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention =
-            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+        let retention = self.get_data_retention_period(ctx.as_ref())?;
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {

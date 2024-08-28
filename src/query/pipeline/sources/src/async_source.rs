@@ -33,7 +33,6 @@ pub trait AsyncSource: Send {
     const NAME: &'static str;
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
 
     fn un_reacted(&self) -> Result<()> {

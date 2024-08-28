@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Sample;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
@@ -105,6 +106,7 @@ pub struct Scan {
     pub inverted_index: Option<InvertedIndexInfo>,
     // Lazy row fetch.
     pub is_lazy_table: bool,
+    pub sample: Option<Sample>,
 
     pub statistics: Arc<Statistics>,
 }
@@ -144,6 +146,7 @@ impl Scan {
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
             is_lazy_table: self.is_lazy_table,
+            sample: self.sample.clone(),
         }
     }
 
@@ -284,7 +287,7 @@ impl Operator for Scan {
         };
 
         // If prewhere is not none, we can't get precise cardinality
-        let precise_cardinality = if self.prewhere.is_none() {
+        let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
             precise_cardinality
         } else {
             None

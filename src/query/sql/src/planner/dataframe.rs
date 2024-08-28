@@ -65,6 +65,7 @@ impl Dataframe {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
 
         let settings = query_ctx.get_settings();
@@ -104,7 +105,7 @@ impl Dataframe {
                 false,
             );
 
-            binder.bind_base_table(&bind_context, database, table_index, None)
+            binder.bind_base_table(&bind_context, database, table_index, None, &None)
         } else {
             binder.bind_table_reference(&mut bind_context, &table)
         }?;
@@ -159,8 +160,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
 
         Ok(self)
     }
@@ -213,8 +214,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -279,8 +280,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -325,8 +326,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -417,9 +418,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
-
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -469,6 +469,7 @@ impl Dataframe {
                 consume: false,
                 pivot: None,
                 unpivot: None,
+                sample: None,
             };
             table_ref.push(table);
         }

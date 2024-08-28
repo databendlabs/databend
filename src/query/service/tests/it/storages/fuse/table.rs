@@ -147,7 +147,7 @@ fn test_parse_storage_prefix() -> Result<()> {
         .meta
         .options
         .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
-    let prefix = FuseTable::parse_storage_prefix(&tbl_info)?;
+    let prefix = FuseTable::parse_storage_prefix_from_table_info(&tbl_info)?;
     assert_eq!(format!("{}/{}", db_id, tbl_id), prefix);
     Ok(())
 }

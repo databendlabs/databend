@@ -150,6 +150,10 @@ impl<Event: SystemLogElement + 'static> SystemLogTable<Event> {
 
 #[async_trait::async_trait]
 impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

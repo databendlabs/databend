@@ -108,7 +108,7 @@ impl Binder {
                 // ALL PRIVILEGES have different available privileges set on different grant objects
                 // Now in this case all is always true.
                 let grant_object = self.convert_to_revoke_grant_object(level).await?;
-                // Note if old version `grant all on db.*/db.t to user`, the user will contains ownership privilege.
+                // Note if old version `grant all on db.*/db.t to user`, the user will contain ownership privilege.
                 // revoke all need to revoke it.
                 let principal: PrincipalIdentity = principal.clone().into();
                 let priv_types = match &principal {
@@ -152,11 +152,20 @@ impl Binder {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                if self
+                    .ctx
+                    .is_temp_table(&catalog_name, &database_name, table_name)
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "{}.{}.{} is a temporary table, cannot grant privileges on it",
+                        catalog_name, database_name, table_name
+                    )));
+                }
                 let db_id = catalog
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = catalog
                     .get_table(&tenant, &database_name, table_name)
@@ -172,7 +181,7 @@ impl Binder {
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 Ok(GrantObject::DatabaseById(catalog_name, db_id))
             }
@@ -197,11 +206,20 @@ impl Binder {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                if self
+                    .ctx
+                    .is_temp_table(&catalog_name, &database_name, table_name)
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "{}.{}.{} is a temporary table, cannot revoke privileges on it",
+                        catalog_name, database_name, table_name
+                    )));
+                }
                 let db_id = catalog
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = catalog
                     .get_table(&tenant, &database_name, table_name)
@@ -220,7 +238,7 @@ impl Binder {
                     .get_database(&tenant, &database_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 Ok(vec![
                     GrantObject::DatabaseById(catalog_name.clone(), db_id),
@@ -302,23 +320,25 @@ impl Binder {
                 .await?
         };
 
+        // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
         for option in user_options {
             user_option.apply(option);
         }
 
-        // None means no change to make
+        // If `must_change_password` is set, user need to change password first when login.
+        let need_change = user_option
+            .must_change_password()
+            .cloned()
+            .unwrap_or_default();
+
+        // None means auth info is not changed.
         let new_auth_info = if let Some(auth_option) = &auth_option {
-            // if `must_change_password` is set, user need to change password first,
-            // unless user is changing self password
-            let need_change = if user.is_none() {
-                false
-            } else {
-                user_option
-                    .must_change_password()
-                    .cloned()
-                    .unwrap_or_default()
-            };
+            // If user is changing self password, always set `need_change` as false,
+            // because after this operation, the password is changed.
+            // And if user is changing other user's password,
+            // set `need_change` same as `must_change_password` option.
+            let need_change = if user.is_none() { false } else { need_change };
             let auth_info = user_info.auth_info.alter2(
                 &auth_option.auth_type.clone().map(Into::into),
                 &auth_option.password,
@@ -339,6 +359,10 @@ impl Binder {
             } else {
                 Some(auth_info)
             }
+        } else if need_change != user_info.auth_info.get_need_change() {
+            // If password is not changed, set `need_change` same as `must_change_password` option.
+            let new_auth_info = user_info.auth_info.create_with_need_change(need_change);
+            Some(new_auth_info)
         } else {
             None
         };

@@ -16,24 +16,17 @@ use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AsyncFunction;
 
-use crate::pipelines::processors::transforms::TransformSequenceNextval;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_async_function(&mut self, async_function: &AsyncFunction) -> Result<()> {
         self.build_pipeline(&async_function.input)?;
 
-        if async_function.func_name == "nextval" {
-            self.main_pipeline.add_async_transformer(|| {
-                TransformSequenceNextval::new(
-                    self.ctx.clone(),
-                    &async_function.arguments[0],
-                    &async_function.return_type,
-                )
-            })
-        } else {
-            unreachable!()
-        }
+        self.main_pipeline.add_async_transformer(|| {
+            TransformAsyncFunction::new(self.ctx.clone(), async_function.async_func_descs.clone())
+        });
+
         Ok(())
     }
 }

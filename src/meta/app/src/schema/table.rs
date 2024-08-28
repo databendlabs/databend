@@ -20,6 +20,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::func_name;
 use chrono::DateTime;
@@ -71,7 +72,7 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TableNameIdent {
     pub tenant: Tenant,
     pub db_name: String,
@@ -187,6 +188,9 @@ impl Display for DatabaseType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
+    /// For a temp table,
+    /// `ident.seq` is always 0.
+    /// `id.table_id` is set as value of `TempTblId`.
     pub ident: TableIdent,
 
     /// For a table it is `db_name.table_name`.
@@ -561,6 +565,8 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
+
+    pub engine: String,
 }
 
 impl DropTableByIdReq {
@@ -580,7 +586,7 @@ impl Display for DropTableByIdReq {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct DropTableReply {
     // db id, share spec vector
     pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
@@ -719,12 +725,31 @@ pub struct UpdateTableMetaReq {
     pub new_table_meta: TableMeta,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateTempTableReq {
+    pub table_id: u64,
+    pub desc: String,
+    pub new_table_meta: TableMeta,
+    pub copied_files: BTreeMap<String, TableCopiedFileInfo>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
+    pub update_temp_tables: Vec<UpdateTempTableReq>,
+}
+
+impl UpdateMultiTableMetaReq {
+    pub fn is_empty(&self) -> bool {
+        self.update_table_metas.is_empty()
+            && self.copied_files.is_empty()
+            && self.update_stream_metas.is_empty()
+            && self.deduplicated_labels.is_empty()
+            && self.update_temp_tables.is_empty()
+    }
 }
 
 /// The result of updating multiple table meta
@@ -983,7 +1008,8 @@ pub struct GetTableCopiedFileReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
-    pub expire_at: Option<u64>,
+    /// If not None, specifies the time-to-live for the keys.
+    pub ttl: Option<Duration>,
     pub fail_if_duplicated: bool,
 }
 
@@ -1166,25 +1192,29 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DBIdTableName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }
 
     impl kvapi::Value for DBIdTableName {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableIdList {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdHistoryIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             self.id_list
                 .iter()
                 .map(|id| TableId::new(*id).to_string_key())
@@ -1192,13 +1222,15 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableCopiedFileInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableCopiedFileNameIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for LeastVisibleTime {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = LeastVisibleTimeKey;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

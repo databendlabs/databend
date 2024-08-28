@@ -35,6 +35,7 @@
 #![feature(let_chains)]
 #![feature(try_blocks)]
 #![feature(variant_count)]
+#![feature(duration_constructors)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 

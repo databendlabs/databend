@@ -232,10 +232,7 @@ fn wrap_true_validity(column: &BlockEntry, num_rows: usize) -> BlockEntry {
     if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         column.clone()
     } else {
-        let col = Column::Nullable(Box::new(NullableColumn {
-            column: col,
-            validity: Bitmap::new_trued(num_rows),
-        }));
+        let col = NullableColumn::new_column(col, Bitmap::new_trued(num_rows));
         BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }

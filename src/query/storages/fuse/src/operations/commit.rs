@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
@@ -38,7 +39,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -49,6 +50,7 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::debug;
 use log::info;
 use log::warn;
@@ -160,6 +162,7 @@ impl FuseTable {
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
         let res = Self::update_table_meta(
+            ctx,
             catalog,
             table_info,
             location_generator,
@@ -175,10 +178,10 @@ impl FuseTable {
         if need_to_save_statistics {
             let table_statistics_location: String = table_statistics_location.unwrap();
             match &res {
-                Ok(_) => TableSnapshotStatistics::cache().put(
-                    table_statistics_location,
-                    Arc::new(table_statistics.unwrap()),
-                ),
+                Ok(_) => {
+                    TableSnapshotStatistics::cache()
+                        .insert(table_statistics_location, table_statistics.unwrap());
+                }
                 Err(e) => info!("update_table_meta failed. {}", e),
             }
         }
@@ -218,6 +221,7 @@ impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
+        ctx: &dyn TableContext,
         catalog: Arc<dyn Catalog>,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
@@ -235,25 +239,44 @@ impl FuseTable {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta,
-        };
+        let mut update_temp_tables = vec![];
+        let mut update_table_metas = vec![];
+        let mut copied_files_req = vec![];
+        if new_table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            let req = UpdateTempTableReq {
+                table_id,
+                new_table_meta,
+                copied_files: copied_files
+                    .as_ref()
+                    .map(|c| c.file_info.clone())
+                    .unwrap_or_default(),
+                desc: table_info.desc.clone(),
+            };
+            update_temp_tables.push(req);
+        } else {
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                new_table_meta,
+            };
+            update_table_metas.push((req, table_info.clone()));
+            copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
+        }
 
         // 3. let's roll
         catalog
             .update_multi_table_meta(UpdateMultiTableMetaReq {
-                update_table_metas: vec![(req, table_info.clone())],
+                update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
-                copied_files: copied_files.iter().map(|c| (table_id, c.clone())).collect(),
+                copied_files: copied_files_req,
                 deduplicated_labels: deduplicated_label.into_iter().collect(),
+                update_temp_tables,
             })
             .await?;
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
-        TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
-        Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
+        TableSnapshot::cache().insert(snapshot_location.clone(), snapshot);
+        Self::write_last_snapshot_hint(ctx, operator, location_generator, &snapshot_location).await;
 
         Ok(())
     }
@@ -261,10 +284,19 @@ impl FuseTable {
     // Left a hint file which indicates the location of the latest snapshot
     #[async_backtrace::framed]
     pub async fn write_last_snapshot_hint(
+        ctx: &dyn TableContext,
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
-        last_snapshot_path: String,
+        last_snapshot_path: &str,
     ) {
+        if let Ok(false) = ctx.get_settings().get_enable_last_snapshot_location_hint() {
+            info!(
+                "Write last_snapshot_location_hint disabled. Snapshot {}",
+                last_snapshot_path
+            );
+            return;
+        }
+
         // Just try our best to write down the hint file of last snapshot
         // - will retry in the case of temporary failure
         // but

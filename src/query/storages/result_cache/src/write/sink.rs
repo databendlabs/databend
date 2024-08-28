@@ -20,8 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncMpscSink;
@@ -56,7 +56,6 @@ pub struct WriteResultCacheSink {
 impl AsyncMpscSink for WriteResultCacheSink {
     const NAME: &'static str = "WriteResultCacheSink";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, block: DataBlock) -> Result<bool> {
         if self.terminated {

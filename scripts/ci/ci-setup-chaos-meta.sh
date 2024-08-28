@@ -76,7 +76,7 @@ kubectl -n databend wait \
 
 kubectl get pods -A -o wide
 
-kubectl -n databend exec test-databend-meta-0 -- /databend-metactl --status
+kubectl -n databend exec test-databend-meta-0 -- /databend-metactl status
 
 echo "create verifier pod.."
 kubectl apply -f scripts/ci/meta-chaos/verifier.yaml

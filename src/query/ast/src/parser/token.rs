@@ -149,9 +149,6 @@ pub enum TokenKind {
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
-    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
-    VariableAccess,
-
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -239,6 +236,8 @@ pub enum TokenKind {
     LBrace,
     #[token("}")]
     RBrace,
+    #[token("$")]
+    Dollar,
     #[token("->")]
     RArrow,
     #[token("->>")]
@@ -405,6 +404,8 @@ pub enum TokenKind {
     BROTLI,
     #[token("BZ2", ignore(ascii_case))]
     BZ2,
+    #[token("BLOCK", ignore(ascii_case))]
+    BLOCK,
     #[token("CALL", ignore(ascii_case))]
     CALL,
     #[token("CASE", ignore(ascii_case))]
@@ -641,6 +642,8 @@ pub enum TokenKind {
     GENERATED,
     #[token("GEOMETRY", ignore(ascii_case))]
     GEOMETRY,
+    #[token("GEOGRAPHY", ignore(ascii_case))]
+    GEOGRAPHY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -924,6 +927,8 @@ pub enum TokenKind {
     RETURN_FAILED_ONLY,
     #[token("REVERSE", ignore(ascii_case))]
     REVERSE,
+    #[token("SAMPLE", ignore(ascii_case))]
+    SAMPLE,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
@@ -1300,6 +1305,8 @@ pub enum TokenKind {
     ROLLBACK,
     #[token("TEMPORARY", ignore(ascii_case))]
     TEMPORARY,
+    #[token("TEMP", ignore(ascii_case))]
+    TEMP,
     #[token("SECONDS", ignore(ascii_case))]
     SECONDS,
     #[token("DAYS", ignore(ascii_case))]
@@ -1372,6 +1379,7 @@ impl TokenKind {
                 | Factorial
                 | LBrace
                 | RBrace
+                | Dollar
                 | RArrow
                 | LongRArrow
                 | HashRArrow
@@ -1567,6 +1575,7 @@ impl TokenKind {
             // | TokenKind::AUTHORIZATION
             // | TokenKind::BINARY
             | TokenKind::BOTH
+            | TokenKind::BLOCK
             | TokenKind::CASE
             | TokenKind::CAST
             // | TokenKind::CHECK
@@ -1624,6 +1633,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             | TokenKind::SEMI
+            | TokenKind::SAMPLE
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN

@@ -81,6 +81,13 @@ impl ModifyTableColumnInterpreter {
             .manager
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
+        if table.is_temp() {
+            return Err(ErrorCode::StorageOther(format!(
+                "Table {} is temporary table, setting data mask policy not allowed",
+                table.name()
+            )));
+        }
+
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
         let policy = handler

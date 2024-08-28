@@ -64,14 +64,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
-                    Some(TokenKind::AST) => {
-                        let formatted_stmt =
-                            format_statement(statement.stmt.clone()).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
-                        ExplainKind::Ast(formatted_stmt)
-                    }
-                    Some(TokenKind::SYNTAX) => {
+                    Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
                         let pretty_stmt =
                             pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
                                 nom::Err::Failure(ErrorKind::Other("invalid statement"))
@@ -697,7 +690,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_table = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -709,7 +702,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(
             _,
             opt_or_replace,
-            opt_transient,
+            opt_type,
             _,
             opt_if_not_exists,
             (catalog, database, table),
@@ -722,6 +715,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            let table_type = match opt_type.map(|t| t.kind) {
+                None => TableType::Normal,
+                Some(TRANSIENT) => TableType::Transient,
+                Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
+                _ => unreachable!(),
+            };
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,
                 catalog,
@@ -735,7 +734,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     .unwrap_or_default(),
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
-                transient: opt_transient.is_some(),
+                table_type,
             }))
         },
     );
@@ -3036,9 +3035,18 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
     );
 
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let view = map(
+        rule! {
+            VIEW ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| ShareGrantObjectName::View(database, table),
+    );
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
+        | #view : "TABLE <database>.<view>"
     )(i)
 }
 
@@ -4140,6 +4148,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
     )(i)
 }
@@ -4159,6 +4168,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
     )(i)
 }

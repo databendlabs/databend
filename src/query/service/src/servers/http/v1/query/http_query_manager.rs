@@ -26,22 +26,20 @@ use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
-use tokio::task;
 
-use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
 use crate::servers::http::v1::query::HttpQueryRequest;
-use crate::sessions::Session;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq)]
 pub(crate) enum RemoveReason {
     Timeout,
     Canceled,
@@ -84,8 +82,7 @@ pub struct HttpQueryManager {
     pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
     pub(crate) removed_queries: Arc<parking_lot::Mutex<LimitedQueue<String>>>,
     #[allow(clippy::type_complexity)]
-    pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, task::JoinHandle<()>)>>>,
-    pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
+    pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
 }
 
 impl HttpQueryManager {
@@ -98,8 +95,7 @@ impl HttpQueryManager {
                 start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Millis, false),
             },
             queries: Arc::new(DashMap::new()),
-            sessions: Mutex::new(ExpiringMap::default()),
-            removed_queries: Arc::new(parking_lot::Mutex::new(LimitedQueue::new(1000))),
+            removed_queries: Arc::new(Mutex::new(LimitedQueue::new(1000))),
             txn_managers: Arc::new(Mutex::new(HashMap::new())),
         }));
 
@@ -155,10 +151,12 @@ impl HttpQueryManager {
                         _ = self_clone
                             .remove_query(
                                 &query_id_clone,
+                                &None,
                                 RemoveReason::Timeout,
                                 ErrorCode::AbortedQuery(&msg),
                             )
-                            .await;
+                            .await
+                            .ok();
                         break;
                     }
                     ExpireResult::Sleep(t) => {
@@ -176,12 +174,16 @@ impl HttpQueryManager {
     pub(crate) async fn remove_query(
         self: &Arc<Self>,
         query_id: &str,
+        client_session_id: &Option<String>,
         reason: RemoveReason,
         error: ErrorCode,
-    ) -> Option<Arc<HttpQuery>> {
+    ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         // deref at once to avoid holding DashMap shard guard for too long.
         let query = self.queries.get(query_id).map(|q| q.clone());
         if let Some(q) = &query {
+            if reason != RemoveReason::Timeout {
+                q.check_client_session_id(client_session_id)?;
+            }
             if q.mark_removed(reason) {
                 q.kill(error).await;
                 let mut queue = self.removed_queries.lock();
@@ -190,7 +192,7 @@ impl HttpQueryManager {
                 };
             }
         }
-        query
+        Ok(query)
     }
 
     #[async_backtrace::framed]
@@ -227,22 +229,5 @@ impl HttpQueryManager {
         } else {
             None
         }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<Arc<Session>> {
-        let sessions = self.sessions.lock();
-        sessions.get(session_id)
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn add_session(self: &Arc<Self>, session: Arc<Session>, timeout: Duration) {
-        let mut sessions = self.sessions.lock();
-        sessions.insert(session.get_id(), session, Some(timeout));
-    }
-
-    pub(crate) fn kill_session(self: &Arc<Self>, session_id: &str) {
-        let mut sessions = self.sessions.lock();
-        sessions.remove(session_id);
     }
 }

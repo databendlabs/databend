@@ -55,38 +55,38 @@ use url::Url;
 
 use crate::reading;
 use crate::upgrade;
-use crate::Config;
+use crate::ImportArgs;
 
-pub async fn import_data(config: &Config) -> anyhow::Result<()> {
-    let raft_dir = config.raft_dir.clone().unwrap_or_default();
+pub async fn import_data(args: &ImportArgs) -> anyhow::Result<()> {
+    let raft_dir = args.raft_dir.clone().unwrap_or_default();
 
     eprintln!();
     eprintln!("Import:");
     eprintln!("    Into Meta Dir: '{}'", raft_dir);
-    eprintln!("    Initialize Cluster with Id: {}, cluster: {{", config.id);
-    for peer in config.initial_cluster.clone() {
+    eprintln!("    Initialize Cluster with Id: {}, cluster: {{", args.id);
+    for peer in args.initial_cluster.clone() {
         eprintln!("        Peer: {}", peer);
     }
     eprintln!("    }}");
 
-    let nodes = build_nodes(config.initial_cluster.clone(), config.id)?;
+    let nodes = build_nodes(args.initial_cluster.clone(), args.id)?;
 
     init_sled_db(raft_dir.clone(), 64 * 1024 * 1024 * 1024);
 
-    clear(config)?;
-    let max_log_id = import_from_stdin_or_file(config).await?;
+    clear(args)?;
+    let max_log_id = import_from_stdin_or_file(args).await?;
 
-    if config.initial_cluster.is_empty() {
+    if args.initial_cluster.is_empty() {
         return Ok(());
     }
 
-    init_new_cluster(config, nodes, max_log_id, config.id).await?;
+    init_new_cluster(args, nodes, max_log_id).await?;
     Ok(())
 }
 
 /// Import from lines of exported data and Return the max log id that is found.
 async fn import_lines<B: BufRead + 'static>(
-    config: &Config,
+    raft_config: RaftConfig,
     lines: Lines<B>,
 ) -> anyhow::Result<Option<LogId>> {
     #[allow(clippy::useless_conversion)]
@@ -106,8 +106,8 @@ async fn import_lines<B: BufRead + 'static>(
                  please use an older version databend-metactl to import from V001"
             ));
         }
-        DataVersion::V002 => import_v002(config, it).await?,
-        DataVersion::V003 => import_v003(config, it).await?,
+        DataVersion::V002 => import_v002(raft_config, it).await?,
+        DataVersion::V003 => import_v003(raft_config, it).await?,
     };
 
     Ok(max_log_id)
@@ -119,11 +119,11 @@ async fn import_lines<B: BufRead + 'static>(
 ///
 /// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
 async fn import_v002(
-    config: &Config,
+    raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
     // v002 and v003 share the same exported data format.
-    import_v003(config, lines).await
+    import_v003(raft_config, lines).await
 }
 
 /// Import serialized lines for `DataVersion::V003`
@@ -132,11 +132,9 @@ async fn import_v002(
 ///
 /// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
 async fn import_v003(
-    config: &Config,
+    raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
-    let raft_config: RaftConfig = config.clone().into();
-
     let db = get_sled_db();
 
     let mut n = 0;
@@ -221,24 +219,26 @@ async fn import_v003(
 /// Insert them into sled db and flush.
 ///
 /// Finally upgrade the data in raft_dir to the latest version.
-async fn import_from_stdin_or_file(config: &Config) -> anyhow::Result<Option<LogId>> {
-    let restore = config.db.clone();
+async fn import_from_stdin_or_file(args: &ImportArgs) -> anyhow::Result<Option<LogId>> {
+    let restore = args.db.clone();
 
+    let raft_config: RaftConfig = args.clone().into();
     let max_log_id = if restore.is_empty() {
         eprintln!("    From: <stdin>");
         let lines = io::stdin().lines();
 
-        import_lines(config, lines).await?
+        import_lines(raft_config, lines).await?
     } else {
-        eprintln!("    From: {}", config.db);
+        eprintln!("    From: {}", args.db);
         let file = File::open(restore)?;
         let reader = BufReader::new(file);
         let lines = reader.lines();
 
-        import_lines(config, lines).await?
+        import_lines(raft_config, lines).await?
     };
 
-    upgrade::upgrade(config).await?;
+    let raft_config: RaftConfig = args.clone().into();
+    upgrade::upgrade(&raft_config).await?;
 
     Ok(max_log_id)
 }
@@ -298,16 +298,15 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
 
 // initial_cluster format: node_id=endpoint,grpc_api_addr;
 async fn init_new_cluster(
-    config: &Config,
+    args: &ImportArgs,
     nodes: BTreeMap<NodeId, Node>,
     max_log_id: Option<LogId>,
-    id: u64,
 ) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Initialize Cluster with: {:?}", nodes);
 
     let db = get_sled_db();
-    let raft_config: RaftConfig = config.clone().into();
+    let raft_config: RaftConfig = args.clone().into();
 
     let mut sto = RaftStore::open_create(&raft_config, Some(()), None).await?;
 
@@ -375,13 +374,13 @@ async fn init_new_cluster(
 
     // Reset node id
     let raft_state = RaftState::open_create(&db, &raft_config, Some(()), None).await?;
-    raft_state.set_node_id(id).await?;
+    raft_state.set_node_id(args.id).await?;
 
     Ok(())
 }
 
 /// Clear all sled data and on-disk snapshot.
-fn clear(config: &Config) -> anyhow::Result<()> {
+fn clear(args: &ImportArgs) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Clear All Sled Trees Before Import:");
     let db = get_sled_db();
@@ -394,7 +393,7 @@ fn clear(config: &Config) -> anyhow::Result<()> {
         eprintln!("    Cleared sled tree: {}", name);
     }
 
-    let df_meta_path = format!("{}/df_meta", config.raft_dir.clone().unwrap_or_default());
+    let df_meta_path = format!("{}/df_meta", args.raft_dir.clone().unwrap_or_default());
     if Path::new(&df_meta_path).exists() {
         remove_dir_all(&df_meta_path)?;
     }

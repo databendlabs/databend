@@ -17,8 +17,8 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::Duration;
 use std::time::Instant;
-use std::time::SystemTime;
 
+use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::AsKeySpace;
@@ -28,6 +28,8 @@ use databend_common_meta_sled_store::Store;
 use databend_common_meta_sled_store::TransactionSledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
@@ -46,8 +48,6 @@ use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
@@ -107,8 +107,6 @@ pub struct StateMachine {
     /// - Every other state is store in its own keyspace such as `Nodes`.
     pub sm_tree: SledTree,
 
-    blocking_config: BlockingConfig,
-
     /// subscriber of state machine data
     pub subscriber: Option<Box<dyn StateMachineSubscriber>>,
 }
@@ -135,23 +133,7 @@ impl SerializableSnapshot {
     }
 }
 
-/// Configuration of what operation to block for testing purpose.
-#[derive(Debug, Clone, Default)]
-pub struct BlockingConfig {
-    pub write_snapshot: Duration,
-    pub compact_snapshot: Duration,
-}
-
 impl StateMachine {
-    /// Return a Arc of the blocking config. It is only used for testing.
-    pub fn blocking_config_mut(&mut self) -> &mut BlockingConfig {
-        &mut self.blocking_config
-    }
-
-    pub fn blocking_config(&self) -> &BlockingConfig {
-        &self.blocking_config
-    }
-
     pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
@@ -167,7 +149,6 @@ impl StateMachine {
 
         let sm = StateMachine {
             sm_tree,
-            blocking_config: BlockingConfig::default(),
             subscriber: None,
         };
 
@@ -336,8 +317,10 @@ impl StateMachine {
                     0
                 }
                 Some(x) => {
-                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
-                    info!("apply: raft-log time: {:?}", t);
+                    info!(
+                        "apply: raft-log time: {}",
+                        Duration::from_millis(x).display_unix_timestamp()
+                    );
                     x
                 }
             },
@@ -1071,8 +1054,8 @@ impl StateMachine {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_types::KVMeta;
-    use databend_common_meta_types::SeqV;
+    use databend_common_meta_types::seq_value::KVMeta;
+    use databend_common_meta_types::seq_value::SeqV;
 
     use crate::state_machine::StateMachine;
 

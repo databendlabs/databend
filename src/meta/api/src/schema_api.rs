@@ -14,13 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
-use databend_common_meta_app::schema::CreateCatalogReply;
-use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
@@ -33,8 +37,7 @@ use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
-use databend_common_meta_app::schema::DropCatalogReply;
-use databend_common_meta_app::schema::DropCatalogReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
@@ -48,8 +51,8 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
-use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReply;
@@ -60,6 +63,7 @@ use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -87,6 +91,8 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -96,9 +102,9 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 
@@ -289,12 +295,25 @@ pub trait SchemaApi: Send + Sync {
 
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError>;
 
-    async fn create_catalog(&self, req: CreateCatalogReq)
-    -> Result<CreateCatalogReply, KVAppError>;
+    /// Create a catalog with the given name and meta.
+    /// On success, it returns `Ok(Ok(created_catalog_id))`.
+    /// If there is already a catalog with the same name, it returns `Ok(Err(existing_catalog_id))`.
+    async fn create_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+        meta: &CatalogMeta,
+    ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError>;
 
-    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError>;
+    async fn get_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+    ) -> Result<Arc<CatalogInfo>, KVAppError>;
 
-    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError>;
+    /// Drop a catalog and return the dropped id and meta
+    async fn drop_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+    ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError>;
 
     async fn list_catalogs(&self, req: ListCatalogReq)
     -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
@@ -304,4 +323,30 @@ pub trait SchemaApi: Send + Sync {
     async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError>;
 
     fn name(&self) -> String;
+
+    // dictionary
+    async fn create_dictionary(
+        &self,
+        req: CreateDictionaryReq,
+    ) -> Result<CreateDictionaryReply, KVAppError>;
+
+    async fn update_dictionary(
+        &self,
+        req: UpdateDictionaryReq,
+    ) -> Result<UpdateDictionaryReply, KVAppError>;
+
+    async fn drop_dictionary(
+        &self,
+        dict_ident: TenantDictionaryIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError>;
+
+    async fn get_dictionary(
+        &self,
+        req: TenantDictionaryIdent,
+    ) -> Result<Option<GetDictionaryReply>, KVAppError>;
+
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
 }

@@ -53,8 +53,8 @@ async fn test_parse_uri_location() -> Result<()> {
             "secure scheme by default",
             UriLocation::new(
                 "ipfs".to_string(),
+                "".to_string(),
                 "too-naive".to_string(),
-                "/".to_string(),
                 "".to_string(),
                 vec![("endpoint_url", "ipfs.filebase.io")]
                     .into_iter()
@@ -64,9 +64,9 @@ async fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
-                    root: "/ipfs/too-naive".to_string(),
+                    root: "/ipfs/".to_string(),
                 }),
-                "/".to_string(),
+                "too-naive".to_string(),
             ),
         ),
         (
@@ -124,25 +124,25 @@ async fn test_parse_uri_location() -> Result<()> {
             "ipfs-default-endpoint",
             UriLocation::new(
                 "ipfs".to_string(),
+                "".to_string(),
                 "too-simple".to_string(),
-                "/".to_string(),
                 "".to_string(),
                 BTreeMap::new(),
             ),
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: STORAGE_IPFS_DEFAULT_ENDPOINT.to_string(),
-                    root: "/ipfs/too-simple".to_string(),
+                    root: "/ipfs/".to_string(),
                 }),
-                "/".to_string(),
+                "too-simple".to_string(),
             ),
         ),
         (
             "ipfs-change-endpoint",
             UriLocation::new(
                 "ipfs".to_string(),
+                "".to_string(),
                 "too-naive".to_string(),
-                "/".to_string(),
                 "".to_string(),
                 vec![("endpoint_url", "https://ipfs.filebase.io")]
                     .into_iter()
@@ -152,9 +152,9 @@ async fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::Ipfs(StorageIpfsConfig {
                     endpoint_url: "https://ipfs.filebase.io".to_string(),
-                    root: "/ipfs/too-naive".to_string(),
+                    root: "/ipfs/".to_string(),
                 }),
-                "/".to_string(),
+                "too-naive".to_string(),
             ),
         ),
         (

@@ -1,0 +1,66 @@
+---- do_login()
+200
+['refresh_token',
+ 'refresh_token_validity_in_secs',
+ 'session_id',
+ 'session_token',
+ 'session_token_validity_in_secs',
+ 'version']
+14400
+---- do_query('select 1',)
+200
+[['1']]
+---- do_query('select 2',)
+401
+{'code': 5100, 'message': 'jwt auth not configured.'}
+---- do_query('select 3',)
+401
+{'code': 5100,
+ 'message': 'fail to decode token(base64 decode error: Invalid padding): '
+            'bend-v1-xxx'}
+---- do_query('select 4',)
+401
+{'code': 5101, 'message': 'session token expired'}
+---- do_query('select 5',)
+401
+{'code': 5103, 'message': 'session token not found'}
+---- do_renew(1,)
+200
+['refresh_token',
+ 'refresh_token_validity_in_secs',
+ 'session_token',
+ 'session_token_validity_in_secs']
+14400
+---- do_query('select 6',)
+200
+[['6']]
+---- do_query('select 7',)
+200
+[['7']]
+---- do_renew(2,)
+401
+{'code': 5100, 'message': 'jwt auth not configured.'}
+---- do_renew(3,)
+401
+{'code': 5100,
+ 'message': 'fail to decode token(base64 decode error: Invalid padding): '
+            'bend-v1-xxx'}
+---- do_renew(4,)
+401
+{'code': 5102, 'message': 'refresh token expired'}
+---- do_renew(5,)
+401
+{'code': 5104, 'message': 'refresh token not found'}
+---- do_renew(6,)
+200
+---- do_logout(0,)
+401
+{'code': 5103, 'message': 'session token not found'}
+---- do_logout(1,)
+200
+---- do_query("select 'after logout'",)
+401
+{'code': 5103, 'message': 'session token not found'}
+---- do_renew('after_logout',)
+401
+{'code': 5104, 'message': 'refresh token not found'}

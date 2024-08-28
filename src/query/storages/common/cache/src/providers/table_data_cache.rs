@@ -20,8 +20,6 @@ use bytes::Bytes;
 use crossbeam_channel::TrySendError;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,12 +29,11 @@ use log::info;
 
 use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
-use crate::CacheAccessorExt;
 use crate::LruDiskCacheBuilder;
 
 struct CacheItem {
     key: String,
-    value: Arc<Bytes>,
+    value: Bytes,
 }
 
 #[derive(Clone)]
@@ -79,7 +76,7 @@ impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
         path: &PathBuf,
         population_queue_size: u32,
-        disk_cache_bytes_size: u64,
+        disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
@@ -99,23 +96,13 @@ impl TableDataCacheBuilder {
     }
 }
 
-impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
-    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
-        let r = self.get(k);
-        if r.is_none() {
-            metrics_inc_cache_miss_count(len, DISK_TABLE_DATA_CACHE_NAME);
-        }
-        r
-    }
-}
+impl CacheAccessor for TableDataCache {
+    type V = Bytes;
 
-impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for Option<TableDataCache> {
-    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
-        self.as_ref().and_then(|cache| cache.get_with_len(k, len))
+    fn name(&self) -> &str {
+        DISK_TABLE_DATA_CACHE_NAME
     }
-}
 
-impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
@@ -129,11 +116,23 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         }
     }
 
-    fn put(&self, k: String, v: Arc<Bytes>) {
+    fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+        let Some(cached_value) = self.get(k) else {
+            metrics_inc_cache_miss_bytes(len, DISK_TABLE_DATA_CACHE_NAME);
+            return None;
+        };
+
+        Some(cached_value)
+    }
+
+    fn insert(&self, k: String, v: Bytes) -> Arc<Bytes> {
         // check if already cached
         if !self.external_cache.contains_key(&k) {
             // populate the cache is necessary
-            let msg = CacheItem { key: k, value: v };
+            let msg = CacheItem {
+                key: k,
+                value: v.clone(),
+            };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
                     metrics_inc_cache_population_pending_count(1, DISK_TABLE_DATA_CACHE_NAME);
@@ -147,6 +146,7 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
                 }
             }
         }
+        Arc::new(v)
     }
 
     fn evict(&self, k: &str) -> bool {
@@ -157,16 +157,16 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         self.external_cache.contains_key(k)
     }
 
-    fn size(&self) -> u64 {
-        self.external_cache.size()
+    fn bytes_size(&self) -> u64 {
+        self.external_cache.bytes_size()
     }
 
-    fn capacity(&self) -> u64 {
-        self.external_cache.capacity()
+    fn items_capacity(&self) -> u64 {
+        self.external_cache.items_capacity()
     }
 
-    fn set_capacity(&self, cap: u64) {
-        self.external_cache.set_capacity(cap)
+    fn bytes_capacity(&self) -> u64 {
+        self.external_cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {
@@ -179,9 +179,7 @@ struct CachePopulationWorker<T> {
     population_queue: crossbeam_channel::Receiver<CacheItem>,
 }
 
-impl<T> CachePopulationWorker<T>
-where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static
-{
+impl<T: CacheAccessor<V = Bytes> + Send + Sync + 'static> CachePopulationWorker<T> {
     fn populate(&self) {
         loop {
             match self.population_queue.recv() {
@@ -191,7 +189,7 @@ where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync +
                             continue;
                         }
                     }
-                    self.cache.put(key, value);
+                    self.cache.insert(key, value);
                     metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(_) => {
@@ -221,7 +219,7 @@ impl DiskCachePopulator {
         _num_worker_thread: usize,
     ) -> Result<Self>
     where
-        T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static,
+        T: CacheAccessor<V = Bytes> + Send + Sync + 'static,
     {
         let worker = Arc::new(CachePopulationWorker {
             cache,

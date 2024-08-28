@@ -211,6 +211,11 @@ impl Plan {
 
             Plan::SetPriority(_) => Ok("SetPriority".to_string()),
             Plan::System(_) => Ok("System".to_string()),
+
+            // Dictionary
+            Plan::CreateDictionary(_) => Ok("CreateDictionary".to_string()),
+            Plan::DropDictionary(_) => Ok("DropDictionary".to_string()),
+            Plan::ShowCreateDictionary(_) => Ok("ShowCreateDictionary".to_string()),
         }
     }
 }

@@ -14,13 +14,13 @@
 
 use anyhow::Error;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnPutRequest;

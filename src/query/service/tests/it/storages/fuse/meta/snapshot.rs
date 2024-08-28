@@ -117,3 +117,24 @@ fn test_snapshot_v1_to_v4() {
     assert_eq!(v4.snapshot_id, v1.snapshot_id);
     assert_eq!(v4.timestamp, v1.timestamp);
 }
+
+#[test]
+fn test_snapshot_reader() {
+    for data in [
+        include_bytes!("legacy_tpch_v4.mpk").as_slice(),
+        include_bytes!("c_sn_v4.mpk").as_slice(),
+    ] {
+        let sn = TableSnapshot::from_slice(data).unwrap();
+        assert!(sn.schema.num_fields() > 0);
+        assert!(!sn.segments.is_empty());
+        assert_eq!(sn.summary.col_stats.len(), sn.schema.num_fields());
+    }
+}
+
+#[test]
+fn test_seg_reader() {
+    let meta = include_bytes!("c_seg_v4.mpk");
+    let seg = databend_storages_common_table_meta::meta::SegmentInfo::from_slice(meta).unwrap();
+    assert!(!seg.summary.col_stats.is_empty());
+    assert!(!seg.blocks.is_empty());
+}

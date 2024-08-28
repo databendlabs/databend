@@ -359,7 +359,7 @@ impl QueryContextShared {
             .get_catalog(
                 tenant.tenant_name(),
                 catalog_name,
-                self.session.session_ctx.txn_mgr(),
+                self.session.session_ctx.session_state(),
             )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;
@@ -382,14 +382,14 @@ impl QueryContextShared {
         table: Arc<dyn Table>,
         catalog_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        if table.engine() == "STREAM" {
+        if table.is_stream() {
             let tenant = self.get_tenant();
             let catalog = self
                 .catalog_manager
                 .get_catalog(
                     tenant.tenant_name(),
                     catalog_name,
-                    self.session.session_ctx.txn_mgr(),
+                    self.session.session_ctx.session_state(),
                 )
                 .await?;
 

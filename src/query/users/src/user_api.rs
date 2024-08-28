@@ -16,9 +16,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
+use databend_common_management::ClientSessionMgr;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
@@ -124,7 +126,11 @@ impl UserApiProvider {
     }
 
     pub fn role_api(&self, tenant: &Tenant) -> Arc<impl RoleApi> {
-        let role_mgr = RoleMgr::create(self.client.clone(), tenant);
+        let role_mgr = RoleMgr::create(
+            self.client.clone(),
+            tenant,
+            GlobalConfig::instance().query.upgrade_to_pb,
+        );
         Arc::new(role_mgr)
     }
 
@@ -155,6 +161,10 @@ impl UserApiProvider {
 
     pub fn password_policy_api(&self, tenant: &Tenant) -> PasswordPolicyMgr {
         PasswordPolicyMgr::create(self.client.clone(), tenant)
+    }
+
+    pub fn client_session_api(&self, tenant: &Tenant) -> ClientSessionMgr {
+        ClientSessionMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

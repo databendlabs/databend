@@ -26,8 +26,11 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use databend_storages_common_txn::TxnManager;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TempTblMgr;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManager;
+use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -53,11 +56,11 @@ pub struct SessionContext {
     /// The user can switch to another available role by `SET ROLE`. If the current_role is not set,
     /// it takes the user's default role.
     current_role: RwLock<Option<RoleInfo>>,
-    /// When an user comes from an external authenticator, the session is usually mapped to a single role.
+    /// When a user comes from an external authenticator, the session is usually mapped to a single role.
     auth_role: RwLock<Option<String>>,
     /// To SET SECONDARY ROLES ALL, the session will have all the roles take effect. On the other hand,
-    /// SET SEONCDARY ROLES NONE will disable all the roles except the current role.
-    /// By default, the SECONDARY ROLES is ALL, which is None here. There're a few cases that the SECONDARY
+    /// SET SECONDARY ROLES NONE will disable all the roles except the current role.
+    /// By default, the SECONDARY ROLES is ALL, which is None here. There are a few cases that the SECONDARY
     /// ROLES is preferred to be empty, which is Some([]) here:
     /// 1. The user comes from an external authenticator, which maps to a single role.
     /// 2. The role is intentionally restricted by the sql client, to run SQLs with a restricted privileges.
@@ -73,6 +76,13 @@ pub struct SessionContext {
     variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
+    temp_tbl_mgr: Mutex<TempTblMgrRef>,
+    /// The uniq id for session from the perspective of client.
+    /// for HTTP handler, client session lives longer then the `Session` object, the id is generated in response of /v1/session/login,
+    /// and carried in session and refresh token. If token is not used, client session id is not available,
+    /// some features like temp table will be unavailable.
+    /// for mysql handler: simple use set id of `Session`
+    client_session_id: RwLock<Option<String>>,
 }
 
 impl SessionContext {
@@ -94,6 +104,8 @@ impl SessionContext {
             variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
+            client_session_id: Default::default(),
+            temp_tbl_mgr: Mutex::new(TempTblMgr::init()),
         })
     }
 
@@ -301,8 +313,16 @@ impl SessionContext {
         self.txn_mgr.lock().clone()
     }
 
+    pub fn temp_tbl_mgr(&self) -> TempTblMgrRef {
+        self.temp_tbl_mgr.lock().clone()
+    }
+
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         *self.txn_mgr.lock() = txn_mgr;
+    }
+
+    pub fn set_temp_tbl_mgr(&self, temp_tbl_mgr: TempTblMgrRef) {
+        *self.temp_tbl_mgr.lock() = temp_tbl_mgr;
     }
 
     pub fn set_variable(&self, key: String, value: Scalar) {
@@ -315,5 +335,26 @@ impl SessionContext {
 
     pub fn get_variable(&self, key: &str) -> Option<Scalar> {
         self.variables.read().get(key).cloned()
+    }
+    pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.variables.read().clone()
+    }
+    pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
+        *self.variables.write() = variables
+    }
+
+    pub fn session_state(&self) -> SessionState {
+        SessionState {
+            txn_mgr: self.txn_mgr(),
+            temp_tbl_mgr: self.temp_tbl_mgr(),
+        }
+    }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.client_session_id.read().clone()
+    }
+
+    pub fn set_client_session_id(&self, id: String) {
+        *self.client_session_id.write() = Some(id);
     }
 }

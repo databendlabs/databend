@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
-use chrono::Utc;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -233,10 +233,9 @@ impl PipelineBuilder {
                 None
             } else {
                 debug!("upsert_copied_files_info: {:?}", copied_file_tree);
-                let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
                 let req = UpsertTableCopiedFileReq {
                     file_info: copied_file_tree,
-                    expire_at: Some(expire_at),
+                    ttl: Some(Duration::from_hours(expire_hours)),
                     fail_if_duplicated: !force,
                 };
                 Some(req)

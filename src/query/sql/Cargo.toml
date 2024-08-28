@@ -27,7 +27,6 @@ cron = "0.12.0"
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
-databend-common-async-functions = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-compress = { workspace = true }
@@ -42,11 +41,13 @@ databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
+databend-common-sharing = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 educe = "0.4"
@@ -64,10 +65,12 @@ ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = "2"
 prqlc = "0.11.3"
+rand = "0.8.5"
 recursive = "0.1.1"
 regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
+sha2 = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
 url = "2.3.1"

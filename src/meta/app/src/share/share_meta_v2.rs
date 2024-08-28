@@ -141,6 +141,8 @@ pub enum ShareObject {
     Database(String, u64),
     // (table name, db_id, table id)
     Table(String, u64, u64),
+    // (view name, db_id, table id)
+    View(String, u64, u64),
 }
 
 impl Display for ShareObject {
@@ -151,6 +153,9 @@ impl Display for ShareObject {
             }
             ShareObject::Table(name, _db_id, _table_id) => {
                 write!(f, "table {}", name)
+            }
+            ShareObject::View(name, _db_id, _table_id) => {
+                write!(f, "view {}", name)
             }
         }
     }
@@ -198,6 +203,7 @@ impl ShareMetaV2 {
         object: &ShareObject,
         privileges: ShareGrantObjectPrivilege,
         grant_on: DateTime<Utc>,
+        view_reference_table: BTreeSet<u64>,
     ) -> Result<(), AppError> {
         match object {
             ShareObject::Database(name, db_id) => match privileges {
@@ -269,6 +275,25 @@ impl ShareMetaV2 {
                 }
                 _ => {}
             },
+
+            ShareObject::View(name, db_id, table_id) => {
+                if privileges == ShareGrantObjectPrivilege::Select {
+                    for table in &mut self.table {
+                        if table.table_id == *table_id {
+                            return Ok(());
+                        }
+                    }
+                    self.table.push(ShareTable {
+                        privileges: BitFlags::from(privileges),
+                        table_name: name.to_string(),
+                        db_id: *db_id,
+                        grant_on,
+                        table_id: *table_id,
+                        engine: "VIEW".to_string(),
+                        view_reference_table,
+                    })
+                }
+            }
         }
 
         Ok(())
@@ -300,6 +325,14 @@ impl ShareMetaV2 {
                     }
                 }
             }
+
+            ShareObject::View(_table_name, _db_id, table_id) => {
+                for table in &self.table {
+                    if table.table_id == *table_id {
+                        return Ok(table.has_granted_privileges(privileges));
+                    }
+                }
+            }
         }
 
         Ok(false)
@@ -309,10 +342,12 @@ impl ShareMetaV2 {
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::share::ShareId;
     use crate::share::ShareMetaV2;
 
     impl kvapi::Value for ShareMetaV2 {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = ShareId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

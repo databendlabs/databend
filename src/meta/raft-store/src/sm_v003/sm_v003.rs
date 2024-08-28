@@ -21,6 +21,8 @@ use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
@@ -29,8 +31,6 @@ use databend_common_meta_types::Entry;
 use databend_common_meta_types::EvalExpireTime;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
@@ -53,7 +53,6 @@ use crate::leveled_store::map_api::MapApiExt;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
-use crate::state_machine::sm::BlockingConfig;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineSubscriber;
 use crate::utils::prefix_right_bound;
@@ -117,8 +116,6 @@ impl<'a> SMV003KVApi<'a> {
 pub struct SMV003 {
     pub(in crate::sm_v003) levels: LeveledMap,
 
-    blocking_config: BlockingConfig,
-
     /// The expiration key since which for next clean.
     pub(in crate::sm_v003) expire_cursor: ExpireKey,
 
@@ -170,15 +167,6 @@ impl SMV003 {
 
     pub fn get_snapshot(&self) -> Option<DB> {
         self.levels.persisted().cloned()
-    }
-
-    /// Return a Arc of the blocking config. It is only used for testing.
-    pub fn blocking_config_mut(&mut self) -> &mut BlockingConfig {
-        &mut self.blocking_config
-    }
-
-    pub fn blocking_config(&self) -> &BlockingConfig {
-        &self.blocking_config
     }
 
     #[allow(dead_code)]
@@ -257,7 +245,7 @@ impl SMV003 {
     }
 
     /// List expiration index by expiration time,
-    /// upto current time(exclusive) in milli seconds.
+    /// upto current time(exclusive) in milliseconds.
     ///
     /// Only records with expire time less than current time will be returned.
     /// Expire time that equals to current time is not considered expired.
@@ -323,7 +311,7 @@ impl SMV003 {
         self.levels.acquire_compactor().await
     }
 
-    /// Replace all of the state machine data with the given one.
+    /// Replace all the state machine data with the given one.
     /// The input is a multi-level data.
     pub fn replace(&mut self, level: LeveledMap) {
         let applied = self.levels.writable_ref().last_applied_ref();
@@ -338,8 +326,8 @@ impl SMV003 {
 
         self.levels = level;
 
-        // The installed data may not cleaned up all expired keys, if it is built with an older state machine.
-        // So we need to reset the cursor then the next time applying a log it will cleanup all expired.
+        // The installed data may not clean up all expired keys, if it is built with an older state machine.
+        // So we need to reset the cursor then the next time applying a log it will clean up all expired.
         self.expire_cursor = ExpireKey::new(0, 0);
     }
 

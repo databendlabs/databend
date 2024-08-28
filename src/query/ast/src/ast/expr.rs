@@ -789,6 +789,23 @@ pub enum Literal {
     Null,
 }
 
+impl Literal {
+    pub fn as_double(&self) -> Result<f64> {
+        match self {
+            Literal::UInt64(val) => Ok(*val as f64),
+            Literal::Float64(val) => Ok(*val),
+            Literal::Decimal256 { value, scale, .. } => {
+                let div = 10_f64.powi(*scale as i32);
+                Ok(value.as_f64() / div)
+            }
+            _ => Err(ParseError(
+                None,
+                format!("Cannot convert {:?} to double", self),
+            )),
+        }
+    }
+}
+
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -923,6 +940,7 @@ pub enum TypeName {
     },
     Variant,
     Geometry,
+    Geography,
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -1041,6 +1059,9 @@ impl Display for TypeName {
             }
             TypeName::Geometry => {
                 write!(f, "GEOMETRY")?;
+            }
+            TypeName::Geography => {
+                write!(f, "GEOGRAPHY")?;
             }
             TypeName::Nullable(ty) => {
                 write!(f, "{} NULL", ty)?;

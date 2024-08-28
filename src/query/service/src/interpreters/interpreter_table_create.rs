@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
@@ -26,6 +27,7 @@ use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
@@ -42,12 +44,14 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_settings::Settings;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -72,6 +76,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 
@@ -205,21 +210,23 @@ impl CreateTableInterpreter {
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
 
-        // grant the ownership of the table to the current role.
-        let current_role = self.ctx.get_current_role();
-        if let Some(current_role) = current_role {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            // grant the ownership of the table to the current role.
+            let current_role = self.ctx.get_current_role();
+            if let Some(current_role) = current_role {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Table {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id,
+                            table_id,
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -285,9 +292,11 @@ impl CreateTableInterpreter {
         //
         // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
+        let ctx = self.ctx.clone();
         pipeline
             .main_pipeline
             .lift_on_finished(move |info: &ExecutionInfo| {
+                info!("{:?}", ctx.session_state().temp_tbl_mgr);
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
                 if info.res.is_ok() {
@@ -314,6 +323,7 @@ impl CreateTableInterpreter {
                         info!("create {} as select failed. {:?}", qualified_table_name, e);
                         e
                     })?;
+                    info!("{:?}", ctx.session_state().temp_tbl_mgr);
                 }
 
                 Ok(())
@@ -359,24 +369,26 @@ impl CreateTableInterpreter {
 
         let reply = catalog.create_table(req.clone()).await?;
 
-        // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
-        if let Some(current_role) = self.ctx.get_current_role() {
-            let tenant = self.ctx.get_tenant();
-            let db = catalog.get_database(&tenant, &self.plan.database).await?;
-            let db_id = db.get_db_info().ident.db_id;
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let tenant = self.ctx.get_tenant();
+                let db = catalog.get_database(&tenant, &self.plan.database).await?;
+                let db_id = db.get_db_info().database_id.db_id;
 
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id: reply.table_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Table {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id,
+                            table_id: reply.table_id,
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
         }
 
         // update share spec if needed
@@ -448,6 +460,8 @@ impl CreateTableInterpreter {
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
         is_valid_random_seed(&table_meta.options)?;
+        // check table level data_retention_period_in_hours
+        is_valid_data_retention_period(&table_meta.options)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
@@ -498,6 +512,7 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
@@ -516,6 +531,7 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(OPT_KEY_RANDOM_SEED);
 
     r.insert("transient");
+    r.insert(OPT_KEY_TEMP_PREFIX);
     r
 });
 
@@ -556,6 +572,32 @@ pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> 
         if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
             error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_data_retention_period(options: &BTreeMap<String, String>) -> Result<()> {
+    if let Some(value) = options.get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS) {
+        let new_duration_in_hours = value.parse::<u64>()?;
+
+        if new_duration_in_hours < DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid data_retention_period_in_hours {:?}, it should not be lesser than {:?}",
+                new_duration_in_hours, DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS
+            )));
+        }
+
+        let default_max_period_in_days = Settings::get_max_data_retention_period_in_days();
+
+        let default_max_duration = Duration::days(default_max_period_in_days as i64);
+        let new_duration = Duration::hours(new_duration_in_hours as i64);
+
+        if new_duration > default_max_duration {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "Invalid data_retention_period_in_hours {:?}, it should not be larger than {:?}",
+                new_duration, default_max_duration
+            )));
         }
     }
     Ok(())

@@ -291,16 +291,10 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024),
+                    value: UserSettingValue::UInt64(512),
                     desc: "Set the spilling buffer threshold (MB) for each join processor.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("disable_merge_into_join_reorder", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Disable merge into join reorder optimization.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -356,6 +350,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enforce_shuffle_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce shuffle join.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
@@ -379,6 +379,12 @@ impl DefaultSettings {
                     desc: "Injects a custom 'sandbox_tenant' into this session. This is only for testing purposes and will take effect only when 'internal_enable_sandbox_tenant' is turned on.",
                     mode: SettingMode::Both,
                     range: None,
+                }),
+                ("enable_planner_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables caching logic plan from same query.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -430,7 +436,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(60),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -577,6 +583,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("auto_compaction_segments_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "This setting is deprecated",
@@ -660,6 +672,12 @@ impl DefaultSettings {
                     desc: "Request batch rows to external server",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("external_server_request_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(48),
+                    desc: "Request max retry times to external server",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -754,7 +772,7 @@ impl DefaultSettings {
                 // this setting will be removed when geometry type stable.
                 ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Create and alter table with geometry type",
+                    desc: "Create and alter table with geometry/geography type",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -813,9 +831,21 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_last_snapshot_location_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables writing last_snapshot_location_hint object",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("format_null_as_str", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Format NULL as str in query api response",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("random_function_seed", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Seed for random function",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 })
@@ -841,7 +871,7 @@ impl DefaultSettings {
     /// The maximum number of days that data can be retained.
     /// The max is read from the global config:data_retention_time_in_days_max
     /// If the global config is not set, the default value is 90 days.
-    fn data_retention_time_in_days_max() -> u64 {
+    pub(crate) fn data_retention_time_in_days_max() -> u64 {
         match GlobalConfig::try_get_instance() {
             None => 90,
             Some(conf) => conf.query.data_retention_time_in_days_max,

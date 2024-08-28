@@ -16,10 +16,11 @@ mod catalog_context;
 mod database_catalog;
 mod immutable_catalog;
 mod mutable_catalog;
-pub mod table_id_ranges;
+mod session_catalog;
 pub mod table_memory_meta;
 
 pub use catalog_context::CatalogContext;
 pub use database_catalog::DatabaseCatalog;
 pub use immutable_catalog::ImmutableCatalog;
 pub use mutable_catalog::MutableCatalog;
+pub use session_catalog::SessionCatalog;

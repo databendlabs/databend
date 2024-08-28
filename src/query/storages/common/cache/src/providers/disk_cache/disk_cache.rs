@@ -24,8 +24,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_cache::Cache;
-use databend_common_cache::DefaultHashBuilder;
-use databend_common_cache::FileSize;
+use databend_common_cache::LruCache;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
 use log::error;
@@ -35,17 +34,16 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 
+use crate::CacheValue;
 use crate::DiskCacheKey;
 
-pub struct DiskCache<C> {
-    cache: C,
+pub struct DiskCache {
+    cache: LruCache<String, CacheValue<FileSize>>,
     root: PathBuf,
     sync_data: bool,
 }
 
-impl<C> DiskCache<C>
-where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
-{
+impl DiskCache {
     /// Create an `DiskCache` with `hashbrown::hash_map::DefaultHashBuilder` that stores files in `path`,
     /// limited to `size` bytes.
     ///
@@ -57,7 +55,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     /// expects to have sole maintenance of the contents.
     pub fn new<T>(
         path: T,
-        size: u64,
+        size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> self::io_result::Result<Self>
@@ -65,7 +63,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         PathBuf: From<T>,
     {
         DiskCache {
-            cache: C::with_meter_and_hasher(size, FileSize, DefaultHashBuilder::default()),
+            cache: LruCache::<String, CacheValue<FileSize>>::with_bytes_capacity(size),
             root: PathBuf::from(path),
             sync_data,
         }
@@ -73,14 +71,12 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 }
 
-type CacheHolder<C> = Arc<RwLock<Option<DiskCache<C>>>>;
+type CacheHolder = Arc<RwLock<Option<DiskCache>>>;
 
-impl<C> DiskCache<C>
-where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
-{
+impl DiskCache {
     /// Return the current size of all the files in the cache.
     pub fn size(&self) -> u64 {
-        self.cache.size()
+        self.cache.bytes_size()
     }
 
     /// Return the count of entries in the cache.
@@ -93,20 +89,12 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 
     /// Return the maximum size of the cache.
-    pub fn capacity(&self) -> u64 {
-        self.cache.capacity()
+    pub fn items_capacity(&self) -> u64 {
+        self.cache.items_capacity()
     }
 
-    pub fn set_capacity(&mut self, capacity: u64) {
-        if capacity <= self.cache.capacity() {
-            info!(
-                "shrinking disk cache capacity: current {}, new capacity {}, ignored",
-                capacity,
-                self.cache.capacity()
-            );
-        } else {
-            self.cache.set_capacity(capacity)
-        }
+    pub fn bytes_capacity(&self) -> u64 {
+        self.cache.bytes_capacity()
     }
 
     /// Return the path in which the cache is stored.
@@ -123,12 +111,11 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     fn parallel_scan<F>(
         cache_root: &Path,
         working_path: &PathBuf,
-        cache_holder: &CacheHolder<C>,
+        cache_holder: &CacheHolder,
         counter: &AtomicUsize,
         process_entry: F,
     ) where
-        C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
-        F: Fn(&Path, &fs::DirEntry, &CacheHolder<C>, &AtomicUsize) + Clone + Send + Sync + 'static,
+        F: Fn(&Path, &fs::DirEntry, &CacheHolder, &AtomicUsize) + Clone + Send + Sync + 'static,
     {
         if let Ok(entries) = fs::read_dir(working_path) {
             let process_entry_clone = process_entry.clone();
@@ -179,7 +166,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 
     /// Reload cache keys from the cache directory.
-    fn fuzzy_restart(root: &PathBuf, me: CacheHolder<C>) -> io_result::Result<CacheHolder<C>> {
+    fn fuzzy_restart(root: &PathBuf, me: CacheHolder) -> io_result::Result<CacheHolder> {
         let counter = AtomicUsize::new(0);
         Self::parallel_scan(
             root,
@@ -199,7 +186,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
                                 disk_cache_opt
                                     .expect("unreachable, disk cache should be there")
                                     .cache
-                                    .put(cache_key, size);
+                                    .insert(cache_key, Into::into(FileSize(size)));
                             }
                             let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
                             if count % 1000 == 0 {
@@ -275,7 +262,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
-        size <= self.cache.capacity()
+        size <= self.cache.bytes_capacity()
     }
 
     fn cache_key(&self, key: &str) -> DiskCacheKey {
@@ -295,7 +282,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         }
 
         // check eviction
-        while self.cache.size() + bytes_len > self.cache.capacity() {
+        while self.cache.bytes_size() + bytes_len > self.cache.bytes_capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
                 let cached_item_path = self.abs_path_of_cache_key(&DiskCacheKey(rel_path));
                 fs::remove_file(&cached_item_path).unwrap_or_else(|e| {
@@ -306,7 +293,8 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
                 });
             }
         }
-        debug_assert!(self.cache.size() <= self.cache.capacity());
+
+        debug_assert!(self.cache.bytes_size() <= self.cache.bytes_capacity());
 
         let cache_key = self.cache_key(key.as_ref());
         let path = self.abs_path_of_cache_key(&cache_key);
@@ -319,7 +307,8 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
             bufs.push(IoSlice::new(slick));
         }
         f.write_all_vectored(&mut bufs)?;
-        self.cache.put(cache_key.0, bytes_len);
+        self.cache
+            .insert(cache_key.0, Into::into(FileSize(bytes_len)));
         if self.sync_data {
             f.sync_data()?;
         }
@@ -424,3 +413,5 @@ pub mod io_result {
 }
 
 use io_result::*;
+
+use crate::caches::FileSize;

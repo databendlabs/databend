@@ -40,6 +40,8 @@ pub struct HttpQueryContext {
     pub http_method: String,
     pub uri: String,
     pub client_host: Option<String>,
+    pub databend_token: Option<String>,
+    pub client_session_id: Option<String>,
 }
 
 impl HttpQueryContext {

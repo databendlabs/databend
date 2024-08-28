@@ -12,209 +12,121 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FunctionCall;
-use databend_common_ast::ast::Window;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
-use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use derive_visitor::Drive;
-use derive_visitor::Visitor;
 
+use crate::binder::select::SelectList;
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::ExprContext;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
-use crate::plans::FunctionCall as ScalarExprFunctionCall;
+use crate::plans::FunctionCall;
 use crate::plans::ProjectSet;
-use crate::plans::SrfItem;
+use crate::plans::ScalarItem;
+use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::Binder;
-use crate::ScalarBinder;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-#[derive(Visitor)]
-#[visitor(FunctionCall(enter), Window)]
-pub struct SrfCollector {
-    srfs: Vec<Expr>,
-    in_window: bool,
+struct SetReturningRewriter<'a> {
+    bind_context: &'a mut BindContext,
+    metadata: MetadataRef,
 }
 
-impl SrfCollector {
-    fn enter_function_call(&mut self, func: &FunctionCall) {
-        // TODO(andylokandy/leisky): SRF in window function is not supported yet.
-        // This is a workaround to skip SRF in window function.
-        if self.in_window {
-            return;
-        }
-
-        let FunctionCall {
-            distinct,
-            name,
-            args,
-            params,
-            window,
-            lambda,
-        } = func;
-
-        if BUILTIN_FUNCTIONS
-            .get_property(&name.name)
-            .map(|property| property.kind == FunctionKind::SRF)
-            .unwrap_or(false)
-        {
-            // Collect the srf
-            self.srfs.push(Expr::FunctionCall {
-                span: name.span,
-                func: FunctionCall {
-                    distinct: *distinct,
-                    name: name.clone(),
-                    args: args.to_vec(),
-                    params: params.to_vec(),
-                    window: window.clone(),
-                    lambda: lambda.clone(),
-                },
-            });
+impl<'a> SetReturningRewriter<'a> {
+    fn new(bind_context: &'a mut BindContext, metadata: MetadataRef) -> Self {
+        Self {
+            bind_context,
+            metadata,
         }
     }
 
-    fn enter_window(&mut self, _window: &Window) {
-        self.in_window = true;
-    }
+    /// Replace the set returning function with a BoundColumnRef.
+    fn replace_set_returning_function(&mut self, func: &FunctionCall) -> Result<ScalarExpr> {
+        let srf_func = ScalarExpr::FunctionCall(func.clone());
+        let data_type = srf_func.data_type()?;
 
-    fn exit_window(&mut self, _window: &Window) {
-        self.in_window = false;
+        let column_index = self.metadata.write().add_derived_column(
+            func.func_name.clone(),
+            data_type.clone(),
+            Some(srf_func.clone()),
+        );
+        let column = ColumnBindingBuilder::new(
+            func.func_name.clone(),
+            column_index,
+            Box::new(data_type),
+            Visibility::InVisible,
+        )
+        .build();
+
+        // Add the srf to bind context, build ProjectSet plan later.
+        self.bind_context.srfs.push(ScalarItem {
+            index: column_index,
+            scalar: srf_func,
+        });
+
+        Ok(BoundColumnRef {
+            span: func.span,
+            column,
+        }
+        .into())
     }
 }
 
-impl SrfCollector {
-    pub fn new() -> Self {
-        SrfCollector {
-            srfs: vec![],
-            in_window: false,
+impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if let ScalarExpr::FunctionCall(func) = expr {
+            if BUILTIN_FUNCTIONS
+                .get_property(&func.func_name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(false)
+            {
+                *expr = self.replace_set_returning_function(func)?;
+                return Ok(());
+            }
         }
-    }
 
-    pub fn visit(&mut self, expr: &Expr) {
-        expr.drive(self);
-    }
-
-    pub fn into_srfs(self) -> Vec<Expr> {
-        self.srfs
+        walk_expr_mut(self, expr)
     }
 }
 
 impl Binder {
-    pub fn bind_project_set(
+    /// Analyze project sets in select clause, this will rewrite project set functions.
+    /// See [`SetReturningRewriter`] for more details.
+    pub(crate) fn analyze_project_set_select(
         &mut self,
         bind_context: &mut BindContext,
-        srfs: &[Expr],
-        s_expr: SExpr,
+        select_list: &mut SelectList,
+    ) -> Result<()> {
+        let mut rewriter = SetReturningRewriter::new(bind_context, self.metadata.clone());
+        for item in select_list.items.iter_mut() {
+            rewriter.visit(&mut item.scalar)?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn bind_project_set(
+        &mut self,
+        bind_context: &mut BindContext,
+        child: SExpr,
     ) -> Result<SExpr> {
-        if srfs.is_empty() {
-            return Ok(s_expr);
+        if bind_context.srfs.is_empty() {
+            return Ok(child);
         }
 
-        let mut items = Vec::with_capacity(srfs.len());
-        for srf in srfs {
-            let (name, srf_scalar) = match srf {
-                Expr::FunctionCall {
-                    func: FunctionCall { name, args, .. },
-                    ..
-                } => {
-                    let name = normalize_identifier(name, &self.name_resolution_ctx).to_string();
+        // Build a ProjectSet Plan.
+        let srfs = mem::take(&mut bind_context.srfs);
+        let project_set = ProjectSet { srfs };
 
-                    let original_context = bind_context.expr_context.clone();
-                    bind_context.set_expr_context(ExprContext::InSetReturningFunction);
+        let new_expr = SExpr::create_unary(Arc::new(project_set.into()), Arc::new(child));
 
-                    let mut arguments = Vec::with_capacity(args.len());
-                    for arg in args.iter() {
-                        let mut scalar_binder = ScalarBinder::new(
-                            bind_context,
-                            self.ctx.clone(),
-                            &self.name_resolution_ctx,
-                            self.metadata.clone(),
-                            &[],
-                            self.m_cte_bound_ctx.clone(),
-                            self.ctes_map.clone(),
-                        );
-                        let (scalar, _) = scalar_binder.bind(arg)?;
-                        arguments.push(scalar);
-                    }
-
-                    // Restore the original context
-                    bind_context.set_expr_context(original_context);
-
-                    let scalar = ScalarExpr::FunctionCall(ScalarExprFunctionCall {
-                        span: srf.span(),
-                        func_name: name.clone(),
-                        params: vec![],
-                        arguments,
-                    });
-
-                    (name, scalar)
-                }
-
-                // Should have been checked by SrfCollector
-                _ => unreachable!(),
-            };
-
-            let srf_expr = srf_scalar.as_expr()?;
-            let return_types = srf_expr.data_type().as_tuple().unwrap();
-
-            // Add result column to metadata
-            let column_index = self.metadata.write().add_derived_column(
-                name.clone(),
-                srf_expr.data_type().clone(),
-                Some(srf_scalar.clone()),
-            );
-            let column = ColumnBindingBuilder::new(
-                name.clone(),
-                column_index,
-                Box::new(srf_expr.data_type().clone()),
-                Visibility::InVisible,
-            )
-            .build();
-
-            let item = SrfItem {
-                scalar: srf_scalar,
-                index: column_index,
-            };
-            items.push(item);
-
-            // If tuple has more than one field, return the tuple column,
-            // otherwise, extract the tuple field to top level column.
-            let result_column = if return_types.len() > 1 {
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: srf.span(),
-                    column,
-                })
-            } else {
-                ScalarExpr::FunctionCall(ScalarExprFunctionCall {
-                    span: srf.span(),
-                    func_name: "get".to_string(),
-                    params: vec![Scalar::Number(NumberScalar::Int64(1))],
-                    arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: srf.span(),
-                        column,
-                    })],
-                })
-            };
-
-            // Add the srf to bind context, so we can replace the srfs later.
-            bind_context.srfs.insert(srf.to_string(), result_column);
-        }
-
-        let project_set = ProjectSet { srfs: items };
-
-        Ok(SExpr::create_unary(
-            Arc::new(project_set.into()),
-            Arc::new(s_expr),
-        ))
+        Ok(new_expr)
     }
 }

@@ -19,6 +19,10 @@ use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -39,14 +43,14 @@ use databend_common_sql::ColumnSet;
 
 /// Expand the input [`DataBlock`] with set-returning functions.
 pub struct TransformSRF {
-    func_ctx: FunctionContext,
+    input: Option<DataBlock>,
     projections: ColumnSet,
+    func_ctx: FunctionContext,
     srf_exprs: Vec<Expr>,
-    /// The output number of rows for each input row.
-    num_rows: VecDeque<usize>,
     /// The output of each set-returning function for each input row.
     srf_results: Vec<VecDeque<(Value<AnyType>, usize)>>,
-    input: Option<DataBlock>,
+    /// The output number of rows for each input row.
+    num_rows: VecDeque<usize>,
     max_block_size: usize,
 }
 
@@ -61,12 +65,12 @@ impl TransformSRF {
     ) -> Box<dyn Processor> {
         let srf_results = vec![VecDeque::new(); srf_exprs.len()];
         BlockingTransformer::create(input, output, TransformSRF {
-            func_ctx,
-            projections,
-            srf_exprs,
-            num_rows: VecDeque::new(),
-            srf_results,
             input: None,
+            projections,
+            func_ctx,
+            srf_exprs,
+            srf_results,
+            num_rows: VecDeque::new(),
             max_block_size,
         })
     }
@@ -92,12 +96,9 @@ impl BlockingTransform for TransformSRF {
         for (i, expr) in self.srf_exprs.iter().enumerate() {
             let res = eval.run_srf(expr, &mut max_nums_per_row)?;
             debug_assert_eq!(res.len(), input_num_rows);
-            debug_assert!(self.srf_results[i].is_empty());
             self.srf_results[i] = VecDeque::from(res);
         }
-
         debug_assert_eq!(max_nums_per_row.len(), input_num_rows);
-        debug_assert!(self.num_rows.is_empty());
         debug_assert!(self.input.is_none());
 
         self.num_rows = VecDeque::from(max_nums_per_row);
@@ -110,18 +111,17 @@ impl BlockingTransform for TransformSRF {
         if self.input.is_none() {
             return Ok(None);
         }
+
         let input = self.input.take().unwrap();
 
         let mut result_size = 0;
         let mut used = 0;
-
         for num_rows in self.num_rows.iter() {
-            result_size += num_rows;
-            used += 1;
-            // TBD: if we need to limit `result_size` under `max_block_size`.
-            if result_size >= self.max_block_size {
+            if result_size + num_rows > self.max_block_size && used > 0 {
                 break;
             }
+            used += 1;
+            result_size += num_rows;
         }
 
         // TODO: if there is only one row can be used, we can use `Value::Scalar` directly.
@@ -150,38 +150,31 @@ impl BlockingTransform for TransformSRF {
         for (srf_expr, srf_results) in self.srf_exprs.iter().zip(self.srf_results.iter_mut()) {
             if let Expr::FunctionCall { function, .. } = srf_expr {
                 match function.signature.name.as_str() {
-                    "json_path_query" => {
+                    "json_path_query" | "json_array_elements" | "jq" => {
+                        // The function return type:
+                        // DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])
                         let mut builder: NullableColumnBuilder<VariantType> =
                             NullableColumnBuilder::with_capacity(result_size, &[]);
+
                         for (i, (row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
                         {
                             if let Value::Column(Column::Tuple(fields)) = row_result {
-                                debug_assert!(fields.len() == 1);
-                                match &fields[0] {
-                                    Column::Nullable(box nullable_column) => {
-                                        match &nullable_column.column {
-                                            Column::Variant(string_column) => {
-                                                for idx in 0..repeat_times {
-                                                    builder.push(unsafe {
-                                                        string_column.index_unchecked(idx)
-                                                    });
-                                                }
-                                                for _ in 0..(self.num_rows[i] - repeat_times) {
-                                                    builder.push_null();
-                                                }
-                                            }
-                                            _ => unreachable!(
-                                                "json_path_query's return type is: `DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])`"
-                                            ),
-                                        }
+                                for (field_index, field) in fields.into_iter().enumerate() {
+                                    if field_index == 0 {
+                                        push_variant_column(
+                                            field,
+                                            &mut builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        );
+                                    } else {
+                                        unreachable!();
                                     }
-                                    _ => unreachable!(
-                                        "json_path_query's return type is: `DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])`"
-                                    ),
-                                };
+                                }
                             }
                         }
+
                         let column = builder.build().upcast();
                         let block_entry = BlockEntry::new(
                             DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
@@ -194,7 +187,166 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
-                    _ => {
+                    "json_each" => {
+                        // The function return type:
+                        // DataType::Tuple(vec![
+                        //   DataType::Nullable(Box::new(DataType::String)),
+                        //   DataType::Nullable(Box::new(DataType::Variant)),
+                        // ]).
+                        let mut key_builder =
+                            NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        let mut value_builder =
+                            NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+
+                        for (i, (row_result, repeat_times)) in
+                            srf_results.drain(0..used).enumerate()
+                        {
+                            if let Value::Column(Column::Tuple(fields)) = row_result {
+                                for (field_index, field) in fields.into_iter().enumerate() {
+                                    if field_index == 0 {
+                                        push_string_column(
+                                            field,
+                                            &mut key_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        );
+                                    } else {
+                                        push_variant_column(
+                                            field,
+                                            &mut value_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
+                        let block_entry = BlockEntry::new(
+                            DataType::Tuple(vec![
+                                DataType::Nullable(Box::new(DataType::String)),
+                                DataType::Nullable(Box::new(DataType::Variant)),
+                            ]),
+                            Value::Column(Column::Tuple(vec![
+                                Column::Nullable(Box::new(key_builder.build().upcast())),
+                                Column::Nullable(Box::new(value_builder.build().upcast())),
+                            ])),
+                        );
+                        if block_is_empty {
+                            result = DataBlock::new(vec![block_entry], result_size);
+                            block_is_empty = false;
+                        } else {
+                            result.add_column(block_entry);
+                        }
+                    }
+                    "flatten" => {
+                        // The function return type:
+                        // DataType::Tuple(vec![
+                        //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                        //   DataType::Nullable(Box::new(DataType::String)),
+                        //   DataType::Nullable(Box::new(DataType::String)),
+                        //   DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                        //   DataType::Nullable(Box::new(DataType::Variant)),
+                        //   DataType::Nullable(Box::new(DataType::Variant)),
+                        // ]).
+                        let mut seq_builder =
+                            NullableColumnBuilder::<NumberType<u64>>::with_capacity(
+                                result_size,
+                                &[],
+                            );
+                        let mut key_builder =
+                            NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        let mut path_builder =
+                            NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        let mut index_builder =
+                            NullableColumnBuilder::<NumberType<u64>>::with_capacity(
+                                result_size,
+                                &[],
+                            );
+                        let mut value_builder =
+                            NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+                        let mut this_builder =
+                            NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+
+                        for (i, (row_result, repeat_times)) in
+                            srf_results.drain(0..used).enumerate()
+                        {
+                            if let Value::Column(Column::Tuple(fields)) = row_result {
+                                debug_assert!(fields.len() == 6);
+                                for (field_index, field) in fields.into_iter().enumerate() {
+                                    match field_index {
+                                        0 => push_number_column(
+                                            field,
+                                            &mut seq_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        1 => push_string_column(
+                                            field,
+                                            &mut key_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        2 => push_string_column(
+                                            field,
+                                            &mut path_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        3 => push_number_column(
+                                            field,
+                                            &mut index_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        4 => push_variant_column(
+                                            field,
+                                            &mut value_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        5 => push_variant_column(
+                                            field,
+                                            &mut this_builder,
+                                            self.num_rows[i],
+                                            repeat_times,
+                                        ),
+                                        _ => unreachable!(),
+                                    }
+                                }
+                            }
+                        }
+
+                        let block_entry = BlockEntry::new(
+                            DataType::Tuple(vec![
+                                DataType::Nullable(Box::new(DataType::Number(
+                                    NumberDataType::UInt64,
+                                ))),
+                                DataType::Nullable(Box::new(DataType::String)),
+                                DataType::Nullable(Box::new(DataType::String)),
+                                DataType::Nullable(Box::new(DataType::Number(
+                                    NumberDataType::UInt64,
+                                ))),
+                                DataType::Nullable(Box::new(DataType::Variant)),
+                                DataType::Nullable(Box::new(DataType::Variant)),
+                            ]),
+                            Value::Column(Column::Tuple(vec![
+                                Column::Nullable(Box::new(seq_builder.build().upcast())),
+                                Column::Nullable(Box::new(key_builder.build().upcast())),
+                                Column::Nullable(Box::new(path_builder.build().upcast())),
+                                Column::Nullable(Box::new(index_builder.build().upcast())),
+                                Column::Nullable(Box::new(value_builder.build().upcast())),
+                                Column::Nullable(Box::new(this_builder.build().upcast())),
+                            ])),
+                        );
+                        if block_is_empty {
+                            result = DataBlock::new(vec![block_entry], result_size);
+                            block_is_empty = false;
+                        } else {
+                            result.add_column(block_entry);
+                        }
+                    }
+                    "unnest" => {
                         let mut result_data_blocks = Vec::with_capacity(used);
                         for (i, (mut row_result, repeat_times)) in
                             srf_results.drain(0..used).enumerate()
@@ -264,9 +416,13 @@ impl BlockingTransform for TransformSRF {
                             result.add_column(block_entry);
                         }
                     }
+                    _ => todo!(
+                        "unsupported set-returning function: {}",
+                        function.signature.name
+                    ),
                 }
             } else {
-                unreachable!("expr is not a set returning function: {srf_expr}");
+                unreachable!("expr is not a set-returning function: {srf_expr}");
             }
         }
 
@@ -283,5 +439,107 @@ impl BlockingTransform for TransformSRF {
         }
 
         Ok(Some(result))
+    }
+}
+
+pub fn push_string_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<StringType>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::String(string_column) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.unset_bits() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { string_column.index_unchecked(idx) });
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            } else if validity.unset_bits() == validity.len() {
+                builder.push_repeat_null(num_rows);
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { string_column.index_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_variant_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<VariantType>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Variant(variant_column) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.unset_bits() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { variant_column.index_unchecked(idx) });
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            } else if validity.unset_bits() == validity.len() {
+                builder.push_repeat_null(num_rows);
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { variant_column.index_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_number_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<NumberType<u64>>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Number(NumberColumn::UInt64(number_column)) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.unset_bits() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { *number_column.get_unchecked(idx) });
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            } else if validity.unset_bits() == validity.len() {
+                builder.push_repeat_null(num_rows);
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { *number_column.get_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
     }
 }

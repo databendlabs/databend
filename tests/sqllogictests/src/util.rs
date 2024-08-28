@@ -42,6 +42,7 @@ pub struct HttpSessionConf {
     pub last_server_info: Option<ServerInfo>,
     #[serde(default)]
     pub last_query_ids: Vec<String>,
+    pub internal: Option<String>,
 }
 
 pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {

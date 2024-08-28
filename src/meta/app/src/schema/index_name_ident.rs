@@ -41,6 +41,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::IndexId;
+    use crate::schema::IndexNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -52,8 +53,9 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for IndexId {
+        type KeyType = IndexNameIdent;
         /// IndexId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }

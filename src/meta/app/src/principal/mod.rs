@@ -37,6 +37,8 @@ mod user_stage;
 
 mod ownership_object;
 
+pub mod client_session;
+pub mod client_session_ident;
 pub mod connection_ident;
 pub mod network_policy_ident;
 pub mod password_policy_ident;
@@ -46,6 +48,8 @@ pub mod tenant_user_ident;
 pub mod user_defined_file_format_ident;
 pub mod user_setting_ident;
 pub mod user_stage_ident;
+pub mod user_token;
+pub mod user_token_ident;
 
 pub use connection::*;
 pub use file_format::*;

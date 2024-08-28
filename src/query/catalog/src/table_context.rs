@@ -58,10 +58,11 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -341,6 +342,7 @@ pub trait TableContext: Send + Sync {
     fn set_variable(&self, key: String, value: Scalar);
     fn unset_variable(&self, key: &str);
     fn get_variable(&self, key: &str) -> Option<Scalar>;
+    fn get_all_variables(&self) -> HashMap<String, Scalar>;
 
     async fn load_datalake_schema(
         &self,
@@ -366,4 +368,10 @@ pub trait TableContext: Send + Sync {
         tbl_name: &str,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
+
+    fn get_session_id(&self) -> String;
+
+    fn session_state(&self) -> SessionState;
+
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
 }

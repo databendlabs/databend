@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,7 +26,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::AsyncRetry;
 use databend_common_pipeline_transforms::processors::AsyncRetryWrapper;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
@@ -35,22 +36,34 @@ use crate::sessions::QueryContext;
 
 pub struct TransformUdfServer {
     ctx: Arc<QueryContext>,
-    func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
+    connect_timeout: u64,
+    request_timeout: u64,
+    request_bacth_rows: u64,
+    retry_times: u64,
 }
 
 impl TransformUdfServer {
     pub fn new_retry_wrapper(
         ctx: Arc<QueryContext>,
-        func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
-    ) -> AsyncRetryWrapper<Self> {
+    ) -> Result<AsyncRetryWrapper<Self>> {
+        let settings = ctx.get_settings();
+        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
+        let request_timeout = settings.get_external_server_request_timeout_secs()?;
+        let request_bacth_rows = settings.get_external_server_request_batch_rows()?;
+        let retry_times = settings.get_external_server_request_retry_times()?;
+
         let s = Self {
             ctx,
-            func_ctx,
             funcs,
+
+            connect_timeout,
+            request_timeout,
+            request_bacth_rows,
+            retry_times,
         };
-        AsyncRetryWrapper::create(s)
+        Ok(AsyncRetryWrapper::create(s))
     }
 }
 
@@ -61,9 +74,13 @@ impl AsyncRetry for TransformUdfServer {
 
     fn retry_strategy(&self) -> RetryStrategy {
         RetryStrategy {
-            retry_times: 64,
+            retry_times: self.retry_times as usize,
             retry_sleep_duration: Some(tokio::time::Duration::from_millis(500)),
         }
+    }
+
+    fn retry_hook(&self) {
+        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRetryCount, 1);
     }
 }
 
@@ -73,9 +90,6 @@ impl AsyncTransform for TransformUdfServer {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
-        let request_timeout = self.func_ctx.external_server_request_timeout_secs;
-        let request_bacth_rows = self.func_ctx.external_server_request_batch_rows;
         for func in &self.funcs {
             let server_addr = func.udf_type.as_server().unwrap();
             // construct input record_batch
@@ -110,9 +124,9 @@ impl AsyncTransform for TransformUdfServer {
 
             let mut client = UDFFlightClient::connect(
                 server_addr,
-                connect_timeout,
-                request_timeout,
-                request_bacth_rows,
+                self.connect_timeout,
+                self.request_timeout,
+                self.request_bacth_rows,
             )
             .await?
             .with_tenant(self.ctx.get_tenant().tenant_name())?

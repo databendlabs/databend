@@ -46,11 +46,11 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::Span;
-use databend_common_async_functions::resolve_async_function;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -93,6 +93,8 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -122,6 +124,8 @@ use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
+use crate::plans::AsyncFunctionArgument;
+use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -229,18 +233,6 @@ impl<'a> TypeChecker<'a> {
 
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
-            if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-                return Err(ErrorCode::SemanticError(
-                    "set-returning functions are only allowed in SELECT clause",
-                )
-                .set_span(expr.span()));
-            }
-            // Found a SRF, return it directly.
-            // See `Binder::bind_project_set` for more details.
-            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
-        }
-
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
@@ -750,6 +742,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(ASYNC_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
@@ -799,40 +792,6 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
-
-                // Check assumptions if it is a set returning function
-                if BUILTIN_FUNCTIONS
-                    .get_property(func_name)
-                    .map(|property| property.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InSetReturningFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions cannot be nested".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
-                    if self.in_window_function {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions cannot be used in window spec",
-                        )
-                        .set_span(*span));
-                    }
-
-                    if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
-                        return Err(ErrorCode::SemanticError(
-                            "set-returning functions can only be used in SELECT".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-
-                    // Should have been handled with `BindContext::srfs`
-                    return Err(ErrorCode::Internal("Logical error, there is a bug!"));
-                }
 
                 if GENERAL_WINDOW_FUNCTIONS.contains(&func_name) {
                     // general window function
@@ -914,17 +873,23 @@ impl<'a> TypeChecker<'a> {
                         "score" => self.resolve_score_search_function(*span, func_name, &args)?,
                         "match" => self.resolve_match_search_function(*span, func_name, &args)?,
                         "query" => self.resolve_query_search_function(*span, func_name, &args)?,
-                        _ => unreachable!(),
+                        _ => {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "cannot find search function {}",
+                                func_name
+                            ))
+                            .set_span(*span));
+                        }
                     }
                 } else if ASYNC_FUNCTIONS.contains(&func_name) {
-                    let catalog = self.ctx.get_default_catalog()?;
-                    let tenant = self.ctx.get_tenant();
-                    let async_func = databend_common_base::runtime::block_on(
-                        resolve_async_function(*span, tenant, catalog, func_name, &args),
-                    )?;
-
-                    let data_type = async_func.return_type.as_ref().clone();
-                    Box::new((async_func.into(), data_type))
+                    self.resolve_async_function(*span, func_name, &args)?
+                } else if BUILTIN_FUNCTIONS
+                    .get_property(func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    // Set returning function
+                    self.resolve_set_returning_function(*span, func_name, &args)?
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -939,7 +904,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for scalar function, expected constant",
                                 ))
-                                    .set_span(*span)
+                                .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -1386,6 +1351,13 @@ impl<'a> TypeChecker<'a> {
                         start_bound: WindowFuncFrameBound::CurrentRow,
                         end_bound: WindowFuncFrameBound::CurrentRow,
                     }
+                });
+            }
+            WindowFuncType::CumeDist => {
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Range,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
             _ => {}
@@ -2100,10 +2072,10 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        // TODO: support options field
-        if args.len() != 2 {
+        // The optional third argument is additional configuration option.
+        if args.len() != 2 && args.len() != 3 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 2 arguments, but got {}",
+                "invalid arguments for search function, {} expects 2 or 3 arguments, but got {}",
                 func_name,
                 args.len()
             ))
@@ -2112,6 +2084,7 @@ impl<'a> TypeChecker<'a> {
 
         let field_arg = args[0];
         let query_arg = args[1];
+        let option_arg = if args.len() == 3 { Some(args[2]) } else { None };
 
         let box (field_scalar, _) = self.resolve(field_arg)?;
         let column_refs = match field_scalar {
@@ -2126,7 +2099,7 @@ impl<'a> TypeChecker<'a> {
                         "invalid arguments for search function, field must be a column or constant string, but got {}",
                         constant_expr.value
                     ))
-                        .set_span(constant_expr.span));
+                    .set_span(constant_expr.span));
                 };
 
                 // fields are separated by commas and boost is separated by ^
@@ -2139,7 +2112,7 @@ impl<'a> TypeChecker<'a> {
                             "invalid arguments for search function, field string must have only one boost, but got {}",
                             constant_field
                         ))
-                            .set_span(constant_expr.span));
+                        .set_span(constant_expr.span));
                     }
                     let column_expr = Expr::ColumnRef {
                         span: constant_expr.span,
@@ -2168,7 +2141,7 @@ impl<'a> TypeChecker<'a> {
                                     "invalid arguments for search function, boost must be a float value, but got {}",
                                     field_boosts[1]
                                 ))
-                                    .set_span(constant_expr.span));
+                                .set_span(constant_expr.span));
                             }
                         }
                     } else {
@@ -2182,7 +2155,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "invalid arguments for search function, field must be a column or constant string".to_string(),
                 )
-                    .set_span(span));
+                .set_span(span));
             }
         };
 
@@ -2192,27 +2165,19 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
 
-        // match function didn't support query syntax,
-        // convert query text to lowercase and remove punctuation characters,
-        // so that tantivy query parser can parse the query text as plain text
-        // without syntax
-        let formatted_query_text: String = query_text
-            .to_lowercase()
-            .chars()
-            .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
-            .collect();
+        let inverted_index_option = self.resolve_search_option(option_arg)?;
 
-        self.resolve_search_function(span, column_refs, &formatted_query_text)
+        self.resolve_search_function(span, column_refs, query_text, inverted_index_option)
     }
 
     /// Resolve query search function.
@@ -2237,8 +2202,8 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        // TODO: support options field
-        if args.len() != 1 {
+        // The optional second argument is additional configuration option.
+        if args.len() != 1 && args.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, {} expects 1 argument, but got {}",
                 func_name,
@@ -2248,6 +2213,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let query_arg = args[0];
+        let option_arg = if args.len() == 2 { Some(args[1]) } else { None };
 
         let box (query_scalar, _) = self.resolve(query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
@@ -2255,14 +2221,14 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
 
         let field_strs: Vec<&str> = query_text.split(' ').collect();
@@ -2298,8 +2264,105 @@ impl<'a> TypeChecker<'a> {
             };
             column_refs.push((column_ref, None));
         }
+        let inverted_index_option = self.resolve_search_option(option_arg)?;
 
-        self.resolve_search_function(span, column_refs, query_text)
+        self.resolve_search_function(span, column_refs, query_text, inverted_index_option)
+    }
+
+    fn resolve_search_option(
+        &mut self,
+        option_arg: Option<&Expr>,
+    ) -> Result<Option<InvertedIndexOption>> {
+        if let Some(option_arg) = option_arg {
+            let box (option_scalar, _) = self.resolve(option_arg)?;
+            let Ok(option_expr) = ConstantExpr::try_from(option_scalar.clone()) else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, option must be a constant string, but got {}",
+                    option_arg
+                ))
+                .set_span(option_scalar.span()));
+            };
+            let Some(option_text) = option_expr.value.as_string() else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, option text must be a constant string, but got {}",
+                    option_arg
+                ))
+                .set_span(option_scalar.span()));
+            };
+
+            let mut lenient = None;
+            let mut operator = None;
+            let mut fuzziness = None;
+
+            // additional configuration options are separated by semicolon `;`
+            let option_strs: Vec<&str> = option_text.split(';').collect();
+            for option_str in option_strs {
+                if option_str.trim().is_empty() {
+                    continue;
+                }
+                let option_vals: Vec<&str> = option_str.split('=').collect();
+                if option_vals.len() != 2 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid arguments for search function, each option must have key and value joined by equal sign, but got {}",
+                        option_arg
+                    ))
+                    .set_span(option_scalar.span()));
+                }
+                let option_key = option_vals[0].trim().to_lowercase();
+                let option_val = option_vals[1].trim().to_lowercase();
+                match option_key.as_str() {
+                    "fuzziness" => {
+                        // fuzziness is only support 1 and 2 currently.
+                        if fuzziness.is_none() {
+                            if option_val == "1" {
+                                fuzziness = Some(1);
+                                continue;
+                            } else if option_val == "2" {
+                                fuzziness = Some(2);
+                                continue;
+                            }
+                        }
+                    }
+                    "operator" => {
+                        if operator.is_none() {
+                            if option_val == "or" {
+                                operator = Some(false);
+                                continue;
+                            } else if option_val == "and" {
+                                operator = Some(true);
+                                continue;
+                            }
+                        }
+                    }
+                    "lenient" => {
+                        if lenient.is_none() {
+                            if option_val == "false" {
+                                lenient = Some(false);
+                                continue;
+                            } else if option_val == "true" {
+                                lenient = Some(true);
+                                continue;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, unsupported option: {}",
+                    option_arg
+                ))
+                .set_span(option_scalar.span()));
+            }
+
+            let inverted_index_option = InvertedIndexOption {
+                lenient: lenient.unwrap_or_default(),
+                operator: operator.unwrap_or_default(),
+                fuzziness,
+            };
+
+            return Ok(Some(inverted_index_option));
+        }
+        Ok(None)
     }
 
     fn resolve_search_function(
@@ -2307,6 +2370,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         column_refs: Vec<(BoundColumnRef, Option<F32>)>,
         query_text: &String,
+        inverted_index_option: Option<InvertedIndexOption>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if column_refs.is_empty() {
             return Err(ErrorCode::SemanticError(
@@ -2393,6 +2457,7 @@ impl<'a> TypeChecker<'a> {
             query_fields,
             query_text: query_text.to_string(),
             has_score: false,
+            inverted_index_option,
         };
 
         self.bind_context
@@ -2418,8 +2483,80 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((scalar_expr, data_type)))
     }
 
-    /// Resolve function call.
+    /// Resolve set returning function.
+    pub fn resolve_set_returning_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+        if self.in_window_function {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions cannot be used in window spec",
+            )
+            .set_span(span));
+        }
+        if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+            return Err(ErrorCode::SemanticError(
+                "set-returning functions can only be used in SELECT".to_string(),
+            )
+            .set_span(span));
+        }
 
+        let original_context = self.bind_context.expr_context.clone();
+        self.bind_context
+            .set_expr_context(ExprContext::InSetReturningFunction);
+
+        let mut arguments = Vec::with_capacity(args.len());
+        for arg in args.iter() {
+            let box (scalar, _) = self.resolve(arg)?;
+            arguments.push(scalar);
+        }
+
+        // Restore the original context
+        self.bind_context.set_expr_context(original_context);
+
+        let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
+            span,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments,
+        });
+        let srf_expr = srf_scalar.as_expr()?;
+        let srf_tuple_types = srf_expr.data_type().as_tuple().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "The return type of srf should be tuple, but got {}",
+                srf_expr.data_type()
+            ))
+        })?;
+
+        // If tuple has more than one field, return the tuple column,
+        // otherwise, extract the tuple field to top level column.
+        let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
+            (srf_scalar, srf_expr.data_type().clone())
+        } else {
+            let child_scalar = ScalarExpr::FunctionCall(FunctionCall {
+                span,
+                func_name: "get".to_string(),
+                params: vec![Scalar::Number(NumberScalar::Int64(1))],
+                arguments: vec![srf_scalar],
+            });
+            (child_scalar, srf_tuple_types[0].clone())
+        };
+
+        Ok(Box::new((return_scalar, return_type)))
+    }
+
+    /// Resolve function call.
     pub fn resolve_function(
         &mut self,
         span: Span,
@@ -2927,14 +3064,11 @@ impl<'a> TypeChecker<'a> {
                     arg_x,
                 ]))
             }
-            ("ifnull", &[arg_x, arg_y]) => {
+            ("ifnull" | "nvl", args) => {
                 // Rewrite ifnull(x, y) to coalesce(x, y)
-                Some(self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y]))
-            }
-            ("nvl", &[arg_x, arg_y]) => {
                 // Rewrite nvl(x, y) to coalesce(x, y)
                 // nvl is essentially an alias for ifnull.
-                Some(self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y]))
+                Some(self.resolve_function(span, "coalesce", vec![], args))
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
                 // Rewrite nvl2(x, y, z) to if(is_not_null(x), y, z)
@@ -3440,6 +3574,7 @@ impl<'a> TypeChecker<'a> {
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
+        self.bind_context.have_udf_server = true;
         self.ctx.set_cacheable(false);
         Ok(Box::new((
             UDFCall {
@@ -3552,6 +3687,7 @@ impl<'a> TypeChecker<'a> {
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
+        self.bind_context.have_udf_script = true;
         self.ctx.set_cacheable(false);
         Ok(Box::new((
             UDFCall {
@@ -3615,6 +3751,99 @@ impl<'a> TypeChecker<'a> {
             .into(),
             scalar.1,
         )))
+    }
+
+    fn resolve_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        arguments: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if matches!(self.bind_context.expr_context, ExprContext::InAsyncFunction) {
+            return Err(
+                ErrorCode::SemanticError("async functions cannot be nested".to_string())
+                    .set_span(span),
+            );
+        }
+        let original_context = self.bind_context.expr_context.clone();
+        self.bind_context
+            .set_expr_context(ExprContext::InAsyncFunction);
+
+        let result = match func_name {
+            "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
+            _ => {
+                return Err(ErrorCode::SemanticError(format!(
+                    "cannot find async function {}",
+                    func_name
+                ))
+                .set_span(span));
+            }
+        };
+        // Restore the original context
+        self.bind_context.set_expr_context(original_context);
+        self.bind_context.have_async_func = true;
+        Ok(result)
+    }
+
+    fn resolve_nextval_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        arguments: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if arguments.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "nextval function need one argument but got {}",
+                arguments.len()
+            ))
+            .set_span(span));
+        }
+        let sequence_name = if let Expr::ColumnRef { column, .. } = arguments[0] {
+            if column.database.is_some() || column.table.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "nextval function argument identifier should only contain one part".to_string(),
+                )
+                .set_span(span));
+            }
+            match &column.column {
+                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                ColumnID::Position(pos) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "nextval function argument don't support identifier {}",
+                        pos
+                    ))
+                    .set_span(span));
+                }
+            }
+        } else {
+            return Err(ErrorCode::SemanticError(format!(
+                "nextval function argument don't support expr {}",
+                arguments[0]
+            ))
+            .set_span(span));
+        };
+
+        let catalog = self.ctx.get_default_catalog()?;
+        let req = GetSequenceReq {
+            ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
+        };
+
+        databend_common_base::runtime::block_on(catalog.get_sequence(req))?;
+
+        let display_name = format!("{}({})", func_name, sequence_name);
+        let return_type = DataType::Number(NumberDataType::UInt64);
+        let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
+
+        let async_func = AsyncFunctionCall {
+            span,
+            func_name: func_name.to_string(),
+            display_name,
+            return_type: Box::new(return_type.clone()),
+            arguments: vec![],
+            func_arg,
+        };
+
+        Ok(Box::new((async_func.into(), return_type)))
     }
 
     fn resolve_cast_to_variant(
@@ -4429,6 +4658,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         }
         TypeName::Variant => TableDataType::Variant,
         TypeName::Geometry => TableDataType::Geometry,
+        TypeName::Geography => TableDataType::Geography,
         TypeName::NotNull(inner_type) => {
             let data_type = resolve_type_name(inner_type, not_null)?;
             data_type.remove_nullable()

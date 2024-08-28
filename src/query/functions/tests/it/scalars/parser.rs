@@ -558,6 +558,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         }
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
         databend_common_ast::ast::TypeName::Geometry => DataType::Geometry,
+        databend_common_ast::ast::TypeName::Geography => DataType::Geography,
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }

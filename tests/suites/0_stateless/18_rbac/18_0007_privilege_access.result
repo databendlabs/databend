@@ -77,6 +77,7 @@ number_of_blocks	BIGINT UNSIGNED	YES		NULL	NULL
 number_of_segments	BIGINT UNSIGNED	YES		NULL	NULL
 owner	VARCHAR	YES		NULL	NULL
 table_id	BIGINT UNSIGNED	NO		NULL	NULL
+table_type	VARCHAR	NO		NULL	NULL
 updated_on	TIMESTAMP	NO		NULL	NULL
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
@@ -87,7 +88,7 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege READ is r
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on database root_db for user b.
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
-1	64	377
+1	1	377
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]

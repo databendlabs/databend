@@ -25,7 +25,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use serde::de::Error;
-use serde::Deserialize;
+
+use crate::meta::v0;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -79,41 +80,7 @@ pub struct Statistics {
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
     pub cluster_stats: Option<ClusterStatistics>,
-}
-
-/// An exact copy of `Statistics` with specific `deserialize_with` implementation that can
-/// correctly deserialize legacy MessagePack format.
-#[derive(serde::Deserialize)]
-pub struct StatisticsMessagePack {
-    row_count: u64,
-    block_count: u64,
-    perfect_block_count: u64,
-
-    uncompressed_byte_size: u64,
-    compressed_byte_size: u64,
-    index_size: u64,
-
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
-    col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
-    cluster_stats: Option<ClusterStatistics>,
-}
-
-impl From<StatisticsMessagePack> for Statistics {
-    fn from(v: StatisticsMessagePack) -> Self {
-        Self {
-            row_count: v.row_count,
-            block_count: v.block_count,
-            perfect_block_count: v.perfect_block_count,
-            uncompressed_byte_size: v.uncompressed_byte_size,
-            compressed_byte_size: v.compressed_byte_size,
-            index_size: v.index_size,
-            col_stats: v.col_stats,
-            cluster_stats: v.cluster_stats,
-        }
-    }
 }
 
 // conversions from old meta data
@@ -245,16 +212,22 @@ impl ClusterStatistics {
 }
 
 impl Statistics {
-    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
-        let col_stats = v0
-            .col_stats
-            .into_iter()
-            .filter_map(|(k, v)| {
-                let t = fields[k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(&v, t);
-                stats.map(|s| (k, s))
+    pub(crate) fn convert_column_stats(
+        v0: &HashMap<ColumnId, v0::statistics::ColumnStatistics>,
+        fields: &[TableField],
+    ) -> HashMap<ColumnId, ColumnStatistics> {
+        fields
+            .iter()
+            .filter_map(|f| {
+                v0.get(&f.column_id).and_then(|v| {
+                    ColumnStatistics::from_v0(v, f.data_type()).map(|v2| (f.column_id, v2))
+                })
             })
-            .collect();
+            .collect()
+    }
+
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
+        let col_stats = Self::convert_column_stats(&v0.col_stats, fields);
         Self {
             row_count: v0.row_count,
             block_count: v0.block_count,
@@ -280,8 +253,9 @@ fn serialize_index_scalar<S>(scalar: &Scalar, serializer: S) -> Result<S::Ok, S:
 where S: serde::Serializer {
     match IndexScalar::try_from(scalar.clone()) {
         Ok(index_scalar) => serde::Serialize::serialize(&index_scalar, serializer),
-        Err(_) => Err(serde::ser::Error::custom(format!(
-            "Failed to convert {scalar} to IndexScalar"
+        Err(e) => Err(serde::ser::Error::custom(format!(
+            "Failed to convert scalar to IndexScalar: {:?}",
+            e
         ))),
     }
 }
@@ -293,8 +267,8 @@ where S: serde::Serializer {
 fn deserialize_index_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
 where D: serde::Deserializer<'de> {
     let index_scalar = <IndexScalar as serde::Deserialize>::deserialize(deserializer)?;
-    Scalar::try_from(index_scalar.clone())
-        .map_err(|_| D::Error::custom(format!("Failed to convert {index_scalar:?} to Scalar")))
+    Scalar::try_from(index_scalar)
+        .map_err(|e| D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e)))
 }
 
 /// Serializes a vector of `Scalar` values by first converting each to `IndexScalar`.
@@ -307,17 +281,17 @@ where D: serde::Deserializer<'de> {
 /// `IndexScalar`.
 fn serialize_index_scalar_vec<S>(scalars: &[Scalar], serializer: S) -> Result<S::Ok, S::Error>
 where S: serde::Serializer {
-    let mut index_scalars = Vec::with_capacity(scalars.len());
-    for scalar in scalars {
-        match IndexScalar::try_from(scalar.clone()) {
-            Ok(index_scalar) => index_scalars.push(index_scalar),
-            Err(_) => {
-                return Err(serde::ser::Error::custom(format!(
-                    "Failed to convert {scalar} to IndexScalar"
-                )));
-            }
-        }
-    }
+    let index_scalars = scalars
+        .iter()
+        .map(|scalar| {
+            IndexScalar::try_from(scalar.clone()).map_err(|e| {
+                serde::ser::Error::custom(format!(
+                    "Failed to convert Scalar to IndexScalar: {:?}",
+                    e
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     serde::Serialize::serialize(&index_scalars, serializer)
 }
 
@@ -332,12 +306,11 @@ where D: serde::Deserializer<'de> {
     index_scalars
         .into_iter()
         .map(|index_scalar| {
-            Scalar::try_from(index_scalar.clone()).map_err(|_| {
-                D::Error::custom(format!("Failed to convert {index_scalar:?} to Scalar"))
+            Scalar::try_from(index_scalar).map_err(|e| {
+                D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e))
             })
         })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(serde::de::Error::custom)
 }
 
 fn serialize_index_scalar_option_vec<S>(
@@ -362,12 +335,14 @@ where D: serde::Deserializer<'de> {
             index_scalars
                 .into_iter()
                 .map(|index_scalar| {
-                    Scalar::try_from(index_scalar.clone()).map_err(|_| {
-                        D::Error::custom(format!("Failed to convert {index_scalar:?} to Scalar"))
+                    Scalar::try_from(index_scalar).map_err(|e| {
+                        D::Error::custom(format!(
+                            "Failed to convert IndexScalar to Scalar: {:?}",
+                            e
+                        ))
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(serde::de::Error::custom)
         })
         .transpose()
 }
@@ -391,28 +366,6 @@ pub fn deserialize_col_stats<'de, D>(
 ) -> Result<HashMap<ColumnId, ColumnStatistics>, D::Error>
 where D: serde::Deserializer<'de> {
     deserializer.deserialize_map(ColStatsVisitor::new())
-}
-
-/// Deserializes the `cluster_stats` field of the `BlockMeta` and `Statistics` struct.
-///
-/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
-/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
-/// unsupported index types cannot be deserialized correctly.
-///
-/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
-/// item that fails to deserialize due to containing these unsupported index types.
-/// This allows the rest of the outer struct, including `col_stats` items that do not
-/// contain unsupported index types, to be deserialized successfully.
-///
-/// Note: This function is a workaround for a specific historical issue. If the data being
-/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
-/// the standard deserialization process can be used instead.
-pub fn deserialize_cluster_stats<'de, D>(
-    deserializer: D,
-) -> Result<Option<ClusterStatistics>, D::Error>
-where D: serde::Deserializer<'de> {
-    let v = <Option<ClusterStatistics> as serde::Deserialize>::deserialize(deserializer);
-    Ok(v.unwrap_or(None))
 }
 
 struct ColStatsVisitor<K, V> {
@@ -449,29 +402,5 @@ where
         }
 
         Ok(map)
-    }
-}
-
-/// Deserializes `T`, falling back to `Default::default()` on error.
-///
-/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
-/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
-/// unsupported index types cannot be deserialized correctly.
-pub fn default_on_error<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-    T: Default + serde::Deserialize<'de>,
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum DefaultOnError<T> {
-        Success(T),
-        Error(serde::de::IgnoredAny),
-    }
-
-    let v = DefaultOnError::<T>::deserialize(deserializer);
-    match v {
-        Ok(DefaultOnError::Success(v)) => Ok(v),
-        _ => Ok(T::default()),
     }
 }

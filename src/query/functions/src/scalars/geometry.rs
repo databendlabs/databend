@@ -25,6 +25,7 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
@@ -42,6 +43,9 @@ use geo::EuclideanLength;
 use geo::HasDimensions;
 use geo::HaversineDistance;
 use geo::Point;
+use geo::ToDegrees;
+use geo::ToRadians;
+use geo_types::coord;
 use geo_types::Polygon;
 use geohash::decode_bbox;
 use geohash::encode;
@@ -62,6 +66,8 @@ use geozero::ToWkt;
 use jsonb::parse_value;
 use jsonb::to_string;
 use num_traits::AsPrimitive;
+use proj4rs::transform::transform;
+use proj4rs::Proj;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
@@ -218,11 +224,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_combine_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
         "st_contains",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<GeometryType, GeometryType, NullableType<BooleanType>>(
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, BooleanType>(
             |l_geometry, r_geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push(false);
+                        return;
+                    }
+                }
                 let l_ewkb = Ewkb(l_geometry);
                 let r_ewkb = Ewkb(r_geometry);
                 let l_geos: Geometry = l_ewkb.to_geos().unwrap();
@@ -230,18 +242,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let l_srid = l_geos.srid();
                 let r_srid = r_geos.srid();
                 if l_srid != r_srid {
-                    builder.push_null();
                     ctx.set_error(
                         builder.len(),
                         ErrorCode::GeometryError("Srid does not match!").to_string(),
                     );
+                    builder.push(false);
                 } else {
                     let l_geo: geo::Geometry = l_geos.to_geo().unwrap();
                     let r_geo: geo::Geometry = r_geos.to_geo().unwrap();
                     if matches!(l_geo, geo::Geometry::GeometryCollection(_))
                         || matches!(r_geo, geo::Geometry::GeometryCollection(_))
                     {
-                        builder.push_null();
                         ctx.set_error(
                             builder.len(),
                             ErrorCode::GeometryError(
@@ -249,6 +260,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             )
                             .to_string(),
                         );
+                        builder.push(false);
                     } else {
                         builder.push(l_geo.contains(&r_geo));
                     }
@@ -257,59 +269,54 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_combine_nullable_2_arg::<GeometryType, GeometryType, NumberType<F64>, _, _>(
-        "st_distance",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<GeometryType, GeometryType, NullableType<NumberType<F64>>>(
-            |l_geometry, r_geometry, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push_null();
-                        return;
+    registry
+        .register_passthrough_nullable_2_arg::<GeometryType, GeometryType, NumberType<F64>, _, _>(
+            "st_distance",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<GeometryType, GeometryType, NumberType<F64>>(
+                |l_geometry, r_geometry, builder, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(builder.len()) {
+                            builder.push(F64::from(0_f64));
+                            return;
+                        }
                     }
-                }
 
-                let left_geo = Ewkb(l_geometry);
-                let right_geo = Ewkb(r_geometry);
-                let geos = &vec![left_geo.to_geos().unwrap(), right_geo.to_geos().unwrap()];
-                match get_shared_srid(geos).map_err(|e| ErrorCode::GeometryError(e).to_string()) {
-                    Ok(_) => {}
-                    Err(err_msg) => {
-                        ctx.set_error(builder.len(), err_msg);
-                        return;
-                    }
-                }
-
-                let l_point = match <geo_types::Geometry as TryInto<Point>>::try_into(
-                    Ewkb(l_geometry).to_geo().unwrap(),
-                ) {
-                    Ok(point) => point,
-                    Err(e) => {
+                    let left_geo = Ewkb(l_geometry);
+                    let right_geo = Ewkb(r_geometry);
+                    let geos = &vec![left_geo.to_geos().unwrap(), right_geo.to_geos().unwrap()];
+                    if let Err(e) = get_shared_srid(geos) {
                         ctx.set_error(
                             builder.len(),
                             ErrorCode::GeometryError(e.to_string()).to_string(),
                         );
+                        builder.push(F64::from(0_f64));
                         return;
                     }
-                };
 
-                let r_point = match <geo_types::Geometry as TryInto<Point>>::try_into(
-                    Ewkb(r_geometry).to_geo().unwrap(),
-                ) {
-                    Ok(point) => point,
-                    Err(e) => {
-                        ctx.set_error(
-                            builder.len(),
-                            ErrorCode::GeometryError(e.to_string()).to_string(),
-                        );
-                        return;
+                    match (
+                        <geo_types::Geometry as TryInto<Point>>::try_into(
+                            left_geo.to_geo().unwrap(),
+                        ),
+                        <geo_types::Geometry as TryInto<Point>>::try_into(
+                            right_geo.to_geo().unwrap(),
+                        ),
+                    ) {
+                        (Ok(l_point), Ok(r_point)) => {
+                            let distance = l_point.euclidean_distance(&r_point);
+                            builder.push(format!("{:.9}", distance).parse().unwrap());
+                        }
+                        (Err(e), _) | (_, Err(e)) => {
+                            ctx.set_error(
+                                builder.len(),
+                                ErrorCode::GeometryError(e.to_string()).to_string(),
+                            );
+                            builder.push(F64::from(0_f64));
+                        }
                     }
-                };
-                let distance = l_point.euclidean_distance(&r_point);
-                builder.push(format!("{:.9}", distance).parse().unwrap());
-            },
-        ),
-    );
+                },
+            ),
+        );
 
     registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
         "st_endpoint",
@@ -374,7 +381,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             ctx.set_error(
                                 builder.len(),
                                 ErrorCode::GeometryError(format!(
-                                    "Index { } is out of bounds",
+                                    "Index {} is out of bounds",
                                     index
                                 ))
                                 .to_string(),
@@ -778,6 +785,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             builder.commit_row();
         }),
     );
+
     registry.register_passthrough_nullable_2_arg::<StringType, Int32Type, GeometryType, _, _>(
         "st_geometryfromwkb",
         |_, _, _| FunctionDomain::MayThrow,
@@ -869,7 +877,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match parse_to_ewkb(wkt.as_bytes(), None) {
+            match parse_to_ewkb(wkt, None) {
                 Ok(data) => builder.put_slice(data.as_slice()),
                 Err(e) => ctx.set_error(
                     builder.len(),
@@ -891,7 +899,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match parse_to_ewkb(wkt.as_bytes(), Some(srid)) {
+                match parse_to_ewkb(wkt, Some(srid)) {
                     Ok(data) => builder.put_slice(data.as_slice()),
                     Err(e) => ctx.set_error(
                         builder.len(),
@@ -939,108 +947,108 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
         "st_length",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
-            |geometry, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push_null();
-                        return;
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push(F64::from(0_f64));
+                    return;
+                }
+            }
+
+            let g: geo_types::Geometry = Ewkb(geometry).to_geos().unwrap().try_into().unwrap();
+            let mut distance = 0f64;
+            match g {
+                geo_types::Geometry::LineString(lines) => {
+                    for line in lines.lines() {
+                        distance += line.euclidean_length();
                     }
                 }
-
-                let g: geo_types::Geometry = Ewkb(geometry).to_geos().unwrap().try_into().unwrap();
-                let mut distance = 0f64;
-                match g {
-                    geo_types::Geometry::LineString(lines) => {
-                        for line in lines.lines() {
+                geo_types::Geometry::MultiLineString(multi_lines) => {
+                    for line_string in multi_lines.0 {
+                        for line in line_string.lines() {
                             distance += line.euclidean_length();
                         }
                     }
-                    geo_types::Geometry::MultiLineString(multi_lines) => {
-                        for line_string in multi_lines.0 {
+                }
+                geo_types::Geometry::GeometryCollection(geom_c) => {
+                    for geometry in geom_c.0 {
+                        if let geo::Geometry::LineString(line_string) = geometry {
                             for line in line_string.lines() {
                                 distance += line.euclidean_length();
                             }
                         }
                     }
-                    geo_types::Geometry::GeometryCollection(geom_c) => {
-                        for geometry in geom_c.0 {
-                            if let geo::Geometry::LineString(line_string) = geometry {
-                                for line in line_string.lines() {
-                                    distance += line.euclidean_length();
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
                 }
+                _ => {}
+            }
 
-                builder.push(format!("{:.9}", distance).parse().unwrap());
-            },
-        ),
+            builder.push(format!("{:.9}", distance).parse().unwrap());
+        }),
     );
 
-    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
         "st_x",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
-            |geometry, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push_null();
-                        return;
-                    }
+        vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push(F64::from(0_f64));
+                    return;
                 }
+            }
 
-                match <geo_types::Geometry as TryInto<Point>>::try_into(
-                    Ewkb(geometry).to_geo().unwrap(),
-                ) {
-                    Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.x()))),
-                    Err(e) => ctx.set_error(
+            match <geo_types::Geometry as TryInto<Point>>::try_into(
+                Ewkb(geometry).to_geo().unwrap(),
+            ) {
+                Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.x()))),
+                Err(e) => {
+                    ctx.set_error(
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
-                    ),
-                };
-            },
-        ),
+                    );
+                    builder.push(F64::from(0_f64));
+                }
+            };
+        }),
     );
 
-    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
         "st_y",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
-            |geometry, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push_null();
-                        return;
-                    }
+        vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push(F64::from(0_f64));
+                    return;
                 }
+            }
 
-                match <geo_types::Geometry as TryInto<Point>>::try_into(
-                    Ewkb(geometry).to_geo().unwrap(),
-                ) {
-                    Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.y()))),
-                    Err(e) => ctx.set_error(
+            match <geo_types::Geometry as TryInto<Point>>::try_into(
+                Ewkb(geometry).to_geo().unwrap(),
+            ) {
+                Ok(point) => builder.push(F64::from(AsPrimitive::<f64>::as_(point.y()))),
+                Err(e) => {
+                    ctx.set_error(
                         builder.len(),
                         ErrorCode::GeometryError(e.to_string()).to_string(),
-                    ),
-                };
-            },
-        ),
+                    );
+                    builder.push(F64::from(0_f64));
+                }
+            };
+        }),
     );
 
-    registry.register_combine_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
         "st_setsrid",
         |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<GeometryType, Int32Type, NullableType<GeometryType>>(
+        vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
             |geometry, srid, output, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(output.len()) {
-                        output.push_null();
+                        output.commit_row();
                         return;
                     }
                 }
@@ -1048,26 +1056,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let mut ggeom = ewkb.to_geos().unwrap();
                 ggeom.set_srid(srid as usize);
                 let geo = ggeom.to_ewkb(ggeom.dims(), ggeom.srid()).unwrap();
-                output.push(&geo);
+                output.put_slice(&geo);
+                output.commit_row();
             },
         ),
     );
 
-    registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, Int32Type, _, _>(
         "st_srid",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<GeometryType, NullableType<Int32Type>>(
-            |geometry, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+        vectorize_with_builder_1_arg::<GeometryType, Int32Type>(|geometry, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(0);
+                    return;
                 }
+            }
 
-                output.push(Ewkb(geometry).to_geos().unwrap().srid().unwrap_or(4326));
-            },
-        ),
+            output.push(Ewkb(geometry).to_geos().unwrap().srid().unwrap_or(4326));
+        }),
     );
 
     registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
@@ -1149,20 +1156,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_combine_nullable_1_arg::<GeometryType, UInt32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, UInt32Type, _, _>(
         "st_npoints",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<GeometryType, NullableType<UInt32Type>>(
-            |geometry, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push_null();
-                        return;
-                    }
+        vectorize_with_builder_1_arg::<GeometryType, UInt32Type>(|geometry, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push(0);
+                    return;
                 }
-                builder.push(count_points(&Ewkb(geometry).to_geo().unwrap()) as u32);
-            },
-        ),
+            }
+            builder.push(count_points(&Ewkb(geometry).to_geo().unwrap()) as u32);
+        }),
     );
 
     registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
@@ -1502,109 +1507,112 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    // registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
-    //     "st_transform",
-    //     |_, _, _| FunctionDomain::MayThrow,
-    //     vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
-    //         |original, srid, builder, ctx| {
-    //             if let Some(validity) = &ctx.validity {
-    //                 if !validity.get_bit(builder.len()) {
-    //                     builder.commit_row();
-    //                     return;
-    //                 }
-    //             }
-    //
-    //             #[allow(unused_assignments)]
-    //             let mut from_srid = 0;
-    //
-    //             // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
-    //             // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
-    //             match read_ewkb_srid(&mut std::io::Cursor::new(original)) {
-    //                 Ok(srid) if srid.is_some() => from_srid = srid.unwrap(),
-    //                 _ => {
-    //                     ctx.set_error(
-    //                         builder.len(),
-    //                         ErrorCode::GeometryError(" input geometry must has the correct SRID")
-    //                             .to_string(),
-    //                     );
-    //                     builder.commit_row();
-    //                     return;
-    //                 }
-    //             }
-    //
-    //             let result = {
-    //                 Ewkb(original).to_geo().map_err(ErrorCode::from).and_then(
-    //                     |mut geom: Geometry| {
-    //                         Proj::new_known_crs(&make_crs(from_srid), &make_crs(srid), None)
-    //                             .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-    //                             .and_then(|proj| {
-    //                                 geom.transform(&proj)
-    //                                     .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-    //                                     .and_then(|_| {
-    //                                         geom.to_ewkb(geom.dims(), Some(srid))
-    //                                             .map_err(ErrorCode::from)
-    //                                     })
-    //                             })
-    //                     },
-    //                 )
-    //             };
-    //
-    //             match result {
-    //                 Ok(data) => {
-    //                     builder.put_slice(data.as_slice());
-    //                 }
-    //                 Err(e) => {
-    //                     ctx.set_error(builder.len(), e.to_string());
-    //                 }
-    //             }
-    //
-    //             builder.commit_row();
-    //         },
-    //     ),
-    // );
-    //
-    // registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
-    //     "st_transform",
-    //     |_, _, _,_| FunctionDomain::MayThrow,
-    //     vectorize_with_builder_3_arg::<GeometryType, Int32Type,Int32Type, GeometryType>(
-    //         |original, from_srid, to_srid, builder, ctx| {
-    //             if let Some(validity) = &ctx.validity {
-    //                 if !validity.get_bit(builder.len()) {
-    //                     builder.commit_row();
-    //                     return;
-    //                 }
-    //             }
-    //
-    //             let result = {
-    //                 Proj::new_known_crs(&make_crs(from_srid), &make_crs(to_srid), None)
-    //                     .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-    //                     .and_then(|proj| {
-    //                     let old = Ewkb(original.to_vec());
-    //                     Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap()).to_geo().map_err(ErrorCode::from).and_then(|mut geom| {
-    //                         geom.transform(&proj).map_err(|e|ErrorCode::GeometryError(e.to_string())).and_then(|_| {
-    //                             geom.to_ewkb(old.dims(), Some(to_srid)).map_err(ErrorCode::from)
-    //                         })
-    //                     })
-    //                 })
-    //             };
-    //             match result {
-    //                 Ok(data) => {
-    //                     builder.put_slice(data.as_slice());
-    //                 }
-    //                 Err(e) => {
-    //                     ctx.set_error(builder.len(), e.to_string());
-    //                 }
-    //             }
-    //
-    //             builder.commit_row();
-    //         },
-    //     ),
-    // );
+    registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
+        "st_transform",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
+            |original, to_srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
+                // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
+                let from_srid = match Ewkb(original).to_geos().unwrap().srid() {
+                    Some(srid) => srid,
+                    _ => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError("input geometry must has the correct SRID")
+                                .to_string(),
+                        );
+                        builder.commit_row();
+                        return;
+                    }
+                };
+
+                match st_transform_impl(original, from_srid, to_srid) {
+                    Ok(data) => {
+                        builder.put_slice(data.as_slice());
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                    }
+                }
+
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
+        "st_transform",
+        |_, _, _,_| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType>(
+            |original, from_srid, to_srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                match st_transform_impl(original, from_srid, to_srid) {
+                    Ok(data) => {
+                        builder.put_slice(data.as_slice());
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                    }
+                }
+
+                builder.commit_row();
+            },
+        ),
+    );
 }
 
-// fn make_crs(srid: i32) -> String {
-//     format!("EPSG:{}", srid)
-// }
+fn st_transform_impl(
+    original: &[u8],
+    from_srid: i32,
+    to_srid: i32,
+) -> databend_common_exception::Result<Vec<u8>> {
+    let from_proj = Proj::from_epsg_code(
+        u16::try_from(from_srid).map_err(|_| ErrorCode::GeometryError("invalid from srid"))?,
+    )
+    .map_err(|_| ErrorCode::GeometryError("invalid from srid"))?;
+    let to_proj = Proj::from_epsg_code(
+        u16::try_from(to_srid).map_err(|_| ErrorCode::GeometryError("invalid to srid"))?,
+    )
+    .map_err(|_| ErrorCode::GeometryError("invalid to srid"))?;
+
+    let old = Ewkb(original.to_vec());
+    Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap())
+        .to_geo()
+        .map_err(ErrorCode::from)
+        .and_then(|mut geom| {
+            // EPSG:4326 WGS84 in proj4rs is in radians, not degrees.
+            if from_srid == 4326 {
+                geom.to_radians_in_place();
+            }
+            transform(&from_proj, &to_proj, &mut geom).map_err(|_| {
+                ErrorCode::GeometryError(format!(
+                    "transform from {} to {} failed",
+                    from_srid, to_srid
+                ))
+            })?;
+            if to_srid == 4326 {
+                geom.to_degrees_in_place();
+            }
+            let round_geom = round_geometry_coordinates(geom);
+            round_geom
+                .to_ewkb(round_geom.dims(), Some(to_srid))
+                .map_err(ErrorCode::from)
+        })
+}
 
 #[inline]
 fn get_shared_srid(geometries: &Vec<Geometry>) -> Result<Option<i32>, String> {
@@ -1657,7 +1665,7 @@ fn str_to_geometry_impl(
         Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
     };
     let ewkb = match geo_type {
-        GeometryDataType::WKT | GeometryDataType::EWKT => parse_to_ewkb(str.as_bytes(), srid),
+        GeometryDataType::WKT | GeometryDataType::EWKT => parse_to_ewkb(str, srid),
         GeometryDataType::GEOJSON => GeoJson(str)
             .to_ewkb(CoordDimensions::xy(), srid)
             .map_err(|e| ErrorCode::GeometryError(e.to_string())),
@@ -1893,5 +1901,123 @@ fn count_points(geom: &geo_types::Geometry) -> usize {
             .sum::<usize>(),
         geo_types::Geometry::Rect(_) => 5,
         geo_types::Geometry::Triangle(_) => 4,
+    }
+}
+
+/// The last three decimal places of the f64 type are inconsistent between aarch64 and x86 platforms,
+/// causing unit test results to fail. We will only retain six decimal places.
+fn round_geometry_coordinates(geom: geo::Geometry<f64>) -> geo::Geometry<f64> {
+    fn round_coordinate(coord: f64) -> f64 {
+        (coord * 1_000_000.0).round() / 1_000_000.0
+    }
+
+    match geom {
+        geo::Geometry::Point(point) => geo::Geometry::Point(Point::new(
+            round_coordinate(point.x()),
+            round_coordinate(point.y()),
+        )),
+        geo::Geometry::LineString(linestring) => geo::Geometry::LineString(
+            linestring
+                .into_iter()
+                .map(|coord| coord!(x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
+                .collect(),
+        ),
+        geo::Geometry::Polygon(polygon) => {
+            let outer_ring = polygon.exterior();
+            let mut rounded_inner_rings = Vec::new();
+
+            for inner_ring in polygon.interiors() {
+                let rounded_coords: Vec<Coord<f64>> = inner_ring
+                    .into_iter()
+                    .map(
+                        |coord| coord!( x: round_coordinate(coord.x), y: round_coordinate(coord.y)),
+                    )
+                    .collect();
+                rounded_inner_rings.push(LineString(rounded_coords));
+            }
+
+            let rounded_polygon = Polygon::new(
+                LineString(
+                    outer_ring
+                        .into_iter()
+                        .map(|coord| coord!( x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
+                        .collect(),
+                ),
+                rounded_inner_rings,
+            );
+
+            geo::Geometry::Polygon(rounded_polygon)
+        }
+        geo::Geometry::MultiPoint(multipoint) => geo::Geometry::MultiPoint(
+            multipoint
+                .into_iter()
+                .map(|point| Point::new(round_coordinate(point.x()), round_coordinate(point.y())))
+                .collect(),
+        ),
+        geo::Geometry::MultiLineString(multilinestring) => {
+            let rounded_lines: Vec<LineString<f64>> = multilinestring
+                .into_iter()
+                .map(|linestring| {
+                    LineString(
+                        linestring
+                            .into_iter()
+                            .map(|coord| coord!(x: round_coordinate(coord.x), y: round_coordinate(coord.y)))
+                            .collect(),
+                    )
+                })
+                .collect();
+
+            geo::Geometry::MultiLineString(geo::MultiLineString::new(rounded_lines))
+        }
+        geo::Geometry::MultiPolygon(multipolygon) => {
+            let rounded_polygons: Vec<Polygon<f64>> = multipolygon
+                .into_iter()
+                .map(|polygon| {
+                    let outer_ring = polygon.exterior().into_iter()
+                        .map(|coord| coord!( x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
+                        .collect::<Vec<Coord<f64>>>();
+
+                    let mut rounded_inner_rings = Vec::new();
+                    for inner_ring in polygon.interiors() {
+                        let rounded_coords: Vec<Coord<f64>> = inner_ring
+                            .into_iter()
+                            .map(|coord| coord!( x:round_coordinate(coord.x), y: coord.y))
+                            .collect();
+                        rounded_inner_rings.push(LineString(rounded_coords));
+                    }
+
+                    Polygon::new(LineString(outer_ring), rounded_inner_rings)
+                })
+                .collect();
+            geo::Geometry::MultiPolygon(geo::MultiPolygon::new(rounded_polygons))
+        }
+        geo::Geometry::GeometryCollection(geometrycollection) => geo::Geometry::GeometryCollection(
+            geometrycollection
+                .into_iter()
+                .map(round_geometry_coordinates)
+                .collect(),
+        ),
+        geo::Geometry::Line(line) => geo::Geometry::Line(geo::Line::new(
+            Point::new(
+                round_coordinate(line.start.x),
+                round_coordinate(line.start.y),
+            ),
+            Point::new(round_coordinate(line.end.x), round_coordinate(line.end.y)),
+        )),
+        geo::Geometry::Rect(rect) => geo::Geometry::Rect(geo::Rect::new(
+            Point::new(
+                round_coordinate(rect.min().x),
+                round_coordinate(rect.min().y),
+            ),
+            Point::new(
+                round_coordinate(rect.max().x),
+                round_coordinate(rect.max().y),
+            ),
+        )),
+        geo::Geometry::Triangle(triangle) => geo::Geometry::Triangle(geo::Triangle::new(
+            coord!(x: round_coordinate(triangle.0.x), y: round_coordinate(triangle.0.y)),
+            coord!(x: round_coordinate(triangle.1.x), y: round_coordinate(triangle.1.y)),
+            coord!(x: round_coordinate(triangle.2.x), y: round_coordinate(triangle.2.y)),
+        )),
     }
 }
