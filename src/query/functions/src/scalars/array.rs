@@ -323,12 +323,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                for (i, d) in lhs.iter().enumerate() {
-                    if i != 0 {
+                for (i, d) in lhs.iter().filter(|x| x.is_some()).enumerate() {
+                    if i != 0  {
                         output.put_str(rhs);
-                    }
-                    if let Some(d) = d {
-                        output.put_str(d);
+                        output.put_str(d.unwrap());
                     }
                 }
                 output.commit_row();
