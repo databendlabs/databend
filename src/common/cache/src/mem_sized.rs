@@ -38,13 +38,3 @@ where T: MemSized
         }
     }
 }
-
-impl<T, U> MemSized for (T, U)
-where
-    T: MemSized,
-    U: MemSized,
-{
-    fn mem_bytes(&self) -> usize {
-        self.0.mem_bytes() + self.1.mem_bytes()
-    }
-}
