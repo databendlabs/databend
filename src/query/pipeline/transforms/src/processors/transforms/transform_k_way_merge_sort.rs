@@ -159,7 +159,7 @@ where
 {
     fn create_partition(&self, input: usize) -> Pipe {
         create_partition_pipe::<A::Rows>(
-            vec![InputPort::create(); input],
+            (0..input).map(|_| InputPort::create()).collect(),
             self.worker,
             self.schema.clone(),
             self.sort_desc.clone(),
@@ -186,7 +186,9 @@ where
     }
 
     fn create_combine(&self) -> Pipe {
-        let input_ports = vec![InputPort::create(); self.worker];
+        let input_ports = (0..self.worker)
+            .map(|_| InputPort::create())
+            .collect::<Vec<_>>();
         let output = OutputPort::create();
 
         let processor = ProcessorPtr::create(Box::new(KWayMergeCombineProcessor::new(
@@ -229,7 +231,9 @@ pub fn create_partition_pipe<R>(
 where
     R: Rows + Send + 'static,
 {
-    let output_ports = vec![OutputPort::create(); worker];
+    let output_ports = (0..worker)
+        .map(|_| OutputPort::create())
+        .collect::<Vec<_>>();
     let processor = ProcessorPtr::create(Box::new(KWayMergePartitionProcessor::<R>::new(
         input_ports.clone(),
         output_ports.clone(),
@@ -339,7 +343,7 @@ where R: Rows + Send + 'static
             return Ok(Event::Finished);
         }
 
-        if self.find_output().is_none() {
+        if self.cur.is_none() && self.find_output().is_none() {
             return Ok(Event::NeedConsume);
         }
 
@@ -403,25 +407,25 @@ where A: SortAlgorithm
     }
 
     fn pull(&mut self) -> Result<Event> {
+        if self.ready {
+            return Ok(Event::Sync);
+        }
         if self.input.has_data() {
             let block = self.input.pull_data().unwrap()?;
             self.input.set_need_data();
 
-            if self.buffer.is_empty() {
-                self.buffer.push(block);
-                return Ok(Event::NeedData);
-            }
-
-            let before = &self.buffer[0];
-
             const TASK_ID_POS: usize = 3;
             const TASK_ROWS_POS: usize = 2;
 
-            let task_id = get_u32(before, TASK_ID_POS);
-            assert_eq!(task_id, get_u32(&block, TASK_ID_POS));
+            let task_id = get_u32(&block, TASK_ID_POS);
+            let task_rows = get_u32(&block, TASK_ROWS_POS);
 
-            let task_rows = get_u32(before, TASK_ROWS_POS);
-            debug_assert_eq!(task_rows, get_u32(&block, TASK_ROWS_POS));
+            #[cfg(debug_assertions)]
+            if !self.buffer.is_empty() {
+                let before = &self.buffer[0];
+                debug_assert_eq!(task_id, get_u32(before, TASK_ID_POS));
+                debug_assert_eq!(task_rows, get_u32(before, TASK_ROWS_POS));
+            }
 
             let rows = self.buffer.iter().map(|b| b.num_rows() as u32).sum::<u32>()
                 + block.num_rows() as u32;
@@ -440,8 +444,8 @@ where A: SortAlgorithm
                 Ordering::Less => unreachable!(),
             };
         }
-        self.ready = false;
         if self.input.is_finished() {
+            self.output.finish();
             return Ok(Event::Finished);
         }
         self.input.set_need_data();
@@ -504,9 +508,6 @@ where A: SortAlgorithm + Send + 'static
             return Ok(Event::NeedConsume);
         }
 
-        if self.ready {
-            return Ok(Event::Sync);
-        }
         self.pull()
     }
 
@@ -521,6 +522,7 @@ where A: SortAlgorithm + Send + 'static
             None,
         );
         while let Some(block) = merger.next_block()? {
+            // todo task_id
             self.output_data.push_back(block);
         }
         debug_assert!(merger.is_finished());

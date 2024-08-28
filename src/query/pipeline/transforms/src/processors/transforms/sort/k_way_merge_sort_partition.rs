@@ -79,7 +79,7 @@ where
     }
 
     pub fn is_finished(&self) -> bool {
-        self.buffer.iter().all(|b| b.is_empty()) && !self.has_pending_stream()
+        !self.has_pending_stream() && self.buffer.iter().all(|b| b.is_empty())
         // && self.temp_sorted_num_rows == 0)
         // || self.limit == Some(0)
     }
@@ -167,7 +167,7 @@ where
             .map(|&(input, pp)| {
                 let block = self.slice(input, pp);
 
-                let mut columns = Vec::with_capacity(block.num_columns() + 4);
+                let mut columns = Vec::with_capacity(block.num_columns() + 3);
                 columns.extend_from_slice(block.columns());
                 columns.push(task_id.clone());
                 columns.push(rows.clone());
