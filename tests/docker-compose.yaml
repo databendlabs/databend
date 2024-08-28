@@ -6,7 +6,7 @@ services:
     volumes:
       - ./data:/data
   databend:
-    image: docker.io/datafuselabs/databend:nightly
+    image: docker.io/datafuselabs/databend
     environment:
       - QUERY_STORAGE_TYPE=s3
       - QUERY_DATABEND_ENTERPRISE_LICENSE

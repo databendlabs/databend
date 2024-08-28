@@ -48,8 +48,9 @@ async fn select_null() {
         let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
         // ignore null to str test for flightsql
         if !dsn.starts_with("databend+flight://") {
-            let client = Client::new(format!("{dsn}&format_null_as_str=1"));
+            let client = Client::new(dsn.to_string());
             let conn = client.get_conn().await.unwrap();
+            conn.exec("SET format_null_as_str=1").await.unwrap();
             let row = conn.query_row("select * from select_null").await.unwrap();
             assert!(row.is_some());
             let row = row.unwrap();
@@ -62,8 +63,9 @@ async fn select_null() {
     }
     {
         let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-        let client = Client::new(format!("{dsn}&format_null_as_str=0"));
+        let client = Client::new(dsn.to_string());
         let conn = client.get_conn().await.unwrap();
+        conn.exec("SET format_null_as_str=0").await.unwrap();
         let row = conn.query_row("select * from select_null").await.unwrap();
         assert!(row.is_some());
         let row = row.unwrap();
