@@ -4645,14 +4645,14 @@ impl<'a> TypeChecker<'a> {
         let box (field_scalar, _field_data_type) = self.resolve(field)?;
         let Ok(field_expr) = ConstantExpr::try_from(field_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, attr_names must be a constant string, but got {}",
+                "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
                 field
             ))
             .set_span(field_scalar.span()));
         };
         let Some(attr_name) = field_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, attr_names must be a constant string, but got {}",
+                "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
                 field
             ))
             .set_span(field_scalar.span()));
@@ -4668,6 +4668,7 @@ impl<'a> TypeChecker<'a> {
 
         let mut args = Vec::with_capacity(1);
         let box (key_scalar, key_type) = self.resolve(key_arg)?;
+
         if primary_type != key_type {
             args.push(wrap_cast(&key_scalar, &primary_type));
         } else {
@@ -4687,7 +4688,7 @@ impl<'a> TypeChecker<'a> {
             key_field: Some(primary_field.name().clone()),
             value_field: Some(attr_name.clone()),
         };
-
+        let display_name = format!("{}({},{},{})", func_name, dict_name, attr_name, primary_field.name().clone());
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,

@@ -22,6 +22,7 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -102,12 +103,12 @@ impl TransformAsyncFunction {
             DictionarySource::Redis(conn_str) => {
                 let mut redis_operator = OPERATORS.write().unwrap();
                 if let Some(op) = redis_operator.get(conn_str) {
-                    op
+                    op.clone()
                 } else {
                     let builder = Redis::default().endpoint(&conn_str);
                     let op = Operator::new(builder)?.finish();
-                    redis_operator.insert(conn_str, op.clone());
-                    &op
+                    redis_operator.insert(conn_str.clone(), op.clone());
+                    op.clone()
                 }
             }
             _ => {
@@ -121,7 +122,7 @@ impl TransformAsyncFunction {
         let value = match &entry.value {
             Value::Scalar(scalar) => {
                 if let Scalar::String(key) = scalar {
-                    let cache = CACHE.read().unwrap();
+                    let cache = CACHE.read().unwrap().clone();
                     if let Some(cached_val) = cache.get(key) {
                         Value::Scalar(Scalar::String(cached_val.clone()))
                     } else {
@@ -138,10 +139,10 @@ impl TransformAsyncFunction {
             }
             Value::Column(column) => {
                 let mut builder = StringColumnBuilder::with_capacity(column.len(), 0);
-                let cache = CACHE.read().unwrap();
                 for scalar in column.iter() {
+                    let cache = CACHE.read().unwrap().clone();
                     if let ScalarRef::String(key) = scalar {
-                        let value = if let Some(cached_val) = cache.get(&key) {
+                        let value = if let Some(cached_val) = cache.get(key) {
                             cached_val.clone()
                         } else {
                             drop(cache);
@@ -151,7 +152,7 @@ impl TransformAsyncFunction {
                             cache.insert(key.to_string(), val.clone());
                             val
                         };
-                        builder.put_str(val.as_str());
+                        builder.put_str(value.as_str());
                     }
                     builder.commit_row();
                 }
