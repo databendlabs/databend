@@ -77,10 +77,7 @@ impl TransformAsyncFunction {
     }
 
     // connect to redis by opendal.
-    async fn connect_to_redis(
-        &self,
-        path: &str,
-    ) -> Result<String> {
+    async fn connect_to_redis(&self, path: &str) -> Result<String> {
         let builder = Redis::default();
         let op = Operator::new(builder)?.finish();
         let buffer = op.read(path).await?;

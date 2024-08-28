@@ -108,13 +108,13 @@ impl Binder {
             fields_names.sort();
             if fields_names != vec!["key", "value"] {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
-                    "If the source is redis, there must be two fields which are `key` and `value` whose type is String."
+                    "If the source is redis, there must be two fields which are `key` and `value` whose type is String.",
                 ));
             }
             for table_field in schema.fields() {
                 if *table_field.data_type() != TableDataType::String {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(
-                        "If the source is redis, there must be two fields which are `key` and `value` whose type is String."
+                        "If the source is redis, there must be two fields which are `key` and `value` whose type is String.",
                     ));
                 }
             }

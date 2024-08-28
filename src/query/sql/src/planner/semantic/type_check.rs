@@ -888,7 +888,7 @@ impl<'a> TypeChecker<'a> {
                         }
                     }
                 } else if ASYNC_FUNCTIONS.contains(&func_name) {
-                    self.resolve_async_function(*span, func_name, &args)?
+                    self.resolve_async_function(*span, func_name, &args).await?
                 } else if BUILTIN_FUNCTIONS
                     .get_property(func_name)
                     .map(|property| property.kind == FunctionKind::SRF)
@@ -3782,7 +3782,10 @@ impl<'a> TypeChecker<'a> {
         let catalog = self.ctx.get_catalog(&cat_name).await?;
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span.clone(), func_name, arguments)?,
-            "dict_get" => self.resolve_dict_get(span.clone(), tenant, catalog, arguments)?,
+            "dict_get" => {
+                self.resolve_dict_get(span.clone(), tenant, catalog, arguments)
+                    .await?
+            }
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -4597,7 +4600,7 @@ impl<'a> TypeChecker<'a> {
 
         // Get dict_name and dict_meta.
         let box (dict_scalar, _dict_data_type) = self.resolve(dict_name)?;
-        let db_name: String ;
+        let db_name: String;
         let dict_name = if let Expr::ColumnRef { column, .. } = dict_name {
             if column.database != None {
                 return Err(ErrorCode::SemanticError(
@@ -4667,7 +4670,6 @@ impl<'a> TypeChecker<'a> {
 
         // Get primary_key_values and check types.
         // let primary_column_id = dict
-
         let primary_column_id = dictionary.primary_column_ids[0];
         let primary_field = schema.field_of_column_id(primary_column_id)?;
         let primary_type: DataType = (&primary_field.data_type).into();
@@ -4680,71 +4682,42 @@ impl<'a> TypeChecker<'a> {
             args.push(key_scalar);
         }
 
-        // 应该再加个判断
-        let url = "";
+        let url: String;
         let dict_source: DictionarySource;
         if dictionary.source.to_lowercase() == "mysql" {
             let username = match dictionary.options.get("username") {
                 Some(user) => user,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `username`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
             };
             let password = match dictionary.options.get("password") {
                 Some(psw) => psw,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `password`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `password`")),
             };
             let host = match dictionary.options.get("host") {
                 Some(host) => host,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `host`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
             };
             let port = match dictionary.options.get("port") {
                 Some(port) => port,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `port`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
             };
             let db = match dictionary.options.get("db") {
                 Some(db) => db,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `db`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
             };
-            url += "mysql://".to_string() + username + ":" + password + "@" + host + ":" + port + "/" + db;
-            dict_source = DictionarySource::Mysql(url.to_string());
+            url = format!("mysql://{}:{}@{}:{}/{}", username, password, host, port, db).to_string();
+            dict_source = DictionarySource::Mysql(url);
         } else if dictionary.source.to_lowercase() == "redis" {
             let host = match dictionary.options.get("host") {
                 Some(host) => host,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `host`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
             };
             let port = match dictionary.options.get("port") {
                 Some(port) => port,
-                None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
-                        "Miss option `port`"
-                    ))
-                },
+                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
             };
-            url += "tcp://".to_string() + host + ":" + port;
-            dict_source = DictionarySource::Redis(url.to_string());
+            url = format!("tcp://{}:{}", host, port).to_string();
+            dict_source = DictionarySource::Redis(url);
         }
 
         let dict_get_func_arg = DictGetFunctionArgument {
@@ -4753,12 +4726,15 @@ impl<'a> TypeChecker<'a> {
             key_field: Some(*primary_field.name()),
             value_field: Some(*attr_name),
         };
-        
+
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
                 func_name: "dict_get".to_string(),
-                display_name: format!("dict_get({},({}),({}))", dict_name, attr_name, primary_field.name),
+                display_name: format!(
+                    "dict_get({},({}),({}))",
+                    dict_name, attr_name, primary_field.name
+                ),
                 return_type: Box::new(*attr_type as DataType),
                 arguments: args,
                 func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
@@ -4766,7 +4742,6 @@ impl<'a> TypeChecker<'a> {
             DataType::Array(Box::new(*attr_type as DataType)), // return_type
         )))
     }
-
 }
 
 pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataType> {

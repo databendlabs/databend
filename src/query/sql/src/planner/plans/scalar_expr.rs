@@ -829,11 +829,8 @@ impl AsyncFunctionCall {
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
-                Err(ErrorCode::Internal(
-                    "Cannot generate dict_get function",
-                ))
+                Err(ErrorCode::Internal("Cannot generate dict_get function"))
             }
-
         }
     }
 }
