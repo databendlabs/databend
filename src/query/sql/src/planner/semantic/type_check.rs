@@ -1653,6 +1653,7 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
+
         if matches!(
             self.bind_context.expr_context,
             ExprContext::InSetReturningFunction
@@ -1662,6 +1663,7 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
+
         if self.in_aggregate_function {
             if self.in_window_function {
                 // The aggregate function can be in window function call,

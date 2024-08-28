@@ -312,6 +312,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         );
 
     registry
+        .register_passthrough_nullable_2_arg::<ArrayType<NullableType<StringType>>, StringType, StringType, _, _>(
+        "array_to_string",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<StringType>>, StringType, StringType>(
+            |lhs, rhs, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                for (i, d) in lhs.iter().enumerate() {
+                    if i != 0 {
+                        output.put_str(rhs);
+                    }
+                    if let Some(d) = d {
+                        output.put_str(d);
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry
         .register_passthrough_nullable_2_arg::<EmptyArrayType, UInt64Type, EmptyArrayType, _, _>(
             "slice",
             |_, _, _| FunctionDomain::Full,
