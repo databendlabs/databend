@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
@@ -37,8 +38,6 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::sessions::TableContext;
-
-const FUSE_VACUUM2_ENGINE_NAME: &str = "fuse_vacuum2_table";
 
 enum Vacuum2TableArgs {
     SingleTable {
@@ -78,7 +77,11 @@ impl SimpleTableFunc for FuseVacuum2Table {
         TableSchemaRefExt::create(vec![TableField::new("vacuumed", TableDataType::String)])
     }
 
-    async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        _: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
         let license_manager = get_license_manager();
         license_manager
             .manager
@@ -100,13 +103,12 @@ impl SimpleTableFunc for FuseVacuum2Table {
         ])))
     }
 
-    fn create(table_args: TableArgs) -> Result<Self>
+    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let args = match table_args.positioned.len() {
             0 => Vacuum2TableArgs::All,
             2 => {
-                let (arg_database_name, arg_table_name) =
-                    parse_db_tb_args(&table_args, FUSE_VACUUM2_ENGINE_NAME)?;
+                let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
                 Vacuum2TableArgs::SingleTable {
                     arg_database_name,
                     arg_table_name,

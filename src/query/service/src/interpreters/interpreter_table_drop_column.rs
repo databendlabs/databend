@@ -131,7 +131,6 @@ impl Interpreter for DropTableColumnInterpreter {
         let table_version = table_info.ident.seq;
 
         generate_new_snapshot(table.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
-        generate_new_snapshot(self.ctx.as_ref(), table.as_ref(), &mut new_table_meta).await?;
 
         let req = UpdateTableMetaReq {
             table_id,

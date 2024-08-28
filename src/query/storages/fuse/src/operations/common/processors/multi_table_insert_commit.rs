@@ -32,8 +32,8 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
@@ -108,21 +108,12 @@ impl AsyncSink for CommitMultiTableInsert {
                         table.as_ref(),
                         &snapshot_generator,
                         self.ctx.txn_mgr(),
+                        *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
                     )
                     .await?,
                     table.get_table_info().clone(),
                 ));
             }
-            update_table_metas.push((
-                build_update_table_meta_req(
-                    table.as_ref(),
-                    &snapshot_generator,
-                    self.ctx.txn_mgr(),
-                    *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
-                )
-                .await?,
-                table.get_table_info().clone(),
-            ));
             snapshot_generators.insert(table_id, snapshot_generator);
         }
 

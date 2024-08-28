@@ -151,10 +151,6 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "fuse_segment".to_string(),
-            (next_id(), Arc::new(FuseSegmentTable::create)),
-        );
-        creators.insert(
             "fuse_block".to_string(),
             (
                 next_id(),

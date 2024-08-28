@@ -113,7 +113,6 @@ impl Interpreter for AddTableColumnInterpreter {
         new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
         generate_new_snapshot(tbl.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
-        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -163,7 +162,6 @@ impl Interpreter for AddTableColumnInterpreter {
 }
 
 pub(crate) async fn generate_new_snapshot(
-    ctx: &QueryContext,
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
     ctx: &dyn TableContext,

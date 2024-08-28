@@ -678,6 +678,10 @@ impl Catalog for SessionCatalog {
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.inner.list_dictionaries(req).await
     }
+
+    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply> {
+        self.inner.set_table_lvt(req).await
+    }
 }
 
 impl SessionCatalog {
@@ -687,9 +691,5 @@ impl SessionCatalog {
 
     pub fn inner(&self) -> MutableCatalog {
         self.inner.clone()
-    }
-
-    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply> {
-        self.inner.set_table_lvt(req).await
     }
 }

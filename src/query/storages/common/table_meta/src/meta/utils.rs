@@ -26,7 +26,6 @@ use databend_common_base::base::uuid;
 use databend_common_base::base::uuid::NoContext;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::table::table_storage_prefix;
@@ -144,7 +143,29 @@ pub fn trim_v5_object_prefix(key: &str) -> &str {
     key.strip_prefix(V5_OBJECT_KEY_PREFIX).unwrap_or(key)
 }
 
+pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -> Result<String> {
+    // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
+    if let Some(prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
+        return Ok(prefix.clone());
+    }
+
+    // otherwise, use database id and table id as storage prefix
+
+    let db_id = options.get(OPT_KEY_DATABASE_ID).ok_or_else(|| {
+        ErrorCode::Internal(format!(
+            "Invalid fuse table, table option {} not found",
+            OPT_KEY_DATABASE_ID
+        ))
+    })?;
+    let mut prefix = table_storage_prefix(db_id, table_id);
+    if let Some(temp_prefix) = options.get(OPT_KEY_TEMP_PREFIX) {
+        prefix = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, temp_prefix, prefix);
+    }
+    Ok(prefix)
+}
+
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     fn assert_order_preserved(
         ts1: chrono::DateTime<chrono::Utc>,
@@ -167,25 +188,4 @@ mod tests {
         assert_order_preserved(now, ts);
         assert_order_preserved(ts - chrono::Duration::milliseconds(1), ts);
     }
-}
-
-pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -> Result<String> {
-    // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
-    if let Some(prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
-        return Ok(prefix.clone());
-    }
-
-    // otherwise, use database id and table id as storage prefix
-
-    let db_id = options.get(OPT_KEY_DATABASE_ID).ok_or_else(|| {
-        ErrorCode::Internal(format!(
-            "Invalid fuse table, table option {} not found",
-            OPT_KEY_DATABASE_ID
-        ))
-    })?;
-    let mut prefix = table_storage_prefix(db_id, table_id);
-    if let Some(temp_prefix) = options.get(OPT_KEY_TEMP_PREFIX) {
-        prefix = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, temp_prefix, prefix);
-    }
-    Ok(prefix)
 }
