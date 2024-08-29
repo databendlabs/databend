@@ -782,14 +782,14 @@ impl<Index: ColumnIndex> Expr<Index> {
                         "'nan'::Float64".to_string()
                     }
                     Scalar::Number(NumberScalar::Float32(f)) if f.is_infinite() => {
-                        if f != f32::NEG_INFINITY {
+                        if *f != f32::NEG_INFINITY {
                             "'inf'::Float32".to_string()
                         } else {
                             "'-inf'::Float32".to_string()
                         }
                     }
                     Scalar::Number(NumberScalar::Float64(f)) if f.is_infinite() => {
-                        if f != f64::NEG_INFINITY {
+                        if *f != f64::NEG_INFINITY {
                             "'inf'::Float64".to_string()
                         } else {
                             "'-inf'::Float64".to_string()
