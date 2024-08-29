@@ -334,8 +334,9 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) =
-            DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
+        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+            .optimize(&s_expr)
+            .await?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;
@@ -422,8 +423,9 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) =
-            DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
+        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+            .optimize(&s_expr)
+            .await?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;

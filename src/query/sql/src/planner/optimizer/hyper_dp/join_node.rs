@@ -39,7 +39,7 @@ pub struct JoinNode {
 }
 
 impl JoinNode {
-    pub fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
+    pub async fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
         if let Some(card) = self.cardinality {
             return Ok(card);
         }
