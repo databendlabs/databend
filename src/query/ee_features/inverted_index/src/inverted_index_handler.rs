@@ -17,9 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 
 #[async_trait::async_trait]
@@ -28,13 +26,13 @@ pub trait InvertedIndexHandler: Sync + Send {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateTableIndexReq,
-    ) -> Result<CreateTableIndexReply>;
+    ) -> Result<()>;
 
     async fn do_drop_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropTableIndexReq,
-    ) -> Result<DropTableIndexReply>;
+    ) -> Result<()>;
 }
 
 pub struct InvertedIndexHandlerWrapper {
@@ -51,7 +49,7 @@ impl InvertedIndexHandlerWrapper {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateTableIndexReq,
-    ) -> Result<CreateTableIndexReply> {
+    ) -> Result<()> {
         self.handler.do_create_table_index(catalog, req).await
     }
 
@@ -60,7 +58,7 @@ impl InvertedIndexHandlerWrapper {
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropTableIndexReq,
-    ) -> Result<DropTableIndexReply> {
+    ) -> Result<()> {
         self.handler.do_drop_table_index(catalog, req).await
     }
 }
