@@ -33,12 +33,13 @@ use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::schema::TableId;
@@ -70,6 +71,7 @@ use databend_common_meta_app::share::ShareReferenceTable;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTable;
 use databend_common_meta_app::share::ShareTableSpec;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -279,7 +281,7 @@ pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
 pub async fn fetch_id<T: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     generator: T,
-) -> Result<u64, KVAppError> {
+) -> Result<u64, MetaError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: generator.to_string_key(),
@@ -325,7 +327,7 @@ where T: FromToProto {
 pub async fn send_txn(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     txn_req: TxnRequest,
-) -> Result<(bool, Vec<TxnOpResponse>), KVAppError> {
+) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
     debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
     let (succ, responses) = txn_reply_to_api_result(tx_reply)?;
@@ -1277,13 +1279,15 @@ pub async fn get_table_info_by_share(
 
 pub async fn get_index_metas_by_ids(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
     id_name_list: Vec<(u64, String)>,
 ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
     let mut index_meta_keys = Vec::with_capacity(id_name_list.len());
     for (id, _) in id_name_list.iter() {
-        let index_id = IndexId { index_id: *id };
+        let index_id = IndexId::new(*id);
+        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
 
-        index_meta_keys.push(index_id.to_string_key());
+        index_meta_keys.push(id_ident.to_string_key());
     }
 
     let seq_index_metas = kv_api.mget_kv(&index_meta_keys).await?;

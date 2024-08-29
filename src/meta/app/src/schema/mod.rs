@@ -21,6 +21,8 @@ pub mod catalog_name_ident;
 pub mod database_id;
 pub mod database_id_history_ident;
 pub mod database_name_ident;
+pub mod index_id_ident;
+pub mod index_id_to_name_ident;
 pub mod index_name_ident;
 pub mod table_lock_ident;
 pub mod tenant_dictionary_ident;

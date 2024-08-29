@@ -19,7 +19,6 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -34,11 +33,7 @@ pub trait AggregatingIndexHandler: Sync + Send {
         req: CreateIndexReq,
     ) -> Result<CreateIndexReply>;
 
-    async fn do_drop_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: DropIndexReq,
-    ) -> Result<DropIndexReply>;
+    async fn do_drop_index(&self, catalog: Arc<dyn Catalog>, req: DropIndexReq) -> Result<()>;
 
     async fn do_get_index(
         &self,
@@ -72,11 +67,7 @@ impl AggregatingIndexHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn do_drop_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: DropIndexReq,
-    ) -> Result<DropIndexReply> {
+    pub async fn do_drop_index(&self, catalog: Arc<dyn Catalog>, req: DropIndexReq) -> Result<()> {
         self.handler.do_drop_index(catalog, req).await
     }
 

@@ -48,7 +48,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
@@ -599,7 +598,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
         self.mutable_catalog.drop_index(req).await
     }
 

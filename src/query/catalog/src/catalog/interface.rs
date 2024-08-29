@@ -43,7 +43,6 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
@@ -167,7 +166,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply>;
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
 

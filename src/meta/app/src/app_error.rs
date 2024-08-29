@@ -20,6 +20,7 @@ use databend_common_meta_types::MatchSeq;
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
 use crate::schema::catalog_name_ident;
+use crate::schema::index_name_ident;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::ident::TIdent;
@@ -815,38 +816,6 @@ impl CreateIndexWithDropTime {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("IndexAlreadyExists: `{index_name}` while `{context}`")]
-pub struct IndexAlreadyExists {
-    index_name: String,
-    context: String,
-}
-
-impl IndexAlreadyExists {
-    pub fn new(index_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            index_name: index_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownIndex: `{index_name}` while `{context}`")]
-pub struct UnknownIndex {
-    index_name: String,
-    context: String,
-}
-
-impl UnknownIndex {
-    pub fn new(index_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            index_name: index_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DropIndexWithDropTime: drop {index_name} with drop time")]
 pub struct DropIndexWithDropTime {
     index_name: String,
@@ -1178,10 +1147,10 @@ pub enum AppError {
     CreateIndexWithDropTime(#[from] CreateIndexWithDropTime),
 
     #[error(transparent)]
-    IndexAlreadyExists(#[from] IndexAlreadyExists),
+    IndexAlreadyExists(#[from] ExistError<index_name_ident::IndexName>),
 
     #[error(transparent)]
-    UnknownIndex(#[from] UnknownIndex),
+    UnknownIndex(#[from] UnknownError<index_name_ident::IndexName>),
 
     #[error(transparent)]
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
@@ -1543,18 +1512,6 @@ impl AppErrorMessage for DropDbWithDropTime {
 impl AppErrorMessage for CreateIndexWithDropTime {
     fn message(&self) -> String {
         format!("Create Index '{}' with drop time", self.index_name)
-    }
-}
-
-impl AppErrorMessage for IndexAlreadyExists {
-    fn message(&self) -> String {
-        format!("Index '{}' already exists", self.index_name)
-    }
-}
-
-impl AppErrorMessage for UnknownIndex {
-    fn message(&self) -> String {
-        format!("Unknown index '{}'", self.index_name)
     }
 }
 

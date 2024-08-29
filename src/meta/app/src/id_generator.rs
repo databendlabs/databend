@@ -14,6 +14,7 @@
 
 use databend_common_meta_kvapi::kvapi;
 
+pub(crate) const ID_GEN_GENERIC: &str = "generic";
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
 pub(crate) const ID_GEN_TABLE_LOCK: &str = "table_lock_id";
@@ -39,6 +40,13 @@ pub struct IdGenerator {
 }
 
 impl IdGenerator {
+    /// Create a key for generating generic id
+    pub fn generic() -> Self {
+        Self {
+            resource: ID_GEN_GENERIC.to_string(),
+        }
+    }
+
     /// Create a key for generating table id with kvapi::KVApi
     pub fn table_id() -> Self {
         Self {
