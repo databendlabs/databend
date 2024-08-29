@@ -158,6 +158,20 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<InvertedIndexMeta> {
+        if params.ver > 0 {
+            // read the ThriftFileMetaData, omit unnecessary conversions
+            let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+                .await
+                .map_err(|err| {
+                    ErrorCode::StorageOther(format!(
+                        "read file meta failed, {}, {:?}",
+                        params.location, err
+                    ))
+                })?;
+
+            return InvertedIndexMeta::try_from(meta);
+        }
+
         let operator = &self.0;
         let meta = operator.stat(&params.location).await.map_err(|err| {
             ErrorCode::StorageOther(format!(

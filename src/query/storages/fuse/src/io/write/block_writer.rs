@@ -295,7 +295,15 @@ impl InvertedIndexState {
             &inverted_index_builder.options,
         )?;
         writer.add_block(source_schema, block)?;
-        let data = writer.finalize()?;
+        let (index_schema, index_block) = writer.finalize()?;
+
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = blocks_to_parquet(
+            &index_schema,
+            vec![index_block],
+            &mut data,
+            TableCompression::None,
+        )?;
         let size = data.len() as u64;
 
         // Perf.

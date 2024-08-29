@@ -64,7 +64,8 @@ sha2 = { workspace = true }
 siphasher = "0.3.10"
 sys-info = "0.9"
 tantivy = { workspace = true }
-tantivy-jieba = "0.11.0"
+tantivy-fst = "0.5"
+tantivy-jieba = { git = "https://github.com/b41sh/tantivy-jieba", rev = "af84361" }
 thrift = "0.17.0"
 typetag = { workspace = true }
 uuid = { workspace = true }

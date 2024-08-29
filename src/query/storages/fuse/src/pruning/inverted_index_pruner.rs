@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
@@ -20,8 +21,10 @@ use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use opendal::Operator;
 use tantivy::query::Query;
+use tantivy::query::QueryClone;
 use tantivy::query::QueryParser;
 use tantivy::schema::Field;
+use tantivy::schema::IndexRecordOption;
 use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::create_index_schema;
@@ -56,6 +59,9 @@ pub struct InvertedIndexPruner {
     need_position: bool,
     tokenizer_manager: TokenizerManager,
     query: Box<dyn Query>,
+    field_ids: HashSet<usize>,
+    index_record: IndexRecordOption,
+    fuzziness: Option<u8>,
 }
 
 impl InvertedIndexPruner {
@@ -65,14 +71,26 @@ impl InvertedIndexPruner {
     ) -> Result<Option<Arc<InvertedIndexPruner>>> {
         let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
         if let Some(inverted_index_info) = inverted_index_info {
-            let (query, tokenizer_manager) = create_inverted_index_query(inverted_index_info)?;
+            let (query, fuzziness, tokenizer_manager) =
+                create_inverted_index_query(inverted_index_info)?;
+
+            let index_record: IndexRecordOption =
+                match inverted_index_info.index_options.get("index_record") {
+                    Some(v) => serde_json::from_str(v)?,
+                    None => IndexRecordOption::WithFreqsAndPositions,
+                };
 
             let mut need_position = false;
-            query.query_terms(&mut |_, pos| {
+            let mut field_ids = HashSet::new();
+            query.query_terms(&mut |term, pos| {
+                let field = term.field();
+                let field_id = field.field_id() as usize;
+                field_ids.insert(field_id);
                 if pos {
                     need_position = true;
                 }
             });
+
             // whether need to generate score internl column
             let has_score = inverted_index_info.has_score;
             let field_nums = inverted_index_info.index_schema.num_fields();
@@ -88,6 +106,9 @@ impl InvertedIndexPruner {
                 need_position,
                 tokenizer_manager,
                 query,
+                field_ids,
+                index_record,
+                fuzziness,
             })));
         }
         Ok(None)
@@ -105,20 +126,22 @@ impl InvertedIndexPruner {
             &self.index_version,
         );
 
-        let inverted_index_reader = InvertedIndexReader::try_create(
-            self.dal.clone(),
-            self.field_nums,
-            self.need_position,
-            &index_loc,
-        )
-        .await?;
+        let inverted_index_reader = InvertedIndexReader::create(self.dal.clone());
 
-        let matched_rows = inverted_index_reader.do_filter(
-            self.has_score,
-            &self.query,
-            self.tokenizer_manager.clone(),
-            row_count,
-        )?;
+        let matched_rows = inverted_index_reader
+            .do_filter(
+                self.field_nums,
+                self.need_position,
+                self.has_score,
+                self.query.box_clone(),
+                &self.field_ids,
+                &self.index_record,
+                &self.fuzziness,
+                self.tokenizer_manager.clone(),
+                row_count as u32,
+                &index_loc,
+            )
+            .await?;
 
         Ok(matched_rows)
     }
@@ -127,7 +150,7 @@ impl InvertedIndexPruner {
 // create tantivy query for inverted index.
 pub fn create_inverted_index_query(
     inverted_index_info: &InvertedIndexInfo,
-) -> Result<(Box<dyn Query>, TokenizerManager)> {
+) -> Result<(Box<dyn Query>, Option<u8>, TokenizerManager)> {
     // collect query fields and optional boosts
     let mut query_fields = Vec::with_capacity(inverted_index_info.query_fields.len());
     let mut query_field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
@@ -159,11 +182,11 @@ pub fn create_inverted_index_query(
     let fuzziness = inverted_index_info
         .inverted_index_option
         .as_ref()
-        .and_then(|o| o.fuzziness.as_ref());
+        .and_then(|o| o.fuzziness);
     if let Some(fuzziness) = fuzziness {
         // Fuzzy query matches rows containing a specific term that is within Levenshtein distance.
         for field in query_fields {
-            query_parser.set_field_fuzzy(field, false, *fuzziness, true);
+            query_parser.set_field_fuzzy(field, false, fuzziness, true);
         }
     }
     let operator = inverted_index_info
@@ -189,5 +212,5 @@ pub fn create_inverted_index_query(
         query_parser.parse_query(&inverted_index_info.query_text)?
     };
 
-    Ok((query, tokenizer_manager))
+    Ok((query, fuzziness, tokenizer_manager))
 }

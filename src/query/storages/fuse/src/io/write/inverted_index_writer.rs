@@ -20,11 +20,16 @@ use std::path::Path;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_storages_common_index::extract_component_fields;
+use databend_storages_common_index::extract_fsts;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -130,15 +135,39 @@ impl InvertedIndexWriter {
     }
 
     #[async_backtrace::framed]
-    pub fn finalize(mut self) -> Result<Vec<u8>> {
+    pub fn finalize(mut self) -> Result<(TableSchema, DataBlock)> {
         let _ = self.index_writer.run(self.operations);
         let _ = self.index_writer.commit()?;
         let index = self.index_writer.index();
 
-        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        Self::write_index(&mut buffer, index)?;
+        let mut fields = Vec::new();
+        let mut values = Vec::new();
 
-        Ok(buffer)
+        let segments = index.searchable_segments()?;
+        let segment = &segments[0];
+
+        let termdict_file = segment.open_read(SegmentComponent::Terms)?;
+        extract_fsts(termdict_file, &mut fields, &mut values)?;
+
+        let posting_file = segment.open_read(SegmentComponent::Postings)?;
+        extract_component_fields("idx", posting_file, &mut fields, &mut values)?;
+
+        let position_file = segment.open_read(SegmentComponent::Positions)?;
+        extract_component_fields("pos", position_file, &mut fields, &mut values)?;
+
+        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
+        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
+
+        let inverted_index_schema = TableSchema::new(fields);
+
+        let mut index_columns = Vec::with_capacity(values.len());
+        for value in values.into_iter() {
+            let index_value = Value::Scalar(value);
+            index_columns.push(BlockEntry::new(DataType::Binary, index_value));
+        }
+        let inverted_index_block = DataBlock::new(index_columns, 1);
+
+        Ok((inverted_index_schema, inverted_index_block))
     }
 
     // The tantivy index data consists of eight files.
