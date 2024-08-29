@@ -29,7 +29,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -43,14 +42,12 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
-use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
@@ -259,25 +256,16 @@ pub trait SchemaApi: Send + Sync {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply, KVAppError>;
 
-    async fn create_table_index(
-        &self,
-        req: CreateTableIndexReq,
-    ) -> Result<CreateTableIndexReply, KVAppError>;
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<(), KVAppError>;
 
-    async fn drop_table_index(
-        &self,
-        req: DropTableIndexReq,
-    ) -> Result<DropTableIndexReply, KVAppError>;
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<(), KVAppError>;
 
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
     ) -> Result<ListDroppedTableResp, KVAppError>;
 
-    async fn gc_drop_tables(
-        &self,
-        req: GcDroppedTableReq,
-    ) -> Result<GcDroppedTableResp, KVAppError>;
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError>;
 
     async fn list_lock_revisions(
         &self,

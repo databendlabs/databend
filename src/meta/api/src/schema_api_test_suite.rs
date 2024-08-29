@@ -3469,7 +3469,7 @@ impl SchemaApiTestSuite {
                 tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                 drop_ids: resp.drop_ids.clone(),
             };
-            let _resp = mt.gc_drop_tables(req).await?;
+            mt.gc_drop_tables(req).await?;
         }
 
         // assert db id list key has been removed
@@ -3679,7 +3679,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 drop_ids: resp.drop_ids.clone(),
             };
-            let _resp = mt.gc_drop_tables(req).await?;
+            mt.gc_drop_tables(req).await?;
         }
 
         // assert table id list key has been removed
@@ -3876,7 +3876,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 drop_ids: resp.drop_ids.clone(),
             };
-            let _resp = mt.gc_drop_tables(req).await?;
+            mt.gc_drop_tables(req).await?;
         }
 
         // assert db id list has been removed
@@ -5254,7 +5254,7 @@ impl SchemaApiTestSuite {
                 tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                 drop_ids: resp.drop_ids.clone(),
             };
-            let _resp = mt.gc_drop_tables(req).await?;
+            mt.gc_drop_tables(req).await?;
 
             // assert orphan table id list and table meta has been vacuum
             let seqv = mt
