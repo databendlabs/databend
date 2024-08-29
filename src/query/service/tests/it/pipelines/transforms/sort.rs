@@ -71,15 +71,31 @@ async fn test_k_way_merge_sort() -> Result<()> {
 async fn test_k_way_merge_sort_fuzz() -> Result<()> {
     let mut rng = rand::thread_rng();
     let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
 
-    let worker = 3;
-    let block_size = 10;
-    let (data, expected, limit) = random_test_data(&mut rng, false);
-
-    for (input, blocks) in data.iter().enumerate() {
-        println!("intput {input} {blocks:?}\n\n\n");
+    for _ in 0..10 {
+        let ctx = fixture.new_query_ctx().await?;
+        run_fuzz(ctx, &mut rng, false).await?;
     }
+
+    for _ in 0..10 {
+        let ctx = fixture.new_query_ctx().await?;
+        run_fuzz(ctx, &mut rng, true).await?;
+    }
+    Ok(())
+}
+
+async fn run_fuzz(ctx: Arc<QueryContext>, rng: &mut ThreadRng, with_limit: bool) -> Result<()> {
+    let worker = rng.gen_range(1..=5);
+    let block_size = rng.gen_range(1..=20);
+    let (data, expected, limit) = random_test_data(rng, with_limit);
+
+    // println!("\nwith_limit {with_limit}");
+    // for (input, blocks) in data.iter().enumerate() {
+    //     println!("intput {input}");
+    //     for b in blocks {
+    //         println!("{:?}", b.columns()[0].value);
+    //     }
+    // }
 
     let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit)?;
     executor.execute()?;
@@ -165,7 +181,7 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
     let mut items = Vec::with_capacity(size);
     for _index in 0..size {
         let input = InputPort::create();
-        let (tx, rx) = channel(100);
+        let (tx, rx) = channel(1000);
         rxs.push(rx);
         items.push(PipeItem::create(
             ProcessorPtr::create(SyncSenderSink::create(tx, input.clone())),

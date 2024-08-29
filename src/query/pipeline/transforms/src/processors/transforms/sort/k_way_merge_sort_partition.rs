@@ -26,7 +26,7 @@ use super::utils::u32_entry;
 use super::Rows;
 use super::SortedStream;
 
-pub struct KWaySortPartition<R, S>
+pub struct KWaySortPartitioner<R, S>
 where
     R: Rows,
     S: SortedStream,
@@ -43,7 +43,7 @@ where
     cur_task: u32,
 }
 
-impl<R, S> KWaySortPartition<R, S>
+impl<R, S> KWaySortPartitioner<R, S>
 where
     R: Rows,
     S: SortedStream,
@@ -52,7 +52,7 @@ where
         schema: DataSchemaRef,
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
-        // batch_rows: usize,
+        _batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
         // We only create a merger when there are at least two streams.

@@ -37,12 +37,13 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
+use match_template::match_template;
 
 use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::utils::u32_entry;
-use super::sort::KWaySortPartition;
+use super::sort::KWaySortPartitioner;
 use super::sort::Merger;
 use super::sort::Rows;
 use super::sort::SimpleRows;
@@ -63,53 +64,53 @@ pub fn add_k_way_merge_sort(
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
     }
 
-    struct Args {
-        schema: DataSchemaRef,
-        stream_count: usize,
-        worker: usize,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
-        block_size: usize,
-        limit: Option<usize>,
-        remove_order_col: bool,
-        enable_loser_tree: bool,
-    }
-
-    fn add<R>(args: Args, pipeline: &mut Pipeline) -> Result<()>
-    where R: Rows + Send + 'static {
-        if args.enable_loser_tree {
-            let b = Builder::<LoserTreeSort<R>> {
-                schema: args.schema,
-                stream_count: args.stream_count,
-                worker: args.worker,
-                sort_desc: args.sort_desc,
-                block_size: args.block_size,
-                limit: args.limit,
-                remove_order_col: args.remove_order_col,
-                _a: Default::default(),
-            };
-            b.build(pipeline)
-        } else {
-            let b = Builder::<HeapSort<R>> {
-                schema: args.schema,
-                stream_count: args.stream_count,
-                worker: args.worker,
-                sort_desc: args.sort_desc,
-                block_size: args.block_size,
-                limit: args.limit,
-                remove_order_col: args.remove_order_col,
-                _a: Default::default(),
-            };
-            b.build(pipeline)
-        }
-    }
-
     match pipeline.output_len() {
         0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
         1 => Ok(()),
         pipe_size => {
+            struct Args {
+                schema: DataSchemaRef,
+                stream_size: usize,
+                worker: usize,
+                sort_desc: Arc<Vec<SortColumnDescription>>,
+                block_size: usize,
+                limit: Option<usize>,
+                remove_order_col: bool,
+                enable_loser_tree: bool,
+            }
+
+            fn add<R>(args: Args, pipeline: &mut Pipeline) -> Result<()>
+            where R: Rows + Send + 'static {
+                if args.enable_loser_tree {
+                    let b = Builder::<LoserTreeSort<R>> {
+                        schema: args.schema,
+                        stream_size: args.stream_size,
+                        worker: args.worker,
+                        sort_desc: args.sort_desc,
+                        block_size: args.block_size,
+                        limit: args.limit,
+                        remove_order_col: args.remove_order_col,
+                        _a: Default::default(),
+                    };
+                    b.build(pipeline)
+                } else {
+                    let b = Builder::<HeapSort<R>> {
+                        schema: args.schema,
+                        stream_size: args.stream_size,
+                        worker: args.worker,
+                        sort_desc: args.sort_desc,
+                        block_size: args.block_size,
+                        limit: args.limit,
+                        remove_order_col: args.remove_order_col,
+                        _a: Default::default(),
+                    };
+                    b.build(pipeline)
+                }
+            }
+
             let args = Args {
                 schema,
-                stream_count: pipe_size,
+                stream_size: pipe_size,
                 worker,
                 sort_desc,
                 block_size,
@@ -120,15 +121,16 @@ pub fn add_k_way_merge_sort(
 
             if args.sort_desc.len() == 1 {
                 let sort_type = args.schema.field(args.sort_desc[0].offset).data_type();
-                match sort_type {
-                    DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                        NumberDataType::NUM_TYPE =>
-                            add::<SimpleRows<NumberType<NUM_TYPE>>>(args, pipeline),
-                    }),
-                    DataType::Date => add::<SimpleRows<DateType>>(args, pipeline),
-                    DataType::Timestamp => add::<SimpleRows<TimestampType>>(args, pipeline),
-                    DataType::String => add::<SimpleRows<StringType>>(args, pipeline),
-                    _ => add::<BinaryColumn>(args, pipeline),
+                match_template! {
+                    T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
+                    match sort_type {
+                        DataType::T => add::<SimpleRows<T>>(args, pipeline),
+                        DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                            NumberDataType::NUM_TYPE =>
+                                add::<SimpleRows<NumberType<NUM_TYPE>>>(args, pipeline),
+                        }),
+                        _ => add::<BinaryColumn>(args, pipeline),
+                    }
                 }
             } else {
                 add::<BinaryColumn>(args, pipeline)
@@ -141,7 +143,7 @@ struct Builder<A>
 where A: SortAlgorithm
 {
     schema: DataSchemaRef,
-    stream_count: usize,
+    stream_size: usize,
     worker: usize,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     block_size: usize,
@@ -155,12 +157,13 @@ where
     A: SortAlgorithm + Send + 'static,
     <A as SortAlgorithm>::Rows: Send + 'static,
 {
-    fn create_partition(&self, input: usize) -> Pipe {
-        create_partition_pipe::<A::Rows>(
+    fn create_partitioner(&self, input: usize) -> Pipe {
+        create_partitioner_pipe::<A::Rows>(
             (0..input).map(|_| InputPort::create()).collect(),
             self.worker,
             self.schema.clone(),
             self.sort_desc.clone(),
+            self.block_size,
             self.limit,
         )
     }
@@ -168,102 +171,102 @@ where
     fn create_worker(
         &self,
         input: Arc<InputPort>,
-        stream_count: usize,
+        stream_size: usize,
         output: Arc<OutputPort>,
-        block_size: usize,
+        batch_rows: usize,
     ) -> KWayMergeWorkerProcessor<A> {
         KWayMergeWorkerProcessor::<A>::new(
             input,
-            stream_count,
+            stream_size,
             output,
             self.schema.clone(),
-            block_size,
+            batch_rows,
             self.sort_desc.clone(),
             self.remove_order_col,
         )
     }
 
-    fn create_combine(&self) -> Pipe {
-        let input_ports = (0..self.worker)
+    fn create_combiner(&self) -> Pipe {
+        let inputs_port = (0..self.worker)
             .map(|_| InputPort::create())
             .collect::<Vec<_>>();
         let output = OutputPort::create();
 
-        let processor = ProcessorPtr::create(Box::new(KWayMergeCombineProcessor::new(
-            input_ports.clone(),
+        let processor = ProcessorPtr::create(Box::new(KWayMergeCombinerProcessor::new(
+            inputs_port.clone(),
             output.clone(),
             self.limit,
         )));
 
         Pipe::create(self.worker, 1, vec![PipeItem::create(
             processor,
-            input_ports,
+            inputs_port,
             vec![output],
         )])
     }
 
     fn build(&self, pipeline: &mut Pipeline) -> Result<()> {
-        pipeline.add_pipe(self.create_partition(self.stream_count));
+        pipeline.add_pipe(self.create_partitioner(self.stream_size));
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(self.create_worker(
                 input,
-                self.stream_count,
+                self.stream_size,
                 output,
                 self.block_size,
             ))))
         })?;
 
-        pipeline.add_pipe(self.create_combine());
+        pipeline.add_pipe(self.create_combiner());
         Ok(())
     }
 }
 
-pub fn create_partition_pipe<R>(
-    input_ports: Vec<Arc<InputPort>>,
+pub fn create_partitioner_pipe<R>(
+    inputs_port: Vec<Arc<InputPort>>,
     worker: usize,
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
+    batch_rows: usize,
     limit: Option<usize>,
 ) -> Pipe
 where
     R: Rows + Send + 'static,
 {
-    let output_ports = (0..worker)
-        .map(|_| OutputPort::create())
-        .collect::<Vec<_>>();
-    let processor = ProcessorPtr::create(Box::new(KWayMergePartitionProcessor::<R>::new(
-        input_ports.clone(),
-        output_ports.clone(),
+    let outputs_port: Vec<_> = (0..worker).map(|_| OutputPort::create()).collect();
+    let processor = ProcessorPtr::create(Box::new(KWayMergePartitionerProcessor::<R>::new(
+        inputs_port.clone(),
+        outputs_port.clone(),
         schema,
         sort_desc,
+        batch_rows,
         limit,
     )));
 
-    Pipe::create(input_ports.len(), worker, vec![PipeItem::create(
+    Pipe::create(inputs_port.len(), worker, vec![PipeItem::create(
         processor,
-        input_ports,
-        output_ports,
+        inputs_port,
+        outputs_port,
     )])
 }
 
-pub struct KWayMergePartitionProcessor<R: Rows> {
-    partition: KWaySortPartition<R, InputBlockStream>,
+pub struct KWayMergePartitionerProcessor<R: Rows> {
+    partitioner: KWaySortPartitioner<R, InputBlockStream>,
     inputs: Vec<Arc<InputPort>>,
     outputs: Vec<Arc<OutputPort>>,
 
     task: VecDeque<DataBlock>,
-    cur: Option<usize>,
+    cur_output: Option<usize>,
     next: usize,
 }
 
-impl<R: Rows> KWayMergePartitionProcessor<R> {
+impl<R: Rows> KWayMergePartitionerProcessor<R> {
     pub fn new(
         inputs: Vec<Arc<InputPort>>,
         outputs: Vec<Arc<OutputPort>>,
         schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
-        // batch_rows: usize,
+        batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
         let streams = inputs
@@ -272,11 +275,11 @@ impl<R: Rows> KWayMergePartitionProcessor<R> {
             .collect::<Vec<_>>();
 
         Self {
-            partition: KWaySortPartition::new(schema, streams, sort_desc, limit),
+            partitioner: KWaySortPartitioner::new(schema, streams, sort_desc, batch_rows, limit),
             inputs,
             outputs,
             task: VecDeque::new(),
-            cur: None,
+            cur_output: None,
             next: 0,
         }
     }
@@ -288,20 +291,20 @@ impl<R: Rows> KWayMergePartitionProcessor<R> {
                 i -= n;
             }
             if self.outputs[i].can_push() {
-                self.cur = Some(i);
+                self.cur_output = Some(i);
                 self.next = if i + 1 == n { 0 } else { i + 1 };
-                return self.cur;
+                return self.cur_output;
             }
         }
         None
     }
 }
 
-impl<R> Processor for KWayMergePartitionProcessor<R>
+impl<R> Processor for KWayMergePartitionerProcessor<R>
 where R: Rows + Send + 'static
 {
     fn name(&self) -> String {
-        "KWayMergePartition".to_string()
+        "KWayMergePartitioner".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -315,7 +318,7 @@ where R: Rows + Send + 'static
         }
 
         if !self.task.is_empty() {
-            let output = match self.cur {
+            let output = match self.cur_output {
                 Some(i) => &self.outputs[i],
                 None => match self.find_output() {
                     Some(cur) => &self.outputs[cur],
@@ -328,25 +331,26 @@ where R: Rows + Send + 'static
             }
 
             let block = self.task.pop_front().unwrap();
+            debug_assert!(block.num_rows() > 0);
             output.push_data(Ok(block));
             if self.task.is_empty() {
-                self.cur = None;
+                self.cur_output = None;
             }
             return Ok(Event::NeedConsume);
         }
 
-        if self.partition.is_finished() {
+        if self.partitioner.is_finished() {
             self.outputs.iter().for_each(|o| o.finish());
             self.inputs.iter().for_each(|i| i.finish());
             return Ok(Event::Finished);
         }
 
-        if self.cur.is_none() && self.find_output().is_none() {
+        if self.cur_output.is_none() && self.find_output().is_none() {
             return Ok(Event::NeedConsume);
         }
 
-        self.partition.poll_pending_stream()?;
-        if self.partition.has_pending_stream() {
+        self.partitioner.poll_pending_stream()?;
+        if self.partitioner.has_pending_stream() {
             Ok(Event::NeedData)
         } else {
             Ok(Event::Sync)
@@ -354,7 +358,7 @@ where R: Rows + Send + 'static
     }
 
     fn process(&mut self) -> Result<()> {
-        let task = self.partition.next_task()?;
+        let task = self.partitioner.next_task()?;
         self.task.extend(task);
         Ok(())
     }
@@ -365,9 +369,9 @@ where A: SortAlgorithm
 {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    stream_count: usize,
+    stream_size: usize,
     schema: DataSchemaRef,
-    block_size: usize,
+    batch_rows: usize,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     remove_order_col: bool,
 
@@ -382,15 +386,15 @@ where A: SortAlgorithm
 {
     const INPUT_ID_POS: usize = 1;
     const TASK_ROWS_POS: usize = 2;
-    const TASK_ID_POS: usize = 3;
+    const TASK_POS: usize = 3;
     const SORT_COL_POS: usize = 4;
 
     pub fn new(
         input: Arc<InputPort>,
-        stream_count: usize,
+        stream_size: usize,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        block_size: usize,
+        batch_rows: usize,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
     ) -> Self {
@@ -398,9 +402,9 @@ where A: SortAlgorithm
             input,
             output,
             output_data: VecDeque::new(),
-            stream_count,
+            stream_size,
             schema,
-            block_size,
+            batch_rows,
             sort_desc,
             remove_order_col,
             buffer: Vec::new(),
@@ -429,13 +433,13 @@ where A: SortAlgorithm
         let mut block = self.input.pull_data().unwrap()?;
         self.input.set_need_data();
 
-        let task_id = get_u32(&block, Self::TASK_ID_POS);
+        let task = get_u32(&block, Self::TASK_POS);
         let task_rows = get_u32(&block, Self::TASK_ROWS_POS);
 
         let rows = block.num_rows();
         match &mut self.info {
             Some(info) => {
-                debug_assert_eq!(task_id, info.task_id);
+                debug_assert_eq!(task, info.task);
                 debug_assert_eq!(task_rows as usize, info.total);
                 assert!(info.remain >= rows);
                 info.remain -= rows;
@@ -450,13 +454,13 @@ where A: SortAlgorithm
             }
             None if task_rows as usize == rows => {
                 let n = block.num_columns();
-                let task_id = block.get_by_offset(n - Self::TASK_ID_POS).clone();
+                let task_id = block.get_by_offset(n - Self::TASK_POS).clone();
                 let task_rows = block.get_by_offset(n - Self::TASK_ROWS_POS).clone();
 
                 if self.remove_order_col {
                     block.pop_columns(Self::SORT_COL_POS);
                 } else {
-                    block.pop_columns(Self::TASK_ID_POS);
+                    block.pop_columns(Self::TASK_POS);
                 }
 
                 block.add_column(task_id);
@@ -469,7 +473,7 @@ where A: SortAlgorithm
                 let total = task_rows as usize;
                 assert!(total >= rows);
                 self.info = Some(Info {
-                    task_id,
+                    task,
                     total,
                     remain: total - rows,
                 });
@@ -480,7 +484,7 @@ where A: SortAlgorithm
     }
 
     fn streams(&mut self) -> Vec<BlockStream> {
-        let mut streams = vec![VecDeque::new(); self.stream_count];
+        let mut streams = vec![VecDeque::new(); self.stream_size];
 
         for mut block in self.buffer.drain(..) {
             let n = block.num_columns();
@@ -495,7 +499,7 @@ where A: SortAlgorithm
             if self.remove_order_col {
                 block.pop_columns(Self::SORT_COL_POS);
             } else {
-                block.pop_columns(Self::TASK_ID_POS);
+                block.pop_columns(Self::TASK_POS);
             }
 
             streams[id].push_back((block, sort_col));
@@ -526,6 +530,7 @@ where A: SortAlgorithm + Send + 'static
         }
 
         if let Some(block) = self.output_data.pop_front() {
+            debug_assert!(block.num_rows() > 0);
             self.output.push_data(Ok(block));
             return Ok(Event::NeedConsume);
         }
@@ -534,6 +539,7 @@ where A: SortAlgorithm + Send + 'static
             e @ (Event::NeedData | Event::Finished | Event::Sync) => Ok(e),
             Event::NeedConsume => {
                 let block = self.output_data.pop_front().unwrap();
+                debug_assert!(block.num_rows() > 0);
                 self.output.push_data(Ok(block));
                 Ok(Event::NeedConsume)
             }
@@ -548,27 +554,30 @@ where A: SortAlgorithm + Send + 'static
             self.schema.clone(),
             self.streams(),
             self.sort_desc.clone(),
-            self.block_size,
+            self.batch_rows,
             None,
         );
-        let task_id = u32_entry(info.task_id);
+        let task_id = u32_entry(info.task);
         let task_rows = u32_entry(info.total as u32);
+        let mut rows = 0;
         while let Some(mut block) = merger.next_block()? {
             block.add_column(task_id.clone());
             block.add_column(task_rows.clone());
+            rows += block.num_rows();
             self.output_data.push_back(block);
         }
+        debug_assert_eq!(rows, info.total);
         debug_assert!(merger.is_finished());
         Ok(())
     }
 }
 
-pub struct KWayMergeCombineProcessor {
+pub struct KWayMergeCombinerProcessor {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
 
-    cur: Option<usize>,
-    next_task: u32,
+    cur_input: Option<usize>,
+    cur_task: u32,
     buffer: Vec<VecDeque<DataBlock>>,
     info: Vec<Option<Info>>,
     limit: Option<usize>,
@@ -576,7 +585,7 @@ pub struct KWayMergeCombineProcessor {
 
 #[derive(Debug, Clone, Copy)]
 struct Info {
-    task_id: u32,
+    task: u32,
     total: usize,
     remain: usize,
 }
@@ -587,15 +596,15 @@ impl Info {
     }
 }
 
-impl KWayMergeCombineProcessor {
+impl KWayMergeCombinerProcessor {
     pub fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>, limit: Option<usize>) -> Self {
         let buffer = vec![VecDeque::new(); inputs.len()];
         let info = vec![None; inputs.len()];
         Self {
             inputs,
             output,
-            cur: None,
-            next_task: 1,
+            cur_input: None,
+            cur_task: 1,
             buffer,
             info,
             limit,
@@ -607,39 +616,45 @@ impl KWayMergeCombineProcessor {
         let buffer = &mut self.buffer[i];
         let info = &mut self.info[i];
 
-        const TASK_ID_POS: usize = 2;
+        const TASK_POS: usize = 2;
         const TASK_ROWS_POS: usize = 1;
 
-        if info.map_or(false, |info| info.done() && info.task_id != self.next_task) {
-            return Ok(PullEvent::Pending);
+        if let Some(info) = info {
+            if info.done() {
+                return if info.task == self.cur_task {
+                    Ok(PullEvent::Data)
+                } else {
+                    Ok(PullEvent::Pending)
+                };
+            }
         }
 
         if input.has_data() {
             let mut block = input.pull_data().unwrap()?;
             input.set_need_data();
 
-            return match info {
+            let task = match info {
                 None => {
-                    let task_id = get_u32(&block, TASK_ID_POS);
-                    debug_assert!(task_id >= self.next_task);
+                    let task = get_u32(&block, TASK_POS);
                     let task_rows = get_u32(&block, TASK_ROWS_POS);
+                    debug_assert!(task_rows > 0);
+                    debug_assert!(
+                        task >= self.cur_task,
+                        "disorder task. cur_task: {} task: {task} task_rows: {task_rows}",
+                        self.cur_task
+                    );
                     let remain = task_rows as usize - block.num_rows();
                     let _ = info.insert(Info {
-                        task_id,
+                        task,
                         total: task_rows as usize,
                         remain,
                     });
                     block.pop_columns(2);
                     buffer.push_back(block);
-
-                    if task_id > self.next_task {
-                        Ok(PullEvent::Pending)
-                    } else {
-                        Ok(PullEvent::Data)
-                    }
+                    task
                 }
                 Some(info) => {
-                    debug_assert_eq!(info.task_id, get_u32(&block, TASK_ID_POS));
+                    debug_assert_eq!(info.task, get_u32(&block, TASK_POS));
                     debug_assert_eq!(info.total, get_u32(&block, TASK_ROWS_POS) as usize);
 
                     let rows = block.num_rows();
@@ -647,49 +662,61 @@ impl KWayMergeCombineProcessor {
                         block.pop_columns(2);
                         buffer.push_back(block);
                         info.remain -= rows;
-                        Ok(PullEvent::Data)
+                        info.task
                     } else {
                         unreachable!()
                     }
                 }
             };
+            return if task == self.cur_task {
+                Ok(PullEvent::Data)
+            } else {
+                Ok(PullEvent::Pending)
+            };
         }
 
-        if !buffer.is_empty() && info.unwrap().task_id == self.next_task {
-            return Ok(PullEvent::Data);
+        if !buffer.is_empty() {
+            return if info.unwrap().task == self.cur_task {
+                Ok(PullEvent::Data)
+            } else {
+                Ok(PullEvent::Pending)
+            };
         }
 
         if input.is_finished() {
             return Ok(PullEvent::Finished);
         }
+
         input.set_need_data();
         Ok(PullEvent::Pending)
     }
 
     fn push(&mut self) -> bool {
-        let cur = self.cur.unwrap();
-        let buffer = &mut self.buffer[cur];
-        let info = &mut self.info[cur];
+        let cur_input = self.cur_input.unwrap();
+        let buffer = &mut self.buffer[cur_input];
+        let info = &mut self.info[cur_input];
+        debug_assert_eq!(info.unwrap().task, self.cur_task);
         if let Some(block) = buffer.pop_front() {
-            match &mut self.limit {
+            let block = match &mut self.limit {
+                None => block,
                 Some(limit) => {
                     let n = block.num_rows();
                     if *limit >= n {
-                        *limit -= n
+                        *limit -= n;
+                        block
                     } else {
-                        let block = block.slice(0..*limit);
-                        self.output.push_data(Ok(block));
+                        let range = 0..*limit;
                         *limit = 0;
+                        block.slice(range)
                     }
                 }
-                None => {
-                    self.output.push_data(Ok(block));
-                }
-            }
+            };
+            debug_assert!(block.num_rows() > 0);
+            self.output.push_data(Ok(block));
             if buffer.is_empty() && info.unwrap().done() {
-                self.next_task += 1;
+                self.cur_task += 1;
                 info.take();
-                self.cur = None;
+                self.cur_input = None;
             }
             true
         } else {
@@ -701,7 +728,7 @@ impl KWayMergeCombineProcessor {
         let event =
             (0..self.inputs.len()).try_fold(PullEvent::Finished, |e, i| match self.pull(i) {
                 Ok(PullEvent::Data) => {
-                    self.cur = Some(i);
+                    self.cur_input = Some(i);
                     ControlFlow::Break(None)
                 }
                 Ok(PullEvent::Pending) => ControlFlow::Continue(PullEvent::Pending),
@@ -716,9 +743,9 @@ impl KWayMergeCombineProcessor {
     }
 }
 
-impl Processor for KWayMergeCombineProcessor {
+impl Processor for KWayMergeCombinerProcessor {
     fn name(&self) -> String {
-        "KWayMergeCombine".to_string()
+        "KWayMergeCombiner".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -726,8 +753,9 @@ impl Processor for KWayMergeCombineProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
+        if self.output.is_finished() || self.limit.map_or(false, |limit| limit == 0) {
             self.inputs.iter().for_each(|i| i.finish());
+            self.output.finish();
             return Ok(Event::Finished);
         }
 
@@ -735,7 +763,7 @@ impl Processor for KWayMergeCombineProcessor {
             return Ok(Event::NeedConsume);
         }
 
-        if self.cur.is_none() {
+        if self.cur_input.is_none() {
             match self.find()? {
                 PullEvent::Pending => return Ok(Event::NeedData),
                 PullEvent::Finished => {
@@ -747,11 +775,11 @@ impl Processor for KWayMergeCombineProcessor {
         }
 
         let pushed = self.push();
-        match self.cur {
+        match self.cur_input {
             Some(cur) => match (pushed, self.pull(cur)?) {
                 (true, PullEvent::Pending | PullEvent::Data) => Ok(Event::NeedConsume),
                 (true, PullEvent::Finished) => {
-                    self.cur = None;
+                    self.cur_input = None;
                     Ok(Event::NeedConsume)
                 }
                 (false, PullEvent::Pending) => Ok(Event::NeedData),
