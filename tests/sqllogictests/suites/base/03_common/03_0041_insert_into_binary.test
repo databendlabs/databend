@@ -47,4 +47,15 @@ SELECT id, v FROM t1 order by id
 4 616161
 
 statement ok
+create table t2(a int, b binary NOT NULL DEFAULT 'abc');
+
+statement ok
+insert into t2 (a) values (3);
+
+query IT
+select a, b::string from t2;
+----
+3 abc
+
+statement ok
 DROP DATABASE db_binary
