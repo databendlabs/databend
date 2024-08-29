@@ -871,7 +871,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_session_id(&self) -> Result<String> {
+    fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
 

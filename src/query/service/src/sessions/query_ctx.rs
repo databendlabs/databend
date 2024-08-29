@@ -1335,17 +1335,8 @@ impl TableContext for QueryContext {
         Ok(lock_guard)
     }
 
-    fn get_session_id(&self) -> Result<String> {
-        let session_type = self.shared.session.get_type();
-        match session_type {
-            SessionType::MySQL => Ok(self.shared.session.id.clone()),
-            _ => self
-                .shared
-                .session
-                .session_ctx
-                .get_client_session_id()
-                .ok_or(ErrorCode::Internal("No client session id".to_string())),
-        }
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        self.shared.session.get_temp_table_prefix()
     }
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {
