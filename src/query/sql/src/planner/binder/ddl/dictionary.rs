@@ -17,10 +17,12 @@ use std::collections::HashSet;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableDataType;
@@ -71,7 +73,7 @@ impl Binder {
             )))
         }
 
-        let options: BTreeMap<String, String> = source_options
+        let mut options: BTreeMap<String, String> = source_options
             .iter()
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
@@ -80,7 +82,7 @@ impl Binder {
             for option in required_options {
                 if !options.contains_key(option) {
                     return Err(ErrorCode::MissingDictionaryOption(
-                        "The mysql configuration is missing one or more required options. ".to_owned()
+                        "The mysql configurations are missing one or more required options. ".to_owned()
                             + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
                     ));
                 }
@@ -90,8 +92,14 @@ impl Binder {
                     "Some provided options are not recognized."
                 )));
             }
-            let port = options.get("port")?;
-            if port.parse<u64>().is_err() {
+            let port: String;
+            match options.get("port"){
+                Some(p) => port = p.to_string(),
+                None => return Err(ErrorCode::MissingDictionaryOption(
+                    "The redis configurations are missing `port`"
+                ))
+            }
+            if port.parse::<u64>().is_err() {
                 return Err(ErrorCode::UnsupportedDictionaryOption(format!(
                     "The value of `port` must be UInt"
                 )))
@@ -108,21 +116,21 @@ impl Binder {
             }
             if let Some(db_index) = options.get("db_index") {
                 let db_index = db_index.parse::<u64>().unwrap();
-                if db_index < 0 || db_index > 15 {
+                if db_index > 15 {
                     return Err(ErrorCode::UnsupportedDictionaryOption(format!(
                         "The value of `db_index` must be between [0,15]"
                     )))
                 }
             } else {
-                options.insert("db_index".to_string(), 0);
+                options.insert("db_index".to_string(), 0.to_string());
             }
             if None == options.get("password") {
-                options.insert("password".to_string(), String::new())
+                options.insert("password".to_string(), String::new());
             }
-            let allowed_options = HashSet::from(["host", "port", "password", "db_index"]);
-            let keys = HashSet::new();
+            let allowed_options = HashSet::from(["host".to_string(), "port".to_string(), "password".to_string(), "db_index".to_string()]);
+            let mut keys = HashSet::new();
             for key in options.keys().cloned().collect_vec() {
-                keys.insert(key.as_str())
+                keys.insert(key);
             }
             if !keys.is_subset(&allowed_options) {
                 return Err(ErrorCode::UnsupportedDictionaryOption(format!(
@@ -165,10 +173,16 @@ impl Binder {
         // Check for mysql
         } else if source.to_lowercase() == *"mysql" {
             for table_field in schema.fields() {
-                let field_type = table_field.data_type;
-                if !(field_type == TableDataType::Boolean || field_type == TableDataType::String ||
-                    field_type == TableDataType::Number(()) || field_type == TableDataType::Timestamp
-                    || field_type == TableDataType::Date) {
+                let field_type = &table_field.data_type;
+                if !(*field_type == TableDataType::Boolean || *field_type == TableDataType::String ||
+                    *field_type == TableDataType::Number(NumberDataType::Float32) 
+                    || *field_type == TableDataType::Number(NumberDataType::Float64)
+                    || *field_type == TableDataType::Number(NumberDataType::Int16)
+                    || *field_type == TableDataType::Number(NumberDataType::Int32)
+                    || *field_type == TableDataType::Number(NumberDataType::Int8)
+                    || *field_type == TableDataType::Number(NumberDataType::Int64)
+                    || *field_type == TableDataType::Timestamp
+                    || *field_type == TableDataType::Date) {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(format!(
                         "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`]",
                     )))
@@ -186,7 +200,13 @@ impl Binder {
         if primary_keys.len() != 1 {
             return Err(ErrorCode::WrongPKNumber("Only support one primary key"))
         }
-        let primary_key = primary_keys.get(0)?;
+        let primary_key: Identifier;
+        match primary_keys.get(0) {
+            Some(pk) => primary_key = pk.clone(),
+            None => return Err(ErrorCode::WrongPKNumber(
+                "Miss primary key"
+            ))
+        }
         let pk_id = schema.column_id_of(primary_key.name.as_str())?;
         primary_column_ids.push(pk_id);
 

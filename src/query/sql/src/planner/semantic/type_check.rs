@@ -3778,7 +3778,9 @@ impl<'a> TypeChecker<'a> {
             .set_expr_context(ExprContext::InAsyncFunction);
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span.clone(), func_name, arguments)?,
-            "dict_get" => self.resolve_dict_get(span.clone(), func_name, arguments)?,
+            "dict_get" => {
+                self.resolve_dict_get_async_function(span.clone(), func_name, arguments)?
+            }
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -3971,8 +3973,8 @@ impl<'a> TypeChecker<'a> {
             .collect_vec()
             .get(0)
             .unwrap();
-        let default_res = field_default_value(self.ctx, table_field)?;
-        
+        let default_res = field_default_value(self.ctx.clone(), table_field)?;
+
         let dict_get_func_arg = DictGetFunctionArgument {
             dict_source,
             table: Some(db_name.clone()),
@@ -3982,11 +3984,7 @@ impl<'a> TypeChecker<'a> {
         };
         let display_name = format!(
             "{}({}.{},{},{})",
-            func_name,
-            db_name,
-            dict_name,
-            field_arg,
-            key_arg,
+            func_name, db_name, dict_name, field_arg, key_arg,
         );
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {

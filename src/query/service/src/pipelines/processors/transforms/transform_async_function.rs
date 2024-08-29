@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use arrow_array::builder;
-use databend_common_storage::build_operator;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
@@ -36,6 +35,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::DictGetFunctionArgument;
 use databend_common_sql::plans::DictionarySource;
+use databend_common_storage::build_operator;
 use databend_common_storages_fuse::TableContext;
 use futures::TryFutureExt;
 use lazy_static::lazy_static;
@@ -57,14 +57,16 @@ pub struct DictGetOperators {
 }
 
 impl DictGetOperators {
-    pub fn new() -> Self{
-        Self { operators: Arc::new(RwLock::new(HashMap::new())) }
+    pub fn new() -> Self {
+        Self {
+            operators: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     pub fn add_new_operator(&self, conn_str: String, source: String) -> Result<()> {
         let reader = self.operators.read().unwrap();
         if let Some(_) = reader.get(&conn_str) {
-            return Ok(())
+            return Ok(());
         } else {
             if source.to_lowercase() == "redis" {
                 drop(reader);
@@ -81,15 +83,15 @@ impl DictGetOperators {
                 todo!()
             }
         }
-        return Ok(())
+        return Ok(());
     }
 
-    pub fn get_operator(&self, conn_str: String) -> Result<Option<Operator>> {
-        let reader = self.operators.read().unwrap();
-        let res = reader.get(&conn_str);
-        drop(reader);
-        return Ok(res)
-    }
+    // pub fn get_operator(&self, conn_str: String) -> Result<Option<Operator>> {
+    //     let reader = self.operators.read().unwrap();
+    //     let res = reader.get(&conn_str);
+    //     drop(reader);
+    //     return Ok(res);
+    // }
 }
 
 pub struct DictGetOperator {
@@ -99,20 +101,21 @@ pub struct DictGetOperator {
 }
 
 impl DictGetOperator {
-    pub fn add_new_kv(&self, key: String, value: String){
+    pub fn add_new_kv(&self, key: String, value: String) {
         let mut writer = self.cache.write().unwrap();
         writer.insert(key, value);
     }
-    pub fn get_value(&self, key: String) -> Result<Option<String>> {
-        let reader = self.cache.read().unwrap();
-        let res = reader.get(&key);
-        drop(reader);
-        res
-    }
+    // pub fn get_value(&self, key: String) -> Result<Option<String>> {
+    //     let reader = self.cache.read().unwrap();
+    //     let res = reader.get(&key);
+    //     drop(reader);
+    //     res
+    // }
 }
 
 lazy_static! {
-    static ref OPERATORS: Arc<RwLock<HashMap<String, Operator>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref OPERATORS: Arc<RwLock<HashMap<String, Operator>>> =
+        Arc::new(RwLock::new(HashMap::new()));
     static ref CACHE: Arc<RwLock<HashMap<String, String>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
@@ -193,7 +196,11 @@ impl TransformAsyncFunction {
                         let res = op.read(&key).await;
                         let val = match res {
                             Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                            Err(_) => dict_arg.default_res
+                            Err(_) => if let Some(default) = &dict_arg.default_res {
+                                default.to_string()
+                            } else {
+                                "".to_string()
+                            },
                         };
                         let mut cache = CACHE.write().unwrap();
                         cache.insert(key.clone(), val.clone());
@@ -215,7 +222,11 @@ impl TransformAsyncFunction {
                             let res = op.read(&key).await;
                             let val = match res {
                                 Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                                Err(_) => dict_arg.default_res
+                                Err(_) => if let Some(default) = &dict_arg.default_res {
+                                    default.to_string()
+                                } else {
+                                    "".to_string()
+                                },
                             };
                             let mut cache = CACHE.write().unwrap();
                             cache.insert(key.to_string(), val.clone());
