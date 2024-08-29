@@ -407,7 +407,7 @@ CREATE TABLE t3 (
     e ARRAY(Int32),
     f TUPLE(f1 BOOLEAN, f2 STRING)
 ) ENGINE = FUSE
-CLUSTER BY (
+CLUSTER BY LINEAR(
     a,
     b,
     c
