@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
@@ -374,7 +373,7 @@ where A: SortAlgorithm
     remove_order_col: bool,
 
     buffer: Vec<DataBlock>,
-    ready: bool,
+    info: Option<Info>,
     output_data: VecDeque<DataBlock>,
     _a: PhantomData<A>,
 }
@@ -382,6 +381,11 @@ where A: SortAlgorithm
 impl<A> KWayMergeWorkerProcessor<A>
 where A: SortAlgorithm
 {
+    const INPUT_ID_POS: usize = 1;
+    const TASK_ROWS_POS: usize = 2;
+    const TASK_ID_POS: usize = 3;
+    const SORT_COL_POS: usize = 4;
+
     pub fn new(
         input: Arc<InputPort>,
         stream_count: usize,
@@ -396,88 +400,113 @@ where A: SortAlgorithm
             output,
             output_data: VecDeque::new(),
             stream_count,
-            schema: add_task_fields(schema),
+            schema,
             block_size,
             sort_desc,
             remove_order_col,
             buffer: Vec::new(),
-            ready: false,
+            info: None,
             _a: Default::default(),
         }
     }
 
+    fn ready(&self) -> bool {
+        match self.info {
+            Some(info) => info.remain == 0,
+            None => false,
+        }
+    }
+
     fn pull(&mut self) -> Result<Event> {
-        if self.ready {
+        if self.ready() {
             return Ok(Event::Sync);
         }
-        if self.input.has_data() {
-            let block = self.input.pull_data().unwrap()?;
-            self.input.set_need_data();
-
-            const TASK_ID_POS: usize = 3;
-            const TASK_ROWS_POS: usize = 2;
-
-            let task_id = get_u32(&block, TASK_ID_POS);
-            let task_rows = get_u32(&block, TASK_ROWS_POS);
-
-            #[cfg(debug_assertions)]
-            if !self.buffer.is_empty() {
-                let before = &self.buffer[0];
-                debug_assert_eq!(task_id, get_u32(before, TASK_ID_POS));
-                debug_assert_eq!(task_rows, get_u32(before, TASK_ROWS_POS));
+        if !self.input.has_data() {
+            if self.input.is_finished() {
+                self.output.finish();
+                return Ok(Event::Finished);
             }
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        }
 
-            let rows = self.buffer.iter().map(|b| b.num_rows() as u32).sum::<u32>()
-                + block.num_rows() as u32;
+        let mut block = self.input.pull_data().unwrap()?;
 
-            return match task_rows.cmp(&rows) {
-                Ordering::Equal => {
+        let task_id = get_u32(&block, Self::TASK_ID_POS);
+        let task_rows = get_u32(&block, Self::TASK_ROWS_POS);
+
+        let rows = block.num_rows();
+        match &mut self.info {
+            Some(info) => {
+                debug_assert_eq!(task_id, info.task_id);
+                debug_assert_eq!(task_rows as usize, info.total);
+                assert!(info.remain >= rows);
+                info.remain -= rows;
+
+                if info.remain == 0 {
                     self.buffer.push(block);
                     self.input.set_not_need_data();
-                    self.ready = true;
                     Ok(Event::Sync)
-                }
-                Ordering::Greater => {
+                } else {
                     self.buffer.push(block);
+                    self.input.set_need_data();
                     Ok(Event::NeedData)
                 }
-                Ordering::Less => unreachable!(),
-            };
+            }
+            None if task_rows as usize == rows => {
+                let n = block.num_columns();
+                let task_id = block.get_by_offset(n - Self::TASK_ID_POS).clone();
+                let task_rows = block.get_by_offset(n - Self::TASK_ROWS_POS).clone();
+
+                if self.remove_order_col {
+                    block.pop_columns(Self::SORT_COL_POS);
+                } else {
+                    block.pop_columns(Self::TASK_ID_POS);
+                }
+
+                block.add_column(task_id);
+                block.add_column(task_rows);
+
+                self.output_data.push_back(block);
+                self.input.set_need_data();
+                Ok(Event::NeedConsume)
+            }
+            None => {
+                let total = task_rows as usize;
+                assert!(total >= rows);
+                self.info = Some(Info {
+                    task_id,
+                    total,
+                    remain: total - rows,
+                });
+                self.buffer.push(block);
+                self.input.set_need_data();
+                Ok(Event::NeedData)
+            }
         }
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-        self.input.set_need_data();
-        Ok(Event::NeedData)
     }
 
     fn streams(&mut self) -> Vec<BlockStream> {
-        const INPUT_ID_POS: usize = 1;
-
         let mut streams = vec![VecDeque::new(); self.stream_count];
 
         for mut block in self.buffer.drain(..) {
-            let id = get_u32(&block, INPUT_ID_POS) as usize;
-
             let n = block.num_columns();
-            let columns = block.columns();
-            let task_rows = columns[n - 2].clone();
-            let task_id = columns[n - 3].clone();
-            let sort_col = columns[n - 4].value.as_column().unwrap().clone();
+            let id = get_u32(&block, Self::INPUT_ID_POS) as usize;
+            let sort_col = block
+                .get_by_offset(n - Self::SORT_COL_POS)
+                .value
+                .as_column()
+                .unwrap()
+                .clone();
 
             if self.remove_order_col {
-                block.pop_columns(4);
+                block.pop_columns(Self::SORT_COL_POS);
             } else {
-                block.pop_columns(3);
+                block.pop_columns(Self::TASK_ID_POS);
             }
-
-            block.add_column(task_id);
-            block.add_column(task_rows);
 
             streams[id].push_back((block, sort_col));
         }
-        self.ready = false;
         streams
     }
 }
@@ -508,12 +537,20 @@ where A: SortAlgorithm + Send + 'static
             return Ok(Event::NeedConsume);
         }
 
-        self.pull()
+        match self.pull()? {
+            e @ (Event::NeedData | Event::Finished | Event::Sync) => Ok(e),
+            Event::NeedConsume => {
+                let block = self.output_data.pop_front().unwrap();
+                self.output.push_data(Ok(block));
+                Ok(Event::NeedConsume)
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn process(&mut self) -> Result<()> {
-        debug_assert!(self.ready);
-        self.ready = false;
+        debug_assert!(self.ready());
+        let info = self.info.take().unwrap();
         let mut merger = Merger::<A, BlockStream>::create(
             self.schema.clone(),
             self.streams(),
@@ -521,8 +558,11 @@ where A: SortAlgorithm + Send + 'static
             self.block_size,
             None,
         );
-        while let Some(block) = merger.next_block()? {
-            // todo task_id
+        let task_id = u32_entry(info.task_id);
+        let task_rows = u32_entry(info.total as u32);
+        while let Some(mut block) = merger.next_block()? {
+            block.add_column(task_id.clone());
+            block.add_column(task_rows.clone());
             self.output_data.push_back(block);
         }
         debug_assert!(merger.is_finished());
@@ -739,24 +779,15 @@ fn unwrap_u32(entry: &BlockEntry) -> u32 {
     }
 }
 
-const TASK_ID_NAME: &str = "_task_id";
-const TASK_ROWS_NAME: &str = "_task_rows";
-
-fn add_task_fields(schema: DataSchemaRef) -> DataSchemaRef {
-    let mut fields = schema.fields().clone();
-    fields.push(DataField::new(
-        TASK_ID_NAME,
-        DataType::Number(NumberDataType::UInt32),
-    ));
-    fields.push(DataField::new(
-        TASK_ROWS_NAME,
-        DataType::Number(NumberDataType::UInt32),
-    ));
-    DataSchemaRefExt::create(fields)
-}
-
 enum PullEvent {
     Data,
     Pending,
     Finished,
+}
+
+fn u32_entry(v: u32) -> BlockEntry {
+    BlockEntry::new(
+        UInt32Type::data_type(),
+        Value::Scalar(UInt32Type::upcast_scalar(v)),
+    )
 }
