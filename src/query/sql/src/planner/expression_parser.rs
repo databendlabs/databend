@@ -257,7 +257,7 @@ pub fn parse_default_expr_to_string(
 
     let (mut scalar, data_type) = *type_checker.resolve(ast)?;
     let schema_data_type = DataType::from(field.data_type());
-    if data_type != schema_data_type && !is_string_to_binary(&data_type, &schema_data_type) {
+    if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
     }
     let expr = scalar.as_expr()?;
@@ -268,12 +268,8 @@ pub fn parse_default_expr_to_string(
     } else {
         (expr, false)
     };
-    Ok((expr.sql_display(), is_deterministic))
-}
 
-fn is_string_to_binary(source: &DataType, target: &DataType) -> bool {
-    matches!(source.remove_nullable(), DataType::String)
-        && matches!(target.remove_nullable(), DataType::Binary)
+    Ok((expr.sql_display(), is_deterministic))
 }
 
 pub fn parse_computed_expr_to_string(
