@@ -832,7 +832,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_parallel_multi_merge_sort", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables parallel multi merge sort",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
