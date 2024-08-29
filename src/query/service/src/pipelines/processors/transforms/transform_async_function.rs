@@ -37,6 +37,7 @@ use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::DictGetFunctionArgument;
 use databend_common_sql::plans::DictionarySource;
 use databend_common_storages_fuse::TableContext;
+use futures::TryFutureExt;
 use lazy_static::lazy_static;
 use opendal::services::Redis;
 use opendal::Operator;
@@ -183,149 +184,45 @@ impl TransformAsyncFunction {
         let entry = data_block.get_by_offset(arg_index);
         let value = match &entry.value {
             Value::Scalar(scalar) => {
-                if let Some(key) = match scalar {
-                    Scalar::String(key) => Some(key.to_string()),
-                    Scalar::Number(key) => Some(key.to_string()),
-                    _ => Some("".to_string())
-                } {
+                if let Scalar::String(key) = scalar {
                     let cache = CACHE.read().unwrap().clone();
-                    if key.as_str() == "" {
-                        Value::Scalar(Scalar::String("".to_string()))
-                    } else if let Some(cached_val) = cache.get(&key) {
-                        if cached_val == "null" {
-                            Value::Scalar(Scalar::Null)
-                        } else {
-                            Value::Scalar(Scalar::String(cached_val.clone()))
-                        }
+                    if let Some(cached_val) = cache.get(key) {
+                        Value::Scalar(Scalar::String(cached_val.clone()))
                     } else {
                         drop(cache);
-                        let res = op.read(&key).await?;
-                        if res.is_empty() {
-                            let mut cache = CACHE.write().unwrap();
-                            cache.insert(key, "null".to_string());
-                            Value::Scalar(Scalar::Null)
-                        } else {
-                            let mut cache = CACHE.write().unwrap();
-                            let val = String::from_utf8((&res.current()).to_vec()).unwrap();
-                            cache.insert(key, val.clone());
-                            Value::Scalar(Scalar::String(val))
-                        }
+                        let res = op.read(&key).await;
+                        let val = match res {
+                            Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
+                            Err(_) => dict_arg.default_res
+                        };
+                        let mut cache = CACHE.write().unwrap();
+                        cache.insert(key.clone(), val.clone());
+                        Value::Scalar(Scalar::String(val))
                     }
                 } else {
                     Value::Scalar(Scalar::String("".to_string()))
                 }
-                // match scalar {
-                //     Scalar::String(key) | Scalar::Number(key) => {
-                //         let key = key.to_string();
-                //         let cache = CACHE.read().unwrap().clone();
-                //         if let Some(cached_val) = cache.get(&key) {
-                //             if cached_val == "null" {
-                //                 Value::Scalar(Scalar::Null)
-                //             } else {
-                //                 Value::Scalar(Scalar::String(cached_val.clone()))
-                //             }
-                //         } else {
-                //             drop(cache);
-                //             let mut cache = CACHE.write().unwrap();
-                //             let res = op.read(&key).await?;
-                //             if res.is_empty() {
-                //                 cache.insert(key.clone(), "null".to_string());
-                //                 Value::Scalar(Scalar::Null)
-                //             } else {
-                //                 let val = String::from_utf8((&res.current()).to_vec()).unwrap();
-                //                 cache.insert(key.clone(), val.clone());
-                //                 Value::Scalar(Scalar::String(val))
-                //             }
-                //         }
-                //     }
-                //     _ => Value::Scalar(Scalar::String("".to_string())),
-                // }
-                // if let Scalar::String(key) = scalar {
-                //     let cache = CACHE.read().unwrap().clone();
-                //     if let Some(cached_val) = cache.get(key) {
-                //         Value::Scalar(Scalar::String(cached_val.clone()))
-                //     } else {
-                //         drop(cache);
-                //         let res = op.read(&key).await?;
-                //         let val = String::from_utf8((&res.current()).to_vec()).unwrap();
-                //         let mut cache = CACHE.write().unwrap();
-                //         cache.insert(key.clone(), val.clone());
-                //         Value::Scalar(Scalar::String(val))
-                //     }
-                // } else if let Scalar::Number(key) = scalar{
-                //     let k = key.to_string();
-
-                // } else {
-                //     Value::Scalar(Scalar::String("".to_string()))
-                // }
             }
             Value::Column(column) => {
                 let mut builder = StringColumnBuilder::with_capacity(column.len(), 0);
                 for scalar in column.iter() {
                     let cache = CACHE.read().unwrap().clone();
-
-                    let key = match scalar {
-                        ScalarRef::String(key) => key.to_string(),
-                        ScalarRef::Number(key) => key.to_string(),
-                        _ => "".to_string(),
-                    };
-                    let value = if key == "" {
-                        "".to_string()
-                    } else if let Some(cached_val) = cache.get(&key) {
-                        cached_val.clone()
-                    } else {
-                        drop(cache);
-                        
-                        let res = op.read(&key).await?;
-                        if res.is_empty() {
-                            let mut cache = CACHE.write().unwrap();
-                            cache.insert(key.to_string(), "null".to_string());
-                            "null".to_string()
+                    if let ScalarRef::String(key) = scalar {
+                        let value = if let Some(cached_val) = cache.get(key) {
+                            cached_val.clone()
                         } else {
+                            drop(cache);
+                            let res = op.read(&key).await;
+                            let val = match res {
+                                Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
+                                Err(_) => dict_arg.default_res
+                            };
                             let mut cache = CACHE.write().unwrap();
-                            let val = String::from_utf8((&res.current()).to_vec()).unwrap();
                             cache.insert(key.to_string(), val.clone());
                             val
-                        }
-                    };
-                    builder.put_str(value.as_str());
-                    // match scalar {
-                    //     ScalarRef::String(key) | ScalarRef::Number(key) => {
-                    //         let key = key.to_string();
-                    //         let value = if let Some(cached_val) = cache.get(&key) {
-                    //             cached_val.clone()
-                    //         } else {
-                    //             drop(cache);
-                    //             let mut cache = CACHE.write().unwrap();
-                    //             let res = op.read(&key).await?;
-                    //             if res.is_empty() {
-                    //                 cache.insert(key.clone(), "null".to_string());
-                    //                 "null".to_string()
-                    //             } else {
-                    //                 let val = String::from_utf8((&res.current()).to_vec()).unwrap();
-                    //                 cache.insert(key.clone(), val.clone());
-                    //                 val
-                    //             }
-                    //         };
-                    //         builder.put_str(value.as_str());
-                    //     }
-
-                    //     _ => {}
-                    // }
-
-                    // if let ScalarRef::String(key) = scalar {
-                    //     let value = if let Some(cached_val) = cache.get(key) {
-                    //         cached_val.clone()
-                    //     } else {
-                    //         drop(cache);
-                    //         let res = op.read(&key).await?;
-                    //         let val = String::from_utf8((&res.current()).to_vec()).unwrap();
-                    //         let mut cache = CACHE.write().unwrap();
-                    //         cache.insert(key.to_string(), val.clone());
-                    //         val
-                    //     };
-                    //     builder.put_str(value.as_str());
-                    // }
+                        };
+                        builder.put_str(value.as_str());
+                    }
                     builder.commit_row();
                 }
                 Value::Column(Column::String(builder.build()))

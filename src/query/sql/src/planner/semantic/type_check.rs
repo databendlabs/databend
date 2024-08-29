@@ -3972,6 +3972,7 @@ impl<'a> TypeChecker<'a> {
             .get(0)
             .unwrap();
         let default_res = field_default_value(self.ctx, table_field)?;
+        
         let dict_get_func_arg = DictGetFunctionArgument {
             dict_source,
             table: Some(db_name.clone()),
