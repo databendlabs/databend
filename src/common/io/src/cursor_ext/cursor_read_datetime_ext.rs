@@ -292,7 +292,7 @@ where T: AsRef<[u8]>
             calc_offset: &impl Fn(i64, i64, &DateTime<Tz>) -> Result<DateTime<Tz>>,
             hour_offset: i32,
             minute_offset: i32,
-        ) -> Result<DateTime<Tz>, ErrorCode> {
+        ) -> Result<DateTime<Tz>> {
             if (hour_offset == 14 && minute_offset == 0)
                 || ((0..60).contains(&minute_offset) && hour_offset < 14)
             {

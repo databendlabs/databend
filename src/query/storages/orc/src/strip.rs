@@ -27,14 +27,14 @@ pub struct StripeInMemory {
 }
 
 impl serde::Serialize for StripeInMemory {
-    fn serialize<S>(&self, _: S) -> databend_common_exception::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unimplemented!("Unimplemented serialize StripeInMemory")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for StripeInMemory {
-    fn deserialize<D>(_: D) -> databend_common_exception::Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize StripeInMemory")
     }

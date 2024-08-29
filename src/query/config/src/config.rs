@@ -471,7 +471,7 @@ pub struct HiveCatalogConfig {
 impl TryInto<InnerCatalogConfig> for CatalogConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerCatalogConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogConfig, Self::Error> {
         match self.ty.as_str() {
             "hive" => Ok(InnerCatalogConfig::Hive(self.hive.try_into()?)),
             ty => Err(ErrorCode::CatalogNotSupported(format!(
@@ -495,7 +495,7 @@ impl From<InnerCatalogConfig> for CatalogConfig {
 
 impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
         if self.meta_store_address.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_store_address` is deprecated, please use `address` instead",
@@ -529,7 +529,7 @@ impl Default for CatalogsHiveConfig {
 
 impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
         if self.meta_store_address.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_store_address` is deprecated, please use `address` instead",
@@ -645,7 +645,7 @@ impl From<InnerStorageGcsConfig> for GcsStorageConfig {
 impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerStorageGcsConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerStorageGcsConfig, Self::Error> {
         Ok(InnerStorageGcsConfig {
             endpoint_url: self.gcs_endpoint_url,
             bucket: self.gcs_bucket,
@@ -1112,7 +1112,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
 impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerStorageOssConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerStorageOssConfig, Self::Error> {
         Ok(InnerStorageOssConfig {
             endpoint_url: self.oss_endpoint_url,
             presign_endpoint_url: self.oss_presign_endpoint_url,
@@ -1216,7 +1216,7 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
 impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
     type Error = ErrorCode;
 
-    fn try_from(value: WebhdfsStorageConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: WebhdfsStorageConfig) -> std::result::Result<Self, Self::Error> {
         Ok(InnerStorageWebhdfsConfig {
             delegation: value.webhdfs_delegation,
             endpoint_url: value.webhdfs_endpoint_url,
@@ -1295,7 +1295,7 @@ impl From<InnerStorageCosConfig> for CosStorageConfig {
 impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
     type Error = ErrorCode;
 
-    fn try_from(value: CosStorageConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: CosStorageConfig) -> std::result::Result<Self, Self::Error> {
         Ok(InnerStorageCosConfig {
             secret_id: value.cos_secret_id,
             secret_key: value.cos_secret_key,
@@ -1313,7 +1313,7 @@ pub enum SettingValue {
 }
 
 impl Serialize for SettingValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         match self {
             SettingValue::UInt64(v) => serializer.serialize_u64(*v),
@@ -1323,7 +1323,7 @@ impl Serialize for SettingValue {
 }
 
 impl<'de> Deserialize<'de> for SettingValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         deserializer.deserialize_any(SettingVisitor)
     }
@@ -1347,12 +1347,12 @@ impl<'de> serde::de::Visitor<'de> for SettingVisitor {
         write!(formatter, "integer or string")
     }
 
-    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         Ok(SettingValue::UInt64(value))
     }
 
-    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         if value < 0 {
             return Err(E::custom("setting value must be positive"));
@@ -1360,7 +1360,7 @@ impl<'de> serde::de::Visitor<'de> for SettingVisitor {
         Ok(SettingValue::UInt64(value as u64))
     }
 
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         Ok(SettingValue::String(value.to_string()))
     }

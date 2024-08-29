@@ -271,7 +271,12 @@ pub const FACTOR_MINUTE: i64 = 60;
 pub const FACTOR_SECOND: i64 = 1;
 const LAST_DAY_LUT: [u8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
+fn add_years_base(
+    year: i32,
+    month: u32,
+    day: u32,
+    delta: i64,
+) -> std::result::Result<NaiveDate, String> {
     let new_year = year + delta as i32;
     let mut new_day = day;
     if std::intrinsics::unlikely(month == 2 && day == 29) {
@@ -281,7 +286,12 @@ fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDa
         .ok_or_else(|| format!("Overflow on date YMD {}-{}-{}.", new_year, month, new_day))
 }
 
-fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
+fn add_months_base(
+    year: i32,
+    month: u32,
+    day: u32,
+    delta: i64,
+) -> std::result::Result<NaiveDate, String> {
     let total_months = month as i64 + delta - 1;
     let mut new_year = year + (total_months / 12) as i32;
     let mut new_month0 = total_months % 12;
@@ -325,7 +335,7 @@ macro_rules! impl_interval_year_month {
                 date: i32,
                 tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
-            ) -> Result<i32, String> {
+            ) -> std::result::Result<i32, String> {
                 let date = date.to_date(tz.tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
                 check_date(
@@ -339,7 +349,7 @@ macro_rules! impl_interval_year_month {
                 us: i64,
                 tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
-            ) -> Result<i64, String> {
+            ) -> std::result::Result<i64, String> {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 check_timestamp(
@@ -358,11 +368,14 @@ impl_interval_year_month!(AddMonthsImpl, add_months_base);
 pub struct AddDaysImpl;
 
 impl AddDaysImpl {
-    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> Result<i32, String> {
+    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> std::result::Result<i32, String> {
         check_date((date as i64).wrapping_add(delta.as_()))
     }
 
-    pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
+    pub fn eval_timestamp(
+        date: i64,
+        delta: impl AsPrimitive<i64>,
+    ) -> std::result::Result<i64, String> {
         check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * MICROS_IN_A_SEC))
     }
 }
@@ -370,7 +383,11 @@ impl AddDaysImpl {
 pub struct AddTimesImpl;
 
 impl AddTimesImpl {
-    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> Result<i32, String> {
+    pub fn eval_date(
+        date: i32,
+        delta: impl AsPrimitive<i64>,
+        factor: i64,
+    ) -> std::result::Result<i32, String> {
         check_date(
             (date as i64 * 3600 * 24 * MICROS_IN_A_SEC)
                 .wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC),
@@ -381,7 +398,7 @@ impl AddTimesImpl {
         us: i64,
         delta: impl AsPrimitive<i64>,
         factor: i64,
-    ) -> Result<i64, String> {
+    ) -> std::result::Result<i64, String> {
         check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC))
     }
 }

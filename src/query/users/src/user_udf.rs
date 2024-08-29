@@ -70,7 +70,7 @@ impl UserApiProvider {
         &self,
         tenant: &Tenant,
         udf_name: &str,
-    ) -> Result<Option<UserDefinedFunction>, UdfApiError> {
+    ) -> std::result::Result<Option<UserDefinedFunction>, UdfApiError> {
         if let Some(udf) = self.get_configured_udf(udf_name) {
             Ok(Some(udf))
         } else {

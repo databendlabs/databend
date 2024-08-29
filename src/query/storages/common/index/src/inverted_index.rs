@@ -451,7 +451,7 @@ pub enum InvertedIndexFileVersion {
 
 impl TryFrom<u64> for InvertedIndexFileVersion {
     type Error = ErrorCode;
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
+    fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(InvertedIndexFileVersion::V0(testify_version::<_, 0>(
                 PhantomData,

@@ -146,14 +146,14 @@ impl Debug for FlightSerializedMeta {
 }
 
 impl serde::Serialize for FlightSerializedMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unimplemented!("Unimplemented serialize FlightSerializedMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for FlightSerializedMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize FlightSerializedMeta")
     }

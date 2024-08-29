@@ -65,7 +65,7 @@ impl std::fmt::Debug for LogType {
     }
 }
 
-fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
+fn date_str<S>(dt: &i32, s: S) -> std::result::Result<S::Ok, S::Error>
 where S: Serializer {
     let t = DateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0)
         .unwrap()
@@ -73,7 +73,7 @@ where S: Serializer {
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
-fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
+fn datetime_str<S>(dt: &i64, s: S) -> std::result::Result<S::Ok, S::Error>
 where S: Serializer {
     let t = DateTime::from_timestamp(
         dt / 1_000_000,

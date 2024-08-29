@@ -66,7 +66,6 @@ use arrow_flight::SchemaAsIpc;
 use arrow_flight::Ticket;
 use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_base::base::uuid::Uuid;
-use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use futures::Stream;
 use log::info;
@@ -138,8 +137,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
-    ) -> Result<
-        Response<Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send>>>,
+    ) -> std::result::Result<
+        Response<
+            Pin<Box<dyn Stream<Item = std::result::Result<HandshakeResponse, Status>> + Send>>,
+        >,
         Status,
     > {
         let (user, password) = FlightSqlServiceImpl::get_user_password(request.metadata())
@@ -155,7 +156,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let result = Ok(result);
         let str = format!("Bearer {token}");
         let output = futures::stream::iter(vec![result]);
-        let mut resp: Response<Pin<Box<dyn Stream<Item = Result<_, _>> + Send>>> =
+        let mut resp: Response<Pin<Box<dyn Stream<Item = std::result::Result<_, _>> + Send>>> =
             Response::new(Box::pin(output));
         let metadata = MetadataValue::try_from(str)
             .map_err(|_| Status::internal("authorization not parsable"))?;
@@ -183,7 +184,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         request: Request<Ticket>,
         message: Any,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         let session = self.get_session(&request)?;
         let fetch_results: FetchResults = try_unpack_any(message)?;
 
@@ -210,7 +211,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandStatementQuery,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_sql_info(query={})", query.query);
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
@@ -221,7 +222,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         cmd: CommandPreparedStatementQuery,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         let _session = self.get_session(&request);
         let handle = Uuid::from_slice(cmd.prepared_statement_handle.as_ref())
             .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
@@ -274,7 +275,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetCatalogs,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_catalogs()");
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
@@ -285,7 +286,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetDbSchemas,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_schemas({query:?})");
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
@@ -296,7 +297,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetTables,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_tables({query:?})");
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
@@ -307,7 +308,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetTableTypes,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_table_types()");
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
@@ -318,7 +319,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetSqlInfo,
         request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_sql_info({query:?})");
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
@@ -329,7 +330,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetPrimaryKeys,
         _request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_primary_keys({query:?})",);
         Err(Status::unimplemented(
             "get_flight_info_primary_keys not implemented",
@@ -341,7 +342,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetExportedKeys,
         _request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_exported_keys({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_exported_keys not implemented",
@@ -353,7 +354,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetImportedKeys,
         _request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_imported_keys({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_imported_keys not implemented",
@@ -365,7 +366,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetCrossReference,
         _request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         info!("get_flight_info_cross_reference({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_imported_keys not implemented",
@@ -378,7 +379,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         ticket: TicketStatementQuery,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_statement({ticket:?}");
         Err(Status::unimplemented("do_get_statement not implemented"))
     }
@@ -388,7 +389,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandPreparedStatementQuery,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_prepared_statement({query:?}");
         Err(Status::unimplemented(
             "do_get_prepared_statement not implemented",
@@ -400,7 +401,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetCatalogs,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_catalogs()");
         Err(Status::unimplemented("do_get_catalogs not implemented"))
     }
@@ -410,7 +411,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetDbSchemas,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_schemas({query:?}");
         Err(Status::unimplemented("do_get_schemas not implemented"))
     }
@@ -420,7 +421,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetTables,
         request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_tables({query:?})");
         let session = self.get_session(&request)?;
         let context = session
@@ -438,7 +439,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetTableTypes,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_table_types()");
         Err(Status::unimplemented("do_get_table_types not implemented"))
     }
@@ -448,7 +449,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetSqlInfo,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_sql_info({query:?})");
         Ok(Response::new(super::SqlInfoProvider::all_info()?))
     }
@@ -458,7 +459,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetPrimaryKeys,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_primary_keys({query:?})");
         Err(Status::unimplemented("do_get_primary_keys not implemented"))
     }
@@ -468,7 +469,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetExportedKeys,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_exported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_exported_keys not implemented",
@@ -480,7 +481,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetImportedKeys,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_imported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_imported_keys not implemented",
@@ -492,7 +493,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetCrossReference,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         info!("do_get_cross_reference({query:?})");
         Err(Status::unimplemented(
             "do_get_cross_reference not implemented",
@@ -505,7 +506,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         ticket: CommandStatementUpdate,
         request: Request<PeekableFlightDataStream>,
-    ) -> Result<i64, Status> {
+    ) -> std::result::Result<i64, Status> {
         let session = self.get_session(&request)?;
         let query = ticket.query;
         info!("do_put_statement_update with query = {query}");
@@ -526,7 +527,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandPreparedStatementQuery,
         request: Request<PeekableFlightDataStream>,
-    ) -> Result<DoPutPreparedStatementResult, Status> {
+    ) -> std::result::Result<DoPutPreparedStatementResult, Status> {
         let session = self.get_session(&request)?;
         let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
             .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
@@ -554,7 +555,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandPreparedStatementUpdate,
         request: Request<PeekableFlightDataStream>,
-    ) -> Result<i64, Status> {
+    ) -> std::result::Result<i64, Status> {
         let session = self.get_session(&request)?;
         let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
             .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
@@ -576,7 +577,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: ActionCreatePreparedStatementRequest,
         request: Request<Action>,
-    ) -> Result<ActionCreatePreparedStatementResult, Status> {
+    ) -> std::result::Result<ActionCreatePreparedStatementResult, Status> {
         let session = self.get_session(&request)?;
         let sql = query.query.clone();
         let handle = Uuid::new_v4();
@@ -617,7 +618,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: ActionClosePreparedStatementRequest,
         request: Request<Action>,
-    ) -> Result<(), Status> {
+    ) -> std::result::Result<(), Status> {
         let handle = query.prepared_statement_handle.as_ref();
         if let Ok(handle) = std::str::from_utf8(handle) {
             info!(
@@ -650,7 +651,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetXdbcTypeInfo,
         _request: Request<FlightDescriptor>,
-    ) -> Result<Response<FlightInfo>, Status> {
+    ) -> std::result::Result<Response<FlightInfo>, Status> {
         unimplemented!()
     }
 
@@ -659,7 +660,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetXdbcTypeInfo,
         _request: Request<Ticket>,
-    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         unimplemented!()
     }
 

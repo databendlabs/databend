@@ -975,7 +975,7 @@ impl DefaultSettings {
     /// If the value is not a valid u64, it will be parsed as f64.
     /// Used for:
     /// set max_memory_usage = 1024*1024*1024*1.5;
-    fn parse_to_u64(v: &str) -> Result<u64, ErrorCode> {
+    fn parse_to_u64(v: &str) -> Result<u64> {
         match v.parse::<u64>() {
             Ok(val) => Ok(val),
             Err(_) => {

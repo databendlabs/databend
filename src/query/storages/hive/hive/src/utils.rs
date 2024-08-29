@@ -95,7 +95,7 @@ pub fn from_thrift_error(error: impl std::error::Error) -> ErrorCode {
 }
 
 /// Format a thrift exception into iceberg error.
-pub fn from_thrift_exception<T, E: Debug>(value: MaybeException<T, E>) -> Result<T, ErrorCode> {
+pub fn from_thrift_exception<T, E: Debug>(value: MaybeException<T, E>) -> Result<T> {
     match value {
         MaybeException::Ok(v) => Ok(v),
         MaybeException::Exception(err) => Err(ErrorCode::Internal(format!(

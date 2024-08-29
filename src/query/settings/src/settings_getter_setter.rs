@@ -55,7 +55,7 @@ impl Settings {
         unsafe { self.unchecked_try_get_string(key) }
     }
 
-    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
+    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
             None => match self.configs.get(key) {

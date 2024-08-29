@@ -21,7 +21,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
@@ -171,7 +170,7 @@ impl FuseTable {
                         .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
                         .await?;
 
-                    Result::<_, ErrorCode>::Ok(partitions)
+                    Result::<_>::Ok(partitions)
                 })?;
 
                 query_ctx.set_partitions(partitions)?;

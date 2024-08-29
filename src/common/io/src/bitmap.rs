@@ -21,7 +21,7 @@ pub fn parse_bitmap(buf: &[u8]) -> Result<RoaringTreemap> {
         .map_err(|e| e.to_string())
         .and_then(|s| {
             let s: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            let result: Result<Vec<u64>, String> = s
+            let result: std::result::Result<Vec<u64>, String> = s
                 .split(',')
                 .map(|v| v.parse::<u64>().map_err(|e| e.to_string()))
                 .collect();

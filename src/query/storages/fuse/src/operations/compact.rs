@@ -21,7 +21,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
@@ -159,7 +158,7 @@ impl FuseTable {
                     )
                     .await?;
 
-                    Result::<_, ErrorCode>::Ok(partitions)
+                    Result::<_>::Ok(partitions)
                 })?;
 
                 let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);

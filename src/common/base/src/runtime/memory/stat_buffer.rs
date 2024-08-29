@@ -15,8 +15,6 @@
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
 
-use databend_common_exception::Result;
-
 use crate::runtime::memory::mem_stat::OutOfLimit;
 use crate::runtime::memory::MemStat;
 use crate::runtime::LimitMemGuard;
@@ -70,7 +68,10 @@ impl StatBuffer {
     }
 
     /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush<const ROLLBACK: bool>(&mut self, alloc: i64) -> Result<(), OutOfLimit> {
+    pub fn flush<const ROLLBACK: bool>(
+        &mut self,
+        alloc: i64,
+    ) -> std::result::Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
             usage => {
@@ -94,7 +95,7 @@ impl StatBuffer {
         }
     }
 
-    pub fn alloc(&mut self, memory_usage: i64) -> Result<(), OutOfLimit> {
+    pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), OutOfLimit> {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
         if self.destroyed_thread_local_macro {

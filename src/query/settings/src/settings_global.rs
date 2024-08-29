@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -86,7 +85,7 @@ impl Settings {
         Ok(())
     }
 
-    async fn load_global_changes(&self) -> Result<(), ErrorCode> {
+    async fn load_global_changes(&self) -> Result<()> {
         let default_settings = DefaultSettings::instance()?;
 
         let api = UserApiProvider::instance();

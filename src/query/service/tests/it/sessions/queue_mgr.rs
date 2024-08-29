@@ -75,7 +75,7 @@ async fn test_passed_acquire() -> Result<()> {
                     .acquire(TestData::<true>(format!("TestData{}", index)))
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -114,7 +114,7 @@ async fn test_serial_acquire() -> Result<()> {
                     .acquire(TestData(format!("TestData{}", index)))
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -154,7 +154,7 @@ async fn test_concurrent_acquire() -> Result<()> {
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -195,7 +195,7 @@ async fn test_list_acquire() -> Result<()> {
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(10)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }

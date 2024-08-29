@@ -248,11 +248,11 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: Sender<Result<FlightData, Status>>,
+    tx: Sender<std::result::Result<FlightData, Status>>,
 }
 
 impl FlightSender {
-    pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
+    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
         FlightSender { tx }
     }
 
@@ -282,11 +282,13 @@ pub enum FlightExchange {
         notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     },
-    Sender(Sender<Result<FlightData, Status>>),
+    Sender(Sender<std::result::Result<FlightData, Status>>),
 }
 
 impl FlightExchange {
-    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
+    pub fn create_sender(
+        sender: Sender<std::result::Result<FlightData, Status>>,
+    ) -> FlightExchange {
         FlightExchange::Sender(sender)
     }
 

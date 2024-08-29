@@ -227,7 +227,7 @@ impl HttpSessionStateInternal {
 fn serialize_as_json_string<S>(
     value: &Option<HttpSessionStateInternal>,
     serializer: S,
-) -> Result<S::Ok, S::Error>
+) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -243,7 +243,7 @@ where
 
 fn deserialize_from_json_string<'de, D>(
     deserializer: D,
-) -> Result<Option<HttpSessionStateInternal>, D::Error>
+) -> std::result::Result<Option<HttpSessionStateInternal>, D::Error>
 where D: Deserializer<'de> {
     let json_string: Option<String> = Option::deserialize(deserializer)?;
     match json_string {

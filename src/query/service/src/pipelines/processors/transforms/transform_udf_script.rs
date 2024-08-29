@@ -48,11 +48,7 @@ pub enum ScriptRuntime {
 }
 
 impl ScriptRuntime {
-    pub fn try_create(
-        lang: &str,
-        code: Option<&[u8]>,
-        runtime_num: usize,
-    ) -> Result<Self, ErrorCode> {
+    pub fn try_create(lang: &str, code: Option<&[u8]>, runtime_num: usize) -> Result<Self> {
         match lang {
             "javascript" => {
                 // Create multiple runtimes to execute in parallel to avoid blocking caused by js udf runtime locks.
@@ -87,7 +83,7 @@ impl ScriptRuntime {
         }
     }
 
-    fn create_wasm_runtime(code_blob: Option<&[u8]>) -> Result<Self, ErrorCode> {
+    fn create_wasm_runtime(code_blob: Option<&[u8]>) -> Result<Self> {
         let decoded_code_blob = code_blob
             .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
 
@@ -98,11 +94,7 @@ impl ScriptRuntime {
         Ok(ScriptRuntime::WebAssembly(Arc::new(RwLock::new(runtime))))
     }
 
-    pub fn add_function_with_handler(
-        &self,
-        func: &UdfFunctionDesc,
-        code: &[u8],
-    ) -> Result<(), ErrorCode> {
+    pub fn add_function_with_handler(&self, func: &UdfFunctionDesc, code: &[u8]) -> Result<()> {
         let tmp_schema =
             DataSchema::new(vec![DataField::new("tmp", func.data_type.as_ref().clone())]);
         let arrow_schema = Schema::from(&tmp_schema);
@@ -253,7 +245,7 @@ impl Transform for TransformUdfScript {
 }
 
 impl TransformUdfScript {
-    fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String, ErrorCode> {
+    fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String> {
         let (lang, func_name) = match &func.udf_type {
             UDFType::Script((lang, _, _)) => (lang, &func.func_name),
             _ => {
@@ -271,7 +263,7 @@ impl TransformUdfScript {
     pub fn init_runtime(
         funcs: &[UdfFunctionDesc],
         runtime_num: usize,
-    ) -> Result<BTreeMap<String, Arc<ScriptRuntime>>, ErrorCode> {
+    ) -> Result<BTreeMap<String, Arc<ScriptRuntime>>> {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
 
         let start = std::time::Instant::now();

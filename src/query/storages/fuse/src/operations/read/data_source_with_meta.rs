@@ -55,14 +55,14 @@ impl<T> Debug for DataSourceWithMeta<T> {
 }
 
 impl<T> serde::Serialize for DataSourceWithMeta<T> {
-    fn serialize<S>(&self, _: S) -> databend_common_exception::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize DataSourceMeta")
     }
 }
 
 impl<'de, T> serde::Deserialize<'de> for DataSourceWithMeta<T> {
-    fn deserialize<D>(_: D) -> databend_common_exception::Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize DataSourceMeta")
     }

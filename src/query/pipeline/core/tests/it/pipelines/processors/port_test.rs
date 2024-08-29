@@ -44,14 +44,14 @@ impl TestDataMeta {
 }
 
 impl serde::Serialize for TestDataMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Serialize is unimplemented for TestDataMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for TestDataMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Deserialize is unimplemented for TestDataMeta")
     }

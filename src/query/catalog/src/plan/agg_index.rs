@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 
-use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::RemoteExpr;
@@ -71,14 +70,14 @@ impl AggIndexMeta {
 }
 
 impl serde::Serialize for AggIndexMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unimplemented!("Unimplemented serialize AggIndexMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for AggIndexMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize AggIndexMeta")
     }

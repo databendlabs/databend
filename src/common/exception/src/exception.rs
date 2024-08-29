@@ -17,6 +17,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
@@ -88,20 +89,21 @@ impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
 }
 
 #[derive(Error)]
-pub struct ErrorCode {
-    code: u16,
-    name: String,
-    display_text: String,
-    detail: String,
-    span: Span,
+pub struct ErrorCode<C = ()> {
+    pub(crate) code: u16,
+    pub(crate) name: String,
+    pub(crate) display_text: String,
+    pub(crate) detail: String,
+    pub(crate) span: Span,
     // cause is only used to contain an `anyhow::Error`.
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
-    cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    backtrace: Option<ErrorCodeBacktrace>,
+    pub(crate) cause: Option<Box<dyn std::error::Error + Sync + Send>>,
+    pub(crate) backtrace: Option<ErrorCodeBacktrace>,
     pub(crate) stacks: Vec<ErrorFrame>,
+    pub(crate) _phantom: PhantomData<C>,
 }
 
-impl ErrorCode {
+impl<C> ErrorCode<C> {
     pub fn code(&self) -> u16 {
         self.code
     }
@@ -227,9 +229,9 @@ impl ErrorCode {
     }
 }
 
-pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
+pub type Result<T, C = ()> = std::result::Result<T, ErrorCode<C>>;
 
-impl Debug for ErrorCode {
+impl<C> Debug for ErrorCode<C> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -288,6 +290,7 @@ impl ErrorCode {
             cause: None,
             backtrace: capture(),
             stacks: vec![],
+            _phantom: PhantomData::<()>,
         }
         .with_context(error.to_string())
     }
@@ -302,6 +305,7 @@ impl ErrorCode {
             cause: None,
             backtrace: capture(),
             stacks: vec![],
+            _phantom: PhantomData::<()>,
         }
         .with_context(error)
     }
@@ -316,6 +320,7 @@ impl ErrorCode {
             cause: None,
             backtrace: None,
             stacks: vec![],
+            _phantom: PhantomData::<()>,
         }
     }
 
@@ -336,6 +341,7 @@ impl ErrorCode {
             backtrace,
             name: name.to_string(),
             stacks: vec![],
+            _phantom: PhantomData::<()>,
         }
         .with_context(display_text)
     }

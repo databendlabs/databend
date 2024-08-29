@@ -219,7 +219,7 @@ impl AcquireQueueGuard {
 
 pin_project! {
     pub struct AcquireQueueFuture<Data: QueueData, T>
-where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elapsed>>
+where T: Future<Output =  std::result::Result< std::result::Result<OwnedSemaphorePermit, AcquireError>, Elapsed>>
 {
     #[pin]
     inner: T,
@@ -234,7 +234,12 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
 }
 
 impl<Data: QueueData, T> AcquireQueueFuture<Data, T>
-where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elapsed>>
+where T: Future<
+        Output = std::result::Result<
+            std::result::Result<OwnedSemaphorePermit, AcquireError>,
+            Elapsed,
+        >,
+    >
 {
     pub fn create(data: Arc<Data>, inner: T, mgr: Arc<QueueManager<Data>>) -> Self {
         AcquireQueueFuture {
@@ -249,7 +254,12 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
 }
 
 impl<Data: QueueData, T> Future for AcquireQueueFuture<Data, T>
-where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elapsed>>
+where T: Future<
+        Output = std::result::Result<
+            std::result::Result<OwnedSemaphorePermit, AcquireError>,
+            Elapsed,
+        >,
+    >
 {
     type Output = Result<AcquireQueueGuard>;
 

@@ -24,9 +24,9 @@ pub struct ErrorFrame {
     pub message: String,
 }
 
-impl ErrorCode {
+impl<C> ErrorCode<C> {
     #[track_caller]
-    pub fn with_context(mut self, ctx: impl ToString) -> Self {
+    pub fn with_context<C2>(self, ctx: impl ToString) -> ErrorCode<C2> {
         let location = std::panic::Location::caller();
         let frame = ErrorFrame {
             file: location.file().to_string(),
@@ -34,20 +34,29 @@ impl ErrorCode {
             col: location.column(),
             message: ctx.to_string(),
         };
-        self.stacks.push(frame);
-        self
+        let mut stacks = self.stacks;
+        stacks.push(frame);
+        ErrorCode {
+            code: self.code,
+            name: self.name,
+            display_text: self.display_text,
+            detail: self.detail,
+            span: self.span,
+            cause: self.cause,
+            backtrace: self.backtrace,
+            stacks,
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
-pub trait ResultExt {
-    fn with_context(self, ctx: ErrorFrame) -> Self;
+
+pub trait ResultExt<T, C> {
+    fn with_context<C2>(self, ctx: impl ToString) -> std::result::Result<T, ErrorCode<C2>>;
 }
 
-impl<T> ResultExt for std::result::Result<T, ErrorCode> {
-    fn with_context(self, ctx: ErrorFrame) -> Self {
-        self.map_err(|mut e| {
-            e.stacks.push(ctx);
-            e
-        })
+impl<T, C> ResultExt<T, C> for std::result::Result<T, ErrorCode<C>> {
+    fn with_context<C2>(self, ctx: impl ToString) -> std::result::Result<T, ErrorCode<C2>> {
+        self.map_err(|e| e.with_context(ctx))
     }
 }
 

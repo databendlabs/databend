@@ -71,7 +71,7 @@ impl<'a> GeographyRef<'a> {
         Geography(self.0.to_owned())
     }
 
-    pub fn to_ewkt(&self) -> Result<String, String> {
+    pub fn to_ewkt(&self) -> std::result::Result<String, String> {
         let info = read_wkb_header(self.0)?;
         Ewkb(self.0).to_ewkt(info.srid).map_err(|e| e.to_string())
     }

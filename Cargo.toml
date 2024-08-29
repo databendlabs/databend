@@ -350,6 +350,7 @@ async_fn_in_trait = "allow"
 [workspace.lints.clippy]
 useless_format = "allow"
 mutable_key_type = "allow"
+result_large_err = "allow"
 
 [profile.release]
 debug = 1

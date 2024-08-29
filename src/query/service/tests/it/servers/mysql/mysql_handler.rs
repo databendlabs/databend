@@ -208,7 +208,7 @@ async fn create_connection(port: u16, with_tls: bool) -> Result<mysql_async::Con
 struct EmptyRow;
 
 impl FromRow for EmptyRow {
-    fn from_row_opt(_: Row) -> Result<Self, FromRowError>
+    fn from_row_opt(_: Row) -> std::result::Result<Self, FromRowError>
     where Self: Sized {
         Ok(EmptyRow)
     }

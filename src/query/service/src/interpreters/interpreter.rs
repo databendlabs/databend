@@ -242,10 +242,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
 }
 
-pub fn on_execution_finished(
-    info: &ExecutionInfo,
-    query_ctx: Arc<QueryContext>,
-) -> Result<(), ErrorCode> {
+pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);
 
