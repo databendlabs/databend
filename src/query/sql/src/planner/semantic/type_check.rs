@@ -4597,7 +4597,7 @@ impl<'a> TypeChecker<'a> {
             if column.database.is_some() {
                 return Err(ErrorCode::SemanticError(
                     "dict_get function argument identifier should contain one or two parts"
-                    .to_string(),
+                        .to_string(),
                 )
                 .set_span(dict_name_arg.span()));
             }
@@ -4618,7 +4618,7 @@ impl<'a> TypeChecker<'a> {
             (db_name, dict_name)
         } else {
             return Err(ErrorCode::SemanticError(
-            "async function can only used as column".to_string(),
+                "async function can only used as column".to_string(),
             )
             .set_span(dict_name_arg.span()));
         };
@@ -4661,7 +4661,6 @@ impl<'a> TypeChecker<'a> {
         let attr_type = schema.field(attr_index).data_type();
 
         // Get primary_key_values and check types.
-        // let primary_column_id = dict
         let primary_column_id = dictionary.primary_column_ids[0];
         let primary_field = schema.field_of_column_id(primary_column_id)?;
         let primary_type: DataType = (&primary_field.data_type).into();
@@ -4688,7 +4687,13 @@ impl<'a> TypeChecker<'a> {
             key_field: Some(primary_field.name().clone()),
             value_field: Some(attr_name.clone()),
         };
-        let display_name = format!("{}({},{},{})", func_name, dict_name, attr_name, primary_field.name().clone());
+        let display_name = format!(
+            "{}({},{},{})",
+            func_name,
+            dict_name,
+            attr_name,
+            primary_field.name().clone()
+        );
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,

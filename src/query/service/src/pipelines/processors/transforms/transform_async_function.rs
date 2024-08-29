@@ -17,8 +17,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use arrow_array::builder;
+use databend_common_storage::build_operator;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
@@ -48,10 +51,69 @@ pub struct TransformAsyncFunction {
     async_func_descs: Vec<AsyncFunctionDesc>,
 }
 
-lazy_static!(
+pub struct DictGetOperators {
+    pub operators: Arc<RwLock<HashMap<String, DictGetOperator>>>,
+}
+
+impl DictGetOperators {
+    pub fn new() -> Self{
+        Self { operators: Arc::new(RwLock::new(HashMap::new())) }
+    }
+
+    pub fn add_new_operator(&self, conn_str: String, source: String) -> Result<()> {
+        let reader = self.operators.read().unwrap();
+        if let Some(_) = reader.get(&conn_str) {
+            return Ok(())
+        } else {
+            if source.to_lowercase() == "redis" {
+                drop(reader);
+                let builder = Redis::default().endpoint(&conn_str);
+                let op = build_operator(builder)?;
+                let dict_get_operator = DictGetOperator {
+                    conn_str: Arc::new(RwLock::new(conn_str.clone())),
+                    operator: Arc::new(RwLock::new(op.clone())),
+                    cache: Arc::new(RwLock::new(HashMap::new())),
+                };
+                let mut writer = self.operators.write().unwrap();
+                writer.insert(conn_str.clone(), dict_get_operator);
+            } else {
+                todo!()
+            }
+        }
+        return Ok(())
+    }
+
+    pub fn get_operator(&self, conn_str: String) -> Result<Option<Operator>> {
+        let reader = self.operators.read().unwrap();
+        let res = reader.get(&conn_str);
+        drop(reader);
+        return Ok(res)
+    }
+}
+
+pub struct DictGetOperator {
+    conn_str: Arc<RwLock<String>>,
+    operator: Arc<RwLock<Operator>>,
+    cache: Arc<RwLock<HashMap<String, String>>>,
+}
+
+impl DictGetOperator {
+    pub fn add_new_kv(&self, key: String, value: String){
+        let mut writer = self.cache.write().unwrap();
+        writer.insert(key, value);
+    }
+    pub fn get_value(&self, key: String) -> Result<Option<String>> {
+        let reader = self.cache.read().unwrap();
+        let res = reader.get(&key);
+        drop(reader);
+        res
+    }
+}
+
+lazy_static! {
     static ref OPERATORS: Arc<RwLock<HashMap<String, Operator>>> = Arc::new(RwLock::new(HashMap::new()));
     static ref CACHE: Arc<RwLock<HashMap<String, String>>> = Arc::new(RwLock::new(HashMap::new()));
-);
+}
 
 impl TransformAsyncFunction {
     pub fn new(ctx: Arc<QueryContext>, async_func_descs: Vec<AsyncFunctionDesc>) -> Self {
@@ -121,39 +183,149 @@ impl TransformAsyncFunction {
         let entry = data_block.get_by_offset(arg_index);
         let value = match &entry.value {
             Value::Scalar(scalar) => {
-                if let Scalar::String(key) = scalar {
+                if let Some(key) = match scalar {
+                    Scalar::String(key) => Some(key.to_string()),
+                    Scalar::Number(key) => Some(key.to_string()),
+                    _ => Some("".to_string())
+                } {
                     let cache = CACHE.read().unwrap().clone();
-                    if let Some(cached_val) = cache.get(key) {
-                        Value::Scalar(Scalar::String(cached_val.clone()))
+                    if key.as_str() == "" {
+                        Value::Scalar(Scalar::String("".to_string()))
+                    } else if let Some(cached_val) = cache.get(&key) {
+                        if cached_val == "null" {
+                            Value::Scalar(Scalar::Null)
+                        } else {
+                            Value::Scalar(Scalar::String(cached_val.clone()))
+                        }
                     } else {
                         drop(cache);
                         let res = op.read(&key).await?;
-                        let val = String::from_utf8((&res.current()).to_vec()).unwrap();
-                        let mut cache = CACHE.write().unwrap();
-                        cache.insert(key.clone(), val.clone());
-                        Value::Scalar(Scalar::String(val))
+                        if res.is_empty() {
+                            let mut cache = CACHE.write().unwrap();
+                            cache.insert(key, "null".to_string());
+                            Value::Scalar(Scalar::Null)
+                        } else {
+                            let mut cache = CACHE.write().unwrap();
+                            let val = String::from_utf8((&res.current()).to_vec()).unwrap();
+                            cache.insert(key, val.clone());
+                            Value::Scalar(Scalar::String(val))
+                        }
                     }
                 } else {
                     Value::Scalar(Scalar::String("".to_string()))
                 }
+                // match scalar {
+                //     Scalar::String(key) | Scalar::Number(key) => {
+                //         let key = key.to_string();
+                //         let cache = CACHE.read().unwrap().clone();
+                //         if let Some(cached_val) = cache.get(&key) {
+                //             if cached_val == "null" {
+                //                 Value::Scalar(Scalar::Null)
+                //             } else {
+                //                 Value::Scalar(Scalar::String(cached_val.clone()))
+                //             }
+                //         } else {
+                //             drop(cache);
+                //             let mut cache = CACHE.write().unwrap();
+                //             let res = op.read(&key).await?;
+                //             if res.is_empty() {
+                //                 cache.insert(key.clone(), "null".to_string());
+                //                 Value::Scalar(Scalar::Null)
+                //             } else {
+                //                 let val = String::from_utf8((&res.current()).to_vec()).unwrap();
+                //                 cache.insert(key.clone(), val.clone());
+                //                 Value::Scalar(Scalar::String(val))
+                //             }
+                //         }
+                //     }
+                //     _ => Value::Scalar(Scalar::String("".to_string())),
+                // }
+                // if let Scalar::String(key) = scalar {
+                //     let cache = CACHE.read().unwrap().clone();
+                //     if let Some(cached_val) = cache.get(key) {
+                //         Value::Scalar(Scalar::String(cached_val.clone()))
+                //     } else {
+                //         drop(cache);
+                //         let res = op.read(&key).await?;
+                //         let val = String::from_utf8((&res.current()).to_vec()).unwrap();
+                //         let mut cache = CACHE.write().unwrap();
+                //         cache.insert(key.clone(), val.clone());
+                //         Value::Scalar(Scalar::String(val))
+                //     }
+                // } else if let Scalar::Number(key) = scalar{
+                //     let k = key.to_string();
+
+                // } else {
+                //     Value::Scalar(Scalar::String("".to_string()))
+                // }
             }
             Value::Column(column) => {
                 let mut builder = StringColumnBuilder::with_capacity(column.len(), 0);
                 for scalar in column.iter() {
                     let cache = CACHE.read().unwrap().clone();
-                    if let ScalarRef::String(key) = scalar {
-                        let value = if let Some(cached_val) = cache.get(key) {
-                            cached_val.clone()
-                        } else {
-                            drop(cache);
-                            let res = op.read(&key).await?;
-                            let val = String::from_utf8((&res.current()).to_vec()).unwrap();
+
+                    let key = match scalar {
+                        ScalarRef::String(key) => key.to_string(),
+                        ScalarRef::Number(key) => key.to_string(),
+                        _ => "".to_string(),
+                    };
+                    let value = if key == "" {
+                        "".to_string()
+                    } else if let Some(cached_val) = cache.get(&key) {
+                        cached_val.clone()
+                    } else {
+                        drop(cache);
+                        
+                        let res = op.read(&key).await?;
+                        if res.is_empty() {
                             let mut cache = CACHE.write().unwrap();
+                            cache.insert(key.to_string(), "null".to_string());
+                            "null".to_string()
+                        } else {
+                            let mut cache = CACHE.write().unwrap();
+                            let val = String::from_utf8((&res.current()).to_vec()).unwrap();
                             cache.insert(key.to_string(), val.clone());
                             val
-                        };
-                        builder.put_str(value.as_str());
-                    }
+                        }
+                    };
+                    builder.put_str(value.as_str());
+                    // match scalar {
+                    //     ScalarRef::String(key) | ScalarRef::Number(key) => {
+                    //         let key = key.to_string();
+                    //         let value = if let Some(cached_val) = cache.get(&key) {
+                    //             cached_val.clone()
+                    //         } else {
+                    //             drop(cache);
+                    //             let mut cache = CACHE.write().unwrap();
+                    //             let res = op.read(&key).await?;
+                    //             if res.is_empty() {
+                    //                 cache.insert(key.clone(), "null".to_string());
+                    //                 "null".to_string()
+                    //             } else {
+                    //                 let val = String::from_utf8((&res.current()).to_vec()).unwrap();
+                    //                 cache.insert(key.clone(), val.clone());
+                    //                 val
+                    //             }
+                    //         };
+                    //         builder.put_str(value.as_str());
+                    //     }
+
+                    //     _ => {}
+                    // }
+
+                    // if let ScalarRef::String(key) = scalar {
+                    //     let value = if let Some(cached_val) = cache.get(key) {
+                    //         cached_val.clone()
+                    //     } else {
+                    //         drop(cache);
+                    //         let res = op.read(&key).await?;
+                    //         let val = String::from_utf8((&res.current()).to_vec()).unwrap();
+                    //         let mut cache = CACHE.write().unwrap();
+                    //         cache.insert(key.to_string(), val.clone());
+                    //         val
+                    //     };
+                    //     builder.put_str(value.as_str());
+                    // }
                     builder.commit_row();
                 }
                 Value::Column(Column::String(builder.build()))
@@ -164,9 +336,9 @@ impl TransformAsyncFunction {
             value,
         };
         data_block.add_column(entry);
-    
+
         Ok(())
-    }   
+    }
 }
 
 #[async_trait::async_trait]
