@@ -492,9 +492,9 @@ impl Binder {
                 let _ = options.insert("TRANSIENT".to_owned(), "T".to_owned());
             }
             TableType::Temporary => {
-                if engine != Engine::Fuse {
+                if engine != Engine::Fuse && engine != Engine::Memory {
                     return Err(ErrorCode::BadArguments(
-                        "Temporary table is only supported for FUSE engine",
+                        "Temporary table is only supported for FUSE and MEMORY engine",
                     ));
                 }
                 let _ = options.insert(OPT_KEY_TEMP_PREFIX.to_string(), self.ctx.get_session_id());
@@ -593,6 +593,15 @@ impl Binder {
                 }
             }
         };
+
+        if engine == Engine::Memory {
+            let catalog = self.ctx.get_catalog(&catalog).await?;
+            let db = catalog
+                .get_database(&self.ctx.get_tenant(), &database)
+                .await?;
+            let db_id = db.get_db_info().database_id.db_id;
+            options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+        }
 
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus

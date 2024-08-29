@@ -3115,7 +3115,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "criterion",
  "derive-visitor",
@@ -3143,18 +3143,6 @@ dependencies = [
  "strum_macros 0.24.3",
  "unindent",
  "url",
-]
-
-[[package]]
-name = "databend-common-async-functions"
-version = "0.1.0"
-dependencies = [
- "databend-common-ast",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "educe",
 ]
 
 [[package]]
@@ -3854,7 +3842,6 @@ dependencies = [
  "anyerror",
  "databend-common-exception",
  "prost 0.12.6",
- "serde",
  "serde_json",
  "sled",
  "thiserror",
@@ -4132,7 +4119,6 @@ dependencies = [
  "ctor 0.2.8",
  "dashmap",
  "databend-common-ast",
- "databend-common-async-functions",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-compress",
@@ -4153,6 +4139,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-storages-common-cache",
  "databend-storages-common-table-meta",
  "derive-visitor",
  "educe",
@@ -4175,6 +4162,7 @@ dependencies = [
  "regex",
  "roaring",
  "serde",
+ "sha2",
  "simsearch",
  "time",
  "url",
@@ -4425,6 +4413,7 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-storage",
+ "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "parking_lot 0.12.3",
  "serde",
@@ -5324,6 +5313,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "parking_lot 0.12.3",
  "parquet",
 ]
 
@@ -5417,6 +5407,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-storage",
+ "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "log",
  "parking_lot 0.12.3",

@@ -30,13 +30,16 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::planner::resolve_type_name;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
+use crate::BindContext;
 use crate::Binder;
+use crate::UdfRewriter;
 
 impl Binder {
     fn is_allowed_language(language: &str) -> bool {
@@ -193,5 +196,28 @@ impl Binder {
             if_exists,
             udf: name,
         })))
+    }
+
+    // Rewrite udf script, udf server and its arguments as derived column.
+    pub(in crate::planner::binder) fn rewrite_udf(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if !bind_context.have_udf_script && !bind_context.have_udf_server {
+            return Ok(s_expr);
+        }
+        let mut s_expr = s_expr.clone();
+        if bind_context.have_udf_script {
+            // rewrite udf for interpreter udf
+            let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+            s_expr = udf_rewriter.rewrite(&s_expr)?;
+        }
+        if bind_context.have_udf_server {
+            // rewrite udf for server udf
+            let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+            s_expr = udf_rewriter.rewrite(&s_expr)?;
+        }
+        Ok(s_expr)
     }
 }

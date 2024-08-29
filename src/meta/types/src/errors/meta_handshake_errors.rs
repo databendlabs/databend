@@ -17,7 +17,7 @@ use std::fmt::Display;
 use anyerror::AnyError;
 
 /// Error raised by meta service client.
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("failed to handshake with meta-service: {msg}, cause: {source}")]
 pub struct MetaHandshakeError {
     msg: String,

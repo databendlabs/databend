@@ -357,7 +357,7 @@ impl Catalog for SessionCatalog {
             return self.get_table_by_info(&table);
         }
         let table = self.inner.get_table(tenant, db_name, table_name).await?;
-        if table.engine() == "STREAM" && is_active {
+        if table.is_stream() && is_active {
             self.txn_mgr
                 .lock()
                 .upsert_table_desc_to_id(table.get_table_info().clone());

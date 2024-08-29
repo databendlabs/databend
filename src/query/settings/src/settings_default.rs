@@ -380,6 +380,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("enable_planner_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables caching logic plan from same query.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables caching query results to improve performance for identical queries.",

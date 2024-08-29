@@ -439,6 +439,10 @@ pub trait Table: Sync + Send {
         is_temp
     }
 
+    fn is_stream(&self) -> bool {
+        self.engine() == "STREAM"
+    }
+
     fn use_own_sample_block(&self) -> bool {
         false
     }

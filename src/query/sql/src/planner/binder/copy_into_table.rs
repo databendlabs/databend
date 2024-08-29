@@ -73,7 +73,6 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
-use crate::UdfRewriter;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -404,17 +403,13 @@ impl<'a> Binder {
 
         let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
+
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
-
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan

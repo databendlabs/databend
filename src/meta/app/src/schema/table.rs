@@ -565,6 +565,8 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
+
+    pub engine: String,
 }
 
 impl DropTableByIdReq {

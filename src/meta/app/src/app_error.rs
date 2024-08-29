@@ -17,8 +17,12 @@ use std::fmt::Display;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
 
+use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::schema::catalog_name_ident;
+use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
+use crate::tenant_key::ident::TIdent;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
@@ -58,54 +62,6 @@ impl DatabaseAlreadyExists {
     pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("CatalogAlreadyExists: `{catalog_name}` while `{context}`")]
-pub struct CatalogAlreadyExists {
-    catalog_name: String,
-    context: String,
-}
-
-impl CatalogAlreadyExists {
-    pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            catalog_name: catalog_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DatamaskAlreadyExists: `{name}` while `{context}`")]
-pub struct DatamaskAlreadyExists {
-    name: String,
-    context: String,
-}
-
-impl DatamaskAlreadyExists {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("BackgroundJobAlreadyExists: `{name}` while `{context}`")]
-pub struct BackgroundJobAlreadyExists {
-    name: String,
-    context: String,
-}
-
-impl BackgroundJobAlreadyExists {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
             context: context.into(),
         }
     }
@@ -455,22 +411,6 @@ pub struct UnknownDatamask {
 }
 
 impl UnknownDatamask {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("UnknownBackgroundJob: `{name}` while `{context}`")]
-pub struct UnknownBackgroundJob {
-    name: String,
-    context: String,
-}
-
-impl UnknownBackgroundJob {
     pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -1153,7 +1093,7 @@ pub enum AppError {
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
-    CatalogAlreadyExists(#[from] CatalogAlreadyExists),
+    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::Resource>),
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
@@ -1171,7 +1111,7 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
-    UnknownCatalog(#[from] UnknownCatalog),
+    UnknownCatalog(#[from] UnknownError<catalog_name_ident::Resource>),
 
     #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),
@@ -1256,16 +1196,16 @@ pub enum AppError {
     IndexColumnIdNotFound(#[from] IndexColumnIdNotFound),
 
     #[error(transparent)]
-    DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
+    DatamaskAlreadyExists(#[from] ExistError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
-    BackgroundJobAlreadyExists(#[from] BackgroundJobAlreadyExists),
+    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::Resource>),
 
     #[error(transparent)]
-    UnknownBackgroundJob(#[from] UnknownBackgroundJob),
+    UnknownBackgroundJob(#[from] UnknownError<job_ident::Resource>),
 
     #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
@@ -1306,6 +1246,26 @@ pub enum AppError {
     UnknownDictionary(#[from] UnknownDictionary),
 }
 
+impl AppError {
+    /// Create an `unknown` TIdent error.
+    pub fn unknown<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    where
+        N: Clone,
+        AppError: From<UnknownError<R, N>>,
+    {
+        AppError::from(ident.unknown_error(ctx))
+    }
+
+    /// Create an `exist` TIdent error.
+    pub fn exists<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    where
+        N: Clone,
+        AppError: From<ExistError<R, N>>,
+    {
+        AppError::from(ident.exist_error(ctx))
+    }
+}
+
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum SequenceError {
     #[error(transparent)]
@@ -1330,39 +1290,15 @@ impl AppErrorMessage for TenantIsEmpty {
     }
 }
 
-impl AppErrorMessage for UnknownBackgroundJob {
-    fn message(&self) -> String {
-        format!("Unknown background job '{}'", self.name)
-    }
-}
-
-impl AppErrorMessage for BackgroundJobAlreadyExists {
-    fn message(&self) -> String {
-        format!("Background job '{}' already exists", self.name)
-    }
-}
-
 impl AppErrorMessage for UnknownDatabase {
     fn message(&self) -> String {
         format!("Unknown database '{}'", self.db_name)
     }
 }
 
-impl AppErrorMessage for UnknownCatalog {
-    fn message(&self) -> String {
-        format!("Unknown catalog '{}'", self.catalog_name)
-    }
-}
-
 impl AppErrorMessage for DatabaseAlreadyExists {
     fn message(&self) -> String {
         format!("Database '{}' already exists", self.db_name)
-    }
-}
-
-impl AppErrorMessage for CatalogAlreadyExists {
-    fn message(&self) -> String {
-        format!("Catalog '{}' already exists", self.catalog_name)
     }
 }
 
@@ -1649,12 +1585,6 @@ impl AppErrorMessage for IndexColumnIdNotFound {
             "index '{}' column id {} is not found",
             self.index_name, self.column_id
         )
-    }
-}
-
-impl AppErrorMessage for DatamaskAlreadyExists {
-    fn message(&self) -> String {
-        format!("Datamask '{}' already exists", self.name)
     }
 }
 
