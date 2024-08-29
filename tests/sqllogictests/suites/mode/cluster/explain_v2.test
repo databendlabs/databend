@@ -416,6 +416,52 @@ Exchange
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3.00
 
+query T
+EXPLAIN SELECT a.cluster_node, b.query_node FROM (SELECT name as cluster_node FROM system.clusters) AS a LEFT JOIN (SELECT DISTINCT node_id as query_node FROM system.query_log) AS b ON a.cluster_node = b.query_node
+----
+Exchange
+├── output columns: [clusters.name (#0), query_log.node_id (#10)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [clusters.name (#0), query_log.node_id (#10)]
+    ├── join type: LEFT OUTER
+    ├── build keys: [b.query_node (#10)]
+    ├── probe keys: [CAST(a.cluster_node (#0) AS String NULL)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── Exchange(Build)
+    │   ├── output columns: [query_log.node_id (#10)]
+    │   ├── exchange type: Broadcast
+    │   └── AggregateFinal
+    │       ├── output columns: [query_log.node_id (#10)]
+    │       ├── group by: [node_id]
+    │       ├── aggregate functions: []
+    │       ├── estimated rows: 0.00
+    │       └── Exchange
+    │           ├── output columns: [query_log.node_id (#10)]
+    │           ├── exchange type: Hash(0)
+    │           └── AggregatePartial
+    │               ├── group by: [node_id]
+    │               ├── aggregate functions: []
+    │               ├── estimated rows: 0.00
+    │               └── TableScan
+    │                   ├── table: default.system.query_log
+    │                   ├── output columns: [node_id (#10)]
+    │                   ├── read rows: 0
+    │                   ├── read size: 0
+    │                   ├── partitions total: 0
+    │                   ├── partitions scanned: 0
+    │                   ├── push downs: [filters: [], limit: NONE]
+    │                   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.system.clusters
+        ├── output columns: [name (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 statement ok
 drop table t1;

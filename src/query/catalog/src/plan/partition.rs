@@ -22,6 +22,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -201,6 +202,26 @@ impl Partitions {
                     .collect());
             }
         };
+
+        // If there is only one partition, we prioritize executing the query on the local node.
+        if partitions.len() == 1 {
+            let mut executor_part = HashMap::default();
+
+            let local_id = &GlobalConfig::instance().query.node_id;
+            for executor in executors_sorted.into_iter() {
+                let parts = match &executor == local_id {
+                    true => partitions.clone(),
+                    false => vec![],
+                };
+
+                executor_part.insert(
+                    executor,
+                    Partitions::create(PartitionsShuffleKind::Seq, parts),
+                );
+            }
+
+            return Ok(executor_part);
+        }
 
         // parts_per_executor = num_parts / num_executors
         // remain = num_parts % num_executors
