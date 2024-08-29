@@ -268,6 +268,7 @@ pub fn parse_default_expr_to_string(
     } else {
         (expr, false)
     };
+
     Ok((expr.sql_display(), is_deterministic))
 }
 
