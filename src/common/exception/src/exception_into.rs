@@ -24,6 +24,7 @@ use geozero::error::GeozeroError;
 use crate::exception::ErrorCodeBacktrace;
 use crate::exception_backtrace::capture;
 use crate::ErrorCode;
+use crate::ErrorFrame;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {
@@ -279,37 +280,86 @@ pub struct SerializedError {
     pub message: String,
     pub span: Span,
     pub backtrace: String,
+    pub stacks: Vec<SerializedErrorFrame>,
 }
 
 impl Display for SerializedError {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "Code: {}, Text = {}.", self.code, self.message,)
+        write!(f, "Code: {}, Text = {}.", self.code, self.message)
     }
 }
 
-impl From<ErrorCode> for SerializedError {
-    fn from(e: ErrorCode) -> Self {
+impl From<&ErrorCode> for SerializedError {
+    fn from(e: &ErrorCode) -> Self {
         SerializedError {
             code: e.code(),
             name: e.name(),
             message: e.message(),
             span: e.span(),
             backtrace: e.backtrace_str(),
+            stacks: e.stacks().iter().map(|f| f.into()).collect(),
         }
     }
 }
 
-impl From<SerializedError> for ErrorCode {
-    fn from(se: SerializedError) -> Self {
+impl From<&SerializedError> for ErrorCode {
+    fn from(se: &SerializedError) -> Self {
+        let backtrace = match se.backtrace.len() {
+            0 => None,
+            _ => Some(ErrorCodeBacktrace::Serialized(Arc::new(
+                se.backtrace.clone(),
+            ))),
+        };
         ErrorCode::create(
             se.code,
-            se.name,
-            se.message,
+            se.name.clone(),
+            se.message.clone(),
             String::new(),
             None,
-            Some(ErrorCodeBacktrace::Serialized(Arc::new(se.backtrace))),
+            backtrace,
         )
         .set_span(se.span)
+        .set_stacks(se.stacks.iter().map(|f| f.into()).collect())
+    }
+}
+
+#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct SerializedErrorFrame {
+    pub file: String,
+    pub line: u32,
+    pub col: u32,
+    pub message: String,
+}
+
+impl Display for SerializedErrorFrame {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}: {}",
+            self.file, self.line, self.col, self.message
+        )
+    }
+}
+
+impl From<&ErrorFrame> for SerializedErrorFrame {
+    fn from(frame: &ErrorFrame) -> Self {
+        SerializedErrorFrame {
+            file: frame.file.clone(),
+            line: frame.line,
+            col: frame.col,
+            message: frame.message.clone(),
+        }
+    }
+}
+
+impl From<&SerializedErrorFrame> for ErrorFrame {
+    fn from(frame: &SerializedErrorFrame) -> Self {
+        ErrorFrame {
+            file: frame.file.clone(),
+            line: frame.line,
+            col: frame.col,
+            message: frame.message.clone(),
+        }
     }
 }
 
@@ -374,6 +424,7 @@ impl From<ErrorCode> for tonic::Status {
                 str.truncate(2 * 1024);
                 str
             },
+            stacks: err.stacks().iter().map(|f| f.into()).collect(),
         });
 
         match error_json {

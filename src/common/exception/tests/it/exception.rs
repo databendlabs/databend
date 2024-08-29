@@ -92,9 +92,9 @@ fn test_derive_from_display() {
 #[test]
 fn test_from_and_to_serialized_error() {
     let ec = ErrorCode::UnknownDatabase("foo");
-    let se: SerializedError = ec.clone().into();
+    let se = SerializedError::from(&ec);
 
-    let ec2: ErrorCode = se.into();
+    let ec2 = ErrorCode::from(&se);
     assert_eq!(ec.code(), ec2.code());
     assert_eq!(ec.message(), ec2.message());
     assert_eq!(ec.to_string(), ec2.to_string());

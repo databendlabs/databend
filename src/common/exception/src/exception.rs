@@ -25,6 +25,7 @@ use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
+use crate::ErrorFrame;
 
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
@@ -97,6 +98,7 @@ pub struct ErrorCode {
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
     backtrace: Option<ErrorCodeBacktrace>,
+    pub(crate) stacks: Vec<ErrorFrame>,
 }
 
 impl ErrorCode {
@@ -214,6 +216,15 @@ impl ErrorCode {
             .as_ref()
             .map_or("".to_string(), |x| x.to_string())
     }
+
+    pub fn stacks(&self) -> &[ErrorFrame] {
+        &self.stacks
+    }
+
+    pub fn set_stacks(mut self, stacks: Vec<ErrorFrame>) -> Self {
+        self.stacks = stacks;
+        self
+    }
 }
 
 pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
@@ -266,6 +277,7 @@ impl Display for ErrorCode {
 
 impl ErrorCode {
     /// All std error will be converted to InternalError
+    #[track_caller]
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCode {
             code: 1001,
@@ -275,19 +287,23 @@ impl ErrorCode {
             span: None,
             cause: None,
             backtrace: capture(),
+            stacks: vec![],
         }
+        .with_context(error.to_string())
     }
 
     pub fn from_string(error: String) -> Self {
         ErrorCode {
             code: 1001,
             name: String::from("Internal"),
-            display_text: error,
+            display_text: error.clone(),
             detail: String::new(),
             span: None,
             cause: None,
             backtrace: capture(),
+            stacks: vec![],
         }
+        .with_context(error)
     }
 
     pub fn from_string_no_backtrace(error: String) -> Self {
@@ -299,6 +315,7 @@ impl ErrorCode {
             span: None,
             cause: None,
             backtrace: None,
+            stacks: vec![],
         }
     }
 
@@ -312,13 +329,15 @@ impl ErrorCode {
     ) -> ErrorCode {
         ErrorCode {
             code,
-            display_text,
+            display_text: display_text.clone(),
             detail,
             span: None,
             cause,
             backtrace,
             name: name.to_string(),
+            stacks: vec![],
         }
+        .with_context(display_text)
     }
 }
 
@@ -379,5 +398,6 @@ impl Clone for ErrorCode {
             self.backtrace(),
         )
         .set_span(self.span())
+        .set_stacks(self.stacks().to_vec())
     }
 }
