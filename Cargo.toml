@@ -29,7 +29,6 @@ members = [
     "src/common/license",
     "src/common/parquet2",
     "src/query/ast",
-    "src/query/async_functions",
     "src/query/codegen",
     "src/query/config",
     "src/query/catalog",
@@ -286,6 +285,7 @@ ordq = "0.2.0"
 parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
+sha2 = "0.10.8"
 # TODO: let's use native tls instead.
 iceberg = { version = "0.3.0" }
 iceberg-catalog-hms = { version = "0.3.0" }

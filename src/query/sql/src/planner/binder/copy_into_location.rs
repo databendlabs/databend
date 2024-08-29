@@ -42,7 +42,9 @@ impl<'a> Binder {
                         &table.database,
                         &table.table,
                     );
-                let subquery = format!("SELECT * FROM {catalog_name}.{database_name}.{table_name}");
+                let subquery = format!(
+                    "SELECT * FROM \"{catalog_name}\".\"{database_name}\".\"{table_name}\""
+                );
                 let tokens = tokenize_sql(&subquery)?;
                 let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;
                 let sub_stmt = sub_stmt_msg.0;

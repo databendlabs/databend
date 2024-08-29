@@ -60,7 +60,7 @@ parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 siphasher = "0.3.10"
 sys-info = "0.9"
 tantivy = { workspace = true }

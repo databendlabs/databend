@@ -336,6 +336,7 @@ pub trait TableContext: Send + Sync {
     fn set_variable(&self, key: String, value: Scalar);
     fn unset_variable(&self, key: &str);
     fn get_variable(&self, key: &str) -> Option<Scalar>;
+    fn get_all_variables(&self) -> HashMap<String, Scalar>;
 
     async fn load_datalake_schema(
         &self,

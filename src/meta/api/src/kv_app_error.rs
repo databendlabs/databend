@@ -17,7 +17,9 @@ use std::any::type_name;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TenantIsEmpty;
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaClientError;
@@ -40,7 +42,7 @@ use tonic::Status;
 ///
 /// Either a local or remote meta-store will returns (1) AppError.
 /// An embedded meta-store only returns (1) and (2), while a remote meta-store service only returns (1) and (3)
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum KVAppError {
     /// An error that indicates something wrong for the application of kvapi::KVApi, but nothing wrong about meta.
     #[error(transparent)]
@@ -56,6 +58,12 @@ impl From<KVAppError> for ErrorCode {
             KVAppError::AppError(app_err) => app_err.into(),
             KVAppError::MetaError(meta_err) => ErrorCode::MetaServiceError(meta_err.to_string()),
         }
+    }
+}
+
+impl From<TxnRetryMaxTimes> for KVAppError {
+    fn from(value: TxnRetryMaxTimes) -> Self {
+        KVAppError::AppError(AppError::from(value))
     }
 }
 
@@ -84,6 +92,13 @@ impl From<MetaNetworkError> for KVAppError {
     fn from(e: MetaNetworkError) -> Self {
         let meta_err = MetaError::from(e);
         Self::MetaError(meta_err)
+    }
+}
+
+impl From<InvalidArgument> for KVAppError {
+    fn from(value: InvalidArgument) -> Self {
+        let network_error = MetaNetworkError::from(value);
+        Self::MetaError(MetaError::from(network_error))
     }
 }
 

@@ -68,7 +68,6 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -83,7 +82,6 @@ use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
@@ -283,12 +281,12 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -880,6 +878,10 @@ impl TableContext for CtxDelegation {
         None
     }
 
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
+    }
+
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
@@ -1018,10 +1020,12 @@ async fn test_get_same_table_once() -> Result<()> {
             .load(std::sync::atomic::Ordering::SeqCst),
         1
     );
-    assert_eq!(
+
+    // plan cache need get table
+    assert!(
         ctx.table_from_cache
-            .load(std::sync::atomic::Ordering::SeqCst),
-        2
+            .load(std::sync::atomic::Ordering::SeqCst)
+            >= 2
     );
 
     Ok(())

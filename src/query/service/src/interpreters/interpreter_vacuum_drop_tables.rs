@@ -83,7 +83,7 @@ impl VacuumDropTablesInterpreter {
                 tenant: self.ctx.get_tenant(),
                 drop_ids: c.to_vec(),
             };
-            let _ = catalog.gc_drop_tables(req).await?;
+            catalog.gc_drop_tables(req).await?;
         }
 
         // then gc drop db ids
@@ -93,7 +93,7 @@ impl VacuumDropTablesInterpreter {
                 tenant: self.ctx.get_tenant(),
                 drop_ids: c.to_vec(),
             };
-            let _ = catalog.gc_drop_tables(req).await?;
+            catalog.gc_drop_tables(req).await?;
         }
 
         Ok(())

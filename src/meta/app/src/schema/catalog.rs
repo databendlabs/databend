@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -168,7 +167,7 @@ mod catalog_info {
     impl From<crate::schema::CatalogIdIdent> for CatalogId {
         fn from(value: crate::schema::CatalogIdIdent) -> Self {
             Self {
-                catalog_id: value.catalog_id(),
+                catalog_id: *value.catalog_id(),
             }
         }
     }
@@ -263,25 +262,6 @@ impl Display for DropCatalogReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropCatalogReply {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GetCatalogReq {
-    pub inner: CatalogNameIdent,
-}
-
-impl Deref for GetCatalogReq {
-    type Target = CatalogNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl GetCatalogReq {
-    pub fn new(ident: CatalogNameIdent) -> GetCatalogReq {
-        GetCatalogReq { inner: ident }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListCatalogReq {

@@ -20,6 +20,7 @@ use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
+use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
@@ -283,7 +284,7 @@ impl RoleApi for RoleMgr {
     ) -> databend_common_exception::Result<()> {
         let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials.next().unwrap()?.await;
+            trials.next().unwrap().map_err(AppError::from)?.await;
             let mut if_then = vec![];
             let mut condition = vec![];
             let seq_owns = self.get_ownerships().await.map_err(|e| {

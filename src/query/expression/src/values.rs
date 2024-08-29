@@ -1365,11 +1365,11 @@ impl Column {
                     Some(v) => &v & (&null_column.validity),
                     None => null_column.validity.clone(),
                 };
-                NullableColumn::new_column(null_column.column.clone(), validity)
+                NullableColumn::new_column(null_column.column, validity)
             }
             _ => {
                 let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
-                NullableColumn::new_column(self.clone(), validity)
+                NullableColumn::new_column(self, validity)
             }
         }
     }

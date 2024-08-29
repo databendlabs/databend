@@ -51,7 +51,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for ShareAccountMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = super::ShareConsumerIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

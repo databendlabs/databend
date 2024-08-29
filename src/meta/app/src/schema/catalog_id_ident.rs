@@ -15,19 +15,28 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type CatalogIdIdent = TIdent<Resource, u64>;
-pub type CatalogIdIdentRaw = TIdentRaw<Resource, u64>;
+pub type CatalogId = DataId<Resource>;
+
+pub type CatalogIdIdent = TIdent<Resource, CatalogId>;
+pub type CatalogIdIdentRaw = TIdentRaw<Resource, CatalogId>;
 
 pub use kvapi_impl::Resource;
 
+use crate::data_id::DataId;
+use crate::tenant::ToTenant;
+
 impl CatalogIdIdent {
-    pub fn catalog_id(&self) -> u64 {
+    pub fn new(tenant: impl ToTenant, catalog_id: u64) -> Self {
+        Self::new_generic(tenant, CatalogId::new(catalog_id))
+    }
+
+    pub fn catalog_id(&self) -> CatalogId {
         *self.name()
     }
 }
 
 impl CatalogIdIdentRaw {
-    pub fn catalog_id(&self) -> u64 {
+    pub fn catalog_id(&self) -> CatalogId {
         *self.name()
     }
 }
@@ -36,6 +45,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::CatalogIdIdent;
     use crate::schema::CatalogMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -48,7 +58,9 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for CatalogMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = CatalogIdIdent;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
@@ -62,13 +74,14 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use super::CatalogId;
     use super::CatalogIdIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_background_job_id_ident() {
         let tenant = Tenant::new_literal("dummy");
-        let ident = CatalogIdIdent::new(tenant, 3);
+        let ident = CatalogIdIdent::new_generic(tenant, CatalogId::new(3));
 
         let key = ident.to_string_key();
         assert_eq!(key, "__fd_catalog_by_id/3");

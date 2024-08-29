@@ -314,6 +314,13 @@ impl SExpr {
                     });
                 }
             }
+            RelOperator::AsyncFunction(async_func) => {
+                for item in &async_func.items {
+                    get_udf_names(&item.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
             RelOperator::MutationSource(mutation_source) => {
                 if let Some(filter) = &mutation_source.filter {
                     get_udf_names(filter)?.iter().for_each(|udf| {
@@ -330,7 +337,6 @@ impl SExpr {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::AsyncFunction(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)

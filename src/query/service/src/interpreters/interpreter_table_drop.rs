@@ -125,6 +125,7 @@ impl Interpreter for DropTableInterpreter {
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().database_id.db_id,
+                engine: tbl.engine().to_string(),
             })
             .await?;
 

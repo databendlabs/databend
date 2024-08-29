@@ -20,6 +20,7 @@ use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
+pub use data_mask_id_ident::DataMaskId;
 pub use data_mask_id_ident::DataMaskIdIdent;
 pub use data_mask_name_ident::DataMaskNameIdent;
 pub use mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
@@ -37,28 +38,11 @@ pub struct DatamaskMeta {
     pub update_on: Option<DateTime<Utc>>,
 }
 
-impl From<CreateDatamaskReq> for DatamaskMeta {
-    fn from(p: CreateDatamaskReq) -> Self {
-        DatamaskMeta {
-            args: p.args.clone(),
-            return_type: p.return_type.clone(),
-            body: p.body.clone(),
-            comment: p.comment.clone(),
-            create_on: p.create_on,
-            update_on: None,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatamaskReq {
     pub create_option: CreateOption,
     pub name: DataMaskNameIdent,
-    pub args: Vec<(String, String)>,
-    pub return_type: String,
-    pub body: String,
-    pub comment: Option<String>,
-    pub create_on: DateTime<Utc>,
+    pub data_mask_meta: DatamaskMeta,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -72,17 +56,9 @@ pub struct DropDatamaskReq {
     pub name: DataMaskNameIdent,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropDatamaskReply {}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDatamaskReq {
     pub name: DataMaskNameIdent,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GetDatamaskReply {
-    pub policy: DatamaskMeta,
 }
 
 /// A list of table ids

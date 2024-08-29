@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::SeqV;
 use databend_common_storage::DataOperator;
+use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
@@ -86,12 +87,14 @@ impl TempTblMgr {
             as_dropped,
         } = req;
         let orphan_table_name = as_dropped.then(|| format!("orphan@{}", name_ident.table_name));
+
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
             return Err(ErrorCode::Internal(format!(
                 "Database id not set in table options"
             )));
         };
         let db_id = db_id.parse::<u64>()?;
+
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
         let table_id = self.next_id;
         let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
@@ -291,48 +294,93 @@ pub async fn drop_table_by_id(
     mgr: TempTblMgrRef,
     req: DropTableByIdReq,
 ) -> Result<Option<DropTableReply>> {
-    let DropTableByIdReq { tb_id, .. } = req;
-    let dir = {
-        let mut guard = mgr.lock();
-        let entry = guard.id_to_table.entry(tb_id);
-        match entry {
-            Entry::Occupied(e) => {
-                let dir = parse_storage_prefix(&e.get().meta.options, tb_id)?;
-                let table = e.remove();
-                let desc = format!("{}.{}", table.db_name, table.table_name);
-                guard.name_to_id.remove(&desc).ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "Table not found in temp table manager {:?}, drop table request: {:?}",
-                        guard, req
-                    ))
-                })?;
-                dir
-            }
-            Entry::Vacant(_) => {
-                return Ok(None);
-            }
+    let DropTableByIdReq { tb_id, engine, .. } = &req;
+    match engine.as_str() {
+        "FUSE" => {
+            let dir = {
+                let mut guard = mgr.lock();
+                let entry = guard.id_to_table.entry(*tb_id);
+                match entry {
+                    Entry::Occupied(e) => {
+                        let dir = parse_storage_prefix(&e.get().meta.options, *tb_id)?;
+                        let table = e.remove();
+                        let desc = format!("{}.{}", table.db_name, table.table_name);
+                        guard.name_to_id.remove(&desc).ok_or_else(|| {
+                            ErrorCode::Internal(format!(
+                                "Table not found in temp table manager {:?}, drop table request: {:?}",
+                                guard, req
+                            ))
+                        })?;
+                        dir
+                    }
+                    Entry::Vacant(_) => {
+                        return Ok(None);
+                    }
+                }
+            };
+            let op = DataOperator::instance().operator();
+            op.remove_all(&dir).await?;
         }
+        "MEMORY" => {
+            let mut guard = mgr.lock();
+            let entry = guard.id_to_table.entry(*tb_id);
+            match entry {
+                Entry::Occupied(e) => {
+                    let table = e.remove();
+                    let desc = format!("{}.{}", table.db_name, table.table_name);
+                    guard.name_to_id.remove(&desc).ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Table not found in temp table manager {:?}, drop table request: {:?}",
+                            guard, req
+                        ))
+                    })?;
+                }
+                Entry::Vacant(_) => {
+                    return Ok(None);
+                }
+            }
+            let mut in_mem_data = IN_MEMORY_DATA.write();
+            in_mem_data.remove(tb_id).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Table not found in memory data {:?}, drop table request: {:?}",
+                    in_mem_data, req
+                ))
+            })?;
+        }
+        _ => return Ok(None),
     };
-    let op = DataOperator::instance().operator();
-    op.remove_all(&dir).await?;
     Ok(Some(DropTableReply { spec_vec: None }))
 }
 
 pub async fn drop_all_temp_tables(mgr: TempTblMgrRef) -> Result<()> {
-    let dirs = {
+    let (fuse_dirs, mem_tbl_ids) = {
         let mut guard = mgr.lock();
-        let mut dirs = Vec::new();
+        let mut fuse_dirs = Vec::new();
+        let mut mem_tbl_ids = Vec::new();
         for (id, table) in &guard.id_to_table {
+            let engine = table.meta.engine.as_str();
             let dir = parse_storage_prefix(&table.meta.options, *id)?;
-            dirs.push(dir);
+            if engine == "FUSE" {
+                fuse_dirs.push(dir);
+            } else if engine == "MEMORY" {
+                mem_tbl_ids.push(*id);
+            }
         }
         guard.id_to_table.clear();
         guard.name_to_id.clear();
-        dirs
+        (fuse_dirs, mem_tbl_ids)
     };
-    let op = DataOperator::instance().operator();
-    for dir in dirs {
-        op.remove_all(&dir).await?;
+    if !fuse_dirs.is_empty() {
+        let op = DataOperator::instance().operator();
+        for dir in fuse_dirs {
+            op.remove_all(&dir).await?;
+        }
+    }
+    if !mem_tbl_ids.is_empty() {
+        let mut in_mem_data = IN_MEMORY_DATA.write();
+        for id in mem_tbl_ids {
+            in_mem_data.remove(&id);
+        }
     }
     Ok(())
 }

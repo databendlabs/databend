@@ -117,6 +117,7 @@ impl UdfRewriter {
     }
 
     fn create_udf_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
+        // TODO: handle nested udf function as arguments.
         while !self.udf_functions.is_empty() {
             if !self.udf_arguments.is_empty() {
                 // Add an EvalScalar for the arguments of Udf.
