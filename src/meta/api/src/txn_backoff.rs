@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::time::Duration;
 
-use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use futures::future::BoxFuture;
 use log::info;
@@ -51,7 +50,7 @@ const TXN_MAX_RETRY_TIMES: u32 = 60;
 pub fn txn_backoff(
     n: Option<u32>,
     ctx: impl Display,
-) -> impl Iterator<Item = Result<BoxFuture<'static, ()>, AppError>> {
+) -> impl Iterator<Item = Result<BoxFuture<'static, ()>, TxnRetryMaxTimes>> {
     let n = n.unwrap_or(TXN_MAX_RETRY_TIMES);
 
     let mut rnd = rand::thread_rng();
@@ -88,7 +87,7 @@ pub fn txn_backoff(
             Ok(fu)
         } else {
             let err = TxnRetryMaxTimes::new(&ctx.to_string(), n);
-            Err(AppError::from(err))
+            Err(err)
         }
     })
 }
