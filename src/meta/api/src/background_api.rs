@@ -29,6 +29,7 @@ use databend_common_meta_app::background::UpdateBackgroundJobReply;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReply;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
+use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 
@@ -58,11 +59,14 @@ pub trait BackgroundApi: Send + Sync {
         &self,
         req: GetBackgroundJobReq,
     ) -> Result<GetBackgroundJobReply, KVAppError>;
+
+    /// Return a list of job name and job info
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
-    ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError>;
-    // Return a list of background tasks (task_id, BackgroundInfo)
+    ) -> Result<Vec<(String, SeqV<BackgroundJobInfo>)>, KVAppError>;
+
+    /// Return a list of background tasks (task_id, BackgroundInfo)
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,

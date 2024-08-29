@@ -78,7 +78,6 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReq;
@@ -94,7 +93,6 @@ use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListTableReq;
@@ -6354,9 +6352,9 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list indexes by table id");
-            let req = ListIndexesByIdReq::new(&tenant, table_id);
+            let req = ListIndexesReq::new(&tenant, Some(table_id));
 
-            let res = mt.list_indexes_by_table_id(req).await?;
+            let res = mt.list_indexes(req).await?;
             assert_eq!(2, res.len());
         }
 
@@ -6382,7 +6380,11 @@ impl SchemaApiTestSuite {
             let res = mt.list_indexes(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(
-                vec![(index_id, index_name_1.to_string(), index_meta_1.clone())],
+                vec![(
+                    index_name_1.to_string(),
+                    IndexId::new(index_id),
+                    index_meta_1.clone()
+                )],
                 res
             );
         }
@@ -6415,10 +6417,6 @@ impl SchemaApiTestSuite {
                 meta: index_meta_1.clone(),
             };
 
-            let get_req = GetIndexReq {
-                name_ident: replace_name_ident.clone(),
-            };
-
             let res = mt.create_index(req).await?;
             let old_index_id = IndexId::new(res.index_id);
             let old_index_id_ident = old_index_id.into_t_ident(&tenant);
@@ -6426,7 +6424,7 @@ impl SchemaApiTestSuite {
             let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &old_index_id_ident).await?;
             assert_eq!(meta, index_meta_1);
 
-            let resp = mt.get_index(get_req.clone()).await?;
+            let resp = mt.get_index(&replace_name_ident).await?.unwrap();
 
             assert_eq!(resp.index_meta, index_meta_1);
 
@@ -6463,7 +6461,7 @@ impl SchemaApiTestSuite {
             let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &index_id_ident).await?;
             assert_eq!(meta, index_meta_2);
 
-            let resp = mt.get_index(get_req).await?;
+            let resp = mt.get_index(&replace_name_ident).await?.unwrap();
 
             assert_eq!(resp.index_meta, index_meta_2);
         }

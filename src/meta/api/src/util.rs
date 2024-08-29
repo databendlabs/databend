@@ -33,14 +33,11 @@ use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-use databend_common_meta_app::schema::index_id_ident::IndexId;
-use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdToName;
@@ -71,7 +68,6 @@ use databend_common_meta_app::share::ShareReferenceTable;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTable;
 use databend_common_meta_app::share::ShareTableSpec;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -1276,39 +1272,6 @@ pub async fn get_table_info_by_share(
             ShareHasNoGrantedDatabase::new(share_name.tenant_name(), share_name.share_name()),
         ))),
     }
-}
-
-pub async fn get_index_metas_by_ids(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &Tenant,
-    id_name_list: Vec<(u64, String)>,
-) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
-    let mut index_meta_keys = Vec::with_capacity(id_name_list.len());
-    for (id, _) in id_name_list.iter() {
-        let index_id = IndexId::new(*id);
-        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
-
-        index_meta_keys.push(id_ident.to_string_key());
-    }
-
-    let seq_index_metas = kv_api.mget_kv(&index_meta_keys).await?;
-
-    let mut index_metas = Vec::with_capacity(id_name_list.len());
-
-    for (i, ((id, name), seq_meta_opt)) in id_name_list
-        .into_iter()
-        .zip(seq_index_metas.iter())
-        .enumerate()
-    {
-        if let Some(seq_meta) = seq_meta_opt {
-            let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
-            index_metas.push((id, name, index_meta));
-        } else {
-            debug!(k = &index_meta_keys[i]; "index_meta not found");
-        }
-    }
-
-    Ok(index_metas)
 }
 
 /// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnIdent`],
