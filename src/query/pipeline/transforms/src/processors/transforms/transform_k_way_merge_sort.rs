@@ -26,9 +26,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
@@ -43,6 +41,7 @@ use databend_common_pipeline_core::Pipeline;
 use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
+use super::sort::utils::u32_entry;
 use super::sort::KWaySortPartition;
 use super::sort::Merger;
 use super::sort::Rows;
@@ -411,10 +410,7 @@ where A: SortAlgorithm
     }
 
     fn ready(&self) -> bool {
-        match self.info {
-            Some(info) => info.remain == 0,
-            None => false,
-        }
+        self.info.map_or(false, |info| info.done())
     }
 
     fn pull(&mut self) -> Result<Event> {
@@ -431,6 +427,7 @@ where A: SortAlgorithm
         }
 
         let mut block = self.input.pull_data().unwrap()?;
+        self.input.set_need_data();
 
         let task_id = get_u32(&block, Self::TASK_ID_POS);
         let task_rows = get_u32(&block, Self::TASK_ROWS_POS);
@@ -443,13 +440,11 @@ where A: SortAlgorithm
                 assert!(info.remain >= rows);
                 info.remain -= rows;
 
-                if info.remain == 0 {
+                if info.done() {
                     self.buffer.push(block);
-                    self.input.set_not_need_data();
                     Ok(Event::Sync)
                 } else {
                     self.buffer.push(block);
-                    self.input.set_need_data();
                     Ok(Event::NeedData)
                 }
             }
@@ -468,7 +463,6 @@ where A: SortAlgorithm
                 block.add_column(task_rows);
 
                 self.output_data.push_back(block);
-                self.input.set_need_data();
                 Ok(Event::NeedConsume)
             }
             None => {
@@ -480,7 +474,6 @@ where A: SortAlgorithm
                     remain: total - rows,
                 });
                 self.buffer.push(block);
-                self.input.set_need_data();
                 Ok(Event::NeedData)
             }
         }
@@ -578,6 +571,7 @@ pub struct KWayMergeCombineProcessor {
     next_task: u32,
     buffer: Vec<VecDeque<DataBlock>>,
     info: Vec<Option<Info>>,
+    limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -587,12 +581,14 @@ struct Info {
     remain: usize,
 }
 
+impl Info {
+    fn done(&self) -> bool {
+        self.remain == 0
+    }
+}
+
 impl KWayMergeCombineProcessor {
-    pub fn new(
-        inputs: Vec<Arc<InputPort>>,
-        output: Arc<OutputPort>,
-        _limit: Option<usize>,
-    ) -> Self {
+    pub fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>, limit: Option<usize>) -> Self {
         let buffer = vec![VecDeque::new(); inputs.len()];
         let info = vec![None; inputs.len()];
         Self {
@@ -602,6 +598,7 @@ impl KWayMergeCombineProcessor {
             next_task: 1,
             buffer,
             info,
+            limit,
         }
     }
 
@@ -613,10 +610,15 @@ impl KWayMergeCombineProcessor {
         const TASK_ID_POS: usize = 2;
         const TASK_ROWS_POS: usize = 1;
 
+        if info.map_or(false, |info| info.done() && info.task_id != self.next_task) {
+            return Ok(PullEvent::Pending);
+        }
+
         if input.has_data() {
             let mut block = input.pull_data().unwrap()?;
+            input.set_need_data();
 
-            match info {
+            return match info {
                 None => {
                     let task_id = get_u32(&block, TASK_ID_POS);
                     debug_assert!(task_id >= self.next_task);
@@ -631,10 +633,9 @@ impl KWayMergeCombineProcessor {
                     buffer.push_back(block);
 
                     if task_id > self.next_task {
-                        return Ok(PullEvent::Pending);
+                        Ok(PullEvent::Pending)
                     } else {
-                        input.set_need_data();
-                        return Ok(PullEvent::Data);
+                        Ok(PullEvent::Data)
                     }
                 }
                 Some(info) => {
@@ -645,14 +646,17 @@ impl KWayMergeCombineProcessor {
                     if rows <= info.remain {
                         block.pop_columns(2);
                         buffer.push_back(block);
-                        input.set_need_data();
                         info.remain -= rows;
-                        return Ok(PullEvent::Data);
+                        Ok(PullEvent::Data)
                     } else {
                         unreachable!()
                     }
                 }
-            }
+            };
+        }
+
+        if !buffer.is_empty() && info.unwrap().task_id == self.next_task {
+            return Ok(PullEvent::Data);
         }
 
         if input.is_finished() {
@@ -667,8 +671,22 @@ impl KWayMergeCombineProcessor {
         let buffer = &mut self.buffer[cur];
         let info = &mut self.info[cur];
         if let Some(block) = buffer.pop_front() {
-            self.output.push_data(Ok(block));
-            if buffer.is_empty() && info.unwrap().remain == 0 {
+            match &mut self.limit {
+                Some(limit) => {
+                    let n = block.num_rows();
+                    if *limit >= n {
+                        *limit -= n
+                    } else {
+                        let block = block.slice(0..*limit);
+                        self.output.push_data(Ok(block));
+                        *limit = 0;
+                    }
+                }
+                None => {
+                    self.output.push_data(Ok(block));
+                }
+            }
+            if buffer.is_empty() && info.unwrap().done() {
                 self.next_task += 1;
                 info.take();
                 self.cur = None;
@@ -783,11 +801,4 @@ enum PullEvent {
     Data,
     Pending,
     Finished,
-}
-
-fn u32_entry(v: u32) -> BlockEntry {
-    BlockEntry::new(
-        UInt32Type::data_type(),
-        Value::Scalar(UInt32Type::upcast_scalar(v)),
-    )
 }

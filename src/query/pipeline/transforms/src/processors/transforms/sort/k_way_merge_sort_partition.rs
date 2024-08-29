@@ -17,15 +17,12 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::UInt32Type;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 
+use super::utils::u32_entry;
 use super::Rows;
 use super::SortedStream;
 
@@ -239,11 +236,4 @@ where
         // unsafe { std::hint::assert_unchecked(left <= self.len()) };
         left
     }
-}
-
-fn u32_entry(v: u32) -> BlockEntry {
-    BlockEntry::new(
-        UInt32Type::data_type(),
-        Value::Scalar(UInt32Type::upcast_scalar(v)),
-    )
 }

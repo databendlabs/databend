@@ -14,12 +14,17 @@
 
 use std::collections::BinaryHeap;
 
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::Value;
 
 pub const ORDER_COL_NAME: &str = "_order_col";
 
@@ -68,4 +73,11 @@ pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) ->
         ));
         DataSchemaRefExt::create(fields)
     }
+}
+
+pub fn u32_entry(v: u32) -> BlockEntry {
+    BlockEntry::new(
+        UInt32Type::data_type(),
+        Value::Scalar(UInt32Type::upcast_scalar(v)),
+    )
 }
