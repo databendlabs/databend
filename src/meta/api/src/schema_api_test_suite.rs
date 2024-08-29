@@ -6255,8 +6255,8 @@ impl SchemaApiTestSuite {
             created_on,
             dropped_on: None,
             updated_on: None,
-            original_query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
-            query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+            original_query: "SELECT a".to_string(),
+            query: "SELECT b".to_string(),
             sync_creation: false,
         };
 
@@ -6440,7 +6440,10 @@ impl SchemaApiTestSuite {
 
             // assert old index id key has been deleted
             let meta: Result<IndexMeta, _> = get_kv_data(mt.as_kv_api(), &old_index_id_ident).await;
-            assert_eq!(meta.unwrap_err().to_string(), "");
+            assert_eq!(
+                meta.unwrap_err().to_string(),
+                "fail to access meta-store: fail to get_kv_data: not found, source: "
+            );
 
             // assert old id-to-name has been deleted.
             {
@@ -6448,7 +6451,10 @@ impl SchemaApiTestSuite {
                     IndexIdToNameIdent::new_generic(&tenant, old_index_id);
                 let meta: Result<IndexNameIdentRaw, _> =
                     get_kv_data(mt.as_kv_api(), &old_index_id_to_name_ident).await;
-                assert_eq!(meta.unwrap_err().to_string(), "");
+                assert_eq!(
+                    meta.unwrap_err().to_string(),
+                    "fail to access meta-store: fail to get_kv_data: not found, source: "
+                );
             }
 
             // assert new index id key has been created

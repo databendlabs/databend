@@ -30,6 +30,7 @@ use log::debug;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_op_del;
 use crate::util::fetch_id;
 use crate::util::send_txn;
 use crate::util::txn_cond_eq_seq;
@@ -85,10 +86,9 @@ pub trait BaseApi: KVApi<Error = MetaError> {
                     if override_exist {
                         // Override take place only when the id -> value does not change.
                         // If it does not override, no such condition is required.
-                        txn.condition.push(txn_cond_eq_seq(
-                            &seq_id.data.into_t_ident(tenant),
-                            seq_meta.seq,
-                        ));
+                        let id_ident = seq_id.data.into_t_ident(tenant);
+                        txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
+                        txn.if_then.push(txn_op_del(&id_ident));
 
                         // Following txn must match this seq to proceed.
                         current_id_seq = seq_id.seq;
