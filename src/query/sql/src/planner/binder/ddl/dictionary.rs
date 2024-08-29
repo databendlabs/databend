@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
@@ -24,6 +25,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::DictionaryMeta;
+use itertools::Itertools;
 
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
@@ -64,28 +66,71 @@ impl Binder {
 
         if source.to_lowercase() != *"mysql" && source.to_lowercase() != *"redis" {
             return Err(ErrorCode::UnsupportedDictionarySource(format!(
-                "The specified source '{}' is not currently supported.",
+                "The specified source '{}' is not currently supported",
                 source.to_lowercase(),
-            )));
+            )))
         }
 
         let options: BTreeMap<String, String> = source_options
             .iter()
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
-        let required_options = ["host", "port", "username", "password", "db"];
-        for option in required_options {
-            if !options.contains_key(option) {
-                return Err(ErrorCode::MissingDictionaryOption(
-                    "The configuration is missing one or more required options. ".to_owned()
-                        + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
-                ));
+        if source.to_lowercase() == *"mysql" {
+            let required_options = ["host", "port", "username", "password", "db"];
+            for option in required_options {
+                if !options.contains_key(option) {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "The mysql configuration is missing one or more required options. ".to_owned()
+                            + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
+                    ));
+                }
             }
-        }
-        if required_options.len() != options.len() {
-            return Err(ErrorCode::UnsupportedDictionaryOption(format!(
-                "The provided options are not recognized."
-            )));
+            if required_options.len() != options.len() {
+                return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                    "Some provided options are not recognized."
+                )));
+            }
+            let port = options.get("port")?;
+            if port.parse<u64>().is_err() {
+                return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                    "The value of `port` must be UInt"
+                )))
+            }
+        } else if source.to_lowercase() == *"redis" {
+            let required_options = ["host", "port"];
+            for option in required_options {
+                if !options.contains_key(option) {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "The redis configuration is missing one or more required options. ".to_owned()
+                            + "Please ensure you have provided values for 'host' and 'port'.",
+                    ));
+                }
+            }
+            if let Some(db_index) = options.get("db_index") {
+                let db_index = db_index.parse::<u64>().unwrap();
+                if db_index < 0 || db_index > 15 {
+                    return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                        "The value of `db_index` must be between [0,15]"
+                    )))
+                }
+            } else {
+                options.insert("db_index".to_string(), 0);
+            }
+            if None == options.get("password") {
+                options.insert("password".to_string(), String::new())
+            }
+            let allowed_options = HashSet::from(["host", "port", "password", "db_index"]);
+            let keys = HashSet::new();
+            for key in options.keys().cloned().collect_vec() {
+                keys.insert(key.as_str())
+            }
+            if !keys.is_subset(&allowed_options) {
+                return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                    "The redis configurations must be in [`host`, `port`, `password`, `db_index`] ",
+                )))
+            }
+        } else {
+            todo!()
         }
 
         let mut field_comments = BTreeMap::new();
@@ -95,37 +140,42 @@ impl Binder {
 
         let mut fields_names: Vec<String> = Vec::new();
         for table_field in schema.fields() {
-            if table_field.default_expr.is_some() || table_field.computed_expr.is_some() {
+            if table_field.computed_expr.is_some() {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
                     "The table field configuration is invalid. ".to_owned()
-                        + "Default expressions and computed expressions for the table fields should not be set",
+                        + "Computed expressions for the table fields should not be set",
                 ));
             }
             fields_names.push(table_field.name.clone());
         }
         // Check for redis.
         if source.to_lowercase() == *"redis" {
-            fields_names.sort();
-            if fields_names != vec!["key", "value"] {
+            if fields_names.len() != 2 {
                 return Err(ErrorCode::WrongDictionaryFieldExpr(
-                    "If the source is redis, there must be two fields which are `key` and `value` whose type is String",
+                    "The number of Redis fields must be two",
                 ));
             }
-
             for table_field in schema.fields() {
-                if *table_field.name() == "value"
-                    && !(*table_field.data_type() == TableDataType::String || *table_field.data_type() == TableDataType::Null)
-                {
+                if *table_field.data_type() != TableDataType::String {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(
-                        "If the source is redis, the type of `value` must be String",
+                        "The type of Redis field must be string",
                     ));
                 }
-                // if *table_field.data_type() != TableDataType::String {
-                //     return Err(ErrorCode::WrongDictionaryFieldExpr(
-                //         "If the source is redis, there must be two fields which are `key` and `value` whose type is String",
-                //     ));
-                // }
             }
+        // Check for mysql
+        } else if source.to_lowercase() == *"mysql" {
+            for table_field in schema.fields() {
+                let field_type = table_field.data_type;
+                if !(field_type == TableDataType::Boolean || field_type == TableDataType::String ||
+                    field_type == TableDataType::Number(()) || field_type == TableDataType::Timestamp
+                    || field_type == TableDataType::Date) {
+                    return Err(ErrorCode::WrongDictionaryFieldExpr(format!(
+                        "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`]",
+                    )))
+                }
+            }
+        } else {
+            todo!()
         }
         for column in columns {
             if column.comment.is_some() {
@@ -133,10 +183,12 @@ impl Binder {
                 field_comments.insert(column_id, column.comment.clone().unwrap_or_default());
             }
         }
-        for primary_key in primary_keys {
-            let pk_id = schema.column_id_of(primary_key.name.as_str())?;
-            primary_column_ids.push(pk_id);
+        if primary_keys.len() != 1 {
+            return Err(ErrorCode::WrongPKNumber("Only support one primary key"))
         }
+        let primary_key = primary_keys.get(0)?;
+        let pk_id = schema.column_id_of(primary_key.name.as_str())?;
+        primary_column_ids.push(pk_id);
 
         let comment = comment.clone().unwrap_or("".to_string());
         let meta = DictionaryMeta {

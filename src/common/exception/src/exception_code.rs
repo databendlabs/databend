@@ -390,6 +390,7 @@ build_exceptions! {
     UnsupportedDictionarySource(3117),
     MissingDictionaryOption(3118),
     WrongDictionaryFieldExpr(3119),
+    WrongPKNumber(3120),
 }
 
 // Storage errors [3001, 4000].

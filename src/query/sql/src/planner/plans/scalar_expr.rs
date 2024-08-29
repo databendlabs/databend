@@ -792,6 +792,7 @@ pub struct DictGetFunctionArgument {
     pub table: Option<String>,
     pub key_field: Option<String>,
     pub value_field: Option<String>,
+    pub default_res: Option<Scalar>,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]

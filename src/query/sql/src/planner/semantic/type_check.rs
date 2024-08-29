@@ -117,6 +117,7 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
+use crate::field_default_value;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
@@ -3853,6 +3854,152 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((async_func.into(), return_type)))
     }
 
+    fn resolve_dict_get_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if args.len() != 3 {
+            return Err(ErrorCode::SemanticError(format!(
+                "dict_get function need three arguments but got {}",
+                args.len()
+            ))
+            .set_span(span));
+        }
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_default_catalog()?;
+
+        let dict_name_arg = args[0];
+        let field_arg = args[1];
+        let key_arg = args[2];
+
+        // Get dict_name and dict_meta.
+        let (db_name, dict_name) = if let Expr::ColumnRef { column, .. } = dict_name_arg {
+            if column.database.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "dict_get function argument identifier should contain one or two parts"
+                        .to_string(),
+                )
+                .set_span(dict_name_arg.span()));
+            }
+            let db_name = match &column.table {
+                Some(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                None => self.ctx.get_current_database(),
+            };
+            let dict_name = match &column.column {
+                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                ColumnID::Position(pos) => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "dict_get function argument don't support identifier {}",
+                        pos
+                    ))
+                    .set_span(dict_name_arg.span()));
+                }
+            };
+            (db_name, dict_name)
+        } else {
+            return Err(ErrorCode::SemanticError(
+                "async function can only used as column".to_string(),
+            )
+            .set_span(dict_name_arg.span()));
+        };
+        let db = databend_common_base::runtime::block_on(
+            catalog.get_database(&tenant, db_name.as_str()),
+        )?;
+        let db_id = db.get_db_info().database_id.db_id;
+        let req = TenantDictionaryIdent::new(
+            tenant.clone(),
+            DictionaryIdentity::new(db_id, dict_name.clone()),
+        );
+        let reply = databend_common_base::runtime::block_on(catalog.get_dictionary(req))?;
+        let dictionary = if let Some(r) = reply {
+            r.dictionary_meta
+        } else {
+            return Err(ErrorCode::UnknownDictionary(format!(
+                "Unkown dictionary {}",
+                dict_name.clone(),
+            )));
+        };
+        let schema = dictionary.clone().schema;
+
+        // Get attr_name, attr_type and return_type.
+        let box (field_scalar, _field_data_type) = self.resolve(field_arg)?;
+        let Ok(field_expr) = ConstantExpr::try_from(field_scalar.clone()) else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
+                field_arg
+            ))
+            .set_span(field_scalar.span()));
+        };
+        let Some(attr_name) = field_expr.value.as_string() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
+                field_arg
+            ))
+            .set_span(field_scalar.span()));
+        };
+        let attr_index = schema.index_of(attr_name)?;
+        let attr_type = schema.field(attr_index).data_type();
+
+        // Get primary_key_value and check type.
+        let primary_column_id = dictionary.primary_column_ids[0];
+        let primary_field = schema.field_of_column_id(primary_column_id)?;
+        let primary_type: DataType = (&primary_field.data_type).into();
+
+        let mut args = Vec::with_capacity(1);
+        let box (key_scalar, key_type) = self.resolve(key_arg)?;
+
+        if primary_type != key_type {
+            args.push(wrap_cast(&key_scalar, &primary_type));
+        } else {
+            args.push(key_scalar);
+        }
+
+        let url = dictionary.build_connection_url()?;
+        let dict_source = if dictionary.source.to_lowercase() == "mysql".to_string() {
+            DictionarySource::Mysql(url)
+        } else {
+            DictionarySource::Redis(url)
+        };
+
+        let table_field = *dictionary
+            .schema
+            .fields()
+            .iter()
+            .filter(|x| (*x).name() == attr_name)
+            .collect_vec()
+            .get(0)
+            .unwrap();
+        let default_res = field_default_value(self.ctx, table_field)?;
+        let dict_get_func_arg = DictGetFunctionArgument {
+            dict_source,
+            table: Some(db_name.clone()),
+            key_field: Some(primary_field.name().clone()),
+            value_field: Some(attr_name.clone()),
+            default_res: Some(default_res),
+        };
+        let display_name = format!(
+            "{}({}.{},{},{})",
+            func_name,
+            db_name,
+            dict_name,
+            field_arg,
+            key_arg,
+        );
+        Ok(Box::new((
+            ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span,
+                func_name: func_name.to_string(),
+                display_name,
+                return_type: Box::new(attr_type.into()),
+                arguments: args,
+                func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
+            }),
+            attr_type.into(),
+        )))
+    }
+
     fn resolve_cast_to_variant(
         &mut self,
         span: Span,
@@ -4569,142 +4716,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         None
-    }
-
-    fn resolve_dict_get(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &[&Expr],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if args.len() != 3 {
-            return Err(ErrorCode::SemanticError(format!(
-                "dict_get function need three arguments but got {}",
-                args.len()
-            ))
-            .set_span(span));
-        }
-
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_default_catalog()?;
-
-        let dict_name_arg = args[0];
-        let field = args[1];
-        let key_arg = args[2];
-
-        // Get dict_name and dict_meta.
-        let (db_name, dict_name) = if let Expr::ColumnRef { column, .. } = dict_name_arg {
-            if column.database.is_some() {
-                return Err(ErrorCode::SemanticError(
-                    "dict_get function argument identifier should contain one or two parts"
-                        .to_string(),
-                )
-                .set_span(dict_name_arg.span()));
-            }
-            let db_name = match &column.table {
-                Some(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
-                None => self.ctx.get_current_database(),
-            };
-            let dict_name = match &column.column {
-                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
-                ColumnID::Position(pos) => {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "dict_get function argument don't support identifier {}",
-                        pos
-                    ))
-                    .set_span(dict_name_arg.span()));
-                }
-            };
-            (db_name, dict_name)
-        } else {
-            return Err(ErrorCode::SemanticError(
-                "async function can only used as column".to_string(),
-            )
-            .set_span(dict_name_arg.span()));
-        };
-        let db = databend_common_base::runtime::block_on(
-            catalog.get_database(&tenant, db_name.as_str()),
-        )?;
-        let db_id = db.get_db_info().database_id.db_id;
-        let req = TenantDictionaryIdent::new(
-            tenant.clone(),
-            DictionaryIdentity::new(db_id, dict_name.clone()),
-        );
-        let reply = databend_common_base::runtime::block_on(catalog.get_dictionary(req))?;
-        let dictionary = if let Some(r) = reply {
-            r.dictionary_meta
-        } else {
-            return Err(ErrorCode::UnknownDictionary(format!(
-                "Unkown dictionary {}",
-                dict_name.clone(),
-            )));
-        };
-        let schema = dictionary.clone().schema;
-
-        // Get attr_name, attr_type and return_type.
-        let box (field_scalar, _field_data_type) = self.resolve(field)?;
-        let Ok(field_expr) = ConstantExpr::try_from(field_scalar.clone()) else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
-                field
-            ))
-            .set_span(field_scalar.span()));
-        };
-        let Some(attr_name) = field_expr.value.as_string() else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
-                field
-            ))
-            .set_span(field_scalar.span()));
-        };
-        let attr_index = schema.index_of(attr_name)?;
-        let attr_type = schema.field(attr_index).data_type();
-
-        // Get primary_key_values and check types.
-        let primary_column_id = dictionary.primary_column_ids[0];
-        let primary_field = schema.field_of_column_id(primary_column_id)?;
-        let primary_type: DataType = (&primary_field.data_type).into();
-
-        let mut args = Vec::with_capacity(1);
-        let box (key_scalar, key_type) = self.resolve(key_arg)?;
-
-        if primary_type != key_type {
-            args.push(wrap_cast(&key_scalar, &primary_type));
-        } else {
-            args.push(key_scalar);
-        }
-
-        let url = dictionary.build_connection_url()?;
-        let dict_source = if dictionary.source.to_lowercase() == "mysql".to_string() {
-            DictionarySource::Mysql(url)
-        } else {
-            DictionarySource::Redis(url)
-        };
-
-        let dict_get_func_arg = DictGetFunctionArgument {
-            dict_source,
-            table: Some(db_name),
-            key_field: Some(primary_field.name().clone()),
-            value_field: Some(attr_name.clone()),
-        };
-        let display_name = format!(
-            "{}({},{},{})",
-            func_name,
-            dict_name,
-            attr_name,
-            primary_field.name().clone()
-        );
-        Ok(Box::new((
-            ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
-                span,
-                func_name: func_name.to_string(),
-                display_name,
-                return_type: Box::new(attr_type.into()),
-                arguments: args,
-                func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
-            }),
-            attr_type.into(),
-        )))
     }
 }
 
