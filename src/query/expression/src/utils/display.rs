@@ -774,7 +774,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
                 Expr::Constant { scalar, .. } => match scalar {
-                    s @ Scalar::Binary(_) => format!("from_hex('{}')::string", s.to_string()),
+                    s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
                     Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
                         "'nan'::Float32".to_string()
                     }
