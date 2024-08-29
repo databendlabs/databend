@@ -14,19 +14,35 @@
 
 use crate::hilbert::LUT;
 
+/// Computes the Hilbert curve index for a given set of points.
+///
+/// This function calculates the Hilbert curve index for a set of points in a multi-dimensional space.
+/// Each point is represented as a byte array, and the function maps these points to a Hilbert curve index
+/// using a precomputed state lookup table.
+///
+/// # Arguments
+///
+/// * `point` - A slice of byte slices, where each byte slice represents a point in the multi-dimensional space.
+/// * `width` - The width in bytes for each point's representation.
+///
+/// # Returns
+///
+/// A vector of bytes representing the Hilbert curve index for the given points.
+///
+/// The function assumes that the dimension is between 2 and 5 and the points are correctly aligned according to the width.
 pub fn hilbert_index(point: &[&[u8]], width: usize) -> Vec<u8> {
     let n = point.len();
     assert!((2..=5).contains(&n));
 
-    let per_bits = width * 8;
-    let num_bits = per_bits * n;
-    let num_bytes = (num_bits + 7) / 8;
-    let initial_offset = (num_bytes * 8) - num_bits;
+    let num_bits = width * 8;
+    let total_bits = num_bits * n;
+    let total_bytes = (total_bits + 7) / 8;
+    let initial_offset = (total_bytes * 8) - total_bits;
 
     let states = LUT[n - 2];
     let mut current_state = 0;
-    let mut result = vec![0u8; num_bytes];
-    for i in 0..per_bits {
+    let mut result = vec![0u8; total_bytes];
+    for i in 0..num_bits {
         let mut z = 0;
 
         for v in point {
@@ -37,16 +53,17 @@ pub fn hilbert_index(point: &[&[u8]], width: usize) -> Vec<u8> {
             z = (z << 1) | ((byte >> bit_index) & 1);
         }
 
+        // look up from the state map.
         let value = states[current_state as usize * (1 << n) + z as usize];
         let new_bits = (value >> 8) as u8;
         let next_state = (value & 0xFF) as u8;
         let offset = initial_offset + (i * n);
 
+        // set bits to result.
         let mut bits = (new_bits as u16) << (16 - n);
         let mut remaining_bits = n;
         let mut key_index = offset / 8;
         let mut key_offset = offset % 8;
-
         while remaining_bits > 0 {
             result[key_index] |= (bits >> (8 + key_offset)) as u8;
             remaining_bits -= (8 - key_offset).min(remaining_bits);
@@ -60,14 +77,30 @@ pub fn hilbert_index(point: &[&[u8]], width: usize) -> Vec<u8> {
     result
 }
 
+/// Decompresses a Hilbert curve index into its original points.
+///
+/// This function reverses the process of `hilbert_index` to retrieve the original points from the Hilbert curve index.
+/// It takes a compressed Hilbert index and reconstructs the multi-dimensional points using a state lookup table.
+///
+/// # Arguments
+///
+/// * `key` - A vector of bytes representing the compressed Hilbert curve index.
+/// * `width` - The width in bytes for each point's representation.
+/// * `states` - A slice of 16-bit unsigned integers representing the state transitions.
+///
+/// # Returns
+///
+/// A vector of byte vectors, where each byte vector represents a decompressed point in the multi-dimensional space.
+///
+/// The function assumes that the dimension is between 2 and 5 and the key is correctly aligned according to the width.
 pub fn hilbert_decompress(key: &[u8], width: usize, states: &[u16]) -> Vec<Vec<u8>> {
     let n = key.len() / width;
-    let per_bits = width * 8;
-    let initial_offset = key.len() * 8 - per_bits * n;
+    let num_bits = width * 8;
+    let initial_offset = key.len() * 8 - num_bits * n;
 
     let mut current_state = 0;
     let mut result = vec![vec![0u8; width]; n];
-    for i in 0..per_bits {
+    for i in 0..num_bits {
         let offset = initial_offset + i * n;
         let mut h = 0;
         let mut remaining_bits = n;
@@ -87,7 +120,6 @@ pub fn hilbert_decompress(key: &[u8], width: usize, states: &[u16]) -> Vec<Vec<u
         let value = states[current_state as usize * (1 << n) + h as usize];
         let z = (value >> 8) as u8;
         let next_state = (value & 255) as u8;
-
         for (j, item) in result.iter_mut().enumerate() {
             let v = (z >> (n - 1 - j)) & 1;
             let current_value = (*item)[i / 8];
