@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::data_id::DataId;
+use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -21,9 +23,6 @@ pub type CatalogIdIdent = TIdent<Resource, CatalogId>;
 pub type CatalogIdIdentRaw = TIdentRaw<Resource, CatalogId>;
 
 pub use kvapi_impl::Resource;
-
-use crate::data_id::DataId;
-use crate::tenant::ToTenant;
 
 impl CatalogIdIdent {
     pub fn new(tenant: impl ToTenant, catalog_id: u64) -> Self {

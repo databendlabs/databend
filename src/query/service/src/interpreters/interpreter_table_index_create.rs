@@ -59,9 +59,11 @@ impl Interpreter for CreateTableIndexInterpreter {
         let sync_creation = self.plan.sync_creation;
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
 
         let create_index_req = CreateTableIndexReq {
             create_option: self.plan.create_option,
+            tenant,
             table_id,
             name: index_name,
             column_ids,

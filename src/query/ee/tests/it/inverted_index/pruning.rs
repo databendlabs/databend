@@ -499,10 +499,12 @@ async fn test_block_pruner() -> Result<()> {
         "filters".to_string(),
         "english_stop,english_stemmer,chinese_stop".to_string(),
     );
+    let tenant = ctx.get_tenant();
 
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
+        tenant,
         name: index_name.clone(),
         column_ids: vec![1, 2, 3],
         sync_creation: false,

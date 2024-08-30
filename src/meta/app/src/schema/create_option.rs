@@ -48,3 +48,13 @@ impl From<CreateOption> for MatchSeq {
         }
     }
 }
+
+impl CreateOption {
+    pub fn is_overriding(&self) -> bool {
+        matches!(self, CreateOption::CreateOrReplace)
+    }
+
+    pub fn if_return_error(&self) -> bool {
+        matches!(self, CreateOption::Create)
+    }
+}

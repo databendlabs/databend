@@ -817,6 +817,7 @@ pub struct UpdateTableMetaReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
     pub create_option: CreateOption,
+    pub tenant: Tenant,
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
