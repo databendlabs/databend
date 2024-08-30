@@ -118,20 +118,31 @@ error:
 
 
 error: 
-  --> SQL:1:8
+  --> SQL:1:7
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), to_uint64('a'))`
+  |       ^^^^^ no function matches signature `get(Array(UInt8), String)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(UInt8)` with `Variant`
+... and 9 more
 
 
 
-ast            : [][1]
-raw expr       : get(array(), 1)
-checked expr   : get<Array(Nothing) NULL, UInt64 NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(1_u8 AS UInt64 NULL))
-optimized expr : NULL
-output type    : NULL
-output domain  : {NULL}
-output         : NULL
+error: 
+  --> SQL:1:3
+  |
+1 | [][1]
+  |   ^^^ no function matches signature `get(Array(Nothing), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(Nothing)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(Nothing)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(Nothing)` with `Variant`
+... and 9 more
+
 
 
 ast            : [][NULL]
@@ -143,249 +154,312 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : [NULL][0]
-raw expr       : get(array(NULL), 0)
-checked expr   : get<Array(NULL) NULL, UInt64 NULL>(CAST(array<T0=NULL><T0>(NULL) AS Array(NULL) NULL), CAST(0_u8 AS UInt64 NULL))
-optimized expr : NULL
-output type    : NULL
-output domain  : {NULL}
-output         : NULL
+error: 
+  --> SQL:1:7
+  |
+1 | [NULL][0]
+  |       ^^^ no function matches signature `get(Array(NULL), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(NULL)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(NULL)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(NULL)` with `Variant`
+... and 9 more
 
 
-ast            : [true, false][1]
-raw expr       : get(array(true, false), 1)
-checked expr   : get<T0=Boolean><Array(T0 NULL), UInt64>(CAST(array<T0=Boolean><T0, T0>(true, false) AS Array(Boolean NULL)), to_uint64<UInt8>(1_u8))
-optimized expr : true
-output type    : Boolean NULL
-output domain  : {TRUE}
-output         : true
+
+error: 
+  --> SQL:1:14
+  |
+1 | [true, false][1]
+  |              ^^^ no function matches signature `get(Array(Boolean), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(Boolean)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(Boolean)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(Boolean)` with `Variant`
+... and 9 more
 
 
-ast            : ['a', 'b', 'c'][2]
-raw expr       : get(array('a', 'b', 'c'), 2)
-checked expr   : get<T0=String><Array(T0 NULL), UInt64>(CAST(array<T0=String><T0, T0, T0>("a", "b", "c") AS Array(String NULL)), to_uint64<UInt8>(2_u8))
-optimized expr : "b"
-output type    : String NULL
-output domain  : {"b"..="b"}
-output         : 'b'
+
+error: 
+  --> SQL:1:16
+  |
+1 | ['a', 'b', 'c'][2]
+  |                ^^^ no function matches signature `get(Array(String), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(String)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(String)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(String)` with `Variant`
+... and 9 more
 
 
-ast            : [1, 2, 3][1]
-raw expr       : get(array(1, 2, 3), 1)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(1_u8))
-optimized expr : 1_u8
-output type    : UInt8 NULL
-output domain  : {1..=1}
-output         : 1
+
+error: 
+  --> SQL:1:10
+  |
+1 | [1, 2, 3][1]
+  |          ^^^ no function matches signature `get(Array(UInt8), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(UInt8)` with `Variant`
+... and 9 more
 
 
-ast            : [1, 2, 3][3]
-raw expr       : get(array(1, 2, 3), 3)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(3_u8))
-optimized expr : 3_u8
-output type    : UInt8 NULL
-output domain  : {3..=3}
-output         : 3
+
+error: 
+  --> SQL:1:10
+  |
+1 | [1, 2, 3][3]
+  |          ^^^ no function matches signature `get(Array(UInt8), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(UInt8)` with `Variant`
+... and 9 more
 
 
-ast            : [1, null, 3][1]
-raw expr       : get(array(1, NULL, 3), 1)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(1_u8))
-optimized expr : 1_u8
-output type    : UInt8 NULL
-output domain  : {1..=1}
-output         : 1
+
+error: 
+  --> SQL:1:13
+  |
+1 | [1, null, 3][1]
+  |             ^^^ no function matches signature `get(Array(UInt8 NULL), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(UInt8 NULL)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8 NULL)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(UInt8 NULL)` with `Variant`
+... and 9 more
 
 
-ast            : [1, null, 3][2]
-raw expr       : get(array(1, NULL, 3), 2)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(2_u8))
-optimized expr : NULL
-output type    : UInt8 NULL
-output domain  : {NULL}
-output         : NULL
+
+error: 
+  --> SQL:1:13
+  |
+1 | [1, null, 3][2]
+  |             ^^^ no function matches signature `get(Array(UInt8 NULL), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(UInt8 NULL)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8 NULL)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(UInt8 NULL)` with `Variant`
+... and 9 more
 
 
-ast            : [1, 2, 3][4]
-raw expr       : get(array(1, 2, 3), 4)
-checked expr   : get<T0=UInt8><Array(T0 NULL), UInt64>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(UInt8 NULL)), to_uint64<UInt8>(4_u8))
-optimized expr : NULL
-output type    : UInt8 NULL
-output domain  : {NULL}
-output         : NULL
+
+error: 
+  --> SQL:1:10
+  |
+1 | [1, 2, 3][4]
+  |          ^^^ no function matches signature `get(Array(UInt8), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(UInt8)` with `Variant`
+... and 9 more
 
 
-ast            : [a, b][idx]
-raw expr       : get(array(a::Int16, b::Int16), idx::UInt16)
-checked expr   : get<T0=Int16><Array(T0 NULL), UInt64>(CAST(array<T0=Int16><T0, T0>(a, b) AS Array(Int16 NULL)), to_uint64<UInt16>(idx))
-evaluation:
-+--------+---------+---------+---------+------------------+
-|        | a       | b       | idx     | Output           |
-+--------+---------+---------+---------+------------------+
-| Type   | Int16   | Int16   | UInt16  | Int16 NULL       |
-| Domain | {0..=2} | {3..=5} | {1..=3} | {0..=5} ∪ {NULL} |
-| Row 0  | 0       | 3       | 1       | 0                |
-| Row 1  | 1       | 4       | 2       | 4                |
-| Row 2  | 2       | 5       | 3       | NULL             |
-+--------+---------+---------+---------+------------------+
-evaluation (internal):
-+--------+---------------------------------------------------------------------+
-| Column | Data                                                                |
-+--------+---------------------------------------------------------------------+
-| a      | Int16([0, 1, 2])                                                    |
-| b      | Int16([3, 4, 5])                                                    |
-| idx    | UInt16([1, 2, 3])                                                   |
-| Output | NullableColumn { column: Int16([0, 4, 0]), validity: [0b_____011] } |
-+--------+---------------------------------------------------------------------+
+
+error: 
+  --> SQL:1:7
+  |
+1 | [a, b][idx]
+  |       ^^^^^ no function matches signature `get(Array(Int16), UInt16)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Variant, String) :: Variant NULL              : unable to unify `Array(Int16)` with `Variant`
+  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(Int16)` with `Variant`
+  get(Variant, Int64) :: Variant NULL               : unable to unify `Array(Int16)` with `Variant`
+... and 9 more
 
 
-ast            : slice([], 1)
-raw expr       : slice(array(), 1)
-checked expr   : slice<Array(Nothing), UInt64>(array<>(), to_uint64<UInt8>(1_u8))
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([], 1)
+  | ^^^^^^^^^^^^ no function matches signature `slice(Array(Nothing), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64) :: Array(Nothing)                 : unable to unify `UInt8` with `UInt64`
+  slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `UInt8` with `UInt64`
+  slice(Array(T0), UInt64) :: Array(T0)                           : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([0, 1, 2, 3], 2)
-raw expr       : slice(array(0, 1, 2, 3), 2)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [1, 2, 3]
-output type    : Array(UInt8)
-output domain  : [{1..=3}]
-output         : [1, 2, 3]
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([0, 1, 2, 3], 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(UInt8), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64) :: Array(Nothing)                 : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(T0), UInt64) :: Array(T0)                           : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice(['a', 'b', 'c', 'd'], 3)
-raw expr       : slice(array('a', 'b', 'c', 'd'), 3)
-checked expr   : slice<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(3_u8))
-optimized expr : ['c', 'd']
-output type    : Array(String)
-output domain  : [{"c"..="d"}]
-output         : ['c', 'd']
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice(['a', 'b', 'c', 'd'], 3)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(String), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64) :: Array(Nothing)                 : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(T0), UInt64) :: Array(T0)                           : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([a, b, c], 2)
-raw expr       : slice(array(a::Int16, b::Int16, c::Int16), 2)
-checked expr   : slice<T0=Int16><Array(T0), UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), to_uint64<UInt8>(2_u8))
-optimized expr : slice<T0=Int16><Array(T0), UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), 2_u64)
-evaluation:
-+--------+---------+---------+---------+--------------+
-|        | a       | b       | c       | Output       |
-+--------+---------+---------+---------+--------------+
-| Type   | Int16   | Int16   | Int16   | Array(Int16) |
-| Domain | {0..=2} | {3..=5} | {7..=9} | [{0..=9}]    |
-| Row 0  | 0       | 3       | 7       | [3, 7]       |
-| Row 1  | 1       | 4       | 8       | [4, 8]       |
-| Row 2  | 2       | 5       | 9       | [5, 9]       |
-+--------+---------+---------+---------+--------------+
-evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| a      | Int16([0, 1, 2])                                                         |
-| b      | Int16([3, 4, 5])                                                         |
-| c      | Int16([7, 8, 9])                                                         |
-| Output | ArrayColumn { values: Int16([3, 7, 4, 8, 5, 9]), offsets: [0, 2, 4, 6] } |
-+--------+--------------------------------------------------------------------------+
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([a, b, c], 2)
+  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(Int16), UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64) :: Array(Nothing)                 : unable to unify `Array(Int16)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(Int16)` with `Array(Nothing)`
+  slice(Array(T0), UInt64) :: Array(T0)                           : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([], 1, 2)
-raw expr       : slice(array(), 1, 2)
-checked expr   : slice<Array(Nothing), UInt64, UInt64>(array<>(), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([], 1, 2)
+  | ^^^^^^^^^^^^^^^ no function matches signature `slice(Array(Nothing), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `UInt8` with `UInt64`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `UInt8` with `UInt64`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([1], 1, 2)
-raw expr       : slice(array(1), 1, 2)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0>(1_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [1]
-output type    : Array(UInt8)
-output domain  : [{1..=1}]
-output         : [1]
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([1], 1, 2)
+  | ^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(UInt8), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([NULL, 1, 2, 3], 0, 2)
-raw expr       : slice(array(NULL, 1, 2, 3), 0, 2)
-checked expr   : slice<T0=UInt8 NULL><Array(T0), UInt64, UInt64>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL)), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [NULL, 1]
-output type    : Array(UInt8 NULL)
-output domain  : [{0..=1} ∪ {NULL}]
-output         : [NULL, 1]
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([NULL, 1, 2, 3], 0, 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(UInt8 NULL), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(UInt8 NULL)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(UInt8 NULL)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([0, 1, 2, 3], 1, 2)
-raw expr       : slice(array(0, 1, 2, 3), 1, 2)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : [0, 1]
-output type    : Array(UInt8)
-output domain  : [{0..=1}]
-output         : [0, 1]
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([0, 1, 2, 3], 1, 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(UInt8), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([0, 1, 2, 3], 1, 5)
-raw expr       : slice(array(0, 1, 2, 3), 1, 5)
-checked expr   : slice<T0=UInt8><Array(T0), UInt64, UInt64>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 1_u8, 2_u8, 3_u8), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(5_u8))
-optimized expr : [0, 1, 2, 3]
-output type    : Array(UInt8)
-output domain  : [{0..=3}]
-output         : [0, 1, 2, 3]
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([0, 1, 2, 3], 1, 5)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(UInt8), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice(['a', 'b', 'c', 'd'], 0, 2)
-raw expr       : slice(array('a', 'b', 'c', 'd'), 0, 2)
-checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
-optimized expr : ['a', 'b']
-output type    : Array(String)
-output domain  : [{"a"..="b"}]
-output         : ['a', 'b']
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice(['a', 'b', 'c', 'd'], 0, 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(String), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice(['a', 'b', 'c', 'd'], 1, 4)
-raw expr       : slice(array('a', 'b', 'c', 'd'), 1, 4)
-checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(4_u8))
-optimized expr : ['a', 'b', 'c', 'd']
-output type    : Array(String)
-output domain  : [{"a"..="d"}]
-output         : ['a', 'b', 'c', 'd']
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice(['a', 'b', 'c', 'd'], 1, 4)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(String), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice(['a', 'b', 'c', 'd'], 2, 6)
-raw expr       : slice(array('a', 'b', 'c', 'd'), 2, 6)
-checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(2_u8), to_uint64<UInt8>(6_u8))
-optimized expr : ['b', 'c', 'd']
-output type    : Array(String)
-output domain  : [{"b"..="d"}]
-output         : ['b', 'c', 'd']
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice(['a', 'b', 'c', 'd'], 2, 6)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(String), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(String)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
 
 
-ast            : slice([a, b, c], 1, 2)
-raw expr       : slice(array(a::Int16, b::Int16, c::Int16), 1, 2)
-checked expr   : slice<T0=Int16><Array(T0), UInt64, UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(2_u8))
-optimized expr : slice<T0=Int16><Array(T0), UInt64, UInt64>(array<T0=Int16><T0, T0, T0>(a, b, c), 1_u64, 2_u64)
-evaluation:
-+--------+---------+---------+---------+--------------+
-|        | a       | b       | c       | Output       |
-+--------+---------+---------+---------+--------------+
-| Type   | Int16   | Int16   | Int16   | Array(Int16) |
-| Domain | {0..=2} | {3..=5} | {7..=9} | [{0..=9}]    |
-| Row 0  | 0       | 3       | 7       | [0, 3]       |
-| Row 1  | 1       | 4       | 8       | [1, 4]       |
-| Row 2  | 2       | 5       | 9       | [2, 5]       |
-+--------+---------+---------+---------+--------------+
-evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| a      | Int16([0, 1, 2])                                                         |
-| b      | Int16([3, 4, 5])                                                         |
-| c      | Int16([7, 8, 9])                                                         |
-| Output | ArrayColumn { values: Int16([0, 3, 1, 4, 2, 5]), offsets: [0, 2, 4, 6] } |
-+--------+--------------------------------------------------------------------------+
+
+error: 
+  --> SQL:1:1
+  |
+1 | slice([a, b, c], 1, 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `slice(Array(Int16), UInt8, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)                      : unable to unify `Array(Int16)` with `Array(Nothing)`
+  slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL  : unable to unify `Array(Int16)` with `Array(Nothing)`
+  slice(Array(T0), UInt64, UInt64) :: Array(T0)                                : unable to unify `UInt8` with `UInt64`
+... and 1 more
+
 
 
 ast            : false in (false, true)

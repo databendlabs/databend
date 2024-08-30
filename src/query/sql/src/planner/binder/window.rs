@@ -438,7 +438,7 @@ impl<'a> WindowRewriter<'a> {
         );
 
         // we want the window with more order by items resolve firstly
-        // thus we can elimate some useless order by items
+        // thus we can eliminate some useless order by items
         window_infos.reorder();
         let replaced_window = WindowFunc {
             span: window.span,
