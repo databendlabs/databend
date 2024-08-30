@@ -478,18 +478,13 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:19
-  |
-1 | parse_json('null')[1]
-  |                   ^^^ no function matches signature `get(Variant, UInt8)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt8` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt8` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt8` with `Int64`
-... and 9 more
-
+ast            : parse_json('null')[1]
+raw expr       : get(parse_json('null'), 1)
+checked expr   : get<Variant, Int64>(parse_json<String>("null"), to_int64<UInt8>(1_u8))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : parse_json('null')['k']
@@ -501,32 +496,22 @@ output domain  : {NULL}
 output         : NULL
 
 
-error: 
-  --> SQL:1:24
-  |
-1 | parse_json('[1,2,3,4]')[1]
-  |                        ^^^ no function matches signature `get(Variant, UInt8)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt8` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt8` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt8` with `Int64`
-... and 9 more
+ast            : parse_json('[1,2,3,4]')[1]
+raw expr       : get(parse_json('[1,2,3,4]'), 1)
+checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt8>(1_u8))
+optimized expr : 0x20000000200000025002
+output type    : Variant NULL
+output domain  : Undefined
+output         : '2'
 
 
-
-error: 
-  --> SQL:1:24
-  |
-1 | parse_json('[1,2,3,4]')[2+3]
-  |                        ^^^^^ no function matches signature `get(Variant, UInt16)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt16` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt16` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt16` with `Int64`
-... and 9 more
-
+ast            : parse_json('[1,2,3,4]')[2+3]
+raw expr       : get(parse_json('[1,2,3,4]'), plus(2, 3))
+checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8)))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : parse_json('{"k":"v"}')['k']
@@ -556,32 +541,51 @@ output domain  : Undefined
 output         : '"b"'
 
 
-error: 
-  --> SQL:1:14
-  |
-1 | parse_json(s)[i]
-  |              ^^^ no function matches signature `get(Variant, UInt64)`, you might need to add explicit type casts.
+ast            : parse_json(s)[i]
+raw expr       : get(parse_json(s::String), i::UInt64)
+checked expr   : get<Variant, Int64>(parse_json<String>(s), to_int64<UInt64>(i))
+evaluation:
++--------+----------------------------------+---------+--------------+
+|        | s                                | i       | Output       |
++--------+----------------------------------+---------+--------------+
+| Type   | String                           | UInt64  | Variant NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
+| Row 0  | 'true'                           | 0       | NULL         |
+| Row 1  | '[1,2,3,4]'                      | 0       | '1'          |
+| Row 2  | '["a","b","c"]'                  | 1       | '"b"'        |
++--------+----------------------------------+---------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 26] }                                      |
+| i      | UInt64([0, 0, 1])                                                                                                                           |
+| Output | NullableColumn { column: BinaryColumn { data: 0x20000000200000025001200000001000000162, offsets: [0, 0, 10, 19] }, validity: [0b_____110] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt64` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt64` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt64` with `Int64`
-... and 9 more
 
-
-
-error: 
-  --> SQL:1:14
-  |
-1 | parse_json(s)[i]
-  |              ^^^ no function matches signature `get(Variant NULL, UInt64 NULL)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `Variant NULL` with `Variant`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt64` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `Variant NULL` with `Variant`
-... and 9 more
-
+ast            : parse_json(s)[i]
+raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
+checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
+evaluation:
++--------+------------------------+------------------+--------------+
+|        | s                      | i                | Output       |
++--------+------------------------+------------------+--------------+
+| Type   | String NULL            | UInt64 NULL      | Variant NULL |
+| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                 | NULL             | NULL         |
+| Row 1  | '[1,2,3,4]'            | 2                | '3'          |
+| Row 2  | NULL                   | NULL             | NULL         |
+| Row 3  | '["a","b","c"]'        | 1                | '"b"'        |
++--------+------------------------+------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 13, 26] }, validity: [0b____1011] } |
+| i      | NullableColumn { column: UInt64([0, 2, 0, 1]), validity: [0b____1010] }                                                                                       |
+| Output | NullableColumn { column: BinaryColumn { data: 0x20000000200000025003200000001000000162, offsets: [0, 0, 10, 10, 19] }, validity: [0b____1010] }               |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : parse_json(s)[k]
@@ -2978,18 +2982,13 @@ output domain  : {TRUE}
 output         : true
 
 
-error: 
-  --> SQL:1:19
-  |
-1 | parse_json('null')->1
-  |                   ^^ no function matches signature `get(Variant, UInt8)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt8` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt8` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt8` with `Int64`
-... and 9 more
-
+ast            : parse_json('null')->1
+raw expr       : get(parse_json('null'), 1)
+checked expr   : get<Variant, Int64>(parse_json<String>("null"), to_int64<UInt8>(1_u8))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : parse_json('null')->'k'
@@ -3001,32 +3000,22 @@ output domain  : {NULL}
 output         : NULL
 
 
-error: 
-  --> SQL:1:24
-  |
-1 | parse_json('[1,2,3,4]')->1
-  |                        ^^ no function matches signature `get(Variant, UInt8)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt8` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt8` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt8` with `Int64`
-... and 9 more
+ast            : parse_json('[1,2,3,4]')->1
+raw expr       : get(parse_json('[1,2,3,4]'), 1)
+checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt8>(1_u8))
+optimized expr : 0x20000000200000025002
+output type    : Variant NULL
+output domain  : Undefined
+output         : '2'
 
 
-
-error: 
-  --> SQL:1:24
-  |
-1 | parse_json('[1,2,3,4]')->(2+3)
-  |                        ^^ no function matches signature `get(Variant, UInt16)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt16` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt16` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt16` with `Int64`
-... and 9 more
-
+ast            : parse_json('[1,2,3,4]')->(2+3)
+raw expr       : get(parse_json('[1,2,3,4]'), plus(2, 3))
+checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<UInt16>(plus<UInt8, UInt8>(2_u8, 3_u8)))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : parse_json('{"k":"v"}')->'k'
@@ -3056,32 +3045,51 @@ output domain  : Undefined
 output         : '"b"'
 
 
-error: 
-  --> SQL:1:14
-  |
-1 | parse_json(s)->i
-  |              ^^ no function matches signature `get(Variant, UInt64)`, you might need to add explicit type casts.
+ast            : parse_json(s)->i
+raw expr       : get(parse_json(s::String), i::UInt64)
+checked expr   : get<Variant, Int64>(parse_json<String>(s), to_int64<UInt64>(i))
+evaluation:
++--------+----------------------------------+---------+--------------+
+|        | s                                | i       | Output       |
++--------+----------------------------------+---------+--------------+
+| Type   | String                           | UInt64  | Variant NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
+| Row 0  | 'true'                           | 0       | NULL         |
+| Row 1  | '[1,2,3,4]'                      | 0       | '1'          |
+| Row 2  | '["a","b","c"]'                  | 1       | '"b"'        |
++--------+----------------------------------+---------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 26] }                                      |
+| i      | UInt64([0, 0, 1])                                                                                                                           |
+| Output | NullableColumn { column: BinaryColumn { data: 0x20000000200000025001200000001000000162, offsets: [0, 0, 10, 19] }, validity: [0b_____110] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `UInt64` with `String`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt64` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `UInt64` with `Int64`
-... and 9 more
 
-
-
-error: 
-  --> SQL:1:14
-  |
-1 | parse_json(s)->i
-  |              ^^ no function matches signature `get(Variant NULL, UInt64 NULL)`, you might need to add explicit type casts.
-
-candidate functions:
-  get(Variant, String) :: Variant NULL              : unable to unify `Variant NULL` with `Variant`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `UInt64` with `String`
-  get(Variant, Int64) :: Variant NULL               : unable to unify `Variant NULL` with `Variant`
-... and 9 more
-
+ast            : parse_json(s)->i
+raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
+checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
+evaluation:
++--------+------------------------+------------------+--------------+
+|        | s                      | i                | Output       |
++--------+------------------------+------------------+--------------+
+| Type   | String NULL            | UInt64 NULL      | Variant NULL |
+| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                 | NULL             | NULL         |
+| Row 1  | '[1,2,3,4]'            | 2                | '3'          |
+| Row 2  | NULL                   | NULL             | NULL         |
+| Row 3  | '["a","b","c"]'        | 1                | '"b"'        |
++--------+------------------------+------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275655b312c322c332c345d5b2261222c2262222c2263225d, offsets: [0, 4, 13, 13, 26] }, validity: [0b____1011] } |
+| i      | NullableColumn { column: UInt64([0, 2, 0, 1]), validity: [0b____1010] }                                                                                       |
+| Output | NullableColumn { column: BinaryColumn { data: 0x20000000200000025003200000001000000162, offsets: [0, 0, 10, 10, 19] }, validity: [0b____1010] }               |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : parse_json(s)->k
