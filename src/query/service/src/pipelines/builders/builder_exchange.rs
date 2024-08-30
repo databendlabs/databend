@@ -39,7 +39,6 @@ impl PipelineBuilder {
     }
 
     pub fn build_exchange_sink(&mut self, exchange_sink: &ExchangeSink) -> Result<()> {
-        // PhysicalPlan::AggregatePartial()
         // ExchangeSink will be appended by `ExchangeManager::execute_pipeline`
         self.build_pipeline(&exchange_sink.input)
     }

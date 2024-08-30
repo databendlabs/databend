@@ -86,11 +86,6 @@ impl PipelineBuilder {
     }
 
     pub fn finalize(mut self, plan: &PhysicalPlan) -> Result<PipelineBuildResult> {
-        // if self.is_exchange_neighbor {
-        //     self.is_exchange_neighbor = false;
-        //     self.before_exchange_id = Some(plan.get_id());
-        // }
-
         self.build_pipeline(plan)?;
 
         for source_pipeline in &self.pipelines {
