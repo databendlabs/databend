@@ -79,6 +79,7 @@ pub struct NodeInfo {
     pub cpu_nums: u64,
     pub version: u32,
     pub flight_address: String,
+    pub discovery_address: String,
     pub binary_version: String,
 }
 
@@ -88,6 +89,7 @@ impl NodeInfo {
         secret: String,
         cpu_nums: u64,
         flight_address: String,
+        discovery_address: String,
         binary_version: String,
     ) -> NodeInfo {
         NodeInfo {
@@ -96,6 +98,7 @@ impl NodeInfo {
             cpu_nums,
             version: 0,
             flight_address,
+            discovery_address,
             binary_version,
         }
     }

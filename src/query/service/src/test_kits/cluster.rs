@@ -39,6 +39,7 @@ impl ClusterDescriptor {
             "".to_string(),
             0,
             addr.into(),
+            "".to_string(),
             DATABEND_COMMIT_VERSION.to_string(),
         )));
         ClusterDescriptor {
