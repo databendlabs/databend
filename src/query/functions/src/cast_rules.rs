@@ -54,7 +54,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         registry.register_additional_cast_rules(func_name, CAST_INT_TO_UINT64.iter().cloned());
     }
 
-    registry.register_additional_cast_rules("slice", CAST_INT_TO_UINT64.iter().cloned());
+    for func_name in ["slice", "get"] {
+        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, CAST_INT_TO_UINT64.iter().cloned());
+    }
 
     for func_name in ALL_COMP_FUNC_NAMES {
         // Disable auto cast from strings, e.g., `1 < '1'`.
