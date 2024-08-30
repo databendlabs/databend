@@ -22,6 +22,7 @@ fn test_node_info_ip_port() -> anyhow::Result<()> {
         cpu_nums: 1,
         version: 1,
         flight_address: "1.2.3.4:123".to_string(),
+        discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
     };
 

@@ -350,7 +350,7 @@ impl ClusterDiscovery {
             (&mut discovery_address, "discovery-address"),
         ] {
             info!("{}: {}", typ, lookup_ip);
-            if let Ok(socket_addr) = SocketAddr::from_str(&lookup_ip) {
+            if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
                 if ip_addr.is_loopback() || ip_addr.is_unspecified() {
                     if let Some(local_addr) = self.api_provider.get_local_addr().await? {

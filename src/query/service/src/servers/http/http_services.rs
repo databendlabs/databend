@@ -141,8 +141,8 @@ impl HttpHandler {
             .at(
                 "/discovery_nodes",
                 get(discovery_nodes).with(HTTPSessionMiddleware::create(
-                    *self.kind,
-                    *EndpointKind::StartQuery,
+                    self.kind,
+                    EndpointKind::StartQuery,
                 )),
             );
 
