@@ -16,12 +16,15 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::trim_vacuum2_object_prefix;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use uuid::Uuid;
+use uuid::Version;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
@@ -34,7 +37,6 @@ use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
-
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
@@ -170,7 +172,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = splits[len - 1];
+        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 
@@ -182,7 +184,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = splits[len - 1];
+        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
@@ -204,8 +206,16 @@ trait SnapshotLocationCreator {
 
 impl SnapshotLocationCreator for SnapshotVersion {
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
+        let vacuum_prefix = if id
+            .get_version()
+            .is_some_and(|v| matches!(v, Version::SortRand))
+        {
+            VACUUM2_OBJECT_KEY_PREFIX
+        } else {
+            ""
+        };
         format!(
-            "{}/{}/{}{}",
+            "{}/{}/{vacuum_prefix}{}{}",
             prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_PREFIX,
             id.simple(),

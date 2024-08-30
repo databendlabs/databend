@@ -38,6 +38,9 @@ pub use statistics::*;
 // currently, used by versioned readers only
 pub(crate) use testing::*;
 pub use utils::parse_storage_prefix;
+pub use utils::trim_vacuum2_object_prefix;
+pub use utils::try_extract_uuid_str_from_path;
+pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
