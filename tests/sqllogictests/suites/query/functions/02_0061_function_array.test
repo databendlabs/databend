@@ -19,10 +19,10 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
-create table t(col1 Array(Int Null) not null, col2 Array(String) not null, col3 Array(Date) not null, col4 Array(Timestamp) not null, col5 Array(Array(Int null)) not null)
+create table t(index int default 10, col1 Array(Int Null) not null, col2 Array(String) not null, col3 Array(Date) not null, col4 Array(Timestamp) not null, col5 Array(Array(Int null)) not null)
 
 statement ok
-insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
+insert into t(col1, col2, col3, col4, col5) values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
 
 query IIII
 select length(col1), length(col2), length(col3), length(col4) from t
@@ -30,12 +30,12 @@ select length(col1), length(col2), length(col3), length(col4) from t
 4 4 1 1
 
 query ITT
-select get(col1, 3), get(col2, 2), get(col3, 1) from t
+select get(col1, index - 7), get(col2, index - 8), get(col3, index - 9) from t
 ----
 3 x 2022-02-02
 
 query TTTT
-select slice(col1, 1), slice(col1, 2, 3), slice(col2, 2), slice(col2, 3, 3) from t
+select slice(col1, index - 9), slice(col1, 2, 3), slice(col2, 2), slice(col2, 3, 3) from t
 ----
 [1,2,3,3] [2,3] ['x','y','z'] ['y']
 

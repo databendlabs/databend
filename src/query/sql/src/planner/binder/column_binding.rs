@@ -40,18 +40,43 @@ pub struct ColumnBinding {
     pub virtual_computed_expr: Option<String>,
 }
 
+const DUMMY_INDEX: usize = usize::MAX;
+impl ColumnBinding {
+    pub fn new_dummy_column(name: String, data_type: Box<DataType>) -> Self {
+        ColumnBinding {
+            database_name: None,
+            table_name: None,
+            column_position: None,
+            table_index: None,
+            column_name: name,
+            index: DUMMY_INDEX,
+            data_type,
+            visibility: Visibility::Visible,
+            virtual_computed_expr: None,
+        }
+    }
+}
+
 // we only care about the index
 // if index is same, thus the column binding is same
 impl Eq for ColumnBinding {}
 impl PartialEq for ColumnBinding {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index
+            && self.data_type == other.data_type
+            && ((self.index == DUMMY_INDEX && self.column_name == other.column_name)
+                || self.index != DUMMY_INDEX)
     }
 }
 
 impl std::hash::Hash for ColumnBinding {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.index.hash(state);
+        self.data_type.hash(state);
+
+        if self.index == DUMMY_INDEX {
+            self.column_name.hash(state);
+        }
     }
 }
 
