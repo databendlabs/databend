@@ -57,7 +57,14 @@ impl Rule for RuleEliminateSort {
 
         if !sort.window_partition.is_empty() {
             if let Some((partition, ordering)) = &prop.partition_orderings {
-                if partition == &sort.window_partition && ordering == &sort.items {
+                // must has same partition
+                // if the ordering of the current node is empty, we can eliminate the sort
+                // eg: explain  select number, sum(number - 1) over (partition by number % 3 order by number + 1),
+                // avg(number) over (partition by number % 3 order by number + 1)
+                // from numbers(50);
+                if partition == &sort.window_partition
+                    && (ordering == &sort.items || sort.sort_items_exclude_partition().is_empty())
+                {
                     state.add_result(input.clone());
                     return Ok(());
                 }

@@ -21,7 +21,7 @@ Sort
     ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER ( PARTITION BY depname ORDER BY empno ) (#4)]
     ├── aggregate function: [sum(salary)]
     ├── partition by: [depname]
-    ├── order by: [empno]
+    ├── order by: []
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
     └── WindowPartition
         ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
@@ -138,6 +138,93 @@ Filter
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
                     └── estimated rows: 0.00
+
+# window partition with empty sort items from same window partition  with sort items
+query T
+explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank() over (partition by number % 3 order by number + 1)
+    from numbers(50)) t(number, a);
+----
+Window
+├── output columns: [numbers.number (#0), rank_part_0 (#1), a (#3), sum_arg_0 (#4), rank_part_0 (#1), sum(number - 1) OVER ( PARTITION BY number % 3 ) (#5)]
+├── aggregate function: [sum(sum_arg_0)]
+├── partition by: [rank_part_0]
+├── order by: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── EvalScalar
+    ├── output columns: [numbers.number (#0), rank_part_0 (#1), a (#3), sum_arg_0 (#4), rank_part_0 (#1)]
+    ├── expressions: [t.number (#0) - 1, t.number (#0) % 3]
+    ├── estimated rows: 50.00
+    └── Window
+        ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank_order_0 (#2), a (#3)]
+        ├── aggregate function: [rank]
+        ├── partition by: [rank_part_0]
+        ├── order by: [rank_order_0]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank_order_0 (#2)]
+            ├── hash keys: [rank_part_0]
+            ├── estimated rows: 50.00
+            └── EvalScalar
+                ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank_order_0 (#2)]
+                ├── expressions: [numbers.number (#0) % 3, numbers.number (#0) + 1]
+                ├── estimated rows: 50.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 50
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 50.00
+
+query T
+explain select number, avg(number) over (partition by number % 3),  rank() over (partition by number % 3 order by number + 1), sum(number) over (partition by number % 3)
+    from numbers(50);
+----
+Window
+├── output columns: [numbers.number (#0), avg_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number + 1 ) (#4), avg(number) OVER ( PARTITION BY number % 3 ) (#2), avg_part_0 (#1), sum(number) OVER ( PARTITION BY number % 3 ) (#5)]
+├── aggregate function: [sum(number)]
+├── partition by: [avg_part_0]
+├── order by: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── EvalScalar
+    ├── output columns: [numbers.number (#0), avg_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number + 1 ) (#4), avg(number) OVER ( PARTITION BY number % 3 ) (#2), avg_part_0 (#1)]
+    ├── expressions: [numbers.number (#0) % 3]
+    ├── estimated rows: 50.00
+    └── Window
+        ├── output columns: [numbers.number (#0), avg_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number + 1 ) (#4), avg_part_0 (#1), avg(number) OVER ( PARTITION BY number % 3 ) (#2)]
+        ├── aggregate function: [avg(number)]
+        ├── partition by: [avg_part_0]
+        ├── order by: []
+        ├── frame: [Range: Preceding(None) ~ Following(None)]
+        └── EvalScalar
+            ├── output columns: [numbers.number (#0), avg_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number + 1 ) (#4), avg_part_0 (#1)]
+            ├── expressions: [numbers.number (#0) % 3]
+            ├── estimated rows: 50.00
+            └── Window
+                ├── output columns: [numbers.number (#0), avg_part_0 (#1), rank_order_0 (#3), rank() OVER ( PARTITION BY number % 3 ORDER BY number + 1 ) (#4)]
+                ├── aggregate function: [rank]
+                ├── partition by: [avg_part_0]
+                ├── order by: [rank_order_0]
+                ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                └── WindowPartition
+                    ├── output columns: [numbers.number (#0), avg_part_0 (#1), rank_order_0 (#3)]
+                    ├── hash keys: [avg_part_0]
+                    ├── estimated rows: 50.00
+                    └── EvalScalar
+                        ├── output columns: [numbers.number (#0), avg_part_0 (#1), rank_order_0 (#3)]
+                        ├── expressions: [numbers.number (#0) % 3, numbers.number (#0) + 1]
+                        ├── estimated rows: 50.00
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── output columns: [number (#0)]
+                            ├── read rows: 50
+                            ├── read size: < 1 KiB
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 50.00
 
 # cannot push down filter in window function
 query T

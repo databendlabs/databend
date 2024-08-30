@@ -262,11 +262,25 @@ pub struct WindowInfo {
     pub window_functions_map: HashMap<String, usize>,
 }
 
+impl WindowInfo {
+    pub fn reorder(&mut self) {
+        self.window_functions
+            .sort_by(|a, b| b.order_by_items.len().cmp(&a.order_by_items.len()));
+
+        self.window_functions_map.clear();
+        for (i, window) in self.window_functions.iter().enumerate() {
+            self.window_functions_map
+                .insert(window.display_name.clone(), i);
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WindowFunctionInfo {
     pub span: Span,
     pub index: IndexType,
     pub func: WindowFuncType,
+    pub display_name: String,
     pub arguments: Vec<ScalarItem>,
     pub partition_by_items: Vec<ScalarItem>,
     pub order_by_items: Vec<WindowOrderByInfo>,
@@ -375,6 +389,7 @@ impl<'a> WindowRewriter<'a> {
 
         // resolve order by
         let mut order_by_items = vec![];
+
         for (i, order) in window.order_by.iter().enumerate() {
             let mut order_expr = order.expr.clone();
             let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
@@ -406,6 +421,7 @@ impl<'a> WindowRewriter<'a> {
         let window_info = WindowFunctionInfo {
             span: window.span,
             index,
+            display_name: window.display_name.clone(),
             func: func.clone(),
             arguments: window_args,
             partition_by_items,
@@ -421,6 +437,9 @@ impl<'a> WindowRewriter<'a> {
             window_infos.window_functions.len() - 1,
         );
 
+        // we want the window with more order by items resolve firstly
+        // thus we can elimate some useless order by items
+        window_infos.reorder();
         let replaced_window = WindowFunc {
             span: window.span,
             display_name: window.display_name.clone(),

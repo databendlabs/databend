@@ -45,6 +45,21 @@ pub struct Sort {
     pub window_partition: Vec<ScalarItem>,
 }
 
+impl Sort {
+    pub fn sort_items_exclude_partition(&self) -> Vec<SortItem> {
+        self.items
+            .iter()
+            .filter(|item| {
+                !self
+                    .window_partition
+                    .iter()
+                    .any(|partition| partition.index == item.index)
+            })
+            .cloned()
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SortItem {
     pub index: IndexType,
