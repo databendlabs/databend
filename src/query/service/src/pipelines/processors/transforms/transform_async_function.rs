@@ -13,14 +13,10 @@
 // limitations under the License.
 
 use core::str;
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::RwLock;
 
-use arrow_array::builder;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
@@ -34,15 +30,8 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::DictGetFunctionArgument;
-use databend_common_sql::plans::DictGetOperator;
-use databend_common_sql::plans::DictGetOperators;
 use databend_common_sql::plans::DictionarySource;
-use databend_common_storage::build_operator;
 use databend_common_storages_fuse::TableContext;
-use futures::TryFutureExt;
-use lazy_static::lazy_static;
-use opendal::services::Redis;
-use opendal::Operator;
 
 use crate::sessions::QueryContext;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
@@ -106,12 +95,12 @@ impl TransformAsyncFunction {
         arg_indices: &Vec<IndexType>,
         data_type: &DataType,
     ) -> Result<()> {
-        let mut conn_str = String::new();
-        let op = match &dict_arg.dict_source {
+        let conn_str: String;
+        let _op = match &dict_arg.dict_source {
             DictionarySource::Redis(tmp_conn_str) => {
-                conn_str = *tmp_conn_str;
-                let dict_get_operators = dict_arg.dict_get_operators;
-                dict_get_operators.get_or_new_operator(tmp_conn_str, "redis".to_string())?
+                conn_str = tmp_conn_str.clone();
+                let dict_get_operators = dict_arg.dict_get_operators.clone();
+                dict_get_operators.get_or_new_operator(conn_str.clone(), "redis".to_string())?
             }
             _ => {
                 todo!()
@@ -124,8 +113,12 @@ impl TransformAsyncFunction {
         let value = match &entry.value {
             Value::Scalar(scalar) => {
                 if let Scalar::String(key) = scalar {
-                    let dict_get_operators = dict_arg.dict_get_operators;
-                    let value = dict_get_operators.get_or_add_value(conn_str.clone(), key.clone(), dict_arg)?;
+                    let dict_get_operators = dict_arg.dict_get_operators.clone();
+                    let value = dict_get_operators.get_or_add_value(
+                        conn_str.clone(),
+                        key.clone(),
+                        dict_arg,
+                    ).await?;
                     Value::Scalar(Scalar::String(value))
                 } else {
                     Value::Scalar(Scalar::String("".to_string()))
@@ -135,7 +128,11 @@ impl TransformAsyncFunction {
                 let mut builder = StringColumnBuilder::with_capacity(column.len(), 0);
                 for scalar in column.iter() {
                     if let ScalarRef::String(key) = scalar {
-                        let value = dict_arg.dict_get_operators.get_or_add_value(conn_str.clone(), key.to_string(), dict_arg)?;
+                        let value = dict_arg.dict_get_operators.get_or_add_value(
+                            conn_str.clone(),
+                            key.to_string(),
+                            dict_arg,
+                        ).await?;
 
                         // let value = if let Some(cached_val) = cache.get(key) {
                         //     cached_val.clone()

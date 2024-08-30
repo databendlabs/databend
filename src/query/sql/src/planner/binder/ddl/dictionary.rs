@@ -70,7 +70,7 @@ impl Binder {
             return Err(ErrorCode::UnsupportedDictionarySource(format!(
                 "The specified source '{}' is not currently supported",
                 source.to_lowercase(),
-            )))
+            )));
         }
 
         let mut options: BTreeMap<String, String> = source_options
@@ -82,7 +82,8 @@ impl Binder {
             for option in required_options {
                 if !options.contains_key(option) {
                     return Err(ErrorCode::MissingDictionaryOption(
-                        "The mysql configurations are missing one or more required options. ".to_owned()
+                        "The mysql configurations are missing one or more required options. "
+                            .to_owned()
                             + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
                     ));
                 }
@@ -93,23 +94,26 @@ impl Binder {
                 )));
             }
             let port: String;
-            match options.get("port"){
+            match options.get("port") {
                 Some(p) => port = p.to_string(),
-                None => return Err(ErrorCode::MissingDictionaryOption(
-                    "The redis configurations are missing `port`"
-                ))
+                None => {
+                    return Err(ErrorCode::MissingDictionaryOption(
+                        "The redis configurations are missing `port`",
+                    ));
+                }
             }
             if port.parse::<u64>().is_err() {
                 return Err(ErrorCode::UnsupportedDictionaryOption(format!(
                     "The value of `port` must be UInt"
-                )))
+                )));
             }
         } else if source.to_lowercase() == *"redis" {
             let required_options = ["host", "port"];
             for option in required_options {
                 if !options.contains_key(option) {
                     return Err(ErrorCode::MissingDictionaryOption(
-                        "The redis configuration is missing one or more required options. ".to_owned()
+                        "The redis configuration is missing one or more required options. "
+                            .to_owned()
                             + "Please ensure you have provided values for 'host' and 'port'.",
                     ));
                 }
@@ -119,7 +123,7 @@ impl Binder {
                 if db_index > 15 {
                     return Err(ErrorCode::UnsupportedDictionaryOption(format!(
                         "The value of `db_index` must be between [0,15]"
-                    )))
+                    )));
                 }
             } else {
                 options.insert("db_index".to_string(), 0.to_string());
@@ -127,7 +131,12 @@ impl Binder {
             if None == options.get("password") {
                 options.insert("password".to_string(), String::new());
             }
-            let allowed_options = HashSet::from(["host".to_string(), "port".to_string(), "password".to_string(), "db_index".to_string()]);
+            let allowed_options = HashSet::from([
+                "host".to_string(),
+                "port".to_string(),
+                "password".to_string(),
+                "db_index".to_string(),
+            ]);
             let mut keys = HashSet::new();
             for key in options.keys().cloned().collect_vec() {
                 keys.insert(key);
@@ -135,7 +144,7 @@ impl Binder {
             if !keys.is_subset(&allowed_options) {
                 return Err(ErrorCode::UnsupportedDictionaryOption(format!(
                     "The redis configurations must be in [`host`, `port`, `password`, `db_index`] ",
-                )))
+                )));
             }
         } else {
             todo!()
@@ -174,18 +183,20 @@ impl Binder {
         } else if source.to_lowercase() == *"mysql" {
             for table_field in schema.fields() {
                 let field_type = &table_field.data_type;
-                if !(*field_type == TableDataType::Boolean || *field_type == TableDataType::String ||
-                    *field_type == TableDataType::Number(NumberDataType::Float32) 
+                if !(*field_type == TableDataType::Boolean
+                    || *field_type == TableDataType::String
+                    || *field_type == TableDataType::Number(NumberDataType::Float32)
                     || *field_type == TableDataType::Number(NumberDataType::Float64)
                     || *field_type == TableDataType::Number(NumberDataType::Int16)
                     || *field_type == TableDataType::Number(NumberDataType::Int32)
                     || *field_type == TableDataType::Number(NumberDataType::Int8)
                     || *field_type == TableDataType::Number(NumberDataType::Int64)
                     || *field_type == TableDataType::Timestamp
-                    || *field_type == TableDataType::Date) {
+                    || *field_type == TableDataType::Date)
+                {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(format!(
                         "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`]",
-                    )))
+                    )));
                 }
             }
         } else {
@@ -198,14 +209,12 @@ impl Binder {
             }
         }
         if primary_keys.len() != 1 {
-            return Err(ErrorCode::WrongPKNumber("Only support one primary key"))
+            return Err(ErrorCode::WrongPKNumber("Only support one primary key"));
         }
         let primary_key: Identifier;
         match primary_keys.get(0) {
             Some(pk) => primary_key = pk.clone(),
-            None => return Err(ErrorCode::WrongPKNumber(
-                "Miss primary key"
-            ))
+            None => return Err(ErrorCode::WrongPKNumber("Miss primary key")),
         }
         let pk_id = schema.column_id_of(primary_key.name.as_str())?;
         primary_column_ids.push(pk_id);

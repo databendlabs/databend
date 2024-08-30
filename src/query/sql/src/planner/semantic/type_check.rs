@@ -134,6 +134,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::DictGetFunctionArgument;
+use crate::plans::DictGetOperators;
 use crate::plans::DictionarySource;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
@@ -3981,6 +3982,7 @@ impl<'a> TypeChecker<'a> {
             key_field: Some(primary_field.name().clone()),
             value_field: Some(attr_name.clone()),
             default_res: Some(default_res),
+            dict_get_operators: DictGetOperators::new(),
         };
         let display_name = format!(
             "{}({}.{},{},{})",
