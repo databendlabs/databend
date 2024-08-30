@@ -14,8 +14,16 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::optimizer::QuerySampleExecutor;
+use databend_common_sql::optimizer::SExpr;
+use futures_util::TryStreamExt;
 
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::Fragmenter;
@@ -24,6 +32,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::ColumnBinding;
+use crate::stream::PullingExecutorStream;
 
 /// Build query pipeline from physical plan.
 /// If plan is distributed plan it will build_distributed_pipeline
@@ -105,4 +114,28 @@ pub async fn build_distributed_pipeline(
     let settings = ctx.get_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);
     Ok(build_res)
+}
+
+pub struct ServiceQueryExecutor {
+    ctx: Arc<QueryContext>,
+}
+
+impl ServiceQueryExecutor {
+    pub fn new(ctx: Arc<QueryContext>) -> Self {
+        Self { ctx }
+    }
+}
+
+#[async_trait]
+impl QuerySampleExecutor for ServiceQueryExecutor {
+    async fn execute_query(&self, plan: &PhysicalPlan) -> Result<Vec<DataBlock>> {
+        let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
+        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        self.ctx.set_executor(pulling_executor.get_inner())?;
+
+        PullingExecutorStream::create(pulling_executor)?
+            .try_collect::<Vec<DataBlock>>()
+            .await
+    }
 }

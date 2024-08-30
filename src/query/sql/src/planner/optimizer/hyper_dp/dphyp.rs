@@ -28,6 +28,7 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -45,6 +46,7 @@ const RELATION_THRESHOLD: usize = 10;
 // See the paper for more details.
 pub struct DPhpy {
     ctx: Arc<dyn TableContext>,
+    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
     metadata: MetadataRef,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
@@ -59,9 +61,14 @@ pub struct DPhpy {
 }
 
 impl DPhpy {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        metadata: MetadataRef,
+        sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    ) -> Self {
         Self {
             ctx,
+            sample_executor,
             metadata,
             join_relations: vec![],
             table_index_map: Default::default(),
@@ -79,28 +86,22 @@ impl DPhpy {
         let metadata = self.metadata.clone();
         let left_expr = s_expr.children[0].clone();
         let left_res = spawn(async move {
-            let mut dphyp = DPhpy::new(ctx, metadata);
+            let mut dphyp = DPhpy::new(ctx, metadata, self.sample_executor.clone());
             (dphyp.optimize(&left_expr).await, dphyp.table_index_map)
         });
         let ctx = self.ctx.clone();
         let metadata = self.metadata.clone();
         let right_expr = s_expr.children[1].clone();
         let right_res = spawn(async move {
-            let mut dphyp = DPhpy::new(ctx, metadata);
+            let mut dphyp = DPhpy::new(ctx, metadata, self.sample_executor.clone());
             (dphyp.optimize(&right_expr).await, dphyp.table_index_map)
         });
-        let left_res = left_res.await.map_err(|e| {
-            ErrorCode::TokioError(format!(
-                "Cannot join tokio job, err: {:?}",
-                e
-            ))
-        })?;
-        let right_res = right_res.await.map_err(|e| {
-            ErrorCode::TokioError(format!(
-                "Cannot join tokio job, err: {:?}",
-                e
-            ))
-        })?;
+        let left_res = left_res
+            .await
+            .map_err(|e| ErrorCode::TokioError(format!("Cannot join tokio job, err: {:?}", e)))?;
+        let right_res = right_res
+            .await
+            .map_err(|e| ErrorCode::TokioError(format!("Cannot join tokio job, err: {:?}", e)))?;
         let (left_expr, _) = left_res.0?;
         let (right_expr, _) = right_res.0?;
 
@@ -127,7 +128,11 @@ impl DPhpy {
     ) -> Result<(Arc<SExpr>, bool)> {
         if is_subquery {
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
+            let mut dphyp = DPhpy::new(
+                self.ctx.clone(),
+                self.metadata.clone(),
+                self.sample_executor.clone(),
+            );
             let (new_s_expr, _) = dphyp.optimize(s_expr).await?;
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;

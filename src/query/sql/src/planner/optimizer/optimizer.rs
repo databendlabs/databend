@@ -41,6 +41,7 @@ use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
+use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -66,6 +67,8 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+
+    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 impl OptimizerContext {
@@ -77,6 +80,7 @@ impl OptimizerContext {
             enable_distributed_optimization: false,
             enable_join_reorder: true,
             enable_dphyp: true,
+            sample_executor: None,
         }
     }
 
@@ -92,6 +96,11 @@ impl OptimizerContext {
 
     pub fn with_enable_dphyp(mut self, enable: bool) -> Self {
         self.enable_dphyp = enable;
+        self
+    }
+
+    pub fn with_sample_executor(mut self, sample_executor: Arc<dyn QuerySampleExecutor>) -> Self {
+        self.sample_executor = Some(sample_executor);
         self
     }
 }
@@ -334,9 +343,13 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
-            .optimize(&s_expr)
-            .await?;
+        let (dp_res, optimized) = DPhpy::new(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            opt_ctx.sample_executor.clone(),
+        )
+        .optimize(&s_expr)
+        .await?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;
@@ -423,9 +436,13 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
-            .optimize(&s_expr)
-            .await?;
+        let (dp_res, optimized) = DPhpy::new(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            opt_ctx.sample_executor.clone(),
+        )
+        .optimize(&s_expr)
+        .await?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;
