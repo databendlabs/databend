@@ -34,6 +34,8 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::DictGetFunctionArgument;
+use databend_common_sql::plans::DictGetOperator;
+use databend_common_sql::plans::DictGetOperators;
 use databend_common_sql::plans::DictionarySource;
 use databend_common_storage::build_operator;
 use databend_common_storages_fuse::TableContext;
@@ -52,72 +54,11 @@ pub struct TransformAsyncFunction {
     async_func_descs: Vec<AsyncFunctionDesc>,
 }
 
-pub struct DictGetOperators {
-    pub operators: Arc<RwLock<HashMap<String, DictGetOperator>>>,
-}
-
-impl DictGetOperators {
-    pub fn new() -> Self {
-        Self {
-            operators: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-
-    pub fn add_new_operator(&self, conn_str: String, source: String) -> Result<()> {
-        let reader = self.operators.read().unwrap();
-        if let Some(_) = reader.get(&conn_str) {
-            return Ok(());
-        } else {
-            if source.to_lowercase() == "redis" {
-                drop(reader);
-                let builder = Redis::default().endpoint(&conn_str);
-                let op = build_operator(builder)?;
-                let dict_get_operator = DictGetOperator {
-                    conn_str: Arc::new(RwLock::new(conn_str.clone())),
-                    operator: Arc::new(RwLock::new(op.clone())),
-                    cache: Arc::new(RwLock::new(HashMap::new())),
-                };
-                let mut writer = self.operators.write().unwrap();
-                writer.insert(conn_str.clone(), dict_get_operator);
-            } else {
-                todo!()
-            }
-        }
-        return Ok(());
-    }
-
-    // pub fn get_operator(&self, conn_str: String) -> Result<Option<Operator>> {
-    //     let reader = self.operators.read().unwrap();
-    //     let res = reader.get(&conn_str);
-    //     drop(reader);
-    //     return Ok(res);
-    // }
-}
-
-pub struct DictGetOperator {
-    conn_str: Arc<RwLock<String>>,
-    operator: Arc<RwLock<Operator>>,
-    cache: Arc<RwLock<HashMap<String, String>>>,
-}
-
-impl DictGetOperator {
-    pub fn add_new_kv(&self, key: String, value: String) {
-        let mut writer = self.cache.write().unwrap();
-        writer.insert(key, value);
-    }
-    // pub fn get_value(&self, key: String) -> Result<Option<String>> {
-    //     let reader = self.cache.read().unwrap();
-    //     let res = reader.get(&key);
-    //     drop(reader);
-    //     res
-    // }
-}
-
-lazy_static! {
-    static ref OPERATORS: Arc<RwLock<HashMap<String, Operator>>> =
-        Arc::new(RwLock::new(HashMap::new()));
-    static ref CACHE: Arc<RwLock<HashMap<String, String>>> = Arc::new(RwLock::new(HashMap::new()));
-}
+// lazy_static! {s
+//     static ref OPERATORS: Arc<RwLock<HashMap<String, Operator>>> =
+//         Arc::new(RwLock::new(HashMap::new()));
+//     static ref CACHE: Arc<RwLock<HashMap<String, String>>> = Arc::new(RwLock::new(HashMap::new()));
+// }
 
 impl TransformAsyncFunction {
     pub fn new(ctx: Arc<QueryContext>, async_func_descs: Vec<AsyncFunctionDesc>) -> Self {
@@ -165,17 +106,12 @@ impl TransformAsyncFunction {
         arg_indices: &Vec<IndexType>,
         data_type: &DataType,
     ) -> Result<()> {
+        let mut conn_str = String::new();
         let op = match &dict_arg.dict_source {
-            DictionarySource::Redis(conn_str) => {
-                let mut redis_operator = OPERATORS.write().unwrap();
-                if let Some(op) = redis_operator.get(conn_str) {
-                    op.clone()
-                } else {
-                    let builder = Redis::default().endpoint(&conn_str);
-                    let op = Operator::new(builder)?.finish();
-                    redis_operator.insert(conn_str.clone(), op.clone());
-                    op.clone()
-                }
+            DictionarySource::Redis(tmp_conn_str) => {
+                conn_str = *tmp_conn_str;
+                let dict_get_operators = dict_arg.dict_get_operators;
+                dict_get_operators.get_or_new_operator(tmp_conn_str, "redis".to_string())?
             }
             _ => {
                 todo!()
@@ -188,24 +124,9 @@ impl TransformAsyncFunction {
         let value = match &entry.value {
             Value::Scalar(scalar) => {
                 if let Scalar::String(key) = scalar {
-                    let cache = CACHE.read().unwrap().clone();
-                    if let Some(cached_val) = cache.get(key) {
-                        Value::Scalar(Scalar::String(cached_val.clone()))
-                    } else {
-                        drop(cache);
-                        let res = op.read(&key).await;
-                        let val = match res {
-                            Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                            Err(_) => if let Some(default) = &dict_arg.default_res {
-                                default.to_string()
-                            } else {
-                                "".to_string()
-                            },
-                        };
-                        let mut cache = CACHE.write().unwrap();
-                        cache.insert(key.clone(), val.clone());
-                        Value::Scalar(Scalar::String(val))
-                    }
+                    let dict_get_operators = dict_arg.dict_get_operators;
+                    let value = dict_get_operators.get_or_add_value(conn_str.clone(), key.clone(), dict_arg)?;
+                    Value::Scalar(Scalar::String(value))
                 } else {
                     Value::Scalar(Scalar::String("".to_string()))
                 }
@@ -213,25 +134,26 @@ impl TransformAsyncFunction {
             Value::Column(column) => {
                 let mut builder = StringColumnBuilder::with_capacity(column.len(), 0);
                 for scalar in column.iter() {
-                    let cache = CACHE.read().unwrap().clone();
                     if let ScalarRef::String(key) = scalar {
-                        let value = if let Some(cached_val) = cache.get(key) {
-                            cached_val.clone()
-                        } else {
-                            drop(cache);
-                            let res = op.read(&key).await;
-                            let val = match res {
-                                Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                                Err(_) => if let Some(default) = &dict_arg.default_res {
-                                    default.to_string()
-                                } else {
-                                    "".to_string()
-                                },
-                            };
-                            let mut cache = CACHE.write().unwrap();
-                            cache.insert(key.to_string(), val.clone());
-                            val
-                        };
+                        let value = dict_arg.dict_get_operators.get_or_add_value(conn_str.clone(), key.to_string(), dict_arg)?;
+
+                        // let value = if let Some(cached_val) = cache.get(key) {
+                        //     cached_val.clone()
+                        // } else {
+                        //     drop(cache);
+                        //     let res = op.read(&key).await;
+                        //     let val = match res {
+                        //         Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
+                        //         Err(_) => if let Some(default) = &dict_arg.default_res {
+                        //             default.to_string()
+                        //         } else {
+                        //             "".to_string()
+                        //         },
+                        //     };
+                        //     let mut cache = CACHE.write().unwrap();
+                        //     cache.insert(key.to_string(), val.clone());
+                        //     val
+                        // };
                         builder.put_str(value.as_str());
                     }
                     builder.commit_row();

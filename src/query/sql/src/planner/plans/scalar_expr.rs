@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::Range;
@@ -30,9 +31,12 @@ use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_storage::build_operator;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use opendal::services::Redis;
+use opendal::Operator;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;
@@ -793,6 +797,106 @@ pub struct DictGetFunctionArgument {
     pub key_field: Option<String>,
     pub value_field: Option<String>,
     pub default_res: Option<Scalar>,
+    pub dict_get_operators: DictGetOperators,
+}
+
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct DictGetOperators {
+    pub operators: Arc<RwLock<HashMap<String, DictGetOperator>>>,
+}
+
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+struct DictGetOperator {
+    operator: Arc<RwLock<Operator>>,
+    cache: Arc<RwLock<HashMap<String, String>>>,
+}
+
+impl DictGetOperators {
+    pub fn new() -> Self {
+        Self {
+            operators: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub fn get_or_new_operator(&self, conn_str: String, source: String) -> Result<Operator> {
+        let reader = self.operators.read().unwrap();
+        if let Some(existed_operator) = reader.get(&conn_str) {
+            return Ok(existed_operator.operator);
+        } else {
+            if source.to_lowercase() == "redis" {
+                drop(reader);
+                let builder = Redis::default().endpoint(&conn_str);
+                let op = build_operator(builder)?;
+                let dict_get_operator = DictGetOperator {
+                    operator: Arc::new(RwLock::new(op.clone())),
+                    cache: Arc::new(RwLock::new(HashMap::new())),
+                };
+                let mut writer = self.operators.write().unwrap();
+                writer.insert(conn_str.clone(), dict_get_operator);
+                return Ok(op);
+            } else {
+                todo!()
+            }
+        }
+    }
+
+    pub fn add_value(&self, conn_str: String, key: String) -> Result<()>{
+        let reader = self.operators.read().unwrap();
+        let operator = match reader.get(&conn_str) {
+            Some(o) => o,
+            None => return Err(ErrorCode::UnknownOperator(format!(
+                "`connection string`: {} is unknown",
+                &conn_str,
+            )))
+        };
+        drop(reader);
+        let mut cache_writer = operator.cache.write().unwrap();
+        cache_writer.insert(key, value);
+        Ok(())
+    }
+
+    pub fn get_or_add_value(&self, conn_str: String, key: String, dict_arg: &DictGetFunctionArgument) -> Result<String> {
+        let reader = self.operators.read().unwrap();
+        let operator = match reader.get(&conn_str) {
+            Some(o) => o,
+            None => return Err(ErrorCode::UnknownOperator(format!(
+                "`connection string`: {} is unknown",
+                &conn_str,
+            )))
+        };
+        drop(reader);
+        let cache_reader = operator.cache.read().unwrap();
+        let res = cache_reader.get(&key);
+        drop(cache_reader);
+        if let Some(r) = res {
+            return Ok(r)
+        } else {
+            let writer = self.operators.write().unwrap();
+            let dict_get_operator = match writer.get(&conn_str) {
+                Some(o) => o,
+                None => return Err(ErrorCode::UnknownOperator(format!(
+                    "`connection string`: {} is unknown",
+                    &conn_str,
+                )))
+            };
+            let operator_writer = dict_get_operator.operator.read().unwrap();
+            let res = operator.read(&key).await;
+            let val = match res {
+                Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
+                Err(_) => if let Some(default) = &dict_arg.default_res {
+                    default.to_string()
+                } else {
+                    "".to_string()
+                },
+            };
+            drop(operator_writer);
+            let mut cache_writer = dict_get_operator.cache.write().unwrap();
+            cache_writer.insert(key.clone(), val.clone());
+            return Ok(val)
+        }
+    }
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
