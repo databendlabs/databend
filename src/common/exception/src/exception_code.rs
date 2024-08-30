@@ -392,6 +392,7 @@ build_exceptions! {
     WrongDictionaryFieldExpr(3119),
     WrongPKNumber(3120),
     UnknownOperator(3121),
+    UnknownDictGetFunction(3122),
 }
 
 // Storage errors [3001, 4000].

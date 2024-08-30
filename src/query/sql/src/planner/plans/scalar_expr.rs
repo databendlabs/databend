@@ -798,102 +798,101 @@ pub struct DictGetFunctionArgument {
     pub key_field: Option<String>,
     pub value_field: Option<String>,
     pub default_res: Option<Scalar>,
-    pub dict_get_operators: DictGetOperators,
 }
 
-#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
-#[educe(PartialEq, Eq, Hash)]
-pub struct DictGetOperators {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-    #[serde(skip)]
-    operators: Arc<RwLock<BTreeMap<String, DictGetOperator>>>,
-}
+// #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+// #[educe(PartialEq, Eq, Hash)]
+// pub struct DictGetOperators {
+//     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+//     #[serde(skip)]
+//     operators: Arc<RwLock<BTreeMap<String, DictGetOperator>>>,
+// }
 
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
-struct DictGetOperator {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-    operator: Operator,
-    cache: BTreeMap<String, String>,
-}
+// #[derive(Clone, Debug, Educe)]
+// #[educe(PartialEq, Eq, Hash)]
+// struct DictGetOperator {
+//     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+//     operator: Operator,
+//     cache: BTreeMap<String, String>,
+// }
 
-impl DictGetOperators {
-    pub fn new() -> Self {
-        Self {
-            operators: Arc::new(RwLock::new(BTreeMap::new())),
-        }
-    }
+// impl DictGetOperators {
+//     pub fn new() -> Self {
+//         Self {
+//             operators: Arc::new(RwLock::new(BTreeMap::new())),
+//         }
+//     }
 
-    pub fn get_or_new_operator(&self, conn_str: String, source: String) -> Result<Operator> {
-        let reader = self.operators.read().unwrap();
-        if let Some(existed_operator) = reader.get(&conn_str) {
-            return Ok(existed_operator.operator.clone());
-        } else {
-            if source.to_lowercase() == "redis" {
-                drop(reader);
-                let builder = Redis::default().endpoint(&conn_str);
-                let op = build_operator(builder)?;
-                let dict_get_operator = DictGetOperator {
-                    operator: op.clone(),
-                    cache: BTreeMap::new(),
-                };
-                let mut writer = self.operators.write().unwrap();
-                writer.insert(conn_str.clone(), dict_get_operator);
-                return Ok(op);
-            } else {
-                todo!()
-            }
-        }
-    }
+//     pub fn get_or_new_operator(&self, conn_str: String, source: String) -> Result<Operator> {
+//         let reader = self.operators.read().unwrap();
+//         if let Some(existed_operator) = reader.get(&conn_str) {
+//             return Ok(existed_operator.operator.clone());
+//         } else {
+//             if source.to_lowercase() == "redis" {
+//                 drop(reader);
+//                 let builder = Redis::default().endpoint(&conn_str);
+//                 let op = build_operator(builder)?;
+//                 let dict_get_operator = DictGetOperator {
+//                     operator: op.clone(),
+//                     cache: BTreeMap::new(),
+//                 };
+//                 let mut writer = self.operators.write().unwrap();
+//                 writer.insert(conn_str.clone(), dict_get_operator);
+//                 return Ok(op);
+//             } else {
+//                 todo!()
+//             }
+//         }
+//     }
 
-    pub async fn get_or_add_value(
-        &self,
-        conn_str: String,
-        key: String,
-        dict_arg: &DictGetFunctionArgument,
-    ) -> Result<String> {
-        let reader = self.operators.read().unwrap();
-        let operator = match reader.get(&conn_str) {
-            Some(o) => o,
-            None => {
-                return Err(ErrorCode::UnknownOperator(format!(
-                    "`connection string`: {} is unknown",
-                    &conn_str,
-                )));
-            }
-        };
-        let cache = &operator.cache;
-        let res = cache.get(&key);
-        if let Some(r) = res {
-            return Ok(r.clone());
-        } else {
-            drop(reader);
-            let mut writer = self.operators.write().unwrap();
-            let dict_get_operator: &mut DictGetOperator = match writer.get_mut(&conn_str) {
-                Some(o) => o,
-                None => {
-                    return Err(ErrorCode::UnknownOperator(format!(
-                        "`connection string`: {} is unknown",
-                        &conn_str,
-                    )));
-                }
-            };
-            let operator = &dict_get_operator.operator;
-            let val = match operator.read(&key).await {
-                Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                Err(_) => {
-                    if let Some(default) = &dict_arg.default_res {
-                        default.to_string()
-                    } else {
-                        "".to_string()
-                    }
-                }
-            };
-            dict_get_operator.cache.insert(key.clone(), val.clone());
-            return Ok(val);
-        }
-    }
-}
+//     pub async fn get_or_add_value(
+//         &self,
+//         conn_str: String,
+//         key: String,
+//         dict_arg: &DictGetFunctionArgument,
+//     ) -> Result<String> {
+//         let reader = self.operators.read().unwrap();
+//         let operator = match reader.get(&conn_str) {
+//             Some(o) => o,
+//             None => {
+//                 return Err(ErrorCode::UnknownOperator(format!(
+//                     "`connection string`: {} is unknown",
+//                     &conn_str,
+//                 )));
+//             }
+//         };
+//         let cache = &operator.cache;
+//         let res = cache.get(&key);
+//         if let Some(r) = res {
+//             return Ok(r.clone());
+//         } else {
+//             drop(reader);
+//             let mut writer = self.operators.write().unwrap();
+//             let dict_get_operator: &mut DictGetOperator = match writer.get_mut(&conn_str) {
+//                 Some(o) => o,
+//                 None => {
+//                     return Err(ErrorCode::UnknownOperator(format!(
+//                         "`connection string`: {} is unknown",
+//                         &conn_str,
+//                     )));
+//                 }
+//             };
+//             let operator = &dict_get_operator.operator;
+//             let val = match operator.read(&key).await {
+//                 Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
+//                 Err(_) => {
+//                     if let Some(default) = &dict_arg.default_res {
+//                         default.to_string()
+//                     } else {
+//                         "".to_string()
+//                     }
+//                 }
+//             };
+//             dict_get_operator.cache.insert(key.clone(), val.clone());
+//             return Ok(val);
+//         }
+//     }
+// }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
