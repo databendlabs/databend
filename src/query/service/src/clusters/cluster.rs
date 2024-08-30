@@ -50,7 +50,6 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use log::error;
-use log::info;
 use log::warn;
 use rand::thread_rng;
 use rand::Rng;
