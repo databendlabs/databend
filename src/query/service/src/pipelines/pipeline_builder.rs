@@ -149,9 +149,16 @@ impl PipelineBuilder {
             }
         }
 
-        plan.children()
-            .map(|x| matches!(x, PhysicalPlan::ExchangeSource(_)))
-            .all(|x| x)
+        let mut is_empty = true;
+        let mut all_exchange_source = true;
+        for children in plan.children() {
+            is_empty = false;
+            if !matches!(children, PhysicalPlan::ExchangeSource(_)) {
+                all_exchange_source = false;
+            }
+        }
+
+        !is_empty && all_exchange_source
     }
 
     #[recursive::recursive]
