@@ -953,14 +953,13 @@ impl FragmentCoordinator {
 
             let pipeline_ctx = QueryContext::create_from(ctx);
 
-            let mut pipeline_builder = PipelineBuilder::create(
+            let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
                 vec![],
             );
 
-            pipeline_builder.before_exchange_plan_id = Some(self.physical_plan.get_id());
             let res = pipeline_builder.finalize(&self.physical_plan)?;
 
             self.pipeline_build_res = Some(res);
