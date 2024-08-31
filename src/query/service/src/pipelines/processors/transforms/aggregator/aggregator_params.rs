@@ -42,7 +42,7 @@ pub struct AggregatorParams {
     pub offsets_aggregate_states: Vec<usize>,
 
     pub enable_experimental_aggregate_hashtable: bool,
-    pub in_cluster: bool,
+    pub cluster_aggregator: bool,
     pub max_block_size: usize,
     // Limit is push down to AggregatorTransform
     pub limit: Option<usize>,
@@ -56,7 +56,7 @@ impl AggregatorParams {
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
         enable_experimental_aggregate_hashtable: bool,
-        in_cluster: bool,
+        cluster_aggregator: bool,
         max_block_size: usize,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
@@ -76,7 +76,7 @@ impl AggregatorParams {
             layout: states_layout,
             offsets_aggregate_states: states_offsets,
             enable_experimental_aggregate_hashtable,
-            in_cluster,
+            cluster_aggregator,
             max_block_size,
             limit,
         }))

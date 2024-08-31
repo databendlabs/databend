@@ -19,11 +19,9 @@ mod format;
 mod query;
 pub mod quote;
 mod statements;
-mod visitors;
 
 pub use common::*;
 pub use expr::*;
 pub use format::*;
 pub use query::*;
 pub use statements::*;
-pub use visitors::*;

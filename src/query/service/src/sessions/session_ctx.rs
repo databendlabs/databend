@@ -78,9 +78,9 @@ pub struct SessionContext {
     txn_mgr: Mutex<TxnManagerRef>,
     temp_tbl_mgr: Mutex<TempTblMgrRef>,
     /// The uniq id for session from the perspective of client.
-    /// for HTTP handler, client session lives longer then the `Session` object. the uniq id is
-    /// http handler: should set the id in session token, if token is not used, session id is not available,
-    ///
+    /// for HTTP handler, client session lives longer then the `Session` object, the id is generated in response of /v1/session/login,
+    /// and carried in session and refresh token. If token is not used, client session id is not available,
+    /// some features like temp table will be unavailable.
     /// for mysql handler: simple use set id of `Session`
     client_session_id: RwLock<Option<String>>,
 }

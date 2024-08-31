@@ -106,5 +106,22 @@ SELECT try_cast(get(try_parse_json(c1),'key1') as varchar) FROM t1
 ----
 NULL
 
+query TT
+select  try_cast(number as timestamp), try_cast(number as timestamp null)  from numbers(1);
+----
+1970-01-01 00:00:00.000000 1970-01-01 00:00:00.000000
+
+statement ok
+create or replace table test(a int not null, b timestamp not null);
+
+statement ok
+insert into test values(1, '2024-01-01');
+
+statement error
+select * from test having try_cast(b as boolean);
+
+statement error
+select * from test having try_cast(try_cast(b as timestamp null) as boolean);
+
 statement ok
 DROP DATABASE db1

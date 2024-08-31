@@ -627,8 +627,8 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
-        let inner_dest_type = &**dest_type.as_nullable().unwrap();
+        let nullable_dest_type = dest_type.wrap_nullable();
+        let inner_dest_type = &**nullable_dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, src_type, inner_dest_type) {
             // `try_to_xxx` functions must not return errors, so we can safely call them without concerning validity.

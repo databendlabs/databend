@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(deprecated)]
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::LazyLock;
 
-mod visitor;
-mod visitor_mut;
-mod walk;
-mod walk_mut;
+use databend_common_expression::DataBlock;
+use parking_lot::RwLock;
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
-pub use visitor::Visitor;
-pub use visitor_mut::VisitorMut;
-pub use walk::*;
-pub use walk_mut::*;
+pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
+    LazyLock::new(|| Arc::new(Default::default()));

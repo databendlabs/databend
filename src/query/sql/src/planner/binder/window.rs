@@ -627,8 +627,8 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
+        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
-            let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
             rewriter.visit(&mut item.scalar)?;
         }
 

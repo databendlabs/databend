@@ -93,6 +93,7 @@ impl Interpreter for DropViewInterpreter {
                     table_name: self.plan.view_name.clone(),
                     tb_id: table.get_id(),
                     db_id: db.get_db_info().database_id.db_id,
+                    engine: table.engine().to_string(),
                 })
                 .await?;
         };

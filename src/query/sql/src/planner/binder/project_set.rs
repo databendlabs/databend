@@ -34,7 +34,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub(super) struct SetReturningRewriter<'a> {
+struct SetReturningRewriter<'a> {
     bind_context: &'a mut BindContext,
     metadata: MetadataRef,
 }
@@ -104,15 +104,15 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
+        let mut rewriter = SetReturningRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
-            let mut rewriter = SetReturningRewriter::new(bind_context, self.metadata.clone());
             rewriter.visit(&mut item.scalar)?;
         }
 
         Ok(())
     }
 
-    pub fn bind_project_set(
+    pub(crate) fn bind_project_set(
         &mut self,
         bind_context: &mut BindContext,
         child: SExpr,

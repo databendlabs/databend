@@ -64,6 +64,7 @@ pub use physical_aggregate_expand::AggregateExpand;
 pub use physical_aggregate_final::AggregateFinal;
 pub use physical_aggregate_partial::AggregatePartial;
 pub use physical_async_func::AsyncFunction;
+pub use physical_async_func::AsyncFunctionDesc;
 pub use physical_cache_scan::CacheScan;
 pub use physical_column_mutation::ColumnMutation;
 pub use physical_commit_sink::CommitSink;

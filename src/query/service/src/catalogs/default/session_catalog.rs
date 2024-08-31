@@ -37,7 +37,6 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -47,12 +46,10 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
@@ -60,7 +57,6 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
-use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -187,7 +183,7 @@ impl Catalog for SessionCatalog {
         self.inner.create_index(req).await
     }
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
         self.inner.drop_index(req).await
     }
 
@@ -357,7 +353,7 @@ impl Catalog for SessionCatalog {
             return self.get_table_by_info(&table);
         }
         let table = self.inner.get_table(tenant, db_name, table_name).await?;
-        if table.engine() == "STREAM" && is_active {
+        if table.is_stream() && is_active {
             self.txn_mgr
                 .lock()
                 .upsert_table_desc_to_id(table.get_table_info().clone());
@@ -384,7 +380,7 @@ impl Catalog for SessionCatalog {
         self.inner.get_drop_table_infos(req).await
     }
 
-    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<()> {
         self.inner.gc_drop_tables(req).await
     }
 
@@ -483,7 +479,7 @@ impl Catalog for SessionCatalog {
         self.inner.set_table_column_mask_policy(req).await
     }
 
-    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<()> {
         if is_temp_table_id(req.table_id) {
             return Err(ErrorCode::StorageUnsupported(format!(
                 "CreateTableIndex: table id {} is a temporary table id",
@@ -493,7 +489,7 @@ impl Catalog for SessionCatalog {
         self.inner.create_table_index(req).await
     }
 
-    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<()> {
         if is_temp_table_id(req.table_id) {
             return Err(ErrorCode::StorageUnsupported(format!(
                 "DropTableIndex: table id {} is a temporary table id",

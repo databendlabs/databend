@@ -64,14 +64,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
-                    Some(TokenKind::AST) => {
-                        let formatted_stmt =
-                            format_statement(statement.stmt.clone()).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
-                        ExplainKind::Ast(formatted_stmt)
-                    }
-                    Some(TokenKind::SYNTAX) => {
+                    Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
                         let pretty_stmt =
                             pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
                                 nom::Err::Failure(ErrorKind::Other("invalid statement"))

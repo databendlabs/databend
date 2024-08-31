@@ -265,327 +265,199 @@ AS
         (number > 10)
 
 query T
-explain ast select 1, 'ab', [1,2,3] as a, (1, 'a') as t
+explain syntax select 1, 'ab', [1,2,3] as a, (1, 'a') as t
 ----
-Query (children 1)
-└── QueryBody (children 1)
-    └── SelectQuery (children 1)
-        └── SelectList (children 4)
-            ├── Target (children 1)
-            │   └── Literal UInt64(1)
-            ├── Target (children 1)
-            │   └── Literal String("ab")
-            ├── Target (alias a) (children 1)
-            │   └── Literal Array (children 3)
-            │       ├── Literal UInt64(1)
-            │       ├── Literal UInt64(2)
-            │       └── Literal UInt64(3)
-            └── Target (alias t) (children 1)
-                └── Literal Tuple (children 2)
-                    ├── Literal UInt64(1)
-                    └── Literal String("a")
+SELECT
+    1,
+    'ab',
+    [1, 2, 3] AS a,
+    (1, 'a') AS t
 
 query T
-explain ast select case when a > 1 then 'x' when a < 10 then 'y' else 'z' end from t1
+explain syntax select case when a > 1 then 'x' when a < 10 then 'y' else 'z' end from t1
 ----
-Query (children 1)
-└── QueryBody (children 1)
-    └── SelectQuery (children 2)
-        ├── SelectList (children 1)
-        │   └── Target (children 1)
-        │       └── Function Case (children 3)
-        │           ├── Conditions (children 2)
-        │           │   ├── Function > (children 2)
-        │           │   │   ├── ColumnIdentifier a
-        │           │   │   └── Literal UInt64(1)
-        │           │   └── Function < (children 2)
-        │           │       ├── ColumnIdentifier a
-        │           │       └── Literal UInt64(10)
-        │           ├── Results (children 2)
-        │           │   ├── Literal String("x")
-        │           │   └── Literal String("y")
-        │           └── ElseResult (children 1)
-        │               └── Literal String("z")
-        └── TableList (children 1)
-            └── TableIdentifier t1
+SELECT CASE
+        WHEN (a > 1) THEN 'x',
+        WHEN (a < 10) THEN 'y'
+        ELSE 'z'
+    END
+FROM
+    t1
 
 query T
-explain ast select a, sum(b) as sum from t1 where a in (1, 2) and b > 0 and b < 100 group by a order by a limit 3
+explain syntax select a, sum(b) as sum from t1 where a in (1, 2) and b > 0 and b < 100 group by a order by a limit 3
 ----
-Query (children 3)
-├── QueryBody (children 1)
-│   └── SelectQuery (children 4)
-│       ├── SelectList (children 2)
-│       │   ├── Target (children 1)
-│       │   │   └── ColumnIdentifier a
-│       │   └── Target (alias sum) (children 1)
-│       │       └── Function sum (children 1)
-│       │           └── ColumnIdentifier b
-│       ├── TableList (children 1)
-│       │   └── TableIdentifier t1
-│       ├── Where (children 1)
-│       │   └── Function AND (children 2)
-│       │       ├── Function AND (children 2)
-│       │       │   ├── Function In (children 2)
-│       │       │   │   ├── ColumnIdentifier a
-│       │       │   │   └── List (children 2)
-│       │       │   │       ├── Literal UInt64(1)
-│       │       │   │       └── Literal UInt64(2)
-│       │       │   └── Function > (children 2)
-│       │       │       ├── ColumnIdentifier b
-│       │       │       └── Literal UInt64(0)
-│       │       └── Function < (children 2)
-│       │           ├── ColumnIdentifier b
-│       │           └── Literal UInt64(100)
-│       └── GroupByList (children 1)
-│           └── ColumnIdentifier a
-├── OrderByList (children 1)
-│   └── OrderByElement (children 1)
-│       └── ColumnIdentifier a
-└── LimitList (children 1)
-    └── Literal UInt64(3)
+SELECT
+    a,
+    sum(b) AS sum
+FROM
+    t1
+WHERE
+    (
+        (
+            a IN (1, 2)
+            AND (b > 0)
+        )
+        AND (b < 100)
+    )
+GROUP BY a
+ORDER BY a
+LIMIT 3
 
 query T
-explain ast select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
+explain syntax select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
 ----
-Query (children 1)
-└── QueryBody (children 1)
-    └── SelectQuery (children 2)
-        ├── SelectList (children 1)
-        │   └── Target *
-        └── TableList (children 1)
-            └── TableJoin (children 1)
-                └── Join (children 3)
-                    ├── TableIdentifier t1
-                    ├── TableIdentifier t2
-                    └── ConditionOn (children 1)
-                        └── Function AND (children 2)
-                            ├── Function AND (children 2)
-                            │   ├── Function = (children 2)
-                            │   │   ├── ColumnIdentifier t1.a
-                            │   │   └── ColumnIdentifier t2.a
-                            │   └── Function = (children 2)
-                            │       ├── ColumnIdentifier t1.b
-                            │       └── ColumnIdentifier t2.b
-                            └── Function > (children 2)
-                                ├── ColumnIdentifier t1.a
-                                └── Literal UInt64(2)
+SELECT *
+FROM
+    t1
+    INNER JOIN t2 ON (
+        (
+            (t1.a = t2.a)
+            AND (t1.b = t2.b)
+        )
+        AND (t1.a > 2)
+    )
 
 query T
-explain ast with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
+explain syntax with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
 ----
-Query (children 2)
-├── With (children 1)
-│   └── CTE (alias cte(a, b)) (children 1)
-│       └── Query (children 1)
-│           └── QueryBody (children 1)
-│               └── SetOperation Union (children 2)
-│                   ├── QueryBody (children 1)
-│                   │   └── SelectQuery (children 1)
-│                   │       └── SelectList (children 2)
-│                   │           ├── Target (children 1)
-│                   │           │   └── Literal UInt64(1)
-│                   │           └── Target (children 1)
-│                   │               └── Literal UInt64(2)
-│                   └── QueryBody (children 1)
-│                       └── SelectQuery (children 1)
-│                           └── SelectList (children 2)
-│                               ├── Target (children 1)
-│                               │   └── Literal UInt64(3)
-│                               └── Target (children 1)
-│                                   └── Literal UInt64(4)
-└── QueryBody (children 1)
-    └── SelectQuery (children 2)
-        ├── SelectList (children 2)
-        │   ├── Target (children 1)
-        │   │   └── ColumnIdentifier a
-        │   └── Target (children 1)
-        │       └── ColumnIdentifier b
-        └── TableList (children 1)
-            └── TableIdentifier cte
+WITH
+    cte(a, b) AS 
+    (
+        SELECT
+            1,
+            2
+        UNION ALL
+        SELECT
+            3,
+            4
+    )
+SELECT
+    a, b
+FROM
+    cte
 
 query T
-explain ast with cte (a, b) as (values(1,2),(3,4)) select a, b from cte
+explain syntax with cte (a, b) as (values(1,2),(3,4)) select a, b from cte
 ----
-Query (children 2)
-├── With (children 1)
-│   └── CTE (alias cte(a, b)) (children 1)
-│       └── Query (children 1)
-│           └── QueryBody (children 1)
-│               └── Values (children 2)
-│                   ├── Row 0 (children 2)
-│                   │   ├── Literal UInt64(1)
-│                   │   └── Literal UInt64(2)
-│                   └── Row 1 (children 2)
-│                       ├── Literal UInt64(3)
-│                       └── Literal UInt64(4)
-└── QueryBody (children 1)
-    └── SelectQuery (children 2)
-        ├── SelectList (children 2)
-        │   ├── Target (children 1)
-        │   │   └── ColumnIdentifier a
-        │   └── Target (children 1)
-        │       └── ColumnIdentifier b
-        └── TableList (children 1)
-            └── TableIdentifier cte
+WITH
+    cte(a, b) AS 
+    (
+        VALUES(1, 2), (3, 4)
+    )
+SELECT
+    a, b
+FROM
+    cte
 
 query T
-explain ast insert into t1 (a, b) values (1, 2),(3, 4)
+explain syntax insert into t1 (a, b) values (1, 2),(3, 4)
 ----
-Insert (children 3)
-├── TableIdentifier t1
-├── Columns (children 2)
-│   ├── Identifier a
-│   └── Identifier b
-└── Source (children 1)
-    └── ValueSource
+INSERT INTO
+    t1 (a, b)
+VALUES
+    (1, 2),
+    (3, 4)
 
 query T
-explain ast delete from t1 where a > 100 and b > 1 and b < 10
+explain syntax delete from t1 where a > 100 and b > 1 and b < 10
 ----
-Delete (children 2)
-├── TableIdentifier t1
-└── Function AND (children 2)
-    ├── Function AND (children 2)
-    │   ├── Function > (children 2)
-    │   │   ├── ColumnIdentifier a
-    │   │   └── Literal UInt64(100)
-    │   └── Function > (children 2)
-    │       ├── ColumnIdentifier b
-    │       └── Literal UInt64(1)
-    └── Function < (children 2)
-        ├── ColumnIdentifier b
-        └── Literal UInt64(10)
+DELETE FROM
+    t1
+WHERE
+    (
+        (
+            (a > 100)
+            AND (b > 1)
+        )
+        AND (b < 10)
+    )
 
 
 query T
-explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
+explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-CopyIntoTable (children 7)
-├── TO (children 1)
-│   └── TableIdentifier t1
-├── FROM (children 1)
-│   └── Location 's3://mybucket/data.csv'
-├── FileFormats (children 4)
-│   ├── FileFormat field_delimiter = String(",")
-│   ├── FileFormat record_delimiter = String("\n")
-│   ├── FileFormat skip_header = U64(1)
-│   └── FileFormat type = Keyword("CSV")
-├── SizeLimit 10
-├── MaxFiles 10
-├── Purge false
-└── DisableVariantCheck false
+COPY
+INTO t1
+FROM 's3://mybucket/data.csv'
+FILE_FORMAT = (
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
+)
+SIZE_LIMIT = 10
+MAX_FILES = 10
+PURGE = false
+DISABLE_VARIANT_CHECK = false
 
 query T
-explain ast create database db1 engine=default
+explain syntax create database db1 engine=default
 ----
-CreateDatabase (children 2)
-├── DatabaseIdentifier db1
-└── DatabaseEngine DEFAULT
+CREATE DATABASE db1 ENGINE = DEFAULT
 
 query T
-explain ast create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
+explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
-CreateTable (children 5)
-├── TableIdentifier t3
-├── ColumnsDefinition (children 6)
-│   ├── ColumnDefinition a (children 1)
-│   │   └── DataType Int64
-│   ├── ColumnDefinition b (children 1)
-│   │   └── DataType UInt64
-│   ├── ColumnDefinition c (children 1)
-│   │   └── DataType Float64
-│   ├── ColumnDefinition d (children 1)
-│   │   └── DataType STRING
-│   ├── ColumnDefinition e (children 1)
-│   │   └── DataType ARRAY(Int32)
-│   └── ColumnDefinition f (children 1)
-│       └── DataType TUPLE(f1 BOOLEAN, f2 STRING)
-├── TableEngine FUSE
-├── ClusterByList (children 3)
-│   ├── ColumnIdentifier a
-│   ├── ColumnIdentifier b
-│   └── ColumnIdentifier c
-└── TableOptions (children 2)
-    ├── TableOption comment = "test"
-    └── TableOption compression = "LZ4"
+CREATE TABLE t3 (
+    a Int64,
+    b UInt64,
+    c Float64,
+    d STRING,
+    e ARRAY(Int32),
+    f TUPLE(f1 BOOLEAN, f2 STRING)
+) ENGINE = FUSE
+CLUSTER BY (
+    a,
+    b,
+    c
+)
+comment = 'test',
+compression = 'LZ4'
 
 query T
-explain ast create view v as select number % 3 as a from numbers(100) where number > 10
+explain syntax create view v as select number % 3 as a from numbers(100) where number > 10
 ----
-CreateView (children 2)
-├── TableIdentifier v
-└── Query (children 1)
-    └── QueryBody (children 1)
-        └── SelectQuery (children 3)
-            ├── SelectList (children 1)
-            │   └── Target (alias a) (children 1)
-            │       └── Function % (children 2)
-            │           ├── ColumnIdentifier number
-            │           └── Literal UInt64(3)
-            ├── TableList (children 1)
-            │   └── TableFunction numbers (children 1)
-            │       └── Literal UInt64(100)
-            └── Where (children 1)
-                └── Function > (children 2)
-                    ├── ColumnIdentifier number
-                    └── Literal UInt64(10)
+CREATE VIEW v
+AS
+    SELECT (number % 3) AS a
+    FROM
+        numbers(100)
+    WHERE
+        (number > 10)
 
 query T
-explain ast show create table t1
+explain syntax show create table t1
 ----
-ShowCreateTable (children 1)
-└── TableIdentifier t1
+SHOW CREATE TABLE t1
 
 query T
-explain ast create user 'test' identified with sha256_password by 'new_password'
+explain syntax create user 'test' identified with sha256_password by 'new_password'
 ----
-CreateUser (children 3)
-├── User 'test'@'%'
-├── AuthType sha256_password
-└── Password "new_password"
+CREATE USER 'test'@'%' IDENTIFIED WITH sha256_password BY 'new_password'
 
 query T
-explain ast select unknown_table.a + 1 from unknown_table1
+explain syntax select unknown_table.a + 1 from unknown_table1
 ----
-Query (children 1)
-└── QueryBody (children 1)
-    └── SelectQuery (children 2)
-        ├── SelectList (children 1)
-        │   └── Target (children 1)
-        │       └── Function + (children 2)
-        │           ├── ColumnIdentifier unknown_table.a
-        │           └── Literal UInt64(1)
-        └── TableList (children 1)
-            └── TableIdentifier unknown_table1
+SELECT (unknown_table.a + 1)
+FROM
+    unknown_table1
 
 query T
-explain ast SELECT * FROM monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY EMPID
+explain syntax SELECT * FROM monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY EMPID
 ----
-Query (children 2)
-├── QueryBody (children 1)
-│   └── SelectQuery (children 2)
-│       ├── SelectList (children 1)
-│       │   └── Target *
-│       └── TableList (children 1)
-│           └── TableIdentifier monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
-└── OrderByList (children 1)
-    └── OrderByElement (children 1)
-         └── ColumnIdentifier EMPID
+SELECT *
+FROM
+    monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+ORDER BY EMPID
 
 query T
-explain ast SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+explain syntax SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
 ----
-Query (children 2)
-├── QueryBody (children 1)
-│   └── SelectQuery (children 2)
-│       ├── SelectList (children 1)
-│       │   └── Target *
-│       └── TableList (children 1)
-│           └── TableIdentifier monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april))
-└── OrderByList (children 1)
-     └── OrderByElement (children 1)
-         └── ColumnIdentifier empid
+SELECT *
+FROM
+    monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+ORDER BY empid
 
 query T
 explain select a from t1 UNION ALL select a from t2
@@ -1001,20 +873,11 @@ FROM
     read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
 query 
-explain ast select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
+explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
-Query (children 1)
-└── QueryBody (children 1)
-    └── SelectQuery (children 2)
-        ├── SelectList (children 1)
-        │   └── Target *
-        └── TableList (children 1)
-            └── TableFunction read_parquet (children 5)
-                ├── Literal String("p1")
-                ├── Literal String("p2")
-                ├── Literal String("p3")
-                ├── prune_page=>Literal Boolean(true)
-                └── refresh_meta_cache=>Literal Boolean(true)
+SELECT *
+FROM
+    read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
 statement ok
 drop table if exists t4
@@ -1888,7 +1751,7 @@ statement ok
 CREATE OR REPLACE TABLE orders_placed (order_id INT, customer_id INT, order_amount FLOAT, order_date DATE);
 
 query T
-EXPLAIN AST
+EXPLAIN syntax
 INSERT FIRST
 WHEN order_amount > 1000 THEN INTO cat.db1.t1(order_id, update_note) VALUES (order_id, 'PriorityHandling')
 WHEN order_amount > 500 THEN INTO cat2.db2.t2 VALUES (order_id, 'ExpressHandling')
@@ -1898,97 +1761,27 @@ WHEN order_amount > 100 THEN
 ELSE INTO processing_updates VALUES (order_id, 'ReviewNeeded')
 SELECT order_id, order_amount FROM orders_placed;
 ----
-INSERT FIRST (children 5)
-├── WHEN (children 2)
-│   ├── Function > (children 2)
-│   │   ├── ColumnIdentifier order_amount
-│   │   └── Literal UInt64(1000)
-│   └── INTO (children 2)
-│       ├── TableIdentifier cat.db1.t1
-│       └── Columns (children 2)
-│           ├── Identifier order_id
-│           └── Identifier update_note
-├── WHEN (children 2)
-│   ├── Function > (children 2)
-│   │   ├── ColumnIdentifier order_amount
-│   │   └── Literal UInt64(500)
-│   └── INTO (children 1)
-│       └── TableIdentifier cat2.db2.t2
-├── WHEN (children 3)
-│   ├── Function > (children 2)
-│   │   ├── ColumnIdentifier order_amount
-│   │   └── Literal UInt64(100)
-│   ├── INTO (children 1)
-│   │   └── TableIdentifier cat3.db3.t3
-│   └── INTO (children 1)
-│       └── TableIdentifier cat3.db3.t4
-├── ELSE (children 1)
-│   └── INTO (children 1)
-│       └── TableIdentifier processing_updates
-└── Query (children 1)
-    └── QueryBody (children 1)
-        └── SelectQuery (children 2)
-            ├── SelectList (children 2)
-            │   ├── Target (children 1)
-            │   │   └── ColumnIdentifier order_id
-            │   └── Target (children 1)
-            │       └── ColumnIdentifier order_amount
-            └── TableList (children 1)
-                └── TableIdentifier orders_placed
+INSERT FIRST WHEN order_amount > 1000 THEN INTO cat.db1.t1 (order_id, update_note) VALUES  (order_id, 'PriorityHandling')  WHEN order_amount > 500 THEN INTO cat2.db2.t2 VALUES  (order_id, 'ExpressHandling')  WHEN order_amount > 100 THEN INTO cat3.db3.t3 VALUES  (order_id, 'StandardHandling') INTO cat3.db3.t4 VALUES  (order_id, 'StandardHandling')  ELSE INTO processing_updates VALUES  (order_id, 'ReviewNeeded')  SELECT order_id, order_amount FROM orders_placed
 
 query T
-EXPLAIN ast
+EXPLAIN syntax
 INSERT ALL
    INTO cat.db1.t1 VALUES (order_id, 'PriorityHandling')
    INTO cat3.db3.t3 VALUES (order_id, 'StandardHandling')
    INTO cat3.db3.t4 VALUES (order_id, 'StandardHandling')
 SELECT order_id, order_amount FROM orders_placed;
 ----
-INSERT ALL (children 2)
-├── INTO (children 3)
-│   ├── INTO (children 1)
-│   │   └── TableIdentifier cat.db1.t1
-│   ├── INTO (children 1)
-│   │   └── TableIdentifier cat3.db3.t3
-│   └── INTO (children 1)
-│       └── TableIdentifier cat3.db3.t4
-└── Query (children 1)
-    └── QueryBody (children 1)
-        └── SelectQuery (children 2)
-            ├── SelectList (children 2)
-            │   ├── Target (children 1)
-            │   │   └── ColumnIdentifier order_id
-            │   └── Target (children 1)
-            │       └── ColumnIdentifier order_amount
-            └── TableList (children 1)
-                └── TableIdentifier orders_placed
+INSERT ALL INTO cat.db1.t1 VALUES  (order_id, 'PriorityHandling') INTO cat3.db3.t3 VALUES  (order_id, 'StandardHandling') INTO cat3.db3.t4 VALUES  (order_id, 'StandardHandling') SELECT order_id, order_amount FROM orders_placed
 
 query T
-EXPLAIN ast
+EXPLAIN syntax
 INSERT OVERWRITE ALL
    INTO cat.db1.t1 VALUES (order_id, 'PriorityHandling')
    INTO cat3.db3.t3 VALUES (order_id, 'StandardHandling')
    INTO cat3.db3.t4 VALUES (order_id, 'StandardHandling')
 SELECT order_id, order_amount FROM orders_placed;
 ----
-INSERT OVERWRITE ALL (children 2)
-├── INTO (children 3)
-│   ├── INTO (children 1)
-│   │   └── TableIdentifier cat.db1.t1
-│   ├── INTO (children 1)
-│   │   └── TableIdentifier cat3.db3.t3
-│   └── INTO (children 1)
-│       └── TableIdentifier cat3.db3.t4
-└── Query (children 1)
-    └── QueryBody (children 1)
-        └── SelectQuery (children 2)
-            ├── SelectList (children 2)
-            │   ├── Target (children 1)
-            │   │   └── ColumnIdentifier order_id
-            │   └── Target (children 1)
-            │       └── ColumnIdentifier order_amount
-            └── TableList (children 1)
-                └── TableIdentifier orders_placed
+INSERT OVERWRITE ALL INTO cat.db1.t1 VALUES  (order_id, 'PriorityHandling') INTO cat3.db3.t3 VALUES  (order_id, 'StandardHandling') INTO cat3.db3.t4 VALUES  (order_id, 'StandardHandling') SELECT order_id, order_amount FROM orders_placed
 
 statement ok
 drop table  orders_placed

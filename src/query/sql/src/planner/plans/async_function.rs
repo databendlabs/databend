@@ -14,24 +14,33 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 
-use super::Operator;
-use super::RelOp;
-use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
+use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
-use crate::IndexType;
+use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
+use crate::plans::Operator;
+use crate::plans::RelOp;
+use crate::plans::ScalarItem;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// `AsyncFunction` is a plan that evaluate a series of async functions.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AsyncFunction {
-    pub func_name: String,
-    pub display_name: String,
-    pub arguments: Vec<String>,
-    pub return_type: DataType,
-    pub index: IndexType,
+    pub items: Vec<ScalarItem>,
+}
+
+impl AsyncFunction {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for item in self.items.iter() {
+            used_columns.insert(item.index);
+            used_columns.extend(item.scalar.used_columns());
+        }
+        Ok(used_columns)
+    }
 }
 
 impl Operator for AsyncFunction {
@@ -44,14 +53,25 @@ impl Operator for AsyncFunction {
 
         // Derive output columns
         let mut output_columns = input_prop.output_columns.clone();
-        output_columns.insert(self.index);
+        for item in self.items.iter() {
+            output_columns.insert(item.index);
+        }
 
         // Derive outer columns
         let mut outer_columns = input_prop.outer_columns.clone();
+        for item in self.items.iter() {
+            let used_columns = item.scalar.used_columns();
+            let outer = used_columns
+                .difference(&output_columns)
+                .cloned()
+                .collect::<ColumnSet>();
+            outer_columns = outer_columns.union(&outer).cloned().collect();
+        }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
         // Derive used columns
-        let used_columns = input_prop.used_columns.clone();
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(input_prop.used_columns.clone());
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
@@ -66,9 +86,16 @@ impl Operator for AsyncFunction {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Serial,
-        })
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(0)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![required.clone()]])
     }
 }
