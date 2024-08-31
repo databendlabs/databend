@@ -27,6 +27,8 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use tonic::Status;
 
+use crate::meta_txn_error::MetaTxnError;
+
 /// Errors for a kvapi::KVApi based application, such SchemaApi, ShareApi.
 ///
 /// There are three subset of errors in it:
@@ -57,6 +59,15 @@ impl From<KVAppError> for ErrorCode {
         match e {
             KVAppError::AppError(app_err) => app_err.into(),
             KVAppError::MetaError(meta_err) => ErrorCode::MetaServiceError(meta_err.to_string()),
+        }
+    }
+}
+
+impl From<MetaTxnError> for KVAppError {
+    fn from(value: MetaTxnError) -> Self {
+        match value {
+            MetaTxnError::TxnRetryMaxTimes(e) => Self::AppError(AppError::from(e)),
+            MetaTxnError::MetaError(e) => Self::MetaError(e),
         }
     }
 }

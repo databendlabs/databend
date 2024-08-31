@@ -67,10 +67,12 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         "filters".to_string(),
         "english_stop,english_stemmer,chinese_stop".to_string(),
     );
+    let tenant = ctx.get_tenant();
 
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
+        tenant,
         name: index_name.clone(),
         column_ids: vec![0, 1],
         sync_creation: false,

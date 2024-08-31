@@ -16,38 +16,37 @@ use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
 /// Index name as meta-service key
-pub type IndexNameIdent = TIdent<Resource>;
+pub type IndexNameIdent = TIdent<IndexName>;
 
 /// Index name as value.
-pub type IndexNameIdentRaw = TIdentRaw<Resource>;
+pub type IndexNameIdentRaw = TIdentRaw<IndexName>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::IndexName;
 
-impl TIdent<Resource> {
+impl TIdent<IndexName> {
     pub fn index_name(&self) -> &str {
         self.name()
     }
 }
 
-impl TIdentRaw<Resource> {
+impl TIdentRaw<IndexName> {
     pub fn index_name(&self) -> &str {
         self.name()
     }
 }
 
 mod kvapi_impl {
-
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::IndexId;
+    use crate::schema::index_id_ident::IndexId;
     use crate::schema::IndexNameIdent;
     use crate::tenant_key::resource::TenantResource;
+    use crate::KeyWithTenant;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct IndexName;
+    impl TenantResource for IndexName {
         const PREFIX: &'static str = "__fd_index";
-        const TYPE: &'static str = "IndexNameIdent";
         const HAS_TENANT: bool = true;
         type ValueType = IndexId;
     }
@@ -55,14 +54,10 @@ mod kvapi_impl {
     impl kvapi::Value for IndexId {
         type KeyType = IndexNameIdent;
         /// IndexId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            [self.into_t_ident(key.tenant()).to_string_key()]
         }
     }
-
-    // // Use these error types to replace usage of ErrorCode if possible.
-    // impl From<ExistError<Resource>> for ErrorCode {
-    // impl From<UnknownError<Resource>> for ErrorCode {
 }
 
 #[cfg(test)]
