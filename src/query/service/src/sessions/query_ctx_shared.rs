@@ -379,7 +379,7 @@ impl QueryContextShared {
         table: Arc<dyn Table>,
         catalog_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        if table.engine() == "STREAM" {
+        if table.is_stream() {
             let tenant = self.get_tenant();
             let catalog = self
                 .catalog_manager

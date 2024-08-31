@@ -47,7 +47,7 @@ pub struct QueriesProfilingTable {
 impl SyncSystemTable for QueriesProfilingTable {
     const NAME: &'static str = "system.queries_profiling";
 
-    const IS_LOCAL: bool = false;
+    const DATA_IN_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

@@ -28,22 +28,23 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::CatalogIdIdent;
+    use crate::schema::catalog_id_ident::CatalogId;
     use crate::schema::CatalogNameIdent;
     use crate::tenant_key::resource::TenantResource;
+    use crate::KeyWithTenant;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_catalog";
         const TYPE: &'static str = "CatalogNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = CatalogIdIdent;
+        type ValueType = CatalogId;
     }
 
-    impl kvapi::Value for CatalogIdIdent {
+    impl kvapi::Value for CatalogId {
         type KeyType = CatalogNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            [self.into_t_ident(key.tenant()).to_string_key()]
         }
     }
 

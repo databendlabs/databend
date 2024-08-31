@@ -773,7 +773,30 @@ impl<Index: ColumnIndex> Expr<Index> {
         #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
-                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
+                Expr::Constant { scalar, .. } => match scalar {
+                    s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
+                        "'nan'::Float32".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_nan() => {
+                        "'nan'::Float64".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_infinite() => {
+                        if *f != f32::NEG_INFINITY {
+                            "'inf'::Float32".to_string()
+                        } else {
+                            "'-inf'::Float32".to_string()
+                        }
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_infinite() => {
+                        if *f != f64::NEG_INFINITY {
+                            "'inf'::Float64".to_string()
+                        } else {
+                            "'-inf'::Float64".to_string()
+                        }
+                    }
+                    other => other.as_ref().to_string(),
+                },
                 Expr::ColumnRef { display_name, .. } => display_name.clone(),
                 Expr::Cast {
                     is_try,

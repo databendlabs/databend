@@ -45,7 +45,6 @@ use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
-use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 
@@ -53,12 +52,11 @@ const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
-    ctx: Arc<dyn TableContext>,
+    pub(crate) ctx: Arc<dyn TableContext>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PlanExtras {
-    pub metadata: MetadataRef,
     pub format: Option<String>,
     pub statement: Statement,
 }
@@ -152,8 +150,33 @@ impl Planner {
                 self.replace_stmt(&mut stmt)?;
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
-                let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                let mut enable_planner_cache =
+                    self.ctx.get_settings().get_enable_planner_cache()?;
+                let planner_cache_key = if enable_planner_cache {
+                    Some(Self::planner_cache_key(&stmt.to_string()))
+                } else {
+                    None
+                };
+
+                if enable_planner_cache {
+                    let (c, plan) = self.get_cache(
+                        name_resolution_ctx.clone(),
+                        planner_cache_key.as_ref().unwrap(),
+                        &stmt,
+                    );
+                    if let Some(mut plan) = plan {
+                        info!("logical plan from cache, time used: {:?}", start.elapsed());
+                        // update for clickhouse handler
+                        plan.extras.format = format;
+                        self.ctx
+                            .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
+                        return Ok((plan.plan, plan.extras));
+                    }
+                    enable_planner_cache = c;
+                }
+
+                let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let binder = Binder::new(
                     self.ctx.clone(),
                     CatalogManager::instance(),
@@ -176,11 +199,21 @@ impl Planner {
                     .with_enable_dphyp(settings.get_enable_dphyp()?);
 
                 let optimized_plan = optimize(opt_ctx, plan).await?;
-                Ok((optimized_plan, PlanExtras {
-                    metadata,
+                let result = (optimized_plan, PlanExtras {
                     format,
                     statement: stmt,
-                }))
+                });
+
+                if enable_planner_cache {
+                    self.set_cache(
+                        planner_cache_key.clone().unwrap(),
+                        result.0.clone(),
+                        result.1.clone(),
+                    );
+                    Ok(result)
+                } else {
+                    Ok(result)
+                }
             }
             .await;
 

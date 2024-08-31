@@ -444,7 +444,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         table.name(),
                         db_id,
                         table_id,
-                    ) && table.engine() != "STREAM"
+                    ) && !table.is_stream()
                     {
                         if !WITHOUT_VIEW && table.get_table_info().engine() == "VIEW" {
                             catalogs.push(ctl_name.as_str());

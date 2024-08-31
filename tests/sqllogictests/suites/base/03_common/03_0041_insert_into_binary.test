@@ -47,4 +47,15 @@ SELECT id, v FROM t1 order by id
 4 616161
 
 statement ok
+create table t2(a int, b binary NOT NULL DEFAULT 'abc', c double default 'inf', e float default 'nan' );
+
+statement ok
+insert into t2 (a) values (3);
+
+query ITTT
+select a, b::string, c, e from t2;
+----
+3 abc Infinity NaN
+
+statement ok
 DROP DATABASE db_binary

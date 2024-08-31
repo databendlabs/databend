@@ -62,7 +62,7 @@ impl SyncSystemTable for CachesTable {
     const NAME: &'static str = "system.caches";
 
     // Allow distributed query.
-    const IS_LOCAL: bool = false;
+    const DATA_IN_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
