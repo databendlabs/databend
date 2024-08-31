@@ -62,7 +62,9 @@ impl ColumnBinding {
 impl Eq for ColumnBinding {}
 impl PartialEq for ColumnBinding {
     fn eq(&self, other: &Self) -> bool {
-        (self.column_name == other.column_name || self.index != DUMMY_INDEX) && self.data_type == other.data_type && self.index == other.index
+        (self.column_name == other.column_name || self.index != DUMMY_INDEX)
+            && self.data_type == other.data_type
+            && self.index == other.index
     }
 }
 
