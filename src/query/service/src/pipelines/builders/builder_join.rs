@@ -112,7 +112,8 @@ impl PipelineBuilder {
         self.build_join_probe(join, state)?;
 
         // In the case of spilling, we need to share state among multiple threads. Quickly fetch all data from this round to quickly start the next round.
-        self.main_pipeline.resize(self.main_pipeline.output_len(), true)
+        self.main_pipeline
+            .resize(self.main_pipeline.output_len(), true)
     }
 
     fn build_join_state(
