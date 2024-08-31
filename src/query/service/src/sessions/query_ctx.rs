@@ -1173,6 +1173,10 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.get_variable(key)
     }
 
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.shared.session.session_ctx.get_all_variables()
+    }
+
     #[async_backtrace::framed]
     async fn load_datalake_schema(
         &self,

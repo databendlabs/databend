@@ -14,12 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CatalogMeta;
+use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
-use databend_common_meta_app::schema::CreateCatalogReply;
-use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
@@ -28,7 +30,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -37,22 +38,15 @@ use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
-use databend_common_meta_app::schema::DropCatalogReply;
-use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
-use databend_common_meta_app::schema::GcDroppedTableResp;
-use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
@@ -63,6 +57,7 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -148,7 +143,13 @@ pub trait SchemaApi: Send + Sync {
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError>;
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
+    /// Drop index and returns the dropped id and meta.
+    ///
+    /// If there is no such record, it returns `Ok(None)`.
+    async fn drop_index(
+        &self,
+        name_ident: &IndexNameIdent,
+    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, KVAppError>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
 
@@ -261,25 +262,16 @@ pub trait SchemaApi: Send + Sync {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply, KVAppError>;
 
-    async fn create_table_index(
-        &self,
-        req: CreateTableIndexReq,
-    ) -> Result<CreateTableIndexReply, KVAppError>;
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<(), KVAppError>;
 
-    async fn drop_table_index(
-        &self,
-        req: DropTableIndexReq,
-    ) -> Result<DropTableIndexReply, KVAppError>;
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<(), KVAppError>;
 
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
     ) -> Result<ListDroppedTableResp, KVAppError>;
 
-    async fn gc_drop_tables(
-        &self,
-        req: GcDroppedTableReq,
-    ) -> Result<GcDroppedTableResp, KVAppError>;
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError>;
 
     async fn list_lock_revisions(
         &self,
@@ -297,12 +289,25 @@ pub trait SchemaApi: Send + Sync {
 
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError>;
 
-    async fn create_catalog(&self, req: CreateCatalogReq)
-    -> Result<CreateCatalogReply, KVAppError>;
+    /// Create a catalog with the given name and meta.
+    /// On success, it returns `Ok(Ok(created_catalog_id))`.
+    /// If there is already a catalog with the same name, it returns `Ok(Err(existing_catalog_id))`.
+    async fn create_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+        meta: &CatalogMeta,
+    ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError>;
 
-    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError>;
+    async fn get_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+    ) -> Result<Arc<CatalogInfo>, KVAppError>;
 
-    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError>;
+    /// Drop a catalog and return the dropped id and meta
+    async fn drop_catalog(
+        &self,
+        name_ident: &CatalogNameIdent,
+    ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError>;
 
     async fn list_catalogs(&self, req: ListCatalogReq)
     -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;

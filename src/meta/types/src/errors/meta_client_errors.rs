@@ -18,7 +18,7 @@ use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
 
 /// Error raised by meta service client.
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum MetaClientError {
     #[error("meta-client dedicated runtime error: {0}")]
     ClientRuntimeError(AnyError),

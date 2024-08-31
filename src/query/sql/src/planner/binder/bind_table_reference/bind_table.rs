@@ -129,14 +129,14 @@ impl Binder {
             }
         };
 
-        if consume && table_meta.engine() != "STREAM" {
+        if consume && !table_meta.is_stream() {
             return Err(ErrorCode::StorageUnsupported(
                 "WITH CONSUME only support in STREAM",
             ));
         }
 
         if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
-            || table_meta.engine() == "STREAM"
+            || table_meta.is_stream()
         {
             let change_type = get_change_type(&table_name_alias);
             if change_type.is_some() {

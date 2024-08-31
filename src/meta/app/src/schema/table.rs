@@ -565,6 +565,8 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
+
+    pub engine: String,
 }
 
 impl DropTableByIdReq {
@@ -815,6 +817,7 @@ pub struct UpdateTableMetaReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
     pub create_option: CreateOption,
+    pub tenant: Tenant,
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
@@ -824,34 +827,19 @@ pub struct CreateTableIndexReq {
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self.create_option {
-            CreateOption::Create => {
-                write!(
-                    f,
-                    "create_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-            CreateOption::CreateIfNotExists => {
-                write!(
-                    f,
-                    "create_table_index_if_not_exists: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-            CreateOption::CreateOrReplace => {
-                write!(
-                    f,
-                    "create_or_replace_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-        }
+        let typ = match self.create_option {
+            CreateOption::Create => "create_table_index",
+            CreateOption::CreateIfNotExists => "create_table_index_if_not_exists",
+            CreateOption::CreateOrReplace => "create_or_replace_table_index",
+        };
+
+        write!(
+            f,
+            "{}: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+            typ, self.name, self.column_ids, self.sync_creation, self.options,
+        )
     }
 }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexReq {
@@ -869,9 +857,6 @@ impl Display for DropTableIndexReq {
         )
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
@@ -964,9 +949,6 @@ pub struct GcDroppedTableReq {
     pub tenant: Tenant,
     pub drop_ids: Vec<DroppedId>,
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GcDroppedTableResp {}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {

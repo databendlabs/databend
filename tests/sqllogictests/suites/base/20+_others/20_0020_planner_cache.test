@@ -1,0 +1,81 @@
+statement ok
+DROP DATABASE IF EXISTS db20_20;
+
+statement ok
+CREATE DATABASE db20_20;
+
+statement ok
+USE db20_20;
+
+statement ok
+SET enable_planner_cache = 1;
+
+statement ok
+SET variable a = 'a';
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1 (a INT not null);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3);
+
+query I
+SELECT *, $a FROM t1 ORDER BY a;
+----
+1 a
+2 a
+3 a
+
+query I
+SELECT *, $a FROM t1 ORDER BY a;
+----
+1 a
+2 a
+3 a
+
+statement ok
+SET variable a = 'b';
+
+query I
+SELECT *, $a FROM t1 ORDER BY a;
+----
+1 b
+2 b
+3 b
+
+statement ok
+alter table t1 add column b string default 's';
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1 s
+2 s
+3 s
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1 s
+2 s
+3 s
+
+statement ok
+SET enable_planner_cache = 0;
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1 s
+2 s
+3 s
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1 s
+2 s
+3 s
+
+statement ok
+DROP DATABASE db20_20;

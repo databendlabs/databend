@@ -53,7 +53,7 @@ pub struct MallocStatsTotalsTable {
 
 impl SyncSystemTable for MallocStatsTotalsTable {
     const NAME: &'static str = "system.malloc_stats_totals";
-    const IS_LOCAL: bool = false;
+    const DATA_IN_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

@@ -14,8 +14,6 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_stoerr::MetaStorageError;
-use serde::Deserialize;
-use serde::Serialize;
 use thiserror::Error;
 
 use crate::errors;
@@ -26,7 +24,7 @@ use crate::MetaClientError;
 use crate::MetaNetworkError;
 
 /// Top level error MetaNode would return.
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum MetaError {
     /// Errors occurred when accessing remote meta store service.
     #[error(transparent)]

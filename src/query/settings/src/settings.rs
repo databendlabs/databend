@@ -31,7 +31,7 @@ use crate::settings_default::DefaultSettings;
 use crate::settings_default::SettingRange;
 use crate::SettingMode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum ScopeLevel {
     Default,
     Local,
@@ -58,7 +58,7 @@ impl Debug for ScopeLevel {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
 pub struct ChangeValue {
     pub level: ScopeLevel,
     pub value: UserSettingValue,

@@ -176,6 +176,8 @@ Functions overloads:
 0 array_sum FACTORY
 0 array_to_string(Array(String), String) :: String
 1 array_to_string(Array(String) NULL, String NULL) :: String NULL
+2 array_to_string(Array(String NULL), String) :: String
+3 array_to_string(Array(String NULL) NULL, String NULL) :: String NULL
 0 array_unique(Array(Nothing)) :: UInt64
 1 array_unique(Array(Nothing) NULL) :: UInt64 NULL
 2 array_unique(Array(T0)) :: UInt64
