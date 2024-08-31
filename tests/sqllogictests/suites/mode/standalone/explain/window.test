@@ -21,7 +21,7 @@ Sort
     ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER ( PARTITION BY depname ORDER BY empno ) (#4)]
     ├── aggregate function: [sum(salary)]
     ├── partition by: [depname]
-    ├── order by: []
+    ├── order by: [empno]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
     └── WindowPartition
         ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]

@@ -86,5 +86,5 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [is_true(t1.a (#2) > 1)], limit: NONE]
     └── estimated rows: 5.00

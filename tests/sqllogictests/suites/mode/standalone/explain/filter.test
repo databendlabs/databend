@@ -90,13 +90,17 @@ HashJoin
 │           ├── partitions scanned: 0
 │           ├── push downs: [filters: [false], limit: NONE]
 │           └── estimated rows: 50.00
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [a (#2)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 5.00
+└── Filter(Probe)
+    ├── output columns: [t1.a (#2)]
+    ├── filters: [is_true(t1.a (#2) > 1)]
+    ├── estimated rows: 5.00
+    └── TableScan
+        ├── table: default.default.t1
+        ├── output columns: [a (#2)]
+        ├── read rows: 5
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [is_true(t1.a (#2) > 1)], limit: NONE]
+        └── estimated rows: 5.00

@@ -102,20 +102,16 @@ EvalScalar
     │       ├── probe keys: [c (#8)]
     │       ├── filters: []
     │       ├── estimated rows: 4.00
-    │       ├── Filter(Build)
-    │       │   ├── output columns: [t1.a (#2)]
-    │       │   ├── filters: [is_true(a (#2) = a (#2))]
-    │       │   ├── estimated rows: 0.60
-    │       │   └── TableScan
-    │       │       ├── table: default.default.t1
-    │       │       ├── output columns: [a (#2)]
-    │       │       ├── read rows: 3
-    │       │       ├── read size: < 1 KiB
-    │       │       ├── partitions total: 1
-    │       │       ├── partitions scanned: 1
-    │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    │       │       ├── push downs: [filters: [is_true(t1.a (#2) = t1.a (#2))], limit: NONE]
-    │       │       └── estimated rows: 3.00
+    │       ├── TableScan(Build)
+    │       │   ├── table: default.default.t1
+    │       │   ├── output columns: [a (#2)]
+    │       │   ├── read rows: 3
+    │       │   ├── read size: < 1 KiB
+    │       │   ├── partitions total: 1
+    │       │   ├── partitions scanned: 1
+    │       │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │       │   ├── push downs: [filters: [], limit: NONE]
+    │       │   └── estimated rows: 3.00
     │       └── HashJoin(Probe)
     │           ├── output columns: [c (#8)]
     │           ├── join type: CROSS
