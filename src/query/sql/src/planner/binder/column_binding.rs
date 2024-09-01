@@ -19,7 +19,7 @@ use crate::IndexType;
 use crate::Visibility;
 
 // Please use `ColumnBindingBuilder` to construct a new `ColumnBinding`
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Hash)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
     pub database_name: Option<String>,
@@ -53,28 +53,6 @@ impl ColumnBinding {
             data_type,
             visibility: Visibility::Visible,
             virtual_computed_expr: None,
-        }
-    }
-}
-
-// we only care about the index
-// if index is same, thus the column binding is same
-impl Eq for ColumnBinding {}
-impl PartialEq for ColumnBinding {
-    fn eq(&self, other: &Self) -> bool {
-        (self.column_name == other.column_name || self.index != DUMMY_INDEX)
-            && self.data_type == other.data_type
-            && self.index == other.index
-    }
-}
-
-impl std::hash::Hash for ColumnBinding {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.index.hash(state);
-        self.data_type.hash(state);
-
-        if self.index == DUMMY_INDEX {
-            self.column_name.hash(state);
         }
     }
 }
