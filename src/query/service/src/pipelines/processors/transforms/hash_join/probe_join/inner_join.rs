@@ -270,7 +270,7 @@ impl HashJoinProbeState {
         &self,
         hash_table: &H,
         key: &H::Key,
-        incomplete_ptr: u64,
+        next_ptr: u64,
         idx: u32,
         probe_indexes: &mut [u32],
         build_indexes_ptr: *mut RowPtr,
@@ -280,7 +280,7 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let (match_count, ptr) =
-            hash_table.next_probe(key, incomplete_ptr, build_indexes_ptr, 0, max_block_size);
+            hash_table.next_probe(key, next_ptr, build_indexes_ptr, 0, max_block_size);
         if match_count == 0 {
             return Ok((0, 0));
         }

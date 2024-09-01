@@ -131,7 +131,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(key_idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, mut next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -154,10 +154,10 @@ impl HashJoinProbeState {
                         &mut row_state,
                         filter_executor,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                    (matched_idx, next_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
                         key,
-                        incomplete_ptr,
+                        next_ptr,
                         key_idx,
                         probe_indexes,
                         build_indexes_ptr,
@@ -171,7 +171,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(key_idx) };
 
                 // Probe hash table and fill build_indexes.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, mut next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -194,10 +194,10 @@ impl HashJoinProbeState {
                         &mut row_state,
                         filter_executor,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                    (matched_idx, next_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
                         key,
-                        incomplete_ptr,
+                        next_ptr,
                         key_idx as u32,
                         probe_indexes,
                         build_indexes_ptr,

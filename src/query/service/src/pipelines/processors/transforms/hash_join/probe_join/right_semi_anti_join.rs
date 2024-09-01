@@ -62,7 +62,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, mut next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -72,13 +72,8 @@ impl HashJoinProbeState {
 
                 while matched_idx == max_block_size {
                     self.process_right_semi_anti_join_block(build_indexes, outer_scan_map)?;
-                    (matched_idx, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        0,
-                        max_block_size,
-                    );
+                    (matched_idx, next_ptr) =
+                        hash_table.next_probe(key, next_ptr, build_indexes_ptr, 0, max_block_size);
                 }
             }
         } else {
@@ -87,7 +82,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, mut next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -96,13 +91,8 @@ impl HashJoinProbeState {
                 matched_idx += match_count;
                 while matched_idx == max_block_size {
                     self.process_right_semi_anti_join_block(build_indexes, outer_scan_map)?;
-                    (matched_idx, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        0,
-                        max_block_size,
-                    );
+                    (matched_idx, next_ptr) =
+                        hash_table.next_probe(key, next_ptr, build_indexes_ptr, 0, max_block_size);
                 }
             }
         }
@@ -156,7 +146,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(key_idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, mut next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -179,10 +169,10 @@ impl HashJoinProbeState {
                         outer_scan_map,
                         filter_executor,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                    (matched_idx, next_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
                         key,
-                        incomplete_ptr,
+                        next_ptr,
                         key_idx,
                         probe_indexes,
                         build_indexes_ptr,
@@ -194,7 +184,7 @@ impl HashJoinProbeState {
             for key_idx in process_state.next_idx..process_state.input.num_rows() {
                 let key = unsafe { keys.key_unchecked(key_idx) };
                 let ptr = unsafe { *pointers.get_unchecked(key_idx) };
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, mut next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -216,10 +206,10 @@ impl HashJoinProbeState {
                         outer_scan_map,
                         filter_executor,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                    (matched_idx, next_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
                         key,
-                        incomplete_ptr,
+                        next_ptr,
                         key_idx as u32,
                         probe_indexes,
                         build_indexes_ptr,

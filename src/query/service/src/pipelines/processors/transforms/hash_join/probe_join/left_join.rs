@@ -261,6 +261,7 @@ impl HashJoinProbeState {
                         pointers,
                         process_state,
                     )?;
+                    break;
                 }
             }
         } else {
@@ -300,6 +301,7 @@ impl HashJoinProbeState {
                         pointers,
                         process_state,
                     )?;
+                    break;
                 }
             }
         }
