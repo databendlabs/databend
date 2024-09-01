@@ -69,19 +69,20 @@ SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW 
 
 # row_number with inherited window
 # binder will reorder this query by evaluate rn2 in previouse of rn1, so the result maybe different cause w1 did not have order by to keep stable results.
+# here we are using rank instead of row_number
 query II
-SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW w1 AS (PARTITION BY depname), w2 AS (w1 ORDER BY salary DESC) ORDER BY depname, rn1
+SELECT rank() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW w1 AS (PARTITION BY depname), w2 AS (w1 ORDER BY salary DESC) ORDER BY depname, rn1
 ----
 1 1
-2 2
-3 2
-4 3
-5 4
+1 2
+1 2
+1 3
+1 4
 1 1
-2 2
+1 2
 1 1
-2 2
-3 2
+1 2
+1 2
 
 # sum with inherited window
 query IIII
