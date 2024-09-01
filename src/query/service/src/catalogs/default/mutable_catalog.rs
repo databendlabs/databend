@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
+use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -52,7 +53,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
@@ -294,8 +294,16 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
-        Ok(self.ctx.meta.drop_index(req).await?)
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
+        let dropped = self.ctx.meta.drop_index(&req.name_ident).await?;
+        if dropped.is_none() {
+            if req.if_exists {
+                // Alright
+            } else {
+                return Err(AppError::from(req.name_ident.unknown_error("drop_index")).into());
+            }
+        }
+        Ok(())
     }
 
     #[async_backtrace::framed]
