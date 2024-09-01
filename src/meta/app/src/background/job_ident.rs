@@ -16,10 +16,10 @@ use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
 /// Defines the meta-service key for background job.
-pub type BackgroundJobIdent = TIdent<Resource>;
-pub type BackgroundJobIdentRaw = TIdentRaw<Resource>;
+pub type BackgroundJobIdent = TIdent<BackgroundJobName>;
+pub type BackgroundJobIdentRaw = TIdentRaw<BackgroundJobName>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::BackgroundJobName;
 
 impl BackgroundJobIdent {
     pub fn job_name(&self) -> &str {
@@ -37,8 +37,8 @@ mod kvapi_impl {
     use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct BackgroundJobName;
+    impl TenantResource for BackgroundJobName {
         const PREFIX: &'static str = "__fd_background_job";
         const TYPE: &'static str = "BackgroundJobIdent";
         const HAS_TENANT: bool = true;

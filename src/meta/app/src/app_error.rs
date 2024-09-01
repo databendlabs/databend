@@ -830,20 +830,6 @@ impl DropIndexWithDropTime {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("GetIndexWithDropTime: get {index_name} with drop time")]
-pub struct GetIndexWithDropTime {
-    index_name: String,
-}
-
-impl GetIndexWithDropTime {
-    pub fn new(index_name: impl Into<String>) -> Self {
-        Self {
-            index_name: index_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedIndexColumnId: {column_id} is duplicated with index {index_name}")]
 pub struct DuplicatedIndexColumnId {
     column_id: u32,
@@ -1156,9 +1142,6 @@ pub enum AppError {
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
 
     #[error(transparent)]
-    GetIndexWithDropTime(#[from] GetIndexWithDropTime),
-
-    #[error(transparent)]
     DuplicatedIndexColumnId(#[from] DuplicatedIndexColumnId),
 
     #[error(transparent)]
@@ -1171,10 +1154,10 @@ pub enum AppError {
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
-    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::Resource>),
+    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::BackgroundJobName>),
 
     #[error(transparent)]
-    UnknownBackgroundJob(#[from] UnknownError<job_ident::Resource>),
+    UnknownBackgroundJob(#[from] UnknownError<job_ident::BackgroundJobName>),
 
     #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
@@ -1521,12 +1504,6 @@ impl AppErrorMessage for DropIndexWithDropTime {
     }
 }
 
-impl AppErrorMessage for GetIndexWithDropTime {
-    fn message(&self) -> String {
-        format!("Get Index '{}' with drop time", self.index_name)
-    }
-}
-
 impl AppErrorMessage for DuplicatedIndexColumnId {
     fn message(&self) -> String {
         format!(
@@ -1731,7 +1708,6 @@ impl From<AppError> for ErrorCode {
             AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
             AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
-            AppError::GetIndexWithDropTime(err) => ErrorCode::GetIndexWithDropTime(err.message()),
             AppError::DuplicatedIndexColumnId(err) => {
                 ErrorCode::DuplicatedIndexColumnId(err.message())
             }
