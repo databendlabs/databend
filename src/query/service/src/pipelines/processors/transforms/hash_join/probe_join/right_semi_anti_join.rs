@@ -30,14 +30,16 @@ use crate::pipelines::processors::transforms::hash_join::ProbeState;
 impl HashJoinProbeState {
     pub(crate) fn right_semi_anti_join<'a, H: HashJoinHashtableLike>(
         &self,
-        input: &DataBlock,
+        probe_state: &mut ProbeState,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
-        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>
     where
         H::Key: 'a,
     {
+        // Process States.
+        let process_state = probe_state.process_state.as_mut().unwrap();
+
         // Probe states.
         let max_block_size = probe_state.max_block_size;
         let mutable_indexes = &mut probe_state.mutable_indexes;
@@ -80,7 +82,7 @@ impl HashJoinProbeState {
                 }
             }
         } else {
-            for idx in 0..input.num_rows() {
+            for idx in process_state.next_idx..process_state.input.num_rows() {
                 let key = unsafe { keys.key_unchecked(idx) };
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
@@ -112,19 +114,23 @@ impl HashJoinProbeState {
             )?;
         }
 
+        probe_state.process_state = None;
+
         Ok(vec![])
     }
 
     pub(crate) fn right_semi_anti_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
-        input: &DataBlock,
+        probe_state: &mut ProbeState,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
-        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>
     where
         H::Key: 'a,
     {
+        // Process States.
+        let process_state = probe_state.process_state.as_mut().unwrap();
+
         // Probe states.
         let max_block_size = probe_state.max_block_size;
         let mutable_indexes = &mut probe_state.mutable_indexes;
@@ -143,10 +149,11 @@ impl HashJoinProbeState {
 
         // Probe hash table and update `outer_scan_map`.
         if probe_state.probe_with_selection {
-            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
-            for idx in selection.iter() {
-                let key = unsafe { keys.key_unchecked(*idx as usize) };
-                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+            let selection = probe_state.selection.as_slice();
+            for selection_idx in process_state.next_idx..probe_state.selection_count {
+                let key_idx = unsafe { *selection.get_unchecked(selection_idx) };
+                let key = unsafe { keys.key_unchecked(key_idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(key_idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
                 let (match_count, mut incomplete_ptr) =
@@ -157,14 +164,14 @@ impl HashJoinProbeState {
 
                 // Fill `probe_indexes`.
                 for _ in 0..match_count {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = key_idx };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
                     self.process_right_semi_anti_join_with_conjunct_block(
                         matched_idx,
-                        input,
+                        &process_state.input,
                         probe_indexes,
                         build_indexes,
                         &mut probe_state.generation_state,
@@ -176,7 +183,7 @@ impl HashJoinProbeState {
                         hash_table,
                         key,
                         incomplete_ptr,
-                        *idx,
+                        key_idx,
                         probe_indexes,
                         build_indexes_ptr,
                         max_block_size,
@@ -184,9 +191,9 @@ impl HashJoinProbeState {
                 }
             }
         } else {
-            for idx in 0..input.num_rows() {
-                let key = unsafe { keys.key_unchecked(idx) };
-                let ptr = unsafe { *pointers.get_unchecked(idx) };
+            for key_idx in process_state.next_idx..process_state.input.num_rows() {
+                let key = unsafe { keys.key_unchecked(key_idx) };
+                let ptr = unsafe { *pointers.get_unchecked(key_idx) };
                 let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
@@ -194,14 +201,14 @@ impl HashJoinProbeState {
                 }
 
                 for _ in 0..match_count {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = key_idx as u32 };
                     matched_idx += 1;
                 }
 
                 while matched_idx == max_block_size {
                     self.process_right_semi_anti_join_with_conjunct_block(
                         matched_idx,
-                        input,
+                        &process_state.input,
                         probe_indexes,
                         build_indexes,
                         &mut probe_state.generation_state,
@@ -213,7 +220,7 @@ impl HashJoinProbeState {
                         hash_table,
                         key,
                         incomplete_ptr,
-                        idx as u32,
+                        key_idx as u32,
                         probe_indexes,
                         build_indexes_ptr,
                         max_block_size,
@@ -225,7 +232,7 @@ impl HashJoinProbeState {
         if matched_idx > 0 {
             self.process_right_semi_anti_join_with_conjunct_block(
                 matched_idx,
-                input,
+                &process_state.input,
                 probe_indexes,
                 build_indexes,
                 &mut probe_state.generation_state,
@@ -234,6 +241,8 @@ impl HashJoinProbeState {
                 filter_executor,
             )?;
         }
+
+        probe_state.process_state = None;
 
         Ok(vec![])
     }

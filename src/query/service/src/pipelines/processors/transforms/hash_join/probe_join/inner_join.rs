@@ -27,6 +27,7 @@ use crate::pipelines::processors::transforms::hash_join::common::wrap_true_valid
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
+use crate::pipelines::processors::transforms::ProcessState;
 
 impl HashJoinProbeState {
     pub(crate) fn inner_join<
@@ -36,21 +37,24 @@ impl HashJoinProbeState {
         const FROM_RIGHT_SINGLE: bool,
     >(
         &self,
-        input: &DataBlock,
+        probe_state: &mut ProbeState,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
-        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>
     where
         H::Key: 'a,
     {
+        // Process States.
+        let mut next_process_state = false;
+        let process_state = probe_state.process_state.as_mut().unwrap();
+
         // Probe states.
         let max_block_size = probe_state.max_block_size;
         let mutable_indexes = &mut probe_state.mutable_indexes;
         let probe_indexes = &mut mutable_indexes.probe_indexes;
         let build_indexes = &mut mutable_indexes.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
-        let pointers = probe_state.hashes.as_slice();
+        let pointers = probe_state.hashes.as_mut_slice();
 
         // Build states.
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
@@ -72,13 +76,14 @@ impl HashJoinProbeState {
 
         // Probe hash table and generate data blocks.
         if probe_state.probe_with_selection {
-            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
-            for idx in selection.iter() {
-                let key = unsafe { keys.key_unchecked(*idx as usize) };
-                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+            let selection = probe_state.selection.as_slice();
+            for selection_idx in process_state.next_idx..probe_state.selection_count {
+                let key_idx = unsafe { *selection.get_unchecked(selection_idx) };
+                let key = unsafe { keys.key_unchecked(key_idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(key_idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -92,39 +97,31 @@ impl HashJoinProbeState {
 
                 // Fill `probe_indexes`.
                 for _ in 0..match_count {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = key_idx };
                     matched_idx += 1;
                 }
 
-                while matched_idx == max_block_size {
-                    result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
-                        matched_idx,
-                        input,
-                        probe_indexes,
-                        build_indexes,
-                        &mut probe_state.generation_state,
-                        &build_state.generation_state,
-                        &mut right_single_scan_map,
-                    )?);
-                    (matched_idx, incomplete_ptr) = self
-                        .fill_probe_and_build_indexes::<_, FROM_LEFT_SINGLE>(
-                            hash_table,
-                            key,
-                            incomplete_ptr,
-                            *idx,
-                            probe_indexes,
-                            build_indexes_ptr,
-                            max_block_size,
-                        )?;
+                if matched_idx == max_block_size {
+                    next_process_state = self.next_process_state::<_, FROM_LEFT_SINGLE>(
+                        key,
+                        hash_table,
+                        probe_state.selection_count,
+                        selection_idx,
+                        key_idx as usize,
+                        next_ptr,
+                        pointers,
+                        process_state,
+                    )?;
+                    break;
                 }
             }
         } else {
-            for idx in 0..input.num_rows() {
-                let key = unsafe { keys.key_unchecked(idx) };
-                let ptr = unsafe { *pointers.get_unchecked(idx) };
+            for key_idx in process_state.next_idx..process_state.input.num_rows() {
+                let key = unsafe { keys.key_unchecked(key_idx) };
+                let ptr = unsafe { *pointers.get_unchecked(key_idx) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (match_count, mut incomplete_ptr) =
+                let (match_count, next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -138,30 +135,22 @@ impl HashJoinProbeState {
 
                 // Fill `probe_indexes`.
                 for _ in 0..match_count {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = key_idx as u32 };
                     matched_idx += 1;
                 }
 
-                while matched_idx == max_block_size {
-                    result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
-                        matched_idx,
-                        input,
-                        probe_indexes,
-                        build_indexes,
-                        &mut probe_state.generation_state,
-                        &build_state.generation_state,
-                        &mut right_single_scan_map,
-                    )?);
-                    (matched_idx, incomplete_ptr) = self
-                        .fill_probe_and_build_indexes::<_, FROM_LEFT_SINGLE>(
-                            hash_table,
-                            key,
-                            incomplete_ptr,
-                            idx as u32,
-                            probe_indexes,
-                            build_indexes_ptr,
-                            max_block_size,
-                        )?;
+                if matched_idx == max_block_size {
+                    next_process_state = self.next_process_state::<_, FROM_LEFT_SINGLE>(
+                        key,
+                        hash_table,
+                        process_state.input.num_rows(),
+                        key_idx,
+                        key_idx,
+                        next_ptr,
+                        pointers,
+                        process_state,
+                    )?;
+                    break;
                 }
             }
         }
@@ -169,13 +158,17 @@ impl HashJoinProbeState {
         if matched_idx > 0 {
             result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
                 matched_idx,
-                input,
+                &process_state.input,
                 probe_indexes,
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
                 &mut right_single_scan_map,
             )?);
+        }
+
+        if !next_process_state {
+            probe_state.process_state = None;
         }
 
         match &mut probe_state.filter_executor {
@@ -303,5 +296,35 @@ impl HashJoinProbeState {
         }
 
         Ok((match_count, ptr))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn next_process_state<H: HashJoinHashtableLike, const FROM_LEFT_SINGLE: bool>(
+        &self,
+        key: &H::Key,
+        hash_table: &H,
+        num_keys: usize,
+        mut next_idx: usize,
+        key_idx: usize,
+        next_ptr: u64,
+        pointers: &mut [u64],
+        process_state: &mut ProcessState,
+    ) -> Result<bool> {
+        let next_matched_ptr = hash_table.next_matched_ptr(key, next_ptr);
+        if next_matched_ptr == 0 {
+            next_idx += 1;
+        } else {
+            if FROM_LEFT_SINGLE {
+                return Err(ErrorCode::Internal(
+                    "Scalar subquery can't return more than one row",
+                ));
+            }
+            pointers[key_idx] = next_matched_ptr;
+        }
+        if next_idx >= num_keys {
+            return Ok(false);
+        }
+        process_state.next_idx = next_idx;
+        Ok(true)
     }
 }

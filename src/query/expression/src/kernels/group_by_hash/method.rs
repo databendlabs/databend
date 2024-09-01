@@ -40,7 +40,7 @@ use crate::HashMethodSerializer;
 use crate::HashMethodSingleBinary;
 use crate::InputColumns;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum KeysState {
     Column(Column),
     U128(Buffer<u128>),
