@@ -134,7 +134,6 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::DictGetFunctionArgument;
-use crate::plans::DictGetOperators;
 use crate::plans::DictionarySource;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
@@ -3778,10 +3777,8 @@ impl<'a> TypeChecker<'a> {
         self.bind_context
             .set_expr_context(ExprContext::InAsyncFunction);
         let result = match func_name {
-            "nextval" => self.resolve_nextval_async_function(span.clone(), func_name, arguments)?,
-            "dict_get" => {
-                self.resolve_dict_get_async_function(span.clone(), func_name, arguments)?
-            }
+            "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
+            "dict_get" => self.resolve_dict_get_async_function(span, func_name, arguments)?,
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -3960,7 +3957,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let url = dictionary.build_connection_url()?;
-        let dict_source = if dictionary.source.to_lowercase() == "mysql".to_string() {
+        let dict_source = if dictionary.source.to_lowercase() == *"mysql".to_string() {
             DictionarySource::Mysql(url)
         } else {
             DictionarySource::Redis(url)
@@ -3972,7 +3969,7 @@ impl<'a> TypeChecker<'a> {
             .iter()
             .filter(|x| (*x).name() == attr_name)
             .collect_vec()
-            .get(0)
+            .first()
             .unwrap();
         let default_res = field_default_value(self.ctx.clone(), table_field)?;
 
@@ -3982,7 +3979,6 @@ impl<'a> TypeChecker<'a> {
             key_field: Some(primary_field.name().clone()),
             value_field: Some(attr_name.clone()),
             default_res: Some(default_res),
-            dict_get_operators: DictGetOperators::new(),
         };
         let display_name = format!(
             "{}({}.{},{},{})",

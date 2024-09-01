@@ -93,15 +93,14 @@ impl Binder {
                     "Some provided options are not recognized."
                 )));
             }
-            let port: String;
-            match options.get("port") {
-                Some(p) => port = p.to_string(),
+            let port = match options.get("port") {
+                Some(p) => p.to_string(),
                 None => {
                     return Err(ErrorCode::MissingDictionaryOption(
                         "The redis configurations are missing `port`",
                     ));
                 }
-            }
+            };
             if port.parse::<u64>().is_err() {
                 return Err(ErrorCode::UnsupportedDictionaryOption(format!(
                     "The value of `port` must be UInt"
@@ -128,7 +127,7 @@ impl Binder {
             } else {
                 options.insert("db_index".to_string(), 0.to_string());
             }
-            if None == options.get("password") {
+            if options.get("password").is_none() {
                 options.insert("password".to_string(), String::new());
             }
             let allowed_options = HashSet::from([
@@ -211,11 +210,10 @@ impl Binder {
         if primary_keys.len() != 1 {
             return Err(ErrorCode::WrongPKNumber("Only support one primary key"));
         }
-        let primary_key: Identifier;
-        match primary_keys.get(0) {
-            Some(pk) => primary_key = pk.clone(),
+        let primary_key = match primary_keys.first() {
+            Some(pk) => pk.clone(),
             None => return Err(ErrorCode::WrongPKNumber("Miss primary key")),
-        }
+        };
         let pk_id = schema.column_id_of(primary_key.name.as_str())?;
         primary_column_ids.push(pk_id);
 

@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::Range;
@@ -32,12 +30,9 @@ use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_storage::build_operator;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use opendal::services::Redis;
-use opendal::Operator;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;

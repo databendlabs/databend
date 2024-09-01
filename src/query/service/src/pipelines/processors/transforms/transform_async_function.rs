@@ -15,6 +15,7 @@
 use core::str;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
+use std::result::Result::Ok;
 use std::sync::Arc;
 
 use arrow_ipc::Buffer;
@@ -37,7 +38,6 @@ use databend_common_sql::plans::DictGetFunctionArgument;
 use databend_common_sql::plans::DictionarySource;
 use databend_common_storage::build_operator;
 use databend_common_storages_fuse::TableContext;
-use jwt_simple::reexports::anyhow::Ok;
 use opendal::services::Redis;
 use opendal::Operator;
 
@@ -54,7 +54,11 @@ pub struct TransformAsyncFunction {
 }
 
 impl TransformAsyncFunction {
-    pub fn new(ctx: Arc<QueryContext>, async_func_descs: Vec<AsyncFunctionDesc>, operators: BTreeMap<usize, Arc<Operator>>) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        async_func_descs: Vec<AsyncFunctionDesc>,
+        operators: BTreeMap<usize, Arc<Operator>>,
+    ) -> Self {
         Self {
             ctx,
             async_func_descs,
@@ -80,16 +84,19 @@ impl TransformAsyncFunction {
         Ok(())
     }
 
-    async fn get_or_create_operator(&mut self, key: usize, conn_str: String) -> Result<Arc<Operator>> {
-        match self.operators.entry(key) {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let builder = Redis::default().endpoint(&conn_str);
-                let op = build_operator(builder)?;
-                let op_arc = Arc::new(op);
-                entry.insert(op_arc.clone());
-                Ok(op_arc)
-            }
+    async fn get_or_create_operator(
+        &mut self,
+        key: usize,
+        conn_str: String,
+    ) -> Result<Arc<Operator>> {
+        if let Some(operator) = self.operators.get(&key) {
+            return Ok(operator.clone());
+        } else {
+            let builder = Redis::default().endpoint(&conn_str);
+            let op = build_operator(builder)?;
+            let op_arc = Arc::new(op);
+            self.operators.insert(key, op_arc.clone());
+            return Ok(op_arc.clone());
         }
     }
 
@@ -125,24 +132,27 @@ impl TransformAsyncFunction {
 
     // transform add dict get column.
     async fn transform_dict_get(
-        &self,
+        &mut self,
         data_block: &mut DataBlock,
         dict_arg: &DictGetFunctionArgument,
         arg_indices: &Vec<IndexType>,
         data_type: &DataType,
     ) -> Result<()> {
-        let index;
+        let mut index = 0;
         let mut flag = false;
         for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
-            if async_func_desc.func_arg == dict_arg {
-                index = i;
-                flag = true;
-            } else {
-                continue;
+            match async_func_desc.func_arg {
+                AsyncFunctionArgument::DictGetFunction(_) => {
+                    index = i;
+                    flag = true;
+                }
+                AsyncFunctionArgument::SequenceFunction(_) => continue,
             }
         }
         if !flag {
-            return Err(ErrorCode::UnknownDictGetFunction("Don't find `dict_get` function"))
+            return Err(ErrorCode::UnknownDictGetFunction(
+                "Don't find `dict_get` function",
+            ));
         }
 
         let conn_str: String;
@@ -164,10 +174,12 @@ impl TransformAsyncFunction {
                     let buffer = op.read(key).await;
                     let value = match buffer {
                         Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                        Err(_) => if let Some(default) = &dict_arg.default_res {
-                            default.to_string()
-                        } else {
-                            "".to_string()
+                        Err(_) => {
+                            if let Some(default) = &dict_arg.default_res {
+                                default.to_string()
+                            } else {
+                                "".to_string()
+                            }
                         }
                     };
                     Value::Scalar(Scalar::String(value))
@@ -182,10 +194,12 @@ impl TransformAsyncFunction {
                         let buffer = op.read(key).await;
                         let value = match buffer {
                             Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                            Err(_) => if let Some(default) = &dict_arg.default_res {
-                                default.to_string()
-                            } else {
-                                "".to_string()
+                            Err(_) => {
+                                if let Some(default) = &dict_arg.default_res {
+                                    default.to_string()
+                                } else {
+                                    "".to_string()
+                                }
                             }
                         };
                         // let value = dict_arg.dict_get_operators.get_or_add_value(
@@ -235,7 +249,7 @@ impl AsyncTransform for TransformAsyncFunction {
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
         self.init_operators()?;
-        for async_func_desc in &self.async_func_descs {
+        for async_func_desc in self.async_func_descs {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
                     self.transform_sequence(
