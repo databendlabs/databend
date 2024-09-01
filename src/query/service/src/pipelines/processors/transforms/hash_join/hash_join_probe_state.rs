@@ -301,16 +301,15 @@ impl HashJoinProbeState {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(probe_keys, input_num_rows)?;
-                let process_state = ProcessState {
+                let keys = table
+                    .hash_method
+                    .build_keys_accessor_and_hashes(keys_state.clone(), &mut probe_state.hashes)?;
+
+                probe_state.process_state = Some(ProcessState {
                     input,
                     keys_state,
                     next_idx: 0,
-                };
-                let keys = table.hash_method.build_keys_accessor_and_hashes(
-                    process_state.keys_state.clone(),
-                    &mut probe_state.hashes,
-                )?;
-                probe_state.process_state = Some(process_state);
+                });
 
                 // Perform a round of hash table probe.
                 probe_state.probe_with_selection = prefer_early_filtering;
