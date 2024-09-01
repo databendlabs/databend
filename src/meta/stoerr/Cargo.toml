@@ -14,7 +14,6 @@ test = true
 anyerror = { workspace = true }
 databend-common-exception = { workspace = true }
 prost = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sled = { workspace = true }
 thiserror = { workspace = true }

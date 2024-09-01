@@ -1,0 +1,51 @@
+statement ok
+create table t1 as select number as a, number as b from numbers(10);
+
+statement ok
+create table t2 as select number as a, number as b from numbers(10);
+
+query T
+explain with A as  materialized (select * from t1 union all select * from t2),
+B as (select * from A),
+C as (select * from B as b1 left outer join B as b2 on b1.a = b2.a where b1.b < b2.b),
+D as (select * from C)
+select * from D;
+----
+MaterializedCTE
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── UnionAll
+│   ├── output columns: [t1.a (#0), t1.b (#1)]
+│   ├── estimated rows: 20.00
+│   ├── TableScan
+│   │   ├── table: default.default.t1
+│   │   ├── output columns: [a (#0), b (#1)]
+│   │   ├── read rows: 10
+│   │   ├── read size: < 1 KiB
+│   │   ├── partitions total: 1
+│   │   ├── partitions scanned: 1
+│   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 10.00
+│   └── TableScan
+│       ├── table: default.default.t2
+│       ├── output columns: [a (#2), b (#3)]
+│       ├── read rows: 10
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
+└── HashJoin
+    ├── output columns: [t1.a (#0), t1.b (#1)]
+    ├── join type: INNER
+    ├── build keys: [b2.a (#0)]
+    ├── probe keys: [b1.a (#0)]
+    ├── filters: [b1.b (#1) < b2.b (#1)]
+    ├── estimated rows: 10.00
+    ├── CTEScan(Build)
+    │   ├── CTE index: 0, sub index: 2
+    │   └── estimated rows: 10.00
+    └── CTEScan(Probe)
+        ├── CTE index: 0, sub index: 1
+        └── estimated rows: 10.00

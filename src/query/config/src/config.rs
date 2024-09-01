@@ -1446,6 +1446,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub discovery_address: String,
+
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:8080")]
     pub admin_api_address: String,
 
@@ -1714,6 +1717,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
+            discovery_address: self.discovery_address,
             flight_sql_handler_host: self.flight_sql_handler_host,
             flight_sql_handler_port: self.flight_sql_handler_port,
             admin_api_address: self.admin_api_address,
@@ -1805,6 +1809,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             flight_api_address: inner.flight_api_address,
             flight_sql_handler_host: inner.flight_sql_handler_host,
             flight_sql_handler_port: inner.flight_sql_handler_port,
+            discovery_address: inner.discovery_address,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
             http_handler_tls_server_cert: inner.http_handler_tls_server_cert,

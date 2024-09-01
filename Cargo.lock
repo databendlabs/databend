@@ -3842,7 +3842,6 @@ dependencies = [
  "anyerror",
  "databend-common-exception",
  "prost 0.12.6",
- "serde",
  "serde_json",
  "sled",
  "thiserror",

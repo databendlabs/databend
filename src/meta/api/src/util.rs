@@ -38,8 +38,6 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::IndexId;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdToName;
@@ -279,7 +277,7 @@ pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
 pub async fn fetch_id<T: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     generator: T,
-) -> Result<u64, KVAppError> {
+) -> Result<u64, MetaError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: generator.to_string_key(),
@@ -325,10 +323,11 @@ where T: FromToProto {
 pub async fn send_txn(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     txn_req: TxnRequest,
-) -> Result<(bool, Vec<TxnOpResponse>), KVAppError> {
+) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
     debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
     let (succ, responses) = txn_reply_to_api_result(tx_reply)?;
+    debug!("txn success: {}", succ);
     Ok((succ, responses))
 }
 
@@ -1273,37 +1272,6 @@ pub async fn get_table_info_by_share(
             ShareHasNoGrantedDatabase::new(share_name.tenant_name(), share_name.share_name()),
         ))),
     }
-}
-
-pub async fn get_index_metas_by_ids(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    id_name_list: Vec<(u64, String)>,
-) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
-    let mut index_meta_keys = Vec::with_capacity(id_name_list.len());
-    for (id, _) in id_name_list.iter() {
-        let index_id = IndexId { index_id: *id };
-
-        index_meta_keys.push(index_id.to_string_key());
-    }
-
-    let seq_index_metas = kv_api.mget_kv(&index_meta_keys).await?;
-
-    let mut index_metas = Vec::with_capacity(id_name_list.len());
-
-    for (i, ((id, name), seq_meta_opt)) in id_name_list
-        .into_iter()
-        .zip(seq_index_metas.iter())
-        .enumerate()
-    {
-        if let Some(seq_meta) = seq_meta_opt {
-            let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
-            index_metas.push((id, name, index_meta));
-        } else {
-            debug!(k = &index_meta_keys[i]; "index_meta not found");
-        }
-    }
-
-    Ok(index_metas)
 }
 
 /// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnIdent`],

@@ -17,9 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_enterprise_inverted_index::InvertedIndexHandler;
 use databend_enterprise_inverted_index::InvertedIndexHandlerWrapper;
@@ -33,7 +31,7 @@ impl InvertedIndexHandler for RealInvertedIndexHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateTableIndexReq,
-    ) -> Result<CreateTableIndexReply> {
+    ) -> Result<()> {
         catalog.create_table_index(req).await
     }
 
@@ -42,7 +40,7 @@ impl InvertedIndexHandler for RealInvertedIndexHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropTableIndexReq,
-    ) -> Result<DropTableIndexReply> {
+    ) -> Result<()> {
         catalog.drop_table_index(req).await
     }
 }

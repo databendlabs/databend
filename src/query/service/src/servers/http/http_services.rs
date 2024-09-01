@@ -34,6 +34,7 @@ use poem::EndpointExt;
 use poem::IntoEndpoint;
 use poem::Route;
 
+use super::v1::discovery_nodes;
 use super::v1::logout_handler;
 use super::v1::upload_to_stage;
 use crate::servers::http::middleware::json_response;
@@ -133,6 +134,13 @@ impl HttpHandler {
             .at(
                 "/suggested_background_tasks",
                 get(list_suggestions).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::StartQuery,
+                )),
+            )
+            .at(
+                "/discovery_nodes",
+                get(discovery_nodes).with(HTTPSessionMiddleware::create(
                     self.kind,
                     EndpointKind::StartQuery,
                 )),

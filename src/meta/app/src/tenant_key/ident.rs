@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -39,14 +40,8 @@ where
     R: TenantResource,
     N: Debug,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        // If there is a specified type name for this alias, use it.
-        // Otherwise use the default name
-        let type_name = if R::TYPE.is_empty() {
-            "TIdent"
-        } else {
-            R::TYPE
-        };
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let type_name = self.type_name();
 
         f.debug_struct(type_name)
             .field("tenant", &self.tenant)
@@ -61,11 +56,8 @@ where
     R: TenantResource,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_name = if R::TYPE.is_empty() {
-            "TIdent"
-        } else {
-            R::TYPE
-        };
+        let type_name = self.type_name();
+
         write!(
             f,
             "{}({}/{})",
@@ -148,6 +140,17 @@ impl<R, N> TIdent<R, N> {
 
     pub fn name(&self) -> &N {
         &self.name
+    }
+
+    /// If there is a specified type name for this alias, use it.
+    /// Otherwise, use the default name
+    pub fn type_name(&self) -> &'static str
+    where R: TenantResource {
+        if R::TYPE.is_empty() {
+            type_name::<R>().rsplit("::").next().unwrap_or("TIdent")
+        } else {
+            R::TYPE
+        }
     }
 
     /// Create a display-able instance.
@@ -282,6 +285,18 @@ mod tests {
         assert_eq!(key, "foo/test/test1");
 
         assert_eq!(ident, TIdent::<Foo>::from_str_key(&key).unwrap());
+
+        // Test debug
+
+        assert_eq!(
+            format!("{:?}", ident),
+            r#"Foo { tenant: Tenant { tenant: "test" }, name: "test1" }"#,
+            "debug"
+        );
+
+        // Test display
+
+        assert_eq!(format!("{}", ident), "Foo(test/test1)", "display");
     }
 
     #[test]

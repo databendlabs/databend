@@ -50,7 +50,7 @@ where Self: Sized + Clone
     fn from_column(col: &Column, desc: &[SortColumnDescription]) -> Result<Self> {
         Self::try_from_column(col, desc).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
-                "Order column type mismatched. Expecetd {} but got {}",
+                "Order column type mismatched. Expected {} but got {}",
                 Self::data_type(),
                 col.data_type()
             ))

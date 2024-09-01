@@ -952,7 +952,15 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            let pipeline_ctx = QueryContext::create_from(ctx);
+            let pipeline_ctx = QueryContext::create_from(ctx.clone());
+
+            unsafe {
+                pipeline_ctx
+                    .get_settings()
+                    .unchecked_apply_changes(ctx.get_settings().changes());
+
+                drop(ctx);
+            }
 
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,

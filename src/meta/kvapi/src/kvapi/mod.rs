@@ -50,6 +50,7 @@ pub use message::MGetKVReq;
 pub use message::UpsertKVReply;
 pub use message::UpsertKVReq;
 pub use pair::Pair;
+pub use pair::SeqPair;
 pub use prefix::prefix_to_range;
 pub use test_suite::TestSuite;
 pub use value::Value;
