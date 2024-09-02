@@ -416,6 +416,10 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.mutable_catalog.list_temporary_tables()
+    }
+
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,

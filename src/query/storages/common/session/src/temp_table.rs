@@ -218,6 +218,21 @@ impl TempTblMgr {
         Ok(Some(table_info))
     }
 
+    pub fn list_tables(&self) -> Result<Vec<TableInfo>> {
+        Ok(self
+            .id_to_table
+            .iter()
+            .map(|(id, t)| {
+                TableInfo::new(
+                    &t.db_name,
+                    &t.table_name,
+                    TableIdent::new(*id, 0),
+                    t.meta.clone(),
+                )
+            })
+            .collect())
+    }
+
     pub fn update_multi_table_meta(&mut self, req: Vec<UpdateTempTableReq>) {
         for r in req {
             let UpdateTempTableReq {
