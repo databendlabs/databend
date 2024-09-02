@@ -5410,7 +5410,6 @@ dependencies = [
  "databend-common-storage",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "log",
  "parking_lot 0.12.3",
  "serde",
  "uuid",
