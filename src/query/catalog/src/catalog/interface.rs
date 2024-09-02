@@ -253,6 +253,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    async fn get_single_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>>;
+
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
     async fn list_tables_history(
         &self,

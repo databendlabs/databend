@@ -365,6 +365,16 @@ impl Catalog for SessionCatalog {
         self.inner.list_tables(tenant, db_name).await
     }
 
+    async fn get_single_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.inner
+            .get_single_table_history(tenant, db_name, table_name)
+            .await
+    }
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
