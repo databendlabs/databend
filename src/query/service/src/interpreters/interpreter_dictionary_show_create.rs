@@ -24,7 +24,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_sql::plans::ShowCreateDictionaryPlan;
@@ -66,7 +66,7 @@ impl Interpreter for ShowCreateDictionaryInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let dict_name = self.plan.dictionary.clone();
 
-        let dict_ident = TenantDictionaryIdent::new(
+        let dict_ident = DictionaryNameIdent::new(
             tenant,
             DictionaryIdentity::new(self.plan.database_id, dict_name.clone()),
         );

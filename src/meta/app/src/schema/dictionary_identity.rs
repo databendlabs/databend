@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 /// Uniquely identifies a dictionary with a db_id and a dict_name
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub struct DictionaryIdentity {
@@ -25,6 +27,12 @@ impl DictionaryIdentity {
             db_id,
             dict_name: dict_name.to_string(),
         }
+    }
+}
+
+impl fmt::Display for DictionaryIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.db_id, self.dict_name)
     }
 }
 

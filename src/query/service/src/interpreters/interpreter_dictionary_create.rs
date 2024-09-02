@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::CreateOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -58,7 +58,7 @@ impl Interpreter for CreateDictionaryInterpreter {
         let dictionary_meta = self.plan.meta.clone();
         let dict_ident =
             DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
-        let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
+        let dictionary_ident = DictionaryNameIdent::new(tenant, dict_ident);
         let req = CreateDictionaryReq {
             dictionary_ident: dictionary_ident.clone(),
             dictionary_meta: dictionary_meta.clone(),
