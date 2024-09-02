@@ -3869,17 +3869,17 @@ impl<'a> TypeChecker<'a> {
         }
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_default_catalog()?;
-
+       
         let dict_name_arg = args[0];
         let field_arg = args[1];
         let key_arg = args[2];
-
+       
         // Get dict_name and dict_meta.
         let (db_name, dict_name) = if let Expr::ColumnRef { column, .. } = dict_name_arg {
-            if column.database.is_some() {
-                return Err(ErrorCode::SemanticError(
-                    "dict_get function argument identifier should contain one or two parts"
-                        .to_string(),
+        if column.database.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "dict_get function argument identifier should contain one or two parts"
+                    .to_string(),
                 )
                 .set_span(dict_name_arg.span()));
             }
@@ -3891,8 +3891,8 @@ impl<'a> TypeChecker<'a> {
                 ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
                 ColumnID::Position(pos) => {
                     return Err(ErrorCode::SemanticError(format!(
-                        "dict_get function argument don't support identifier {}",
-                        pos
+                    "dict_get function argument don't support identifier {}",
+                    pos
                     ))
                     .set_span(dict_name_arg.span()));
                 }
@@ -3900,7 +3900,7 @@ impl<'a> TypeChecker<'a> {
             (db_name, dict_name)
         } else {
             return Err(ErrorCode::SemanticError(
-                "async function can only used as column".to_string(),
+            "async function can only used as column".to_string(),
             )
             .set_span(dict_name_arg.span()));
         };
@@ -3939,49 +3939,33 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(field_scalar.span()));
         };
-        let attr_index = schema.index_of(attr_name)?;
-        let attr_type = schema.field(attr_index).data_type();
-
+        let attr_field = schema.field_with_name(attr_name)?;
+        let attr_type: DataType = (&attr_field.data_type).into();
+        let default_value = field_default_value(self.ctx.clone(), attr_field)?;
+       
         // Get primary_key_value and check type.
         let primary_column_id = dictionary.primary_column_ids[0];
         let primary_field = schema.field_of_column_id(primary_column_id)?;
         let primary_type: DataType = (&primary_field.data_type).into();
-
+       
         let mut args = Vec::with_capacity(1);
         let box (key_scalar, key_type) = self.resolve(key_arg)?;
-
+       
         if primary_type != key_type {
             args.push(wrap_cast(&key_scalar, &primary_type));
         } else {
             args.push(key_scalar);
         }
-
-        let url = dictionary.build_connection_url()?;
-        let dict_source = if dictionary.source.to_lowercase() == *"mysql".to_string() {
-            DictionarySource::Mysql(url)
-        } else {
-            DictionarySource::Redis(url)
-        };
-
-        let table_field = *dictionary
-            .schema
-            .fields()
-            .iter()
-            .filter(|x| (*x).name() == attr_name)
-            .collect_vec()
-            .first()
-            .unwrap();
-        let default_res = field_default_value(self.ctx.clone(), table_field)?;
-
+        let key_field_name = primary_field.name.as_str();
+        let value_field_name = attr_field.name.as_str();
+        let dict_source = dictionary.build_dictionary_source(&key_field_name, &value_field_name)?;
+       
         let dict_get_func_arg = DictGetFunctionArgument {
             dict_source,
-            table: Some(db_name.clone()),
-            key_field: Some(primary_field.name().clone()),
-            value_field: Some(attr_name.clone()),
-            default_res: Some(default_res),
+            default_value,
         };
         let display_name = format!(
-            "{}({}.{},{},{})",
+            "{}({}.{}, {}, {})",
             func_name, db_name, dict_name, field_arg, key_arg,
         );
         Ok(Box::new((
@@ -3989,11 +3973,11 @@ impl<'a> TypeChecker<'a> {
                 span,
                 func_name: func_name.to_string(),
                 display_name,
-                return_type: Box::new(attr_type.into()),
+                return_type: Box::new(attr_type.clone()),
                 arguments: args,
                 func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
             }),
-            attr_type.into(),
+            attr_type,
         )))
     }
 

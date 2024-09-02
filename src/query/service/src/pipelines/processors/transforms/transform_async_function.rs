@@ -12,20 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::str;
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
-use std::result::Result::Ok;
 use std::sync::Arc;
 
-use arrow_ipc::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -66,38 +61,34 @@ impl TransformAsyncFunction {
         }
     }
 
-    pub fn init_operators(&mut self) -> Result<()> {
-        for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
+    pub fn init_operators(
+        async_func_descs: &[AsyncFunctionDesc],
+    ) -> Result<BTreeMap<usize, Arc<Operator>>> {
+        let mut operators = BTreeMap::new();
+        for (i, async_func_desc) in async_func_descs.iter().enumerate() {
             if let AsyncFunctionArgument::DictGetFunction(dict_arg) = &async_func_desc.func_arg {
                 match &dict_arg.dict_source {
-                    DictionarySource::Redis(conn_str) => {
-                        let builder = Redis::default().endpoint(&conn_str);
+                    DictionarySource::Redis(redis_source) => {
+                        let mut builder = Redis::default().endpoint(&redis_source.connection_url);
+                        if let Some(username) = &redis_source.username {
+                            builder = builder.username(&username);
+                        }
+                        if let Some(password) = &redis_source.password {
+                            builder = builder.password(&password);
+                        }
+                        if let Some(db_index) = redis_source.db_index {
+                            builder = builder.db(db_index);
+                        }
                         let op = build_operator(builder)?;
-                        self.operators.insert(i, Arc::new(op));
+                        operators.insert(i, Arc::new(op));
                     }
-                    _ => {
-                        todo!()
+                    DictionarySource::Mysql(_) => {
+                        return Err(ErrorCode::Unimplemented("Mysql source is unsupported"));
                     }
                 }
             }
         }
-        Ok(())
-    }
-
-    async fn get_or_create_operator(
-        &mut self,
-        key: usize,
-        conn_str: String,
-    ) -> Result<Arc<Operator>> {
-        if let Some(operator) = self.operators.get(&key) {
-            return Ok(operator.clone());
-        } else {
-            let builder = Redis::default().endpoint(&conn_str);
-            let op = build_operator(builder)?;
-            let op_arc = Arc::new(op);
-            self.operators.insert(key, op_arc.clone());
-            return Ok(op_arc.clone());
-        }
+        Ok(operators)
     }
 
     // transform add sequence nextval column.
@@ -132,104 +123,54 @@ impl TransformAsyncFunction {
 
     // transform add dict get column.
     async fn transform_dict_get(
-        &mut self,
+        &self,
+        i: usize,
         data_block: &mut DataBlock,
         dict_arg: &DictGetFunctionArgument,
         arg_indices: &Vec<IndexType>,
         data_type: &DataType,
     ) -> Result<()> {
-        let mut index = 0;
-        let mut flag = false;
-        for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
-            match async_func_desc.func_arg {
-                AsyncFunctionArgument::DictGetFunction(_) => {
-                    index = i;
-                    flag = true;
-                }
-                AsyncFunctionArgument::SequenceFunction(_) => continue,
-            }
-        }
-        if !flag {
-            return Err(ErrorCode::UnknownDictGetFunction(
-                "Don't find `dict_get` function",
-            ));
-        }
+        let op = self.operators.get(&i).unwrap().clone();
 
-        let conn_str: String;
-        let op = match &dict_arg.dict_source {
-            DictionarySource::Redis(conn_str) => {
-                self.get_or_create_operator(index, conn_str.clone()).await?
-            }
-            _ => {
-                todo!()
-            }
-        };
         // only support one key field.
         let arg_index = arg_indices[0];
-
         let entry = data_block.get_by_offset(arg_index);
         let value = match &entry.value {
             Value::Scalar(scalar) => {
                 if let Scalar::String(key) = scalar {
                     let buffer = op.read(key).await;
-                    let value = match buffer {
-                        Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                        Err(_) => {
-                            if let Some(default) = &dict_arg.default_res {
-                                default.to_string()
-                            } else {
-                                "".to_string()
-                            }
+                    match buffer {
+                        Ok(res) => {
+                            let value =
+                            unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
+                            Value::Scalar(Scalar::String(value))
                         }
-                    };
-                    Value::Scalar(Scalar::String(value))
+                        Err(_) => Value::Scalar(dict_arg.default_value.clone()),
+                    }
                 } else {
-                    Value::Scalar(Scalar::String("".to_string()))
+                    Value::Scalar(dict_arg.default_value.clone())
                 }
             }
             Value::Column(column) => {
-                let mut builder = StringColumnBuilder::with_capacity(column.len(), 0);
+                let mut builder = ColumnBuilder::with_capacity(data_type, column.len());
                 for scalar in column.iter() {
                     if let ScalarRef::String(key) = scalar {
                         let buffer = op.read(key).await;
-                        let value = match buffer {
-                            Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                            Err(_) => {
-                                if let Some(default) = &dict_arg.default_res {
-                                    default.to_string()
-                                } else {
-                                    "".to_string()
+                        match buffer {
+                            Ok(res) => {
+                                    let value =
+                                        unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
+                                        builder.push(ScalarRef::String(value.as_str()));
                                 }
+                            Err(_) => {
+                                builder.push(dict_arg.default_value.as_ref());
                             }
                         };
-                        // let value = dict_arg.dict_get_operators.get_or_add_value(
-                        //     conn_str.clone(),
-                        //     key.to_string(),
-                        //     dict_arg,
-                        // ).await?;
-
-                        // let value = if let Some(cached_val) = cache.get(key) {
-                        //     cached_val.clone()
-                        // } else {
-                        //     drop(cache);
-                        //     let res = op.read(&key).await;
-                        //     let val = match res {
-                        //         Ok(res) => String::from_utf8((&res.current()).to_vec()).unwrap(),
-                        //         Err(_) => if let Some(default) = &dict_arg.default_res {
-                        //             default.to_string()
-                        //         } else {
-                        //             "".to_string()
-                        //         },
-                        //     };
-                        //     let mut cache = CACHE.write().unwrap();
-                        //     cache.insert(key.to_string(), val.clone());
-                        //     val
-                        // };
-                        builder.put_str(value.as_str());
+                    } else {
+                        builder.push(dict_arg.default_value.as_ref());
                     }
-                    builder.commit_row();
                 }
-                Value::Column(Column::String(builder.build()))
+                Value::Column(builder.build())
             }
         };
         let entry = BlockEntry {
@@ -248,21 +189,21 @@ impl AsyncTransform for TransformAsyncFunction {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        self.init_operators()?;
-        for async_func_desc in self.async_func_descs {
+        for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
                     self.transform_sequence(
                         &mut data_block,
-                        sequence_name,
+                        &sequence_name,
                         &async_func_desc.data_type,
                     )
                     .await?;
                 }
                 AsyncFunctionArgument::DictGetFunction(dict_arg) => {
                     self.transform_dict_get(
+                        i,
                         &mut data_block,
-                        dict_arg,
+                        &dict_arg,
                         &async_func_desc.arg_indices,
                         &async_func_desc.data_type,
                     )

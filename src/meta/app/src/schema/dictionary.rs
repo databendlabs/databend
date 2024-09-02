@@ -189,6 +189,116 @@ pub struct UpdateDictionaryReply {
     pub dictionary_id: u64,
 }
 
+impl DictionaryMeta {
+    fn build_sql_connection_url(&self) -> Result<String> {
+        let username = match self.options.get("username") {
+            Some(user) => user,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
+        };
+        let password = match self.options.get("password") {
+            Some(psw) => psw,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `password`")),
+        };
+        let host = match self.options.get("host") {
+            Some(host) => host,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+        };
+        let port = match self.options.get("port") {
+            Some(port) => port,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+        };
+        let db = match self.options.get("db") {
+            Some(db) => db,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
+        };
+        Ok(format!(
+            "mysql://{}:{}@{}:{}/{}",
+            username, password, host, port, db
+        ))
+    }
+
+    fn build_redis_connection_url(&self) -> Result<String> {
+        let host = match self.options.get("host") {
+            Some(host) => host,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+        };
+        let port = match self.options.get("port") {
+            Some(port) => port,
+            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+        };
+        Ok(format!("tcp://{}:{}", host, port))
+    }
+
+    pub fn build_dictionary_source(
+        &self,
+        key_field: &str,
+        value_field: &str,
+    ) -> Result<DictionarySource> {
+        match self.source.as_str() {
+            "mysql" => {
+                let connection_url = self.build_sql_connection_url()?;
+                let table = match self.options.get("table") {
+                    Some(table) => table,
+                    None => return Err(ErrorCode::MissingDictionaryOption("Miss option `table`")),
+                };
+                Ok(DictionarySource::Mysql(SqlSource {
+                    connection_url,
+                    table: table.to_string(),
+                    key_field: key_field.to_string(),
+                    value_field: value_field.to_string(),
+                }))
+            }
+            "redis" => {
+                let connection_url = self.build_redis_connection_url()?;
+                let username = self.options.get("username").cloned();
+                let password = self.options.get("password").cloned();
+                let db_index = self
+                    .options
+                    .get("db_index")
+                    .map(|i| i.parse::<i64>().unwrap());
+                Ok(DictionarySource::Redis(RedisSource {
+                    connection_url,
+                    username,
+                    password,
+                    db_index,
+                }))
+            }
+            _ => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported source {}",
+                self.source
+            ))),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct RedisSource {
+    // Redis connection string `tcp://127.0.0.1:6379`
+    pub connection_url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub db_index: Option<i64>,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct SqlSource {
+    // MySQL connection string `mysql://user:password@localhost:3306/db`
+    pub connection_url: String,
+    pub table: String,
+    pub key_field: String,
+    pub value_field: String,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub enum DictionarySource {
+    Mysql(SqlSource),
+    Redis(RedisSource),
+}
+
+
 mod kvapi_key_impl {
 
     use databend_common_meta_kvapi::kvapi;
