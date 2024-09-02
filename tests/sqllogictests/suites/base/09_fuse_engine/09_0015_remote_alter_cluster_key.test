@@ -19,10 +19,10 @@ INSERT INTO t09_0015_0 VALUES(0,3),(1,1)
 statement ok
 INSERT INTO t09_0015_0 VALUES(1,3),(2,1)
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('db1','t09_0015_0')
 ----
-(b, a) 2 0 1.0 2.0 {"00002":2}
+(b, a) linear 2 0 1.0 2.0 {"00002":2}
 
 statement ok
 ALTER TABLE t09_0015_0 CLUSTER BY(a,b)
@@ -30,10 +30,10 @@ ALTER TABLE t09_0015_0 CLUSTER BY(a,b)
 statement ok
 INSERT INTO t09_0015_0 VALUES(4,4)
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('db1','t09_0015_0')
 ----
-(a, b) 3 1 0.6667 1.6667 {"00001":1,"00002":2}
+(a, b) linear 3 1 0.6667 1.6667 {"00001":1,"00002":2}
 
 query II
 SELECT * FROM t09_0015_0 ORDER BY b,a

@@ -102,6 +102,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 
 use crate::kv_app_error::KVAppError;
+use crate::meta_txn_error::MetaTxnError;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
@@ -147,7 +148,7 @@ pub trait SchemaApi: Send + Sync {
     async fn drop_index(
         &self,
         name_ident: &IndexNameIdent,
-    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, KVAppError>;
+    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, MetaTxnError>;
 
     async fn get_index(
         &self,

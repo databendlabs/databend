@@ -15,4 +15,5 @@
 fn main() {
     databend_codegen::writes::codegen_arithmetic_type();
     databend_codegen::writes::codegen_register();
+    databend_codegen::writes::codegen_hilbert_lut();
 }
