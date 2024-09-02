@@ -82,9 +82,7 @@ impl PartialEq for ScalarExpr {
     #[recursive::recursive]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => {
-                l.column.index == r.column.index && l.column.table_index == r.column.table_index
-            }
+            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => l.eq(r),
             (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
             (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
             (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
@@ -104,10 +102,7 @@ impl Hash for ScalarExpr {
     #[recursive::recursive]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            ScalarExpr::BoundColumnRef(v) => {
-                v.column.index.hash(state);
-                v.column.table_index.hash(state);
-            }
+            ScalarExpr::BoundColumnRef(v) => v.hash(state),
             ScalarExpr::ConstantExpr(v) => v.hash(state),
             ScalarExpr::WindowFunction(v) => v.hash(state),
             ScalarExpr::AggregateFunction(v) => v.hash(state),
