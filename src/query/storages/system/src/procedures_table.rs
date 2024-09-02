@@ -18,8 +18,10 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -79,7 +81,7 @@ impl AsyncSystemTable for ProceduresTable {
 
         for procedure in &procedures {
             names.push(procedure.name_ident.procedure_name());
-            procedure_ids.push(procedure.ident.procedure_id().to_string());
+            procedure_ids.push(*procedure.ident.procedure_id());
             arguments.push(format!(
                 "{} RETURN ({})",
                 procedure.name_ident.procedure_name(),
@@ -94,7 +96,7 @@ impl AsyncSystemTable for ProceduresTable {
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
-            StringType::from_data(procedure_ids),
+            UInt64Type::from_data(procedure_ids),
             StringType::from_data(arguments),
             StringType::from_data(comments),
             StringType::from_data(descriptions),
@@ -107,7 +109,10 @@ impl ProceduresTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
-            TableField::new("procedure_id", TableDataType::String),
+            TableField::new(
+                "procedure_id",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
             TableField::new("arguments", TableDataType::String),
             TableField::new("comment", TableDataType::String),
             TableField::new("description", TableDataType::String),
