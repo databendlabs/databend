@@ -29,7 +29,6 @@ use databend_common_storage::DataOperator;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
 use futures_util::TryStreamExt;
-use log::debug;
 use log::info;
 use uuid::Uuid;
 
@@ -66,7 +65,6 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
         let mut session_ids = HashSet::new();
         while let Some(entry) = lister.try_next().await? {
             let path = entry.path();
-            debug!("path: {}", path);
             if let Some(session_id) = path.split('/').nth(1) {
                 if session_id.is_empty() {
                     continue;
@@ -74,7 +72,6 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
                 // check if session_id is a valid uuid
                 let _ = Uuid::parse_str(session_id)
                     .map_err(|e| ErrorCode::Internal(format!("Invalid session_id: {}", e)))?;
-                debug!("session_id: {}", session_id);
                 session_ids.insert(session_id.to_string());
             }
         }

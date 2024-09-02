@@ -45,7 +45,6 @@ use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
-use log::debug;
 use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
@@ -198,10 +197,6 @@ impl TempTblMgr {
         let desc = format!("{}.{}", database_name, table_name);
         let id = self.name_to_id.get(&desc);
         let Some(id) = id else {
-            debug!(
-                "Table {}.{} not found in temp table manager {:?}",
-                database_name, table_name, self
-            );
             return Ok(None);
         };
         let Some(table) = self.id_to_table.get(id) else {
