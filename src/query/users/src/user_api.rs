@@ -155,8 +155,8 @@ impl UserApiProvider {
     pub fn setting_api(&self, tenant: &Tenant) -> Arc<dyn SettingApi> {
         Arc::new(SettingMgr::create(self.client.clone(), tenant))
     }
-    pub fn procedure_api(&self, tenant: &Tenant) -> ProcedureMgr {
-        ProcedureMgr::create(self.client.clone(), tenant)
+    pub fn procedure_api(&self, _tenant: &Tenant) -> ProcedureMgr {
+        ProcedureMgr::create(self.client.clone())
     }
 
     pub fn network_policy_api(&self, tenant: &Tenant) -> NetworkPolicyMgr {
