@@ -319,24 +319,12 @@ pub enum NumberScalar {
         serialize_with = "json_serde_impl::serialize_f32",
         deserialize_with = "json_serde_impl::deserialize_f32"
     )]
-    Float32(
-        #[borsh(
-            serialize_with = "borsh_serde_impl::serialize_f32",
-            deserialize_with = "borsh_serde_impl::deserialize_f32"
-        )]
-        F32,
-    ),
+    Float32(F32),
     #[serde(
         serialize_with = "json_serde_impl::serialize_f64",
         deserialize_with = "json_serde_impl::deserialize_f64"
     )]
-    Float64(
-        #[borsh(
-            serialize_with = "borsh_serde_impl::serialize_f64",
-            deserialize_with = "borsh_serde_impl::deserialize_f64"
-        )]
-        F64,
-    ),
+    Float64(F64),
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -1525,43 +1513,5 @@ mod json_serde_impl {
         } else {
             serde::Deserialize::deserialize(deserializer)
         }
-    }
-}
-
-/// Borsh serialize and deserialize implementation for `F32` and `F64`.
-mod borsh_serde_impl {
-    use ordered_float::OrderedFloat;
-
-    use crate::types::F32;
-    use crate::types::F64;
-
-    pub fn serialize_f32<W: borsh::io::Write>(
-        obj: &F32,
-        writer: &mut W,
-    ) -> Result<(), borsh::io::Error> {
-        writer.write_all(&obj.to_bits().to_le_bytes())?;
-        Ok(())
-    }
-
-    pub fn deserialize_f32<R: borsh::io::Read>(reader: &mut R) -> Result<F32, borsh::io::Error> {
-        let mut buf = [0u8; size_of::<F32>()];
-        reader.read_exact(&mut buf)?;
-        let res = OrderedFloat::from(f32::from_bits(u32::from_le_bytes(buf)));
-        Ok(res)
-    }
-
-    pub fn serialize_f64<W: borsh::io::Write>(
-        obj: &F64,
-        writer: &mut W,
-    ) -> Result<(), borsh::io::Error> {
-        writer.write_all(&obj.to_bits().to_le_bytes())?;
-        Ok(())
-    }
-
-    pub fn deserialize_f64<R: borsh::io::Read>(reader: &mut R) -> Result<F64, borsh::io::Error> {
-        let mut buf = [0u8; size_of::<F64>()];
-        reader.read_exact(&mut buf)?;
-        let res = OrderedFloat::from(f64::from_bits(u64::from_le_bytes(buf)));
-        Ok(res)
     }
 }
