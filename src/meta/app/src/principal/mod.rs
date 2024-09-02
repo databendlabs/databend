@@ -71,7 +71,6 @@ pub use procedure::DropProcedureReq;
 pub use procedure::GetProcedureReply;
 pub use procedure::GetProcedureReq;
 pub use procedure::ListProcedureReq;
-pub use procedure::ProcedureIdList;
 pub use procedure::ProcedureInfoFilter;
 pub use procedure::ProcedureMeta;
 pub use procedure::RenameProcedureReply;

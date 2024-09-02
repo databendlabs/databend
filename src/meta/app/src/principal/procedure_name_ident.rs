@@ -15,10 +15,10 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type ProcedureNameIdent = TIdent<Resource>;
-pub type ProcedureNameIdentRaw = TIdentRaw<Resource>;
+pub type ProcedureNameIdent = TIdent<ProcedureName>;
+pub type ProcedureNameIdentRaw = TIdentRaw<ProcedureName>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::ProcedureName;
 
 impl ProcedureNameIdent {
     pub fn procedure_name(&self) -> &str {
@@ -41,10 +41,9 @@ mod kvapi_impl {
     use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct ProcedureName;
+    impl TenantResource for ProcedureName {
         const PREFIX: &'static str = "__fd_procedure";
-        const TYPE: &'static str = "ProcedureNameIdent";
         const HAS_TENANT: bool = true;
         type ValueType = ProcedureId;
     }

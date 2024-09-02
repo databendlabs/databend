@@ -19,6 +19,7 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::principal::procedure_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
@@ -1180,7 +1181,16 @@ pub enum AppError {
     ProcedureAlreadyExists(#[from] ProcedureAlreadyExists),
 =======
     UnknownDictionary(#[from] UnknownDictionary),
+<<<<<<< HEAD
 >>>>>>> 16f088a754 (refactor procedure mgr: use DataId)
+=======
+
+    #[error(transparent)]
+    ProcedureAlreadyExists(#[from] ExistError<procedure_name_ident::ProcedureName>),
+
+    #[error(transparent)]
+    UnknownProcedure(#[from] UnknownError<procedure_name_ident::ProcedureName>),
+>>>>>>> 6cec315b7f (remove ProcedureIdList, refactor procedure_mgr)
 }
 
 impl AppError {
@@ -1710,6 +1720,10 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::DictionaryAlreadyExists(err.message())
             }
             AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
+            AppError::UnknownProcedure(err) => ErrorCode::UnknownProcedure(err.message()),
+            AppError::ProcedureAlreadyExists(err) => {
+                ErrorCode::ProcedureAlreadyExists(err.message())
+            }
         }
     }
 }

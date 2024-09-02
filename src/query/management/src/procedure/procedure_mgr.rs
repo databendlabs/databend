@@ -14,38 +14,31 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_api::fetch_id;
 use databend_common_meta_api::kv_app_error::KVAppError;
-use databend_common_meta_api::kv_pb_api::KVPbApi;
-use databend_common_meta_api::send_txn;
-use databend_common_meta_api::txn_backoff::txn_backoff;
-use databend_common_meta_api::txn_op_del;
-use databend_common_meta_api::util::txn_delete_exact;
-use databend_common_meta_api::util::txn_op_put_pb;
-use databend_common_meta_api::util::txn_replace_exact;
+use databend_common_meta_api::name_id_value_api::NameIdValueApi;
+use databend_common_meta_api::serialize_struct;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::procedure::ProcedureInfo;
-use databend_common_meta_app::principal::procedure_id_ident::ProcedureId;
 use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
+use databend_common_meta_app::principal::procedure_name_ident::ProcedureNameIdentRaw;
+use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
-use databend_common_meta_app::principal::DropProcedureReply;
 use databend_common_meta_app::principal::DropProcedureReq;
+use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ListProcedureReq;
+use databend_common_meta_app::principal::ProcedureId;
 use databend_common_meta_app::principal::ProcedureIdToNameIdent;
+use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_types::anyerror::AnyError;
-use databend_common_meta_types::InvalidReply;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
-use futures::TryStreamExt;
 use log::debug;
 
 pub struct ProcedureMgr {
@@ -62,48 +55,38 @@ impl ProcedureMgr {
     pub async fn create_procedure(
         &self,
         req: CreateProcedureReq,
-    ) -> Result<Result<ProcedureId, SeqV<ProcedureId>>, KVAppError> {
+    ) -> Result<CreateProcedureReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let name_ident = req.name_ident;
-        let meta = req.meta;
+        let name_ident = &req.name_ident;
+        let meta = &req.meta;
+        let overriding = req.create_option.is_overriding();
+        let name_ident_raw = serialize_struct(&ProcedureNameIdentRaw::from(name_ident))?;
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let create_res = self
+            .kv_api
+            .create_id_value(name_ident, meta, overriding, |id| {
+                vec![(
+                    ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
+                    name_ident_raw.clone(),
+                )]
+            })
+            .await?;
 
-            let res = self.kv_api.get_id_and_value(&name_ident).await?;
-            debug!(res :? = res,name_ident :? =(name_ident);"get_procedure");
-
-            if let Some((seq_id, _seq_meta)) = res {
-                return Ok(Err(seq_id));
-            }
-
-            // Create procedure by inserting these record:
-            // (tenant, procedure_name) -> procedure_id
-            // (procedure_id) -> procedure_meta
-            // (procedure_id) -> (tenant, procedure_name)
-            let id = fetch_id(self.kv_api.as_ref(), IdGenerator::procedure_id()).await?;
-            let procedure_id = ProcedureId::new(id);
-            let id_ident = ProcedureIdIdent::new_generic(name_ident.tenant(), procedure_id);
-            let id_to_name_ident = ProcedureIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(procedure_id :? = procedure_id, name_ident :? =(name_ident); "new procedure id");
-
-            let mut txn = TxnRequest::default();
-
-            txn_replace_exact(&mut txn, &name_ident, 0, &procedure_id)?; /* (tenant, procedure_name) -> procedure_id */
-            txn.if_then.extend([
-                txn_op_put_pb(&id_ident, &meta)?, /* (procedure_id) -> procedure_meta */
-                txn_op_put_pb(&id_to_name_ident, &name_ident.to_raw())?, /* __fd_procedure_id_to_name/<procedure_id> -> (tenant,procedure_name) */
-
-            ]);
-
-            let (succ, _) = send_txn(self.kv_api.as_ref(), txn).await?;
-            debug!(name :? =(name_ident),id :? =(&id_ident),succ = succ;"create_procedure");
-
-            if succ {
-                return Ok(Ok(procedure_id));
-            }
+        match create_res {
+            Ok(id) => Ok(CreateProcedureReply { procedure_id: *id }),
+            Err(existent) => match req.create_option {
+                CreateOption::Create => {
+                    Err(AppError::from(name_ident.exist_error(func_name!())).into())
+                }
+                CreateOption::CreateIfNotExists => Ok(CreateProcedureReply {
+                    procedure_id: *existent.data,
+                }),
+                CreateOption::CreateOrReplace => {
+                    unreachable!(
+                        "create_procedure: CreateOrReplace should never conflict with existent"
+                    );
+                }
+            },
         }
     }
 
@@ -112,128 +95,56 @@ impl ProcedureMgr {
     pub async fn drop_procedure(
         &self,
         req: DropProcedureReq,
-    ) -> Result<Option<DropProcedureReply>, KVAppError> {
+    ) -> Result<Option<(SeqV<ProcedureId>, SeqV<ProcedureMeta>)>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
         let name_ident = req.name_ident;
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let res = self.kv_api.get_id_and_value(&name_ident).await?;
-
-            let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
-            };
-
-            // Delete procedure by deleting these record:
-            // (tenant, procedure_name) -> procedure_id
-            // (procedure_id) -> procedure_meta
-            // (procedure_id) -> (tenant, procedure_name)
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-            let id_to_name_ident = ProcedureIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(seq_id :? = seq_id, name_ident :? =(&name_ident); "{}", func_name!());
-
-            let mut txn = TxnRequest::default();
-
-            txn_delete_exact(&mut txn, &name_ident, seq_id.seq); // (tenant, procedure_name) -> procedure_id
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq); // (procedure_id) -> procedure_meta
-            txn.if_then.push(txn_op_del(&id_to_name_ident)); /* __fd_procedure_id_to_name/<procedure_id> -> (tenant,procedure_name) */
-
-            let (succ, _) = send_txn(self.kv_api.as_ref(), txn).await?;
-
-            debug!(name_ident :? =(&name_ident),id :? =(&id_ident),succ = succ; "{}", func_name!());
-
-            if succ {
-                return Ok(Some(DropProcedureReply {
-                    procedure_id: seq_id.seq,
-                }));
-            }
-        }
+        let dropped = self
+            .kv_api
+            .remove_id_value(&name_ident, |id| {
+                vec![ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
+            })
+            .await?;
+        Ok(dropped)
     }
 
     #[fastrace::trace]
-    pub async fn get_procedure(&self, req: GetProcedureReq) -> Result<ProcedureInfo, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+    pub async fn get_procedure(
+        &self,
+        req: &GetProcedureReq,
+    ) -> Result<Option<GetProcedureReply>, KVAppError> {
+        debug!(req :? =(req); "SchemaApi: {}", func_name!());
 
-        let name_ident = req.inner;
-        let (seq_id, seq_meta) = self
-            .kv_api
-            .get_id_and_value(&name_ident)
-            .await?
-            .ok_or_else(|| AppError::unknown(&name_ident, func_name!()))?;
+        let res = self.kv_api.get_id_value(&req.inner).await?;
 
-        let procedure = ProcedureInfo {
-            ident: ProcedureIdIdent::new_generic(name_ident.tenant(), seq_id.data),
-            name_ident: name_ident.clone(),
-            meta: seq_meta.data,
+        let Some((seq_id, seq_meta)) = res else {
+            return Ok(None);
         };
 
-        Ok(procedure)
+        Ok(Some(GetProcedureReply {
+            id: *seq_id.data,
+            procedure_meta: seq_meta.data,
+        }))
     }
     #[fastrace::trace]
     pub async fn list_procedures(
         &self,
         req: ListProcedureReq,
-    ) -> Result<Vec<Arc<ProcedureInfo>>, KVAppError> {
+    ) -> Result<Vec<ProcedureInfo>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant = req.tenant;
-        let name_key = ProcedureNameIdent::new(&tenant, "dummy");
+        // Get procedure id list by `prefix_list` "<prefix>/<tenant>"
+        let ident = ProcedureNameIdent::new(&req.tenant, "dummy");
+        let dir = DirName::new(ident);
 
-        let dir = DirName::new(name_key);
+        let name_id_metas = self.kv_api.list_id_value(&dir).await?;
 
-        // Pairs of procedure-name and procedure_id with seq
-        let items = self
-            .kv_api
-            .list_pb(&dir)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        // Keys for fetching ProcedureMeta from kvapi::KVApi
-        let kv_keys = items.iter().map(|x| x.seqv.data.into_t_ident(&tenant));
-        let kv_keys = kv_keys.collect::<Vec<_>>();
-
-        // Batch get all procedure-metas.
-        // - A procedure-meta may be already deleted. It is Ok. Just ignore it.
-        #[allow(deprecated)]
-        let seq_metas = self.kv_api.get_pb_values(kv_keys.clone()).await?;
-        let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
-
-        if seq_metas.len() != kv_keys.len() {
-            let err = InvalidReply::new(
-                "list_procedures",
-                &AnyError::error(format!(
-                    "mismatched procedure-meta count: got: {}, expect: {}",
-                    seq_metas.len(),
-                    kv_keys.len()
-                )),
-            );
-            let meta_net_err = MetaNetworkError::from(err);
-            return Err(KVAppError::MetaError(meta_net_err.into()));
-        }
-
-        let mut procedure_infos = Vec::with_capacity(kv_keys.len());
-
-        for (i, seq_meta_opt) in seq_metas.into_iter().enumerate() {
-            let item = &items[i];
-
-            if let Some(seq_meta) = seq_meta_opt {
-                let procedure_info = ProcedureInfo {
-                    ident: ProcedureIdIdent::new(&tenant, *item.seqv.data),
-                    name_ident: ProcedureNameIdent::new(&tenant, item.key.name()),
-                    meta: seq_meta.data,
-                };
-                procedure_infos.push(Arc::new(procedure_info));
-            } else {
-                debug!(
-                    k :% =(&kv_keys[i]);
-                    "procedure_meta not found, maybe just deleted after listing names and before listing meta"
-                );
-            }
-        }
+        let procedure_infos = name_id_metas
+            .map(|(k, id, seq_meta)| ProcedureInfo {
+                ident: ProcedureIdIdent::new(&req.tenant, *id),
+                name_ident: k,
+                meta: seq_meta.data,
+            })
+            .collect::<Vec<_>>();
 
         Ok(procedure_infos)
     }
