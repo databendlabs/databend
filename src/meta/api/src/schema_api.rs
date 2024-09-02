@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -39,8 +40,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
@@ -51,19 +50,18 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReply;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
@@ -143,26 +141,25 @@ pub trait SchemaApi: Send + Sync {
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError>;
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
+    /// Drop index and returns the dropped id and meta.
+    ///
+    /// If there is no such record, it returns `Ok(None)`.
+    async fn drop_index(
+        &self,
+        name_ident: &IndexNameIdent,
+    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, KVAppError>;
 
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
+    async fn get_index(
+        &self,
+        name_ident: &IndexNameIdent,
+    ) -> Result<Option<GetIndexReply>, MetaError>;
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
 
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
-
-    async fn list_index_ids_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<u64>, KVAppError>;
-
-    async fn list_indexes_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+    ) -> Result<Vec<(String, IndexId, IndexMeta)>, KVAppError>;
 
     // virtual column
 

@@ -404,6 +404,7 @@ impl FunctionRegistry {
         candidates
     }
 
+    // note that if additional_cast_rules is not empty, default cast rules will not be used.
     pub fn get_auto_cast_rules(&self, func_name: &str) -> &[(DataType, DataType)] {
         self.additional_cast_rules
             .get(func_name)
@@ -455,6 +456,7 @@ impl FunctionRegistry {
         self.default_cast_rules.extend(default_cast_rules);
     }
 
+    // Note that, if additional_cast_rules is not empty, the default cast rules will not be used
     pub fn register_additional_cast_rules(
         &mut self,
         fn_name: &str,

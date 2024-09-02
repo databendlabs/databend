@@ -38,6 +38,7 @@ use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqValue;
@@ -46,8 +47,10 @@ use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 
 use crate::background_api::BackgroundApi;
@@ -59,7 +62,6 @@ use crate::kv_pb_api::UpsertPB;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
-use crate::util::deserialize_u64;
 use crate::util::txn_op_put_pb;
 use crate::util::txn_replace_exact;
 
@@ -191,24 +193,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
-    ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError> {
+    ) -> Result<Vec<(String, SeqV<BackgroundJobInfo>)>, KVAppError> {
         let ident = BackgroundJobIdent::new(&req.tenant, "dummy");
-        let prefix = ident.tenant_prefix();
 
-        let reply = self.prefix_list_kv(&prefix).await?;
+        let strm = self.list_pb(&DirName::new(ident)).await?;
+        let name_and_ids = strm.try_collect::<Vec<_>>().await?;
+
         let mut res = vec![];
-        for (k, v) in reply {
-            let ident = BackgroundJobIdent::from_str_key(k.as_str())
-                .map_err(|e| MetaError::from(InvalidReply::new("list_background_jobs", &e)))?;
+        for itm in name_and_ids {
+            let id_ident = itm.seqv.data.into_t_ident(&req.tenant);
 
-            let job_id = deserialize_u64(&v.data)?;
+            let seq_info = self.get_pb(&id_ident).await?;
 
-            let req = BackgroundJobIdIdent::new(&req.tenant, *job_id);
-            let seq_info = self.get_pb(&req).await?;
-
-            // filter none and get the task info
             if let Some(sv) = seq_info {
-                res.push((sv.seq(), ident.job_name().to_string(), sv.data));
+                res.push((itm.key.job_name().to_string(), sv));
             }
         }
         Ok(res)

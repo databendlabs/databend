@@ -618,13 +618,15 @@ impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
         self.method.build_keys_iter(keys_state)
     }
 
-    fn build_keys_accessor_and_hashes(
+    fn build_keys_accessor(
         &self,
         keys_state: KeysState,
-        hashes: &mut Vec<u64>,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-        self.method
-            .build_keys_accessor_and_hashes(keys_state, hashes)
+        self.method.build_keys_accessor(keys_state)
+    }
+
+    fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
+        self.method.build_keys_hashes(keys_state, hashes)
     }
 }
 
