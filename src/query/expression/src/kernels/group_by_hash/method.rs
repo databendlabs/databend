@@ -40,7 +40,7 @@ use crate::HashMethodSerializer;
 use crate::HashMethodSingleBinary;
 use crate::InputColumns;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum KeysState {
     Column(Column),
     U128(Buffer<u128>),
@@ -76,11 +76,12 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
 
-    fn build_keys_accessor_and_hashes(
+    fn build_keys_accessor(
         &self,
         keys_state: KeysState,
-        hashes: &mut Vec<u64>,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>>;
+
+    fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>);
 }
 
 /// These methods are `generic` method to generate hash key,
