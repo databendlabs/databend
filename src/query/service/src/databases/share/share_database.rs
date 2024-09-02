@@ -221,6 +221,13 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn get_single_table_history(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot get table history from a shared database".to_string(),
+        ))
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let share_table_infos = self.list_share_tables().await?;
 

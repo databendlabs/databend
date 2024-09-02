@@ -368,6 +368,17 @@ impl Catalog for SessionCatalog {
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
         self.temp_tbl_mgr.lock().list_tables()
     }
+    
+    async fn get_single_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.inner
+            .get_single_table_history(tenant, db_name, table_name)
+            .await
+    }
 
     async fn list_tables_history(
         &self,

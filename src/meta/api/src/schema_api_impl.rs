@@ -1988,7 +1988,114 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_history(
+    async fn get_single_table_history(
+        &self,
+        req: GetTableReq,
+    ) -> Result<Arc<TableInfo>, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let tenant_dbname_tbname = &req.inner;
+        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
+
+        // Get db by name to ensure presence
+
+        let res = get_db_or_err(
+            self,
+            &tenant_dbname,
+            format!("get_table: {}", tenant_dbname.display()),
+        )
+        .await;
+
+        let (seq_db_id, db_meta) = match res {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        let keys = match db_meta.from_share {
+            Some(ref share_name_ident_raw) => {
+                let share_ident = share_name_ident_raw.clone().to_tident(());
+                error!(
+                    "get_single_table_history {:?} from share {:?}",
+                    tenant_dbname, share_ident,
+                );
+                return Err(KVAppError::AppError(AppError::CannotAccessShareTable(
+                    CannotAccessShareTable::new(
+                        &tenant_dbname_tbname.tenant.tenant,
+                        share_ident.name(),
+                        &tenant_dbname_tbname.table_name,
+                    ),
+                )));
+            }
+            None => {
+                // Get table by tenant,db_id, table_name to assert presence.
+
+                TableIdHistoryIdent {
+                    database_id: *seq_db_id.data,
+                    table_name: tenant_dbname_tbname.table_name.clone(),
+                }
+            }
+        };
+
+        let (meta_seq, table_id_list) = get_pb_value(self, &keys).await?;
+        if meta_seq == 0 || table_id_list.is_none() {
+            return Err(KVAppError::AppError(AppError::from(
+                databend_common_meta_app::app_error::UnknownTable::new(
+                    &tenant_dbname_tbname.table_name,
+                    format!(
+                        "get_single_table_history: {}.{}",
+                        tenant_dbname.database_name(),
+                        tenant_dbname_tbname.table_name()
+                    ),
+                ),
+            )));
+        }
+        let table_id = TableId {
+            table_id: table_id_list.unwrap().id_list[0],
+        };
+
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &table_id).await?;
+
+        assert_table_exist(
+            tb_meta_seq,
+            tenant_dbname_tbname,
+            format!("get_single_table_history meta by: {}", tenant_dbname_tbname),
+        )?;
+
+        debug!(
+            ident :% =(&table_id),
+            name :% =(tenant_dbname_tbname),
+            table_meta :? =(&tb_meta);
+            "get_table"
+        );
+
+        let db_type = DatabaseType::NormalDB;
+
+        let tb_info = TableInfo {
+            ident: TableIdent {
+                table_id: table_id.table_id,
+                seq: tb_meta_seq,
+            },
+            desc: format!(
+                "'{}'.'{}'",
+                tenant_dbname.database_name(),
+                tenant_dbname_tbname.table_name
+            ),
+            name: tenant_dbname_tbname.table_name.clone(),
+            // Safe unwrap() because: tb_meta_seq > 0
+            meta: tb_meta.unwrap(),
+            tenant: req.tenant.tenant_name().to_string(),
+            db_type,
+            catalog_info: Default::default(),
+        };
+
+        return Ok(Arc::new(tb_info));
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_tables_history(
         &self,
         req: ListTableReq,
     ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {

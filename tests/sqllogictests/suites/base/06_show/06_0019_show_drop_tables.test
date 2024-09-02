@@ -23,4 +23,7 @@ statement ok
 show drop tables from db1 like '%t';
 
 statement ok
+show drop tables from db1 where name='t_never_exist$$$$';
+
+statement ok
 drop database db1;

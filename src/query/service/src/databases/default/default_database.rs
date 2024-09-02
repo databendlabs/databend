@@ -137,6 +137,22 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn get_single_table_history(&self, table_name: &str) -> Result<Arc<dyn Table>> {
+        let table_info = self
+            .ctx
+            .meta
+            .get_single_table_history(GetTableReq::new(
+                self.get_tenant(),
+                self.get_db_name(),
+                table_name,
+            ))
+            .await?;
+
+        // disable refresh in history table
+        self.get_table_by_info(table_info.as_ref())
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.list_table_infos().await?;
         self.load_tables(table_infos)
@@ -152,7 +168,7 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_table_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .get_tables_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?
             .into_iter()
             .filter(|i| i.meta.drop_on.is_some())

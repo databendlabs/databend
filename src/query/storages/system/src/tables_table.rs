@@ -72,6 +72,15 @@ pub trait HistoryAware {
         with_history: bool,
         without_view: bool,
     ) -> Result<Vec<Arc<dyn Table>>>;
+
+    async fn get_table(
+        catalog: &Arc<dyn Catalog>,
+        tenant: &Tenant,
+        database_name: &str,
+        table_name: &str,
+        with_history: bool,
+        without_view: bool,
+    ) -> Result<Arc<dyn Table>>;
 }
 
 macro_rules! impl_history_aware {
@@ -92,6 +101,24 @@ macro_rules! impl_history_aware {
                     catalog.list_tables_history(tenant, database_name).await
                 } else {
                     catalog.list_tables(tenant, database_name).await
+                }
+            }
+
+            #[async_backtrace::framed]
+            async fn get_table(
+                catalog: &Arc<dyn Catalog>,
+                tenant: &Tenant,
+                database_name: &str,
+                table_name: &str,
+                with_history: bool,
+                _without_view: bool,
+            ) -> Result<Arc<dyn Table>> {
+                if with_history {
+                    catalog
+                        .get_single_table_history(tenant, database_name, table_name)
+                        .await
+                } else {
+                    catalog.get_table(tenant, database_name, table_name).await
                 }
             }
         }
@@ -391,7 +418,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 let db_name = db.name();
                 let tables = if tables_names.is_empty()
                     || tables_names.len() > 10
-                    || WITH_HISTORY
                     || invalid_tables_ids
                     || invalid_optimize
                 {
@@ -418,7 +444,16 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     // Only without history can call get_table
                     let mut tables = Vec::new();
                     for table_name in &tables_names {
-                        match ctl.get_table(&tenant, db_name, table_name).await {
+                        match Self::get_table(
+                            ctl,
+                            &tenant,
+                            db_name,
+                            table_name,
+                            WITH_HISTORY,
+                            WITHOUT_VIEW,
+                        )
+                        .await
+                        {
                             Ok(t) => tables.push(t),
                             Err(err) => {
                                 let msg = format!(
