@@ -16,7 +16,6 @@ use std::future::Future;
 
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -42,36 +41,42 @@ use crate::util::send_txn;
 use crate::util::txn_cond_eq_seq;
 use crate::util::txn_op_put_pb;
 
-/// BaseApi provide several generic meta-service access pattern implementations
+/// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
 ///
-/// These implementations are used by other meta-service APIs.
+/// Such a two level mapping provides a consistent id `id` for internal use,
+/// which will not be affected by renaming the `name`.
+/// For example, using `TableId` to update a table metadata won't conflict
+/// with another transaction that renaming a table `name -> id`
+///
+/// `K` is the key type for name.
+/// `IdRsc` is the Resource definition for id.
+/// `IdRsc::ValueType` is the value type.
 #[tonic::async_trait]
-pub trait BaseApi: KVApi<Error = MetaError> {
+pub trait NameIdValueApi<K, IdRsc>: KVApi<Error = MetaError>
+where
+    K: kvapi::Key<ValueType = DataId<IdRsc>>,
+    K: KeyWithTenant,
+    K: Send + Sync + 'static,
+    IdRsc: TenantResource + Send + Sync + 'static,
+    IdRsc::ValueType: FromToProto + Send + Sync + 'static,
+{
     /// Create a two level `name -> id -> value` mapping.
     ///
-    /// `IdResource` is the Resource definition for id.
     /// `associated_ops` is used to generate additional key-values to add or remove along with the main operation.
     /// Such operations do not have any condition constraints.
     /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
     ///
     /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
     /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
-    async fn create_id_value<K, V, IdResource, A>(
+    async fn create_id_value<A>(
         &self,
         name_ident: &K,
-        value: &V,
+        value: &IdRsc::ValueType,
         override_exist: bool,
         associated_records: A,
-    ) -> Result<Result<DataId<IdResource>, SeqV<DataId<IdResource>>>, MetaTxnError>
+    ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
     where
-        K: kvapi::Key<ValueType = DataId<IdResource>>,
-        K: KeyWithTenant,
-        K: Sync,
-        IdResource: TenantResource + Send + Sync + 'static,
-        IdResource::ValueType: FromToProto,
-        TIdent<IdResource, DataId<IdResource>>: kvapi::Key<ValueType = V>,
-        V: FromToProto + Sync + 'static,
-        A: Fn(DataId<IdResource>) -> Vec<(String, Vec<u8>)> + Send,
+        A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
     {
         debug!(name_ident :? =name_ident; "SchemaApi: {}", func_name!());
 
@@ -111,7 +116,7 @@ pub trait BaseApi: KVApi<Error = MetaError> {
             }
 
             let idu64 = fetch_id(self, IdGenerator::generic()).await?;
-            let id = DataId::<IdResource>::new(idu64);
+            let id = DataId::<IdRsc>::new(idu64);
             let id_ident = id.into_t_ident(name_ident.tenant());
             debug!(id :? = id,name_ident :? =name_ident; "new id");
 
@@ -136,39 +141,33 @@ pub trait BaseApi: KVApi<Error = MetaError> {
         }
     }
 
-    async fn get_id_value<K, IdResource>(
+    /// Get the `name -> id -> value` mapping by name.
+    ///
+    /// Returning `None` means the name does not exist.
+    /// Otherwise, returns the `SeqV<id>` and `SeqV<value>`.
+    async fn get_id_value(
         &self,
         key: &K,
-    ) -> Result<Option<(SeqV<DataId<IdResource>>, SeqV<IdResource::ValueType>)>, MetaError>
-    where
-        K: kvapi::Key<ValueType = DataId<IdResource>> + KeyWithTenant + Sync,
-        IdResource: TenantResource + Send + Sync,
-        IdResource::ValueType: FromToProto,
-    {
+    ) -> Result<Option<(SeqV<DataId<IdRsc>>, SeqV<IdRsc::ValueType>)>, MetaError> {
         self.get_id_and_value(key).await
     }
 
-    /// list by key prefix, returns a list of `(key, id, value)`
+    /// list by name prefix, returns a list of `(name, id, value)`
     ///
-    /// This function list all the ids by a key prefix,
+    /// Returns an iterator of `(name, id, SeqV<value>)` tuples.
+    /// This function list all the ids by a name prefix,
     /// then get the `id->value` mapping and finally zip these two together.
     // Using `async fn` does not allow using `impl Iterator` in the return type.
     // Thus we use `impl Future` instead.
-    fn list_id_value<K, IdResource>(
+    fn list_id_value(
         &self,
         prefix: &DirName<K>,
-        // ) -> Result<impl Drop, MetaError>
     ) -> impl Future<
         Output = Result<
-            impl Iterator<Item = (K, DataId<IdResource>, SeqV<IdResource::ValueType>)>,
+            impl Iterator<Item = (K, DataId<IdRsc>, SeqV<IdRsc::ValueType>)>,
             MetaError,
         >,
-    > + Send
-    where
-        K: kvapi::Key<ValueType = DataId<IdResource>> + KeyWithTenant + Send + Sync + 'static,
-        IdResource: TenantResource + Send + Sync,
-        IdResource::ValueType: FromToProto + Send + Sync + 'static,
-    {
+    > + Send {
         async move {
             let tenant = prefix.key().tenant();
             let strm = self.list_pb(prefix).await?;
@@ -208,4 +207,13 @@ pub trait BaseApi: KVApi<Error = MetaError> {
     }
 }
 
-impl<T> BaseApi for T where T: KVApi<Error = MetaError> + ?Sized {}
+impl<K, IdRsc, T> NameIdValueApi<K, IdRsc> for T
+where
+    T: KVApi<Error = MetaError> + ?Sized,
+    K: kvapi::Key<ValueType = DataId<IdRsc>>,
+    K: KeyWithTenant,
+    K: Send + Sync + 'static,
+    IdRsc: TenantResource + Send + Sync + 'static,
+    IdRsc::ValueType: FromToProto + Send + Sync + 'static,
+{
+}

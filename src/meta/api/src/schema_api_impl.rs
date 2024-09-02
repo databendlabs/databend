@@ -218,7 +218,6 @@ use log::warn;
 use ConditionResult::Eq;
 
 use crate::assert_table_exist;
-use crate::base_api::BaseApi;
 use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
@@ -234,6 +233,7 @@ use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::list_keys;
 use crate::list_u64_value;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::remove_db_from_share;
 use crate::send_txn;
 use crate::serialize_struct;
