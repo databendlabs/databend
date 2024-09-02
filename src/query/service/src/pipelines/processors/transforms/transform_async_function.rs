@@ -26,11 +26,11 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_meta_app::schema::DictionarySource;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::DictGetFunctionArgument;
-use databend_common_sql::plans::DictionarySource;
 use databend_common_storage::build_operator;
 use databend_common_storages_fuse::TableContext;
 use opendal::services::Redis;
@@ -70,10 +70,10 @@ impl TransformAsyncFunction {
                 match &dict_arg.dict_source {
                     DictionarySource::Redis(redis_source) => {
                         let mut builder = Redis::default().endpoint(&redis_source.connection_url);
-                        if let Some(username) = &redis_source.username {
+                        if let Some(username) = redis_source.username.clone() {
                             builder = builder.username(&username);
                         }
-                        if let Some(password) = &redis_source.password {
+                        if let Some(password) = redis_source.password.clone() {
                             builder = builder.password(&password);
                         }
                         if let Some(db_index) = redis_source.db_index {
@@ -127,7 +127,7 @@ impl TransformAsyncFunction {
         i: usize,
         data_block: &mut DataBlock,
         dict_arg: &DictGetFunctionArgument,
-        arg_indices: &Vec<IndexType>,
+        arg_indices: &[IndexType],
         data_type: &DataType,
     ) -> Result<()> {
         let op = self.operators.get(&i).unwrap().clone();
@@ -142,7 +142,7 @@ impl TransformAsyncFunction {
                     match buffer {
                         Ok(res) => {
                             let value =
-                            unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
+                                unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
                             Value::Scalar(Scalar::String(value))
                         }
                         Err(_) => Value::Scalar(dict_arg.default_value.clone()),
@@ -158,10 +158,10 @@ impl TransformAsyncFunction {
                         let buffer = op.read(key).await;
                         match buffer {
                             Ok(res) => {
-                                    let value =
-                                        unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
-                                        builder.push(ScalarRef::String(value.as_str()));
-                                }
+                                let value =
+                                    unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
+                                builder.push(ScalarRef::String(value.as_str()));
+                            }
                             Err(_) => {
                                 builder.push(dict_arg.default_value.as_ref());
                             }
@@ -194,7 +194,7 @@ impl AsyncTransform for TransformAsyncFunction {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
                     self.transform_sequence(
                         &mut data_block,
-                        &sequence_name,
+                        sequence_name,
                         &async_func_desc.data_type,
                     )
                     .await?;
@@ -203,7 +203,7 @@ impl AsyncTransform for TransformAsyncFunction {
                     self.transform_dict_get(
                         i,
                         &mut data_block,
-                        &dict_arg,
+                        dict_arg,
                         &async_func_desc.arg_indices,
                         &async_func_desc.data_type,
                     )

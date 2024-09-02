@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AsyncFunction;
@@ -25,11 +23,12 @@ impl PipelineBuilder {
     pub(crate) fn build_async_function(&mut self, async_function: &AsyncFunction) -> Result<()> {
         self.build_pipeline(&async_function.input)?;
 
+        let operators = TransformAsyncFunction::init_operators(&async_function.async_func_descs)?;
         self.main_pipeline.add_async_transformer(|| {
             TransformAsyncFunction::new(
                 self.ctx.clone(),
                 async_function.async_func_descs.clone(),
-                BTreeMap::new(),
+                operators.clone(),
             )
         });
 

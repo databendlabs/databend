@@ -23,13 +23,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_settings::Settings;
-use databend_common_sql::executor::physical_plans::AsyncFunction;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
-use super::processors::transforms::TransformAsyncFunction;
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
@@ -239,21 +236,5 @@ impl PipelineBuilder {
                 self.build_column_mutation(column_mutation)
             }
         }
-    }
-
-    #[recursive::recursive]
-    pub(crate) fn build_async_function(&mut self, async_function: &AsyncFunction) -> Result<()> {
-        self.build_pipeline(&async_function.input)?;
-
-        let operators = TransformAsyncFunction::init_operators(&async_function.async_func_descs)?;
-        self.main_pipeline.add_async_transformer(|| {
-            TransformAsyncFunction::new(
-                self.ctx.clone(),
-                async_function.async_func_descs.clone(),
-                operators.clone(),
-            )
-        });
-
-        Ok(())
     }
 }

@@ -23,6 +23,7 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use educe::Educe;
 
 use super::tenant_dictionary_ident::TenantDictionaryIdent;
 use crate::tenant::Tenant;
@@ -297,7 +298,6 @@ pub enum DictionarySource {
     Mysql(SqlSource),
     Redis(RedisSource),
 }
-
 
 mod kvapi_key_impl {
 

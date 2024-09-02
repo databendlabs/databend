@@ -17,7 +17,6 @@ use std::collections::HashSet;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -127,7 +126,7 @@ impl Binder {
             } else {
                 options.insert("db_index".to_string(), 0.to_string());
             }
-            if options.get("password").is_none() {
+            if !options.contains_key("password") {
                 options.insert("password".to_string(), String::new());
             }
             let allowed_options = HashSet::from([

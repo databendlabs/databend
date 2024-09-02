@@ -27,6 +27,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::schema::DictionarySource;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
