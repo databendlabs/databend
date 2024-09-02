@@ -16,14 +16,18 @@ use std::future::Future;
 
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
@@ -33,6 +37,7 @@ use futures::TryStreamExt;
 use log::debug;
 
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::UpsertPB;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_op_del;
@@ -189,6 +194,26 @@ where
                 return Ok(Some((seq_id, seq_meta)));
             }
         }
+    }
+
+    /// Update the value part of `id -> value` mapping by id.
+    ///
+    /// It returns the state transition of the update operation: `(prev, result)`.
+    async fn update_by_id(
+        &self,
+        id_ident: TIdent<IdRsc, DataId<IdRsc>>,
+        value: IdRsc::ValueType,
+    ) -> Result<Change<IdRsc::ValueType>, MetaError> {
+        let reply = self
+            .upsert_pb(&UpsertPB::new(
+                id_ident,
+                MatchSeq::GE(1),
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
+
+        Ok(reply)
     }
 
     /// Get the `name -> id -> value` mapping by name.

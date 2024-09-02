@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -88,8 +89,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -98,6 +97,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 
@@ -155,7 +155,11 @@ pub trait SchemaApi: Send + Sync {
         name_ident: &IndexNameIdent,
     ) -> Result<Option<GetIndexReply>, MetaError>;
 
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
+    async fn update_index(
+        &self,
+        id_ident: IndexIdIdent,
+        index_meta: IndexMeta,
+    ) -> Result<Change<IndexMeta>, MetaError>;
 
     async fn list_indexes(
         &self,

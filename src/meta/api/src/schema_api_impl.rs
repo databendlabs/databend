@@ -165,8 +165,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -197,14 +195,13 @@ use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
@@ -230,7 +227,6 @@ use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::kv_pb_api::UpsertPB;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
@@ -1025,29 +1021,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tenant = &req.tenant;
-        let index_id = IndexId::new(req.index_id);
-        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
-
-        let reply = self
-            .upsert_pb(&UpsertPB::new(
-                id_ident,
-                MatchSeq::GE(1),
-                Operation::Update(req.index_meta),
-                None,
-            ))
-            .await?;
-
-        if !reply.is_changed() {
-            Err(KVAppError::AppError(AppError::UnknownIndex(
-                UnknownError::new(index_id.to_string(), func_name!()),
-            )))
-        } else {
-            Ok(UpdateIndexReply {})
-        }
+    async fn update_index(
+        &self,
+        id_ident: IndexIdIdent,
+        index_meta: IndexMeta,
+    ) -> Result<Change<IndexMeta>, MetaError> {
+        debug!(id_ident :? =(&id_ident); "SchemaApi: {}", func_name!());
+        NameIdValueApi::<IndexNameIdent, _>::update_by_id(self, id_ident, index_meta).await
     }
 
     #[logcall::logcall]

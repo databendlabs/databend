@@ -27,6 +27,8 @@ use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -113,6 +115,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::seq_value::SeqV;
@@ -318,7 +321,23 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        Ok(self.ctx.meta.update_index(req).await?)
+        let tenant = &req.tenant;
+        let index_id = IndexId::new(req.index_id);
+        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
+
+        let change = self.ctx.meta.update_index(id_ident, req.index_meta).await?;
+
+        if !change.is_changed() {
+            Err(
+                KVAppError::AppError(AppError::UnknownIndex(UnknownError::new(
+                    index_id.to_string(),
+                    func_name!(),
+                )))
+                .into(),
+            )
+        } else {
+            Ok(UpdateIndexReply {})
+        }
     }
 
     #[async_backtrace::framed]
