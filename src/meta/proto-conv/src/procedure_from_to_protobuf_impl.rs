@@ -37,8 +37,6 @@ impl FromToProto for mt::principal::ProcedureMeta {
     fn from_pb(p: pb::ProcedureMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
         let mut return_types = Vec::with_capacity(p.return_types.len());
         for arg_type in p.return_types {
             let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
@@ -76,28 +74,6 @@ impl FromToProto for mt::principal::ProcedureMeta {
             script: self.script.to_string(),
             comment: self.comment.to_string(),
             language: self.procedure_language.to_string(),
-        };
-        Ok(p)
-    }
-}
-
-impl FromToProto for mt::principal::ProcedureIdList {
-    type PB = pb::ProcedureIdList;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::ProcedureIdList) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let v = Self { id_list: p.ids };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<pb::ProcedureIdList, Incompatible> {
-        let p = pb::ProcedureIdList {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            ids: self.id_list.clone(),
         };
         Ok(p)
     }

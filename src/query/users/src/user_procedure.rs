@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::procedure::ProcedureInfo;
+use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::principal::CreateProcedureReq;
 use databend_common_meta_app::principal::DropProcedureReq;
+use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::tenant::Tenant;
 
@@ -36,10 +37,12 @@ impl UserApiProvider {
         &self,
         tenant: &Tenant,
         req: GetProcedureReq,
-    ) -> Result<ProcedureInfo> {
+    ) -> Result<GetProcedureReply> {
         let procedure_api = self.procedure_api(tenant);
-        let procedure = procedure_api.get_procedure(req).await?;
-
+        let procedure = procedure_api
+            .get_procedure(&req)
+            .await?
+            .ok_or_else(|| AppError::from(req.inner.unknown_error("get_procedure")))?;
         Ok(procedure)
     }
 
