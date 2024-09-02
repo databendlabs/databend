@@ -958,6 +958,9 @@ impl Table for FuseTable {
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))
             }
+            TimeNavigation::StreamBatch(_) => Err(ErrorCode::StorageUnsupported(
+                "MAX_BATCH_SIZE_HINT only support in STREAM",
+            )),
         }
     }
 

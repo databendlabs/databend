@@ -592,6 +592,7 @@ impl Display for ChangesInterval {
 pub enum TemporalClause {
     TimeTravel(TimeTravelPoint),
     Changes(ChangesInterval),
+    StreamBatch(u64),
 }
 
 impl Display for TemporalClause {
@@ -602,6 +603,9 @@ impl Display for TemporalClause {
             }
             TemporalClause::Changes(changes) => {
                 write!(f, "{}", changes)?;
+            }
+            TemporalClause::StreamBatch(size) => {
+                write!(f, "MAX_BATCH_SIZE_HINT {}", size)?;
             }
         }
         Ok(())

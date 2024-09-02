@@ -99,7 +99,6 @@ impl Binder {
             )?
         } else {
             match self.resolve_data_source(
-                tenant.tenant_name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),

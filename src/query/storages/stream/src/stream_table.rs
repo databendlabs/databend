@@ -36,8 +36,13 @@ use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
@@ -47,6 +52,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
+use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
@@ -116,6 +122,84 @@ impl StreamTable {
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(desc, self.offset()?)?;
         Ok(source)
+    }
+
+    pub async fn navigate_within_batch_limit(
+        &self,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        source_db_name: &str,
+        source_tb_name: &str,
+        batch_limit: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        let stream_desc = &self.get_table_info().desc;
+        let source = catalog
+            .get_table(tenant, source_db_name, source_tb_name)
+            .await
+            .map_err(|err| {
+                ErrorCode::IllegalStream(format!(
+                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                    source_db_name,
+                    source_tb_name,
+                    stream_desc,
+                    err.message()
+                ))
+            })?;
+
+        if source.get_table_info().ident.table_id != self.source_table_id()? {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Base table {} dropped, cannot read from stream {}",
+                stream_desc, self.info.desc,
+            )));
+        }
+
+        let fuse_table = FuseTable::try_from_table(source.as_ref())?;
+        fuse_table.check_changes_valid(stream_desc, self.offset()?)?;
+        let Some(batch_limit) = batch_limit else {
+            return Ok(source);
+        };
+
+        let (base_row_count, base_timsestamp) = if let Some(base_loc) = self.snapshot_loc() {
+            let (base, _) =
+                SnapshotsIO::read_snapshot(base_loc.to_string(), fuse_table.get_operator()).await?;
+            (base.summary.row_count, base.timestamp)
+        } else {
+            (0, None)
+        };
+
+        let Some(location) = fuse_table.snapshot_loc().await? else {
+            return Ok(source);
+        };
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
+        let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+        let mut snapshot_stream = reader.snapshot_history(
+            location,
+            snapshot_version,
+            fuse_table.meta_location_generator().clone(),
+        );
+
+        let mut instant = None;
+        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
+            if snapshot_with_version.0.timestamp <= base_timsestamp {
+                break;
+            }
+
+            let change_row_count = snapshot_with_version
+                .0
+                .summary
+                .row_count
+                .abs_diff(base_row_count);
+            instant = Some(snapshot_with_version);
+            if change_row_count <= batch_limit {
+                break;
+            }
+        }
+
+        if let Some((snapshot, format_version)) = instant {
+            Ok(fuse_table.load_table_by_snapshot(snapshot.as_ref(), format_version)?)
+        } else {
+            Ok(source)
+        }
     }
 
     pub fn offset(&self) -> Result<u64> {

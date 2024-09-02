@@ -767,6 +767,8 @@ pub enum TokenKind {
     MASKING,
     #[token("MAP", ignore(ascii_case))]
     MAP,
+    #[token("MAX_BATCH_SIZE_HINT", ignore(ascii_case))]
+    MAX_BATCH_SIZE_HINT,
     #[token("MAX_FILE_SIZE", ignore(ascii_case))]
     MAX_FILE_SIZE,
     #[token("MASTER_KEY", ignore(ascii_case))]

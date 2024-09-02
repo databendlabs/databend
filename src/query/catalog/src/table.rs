@@ -505,6 +505,7 @@ pub enum TimeNavigation {
         at: NavigationPoint,
         end: Option<NavigationPoint>,
     },
+    StreamBatch(u64),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

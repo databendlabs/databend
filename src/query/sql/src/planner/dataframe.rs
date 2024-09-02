@@ -84,9 +84,7 @@ impl Dataframe {
         let (s_expr, bind_context) = if db == Some("system") && table_name == "one" {
             let catalog = CATALOG_DEFAULT;
             let database = "system";
-            let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder.resolve_data_source(
-                tenant.tenant_name(),
                 catalog,
                 database,
                 "one",

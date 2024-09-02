@@ -896,6 +896,19 @@ impl TableContext for QueryContext {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: u64,
+    ) -> Result<Arc<dyn Table>> {
+        self.shared
+            .get_table_with_batch(catalog, database, table, max_batch_size)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn filter_out_copied_files(
         &self,
         catalog_name: &str,

@@ -564,9 +564,17 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
         },
     );
 
+    let stream_batch = map(
+        rule! {
+           MAX_BATCH_SIZE_HINT ~ ^#literal_u64
+        },
+        |(_, size)| TemporalClause::StreamBatch(size),
+    );
+
     rule!(
         #time_travel
         | #changes
+        | #stream_batch
     )(i)
 }
 
@@ -743,12 +751,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_1_to_3 ~ (WITH ~ CONSUME)? ~ #temporal_clause? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
             (catalog, database, table),
-            temporal,
             opt_consume,
+            temporal,
             alias,
             pivot,
             unpivot,
