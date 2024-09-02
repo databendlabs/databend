@@ -44,6 +44,9 @@ set max_threads=4;
 statement ok
 set sort_spilling_memory_ratio = 0;
 
+statement ok
+set enable_parallel_multi_merge_sort = 0;
+
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
