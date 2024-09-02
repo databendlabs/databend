@@ -4283,6 +4283,7 @@ dependencies = [
  "databend-common-sharing",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-users",
  "databend-enterprise-fail-safe",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",

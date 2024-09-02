@@ -121,3 +121,24 @@ query I
 select count(*) from t2;
 ----
 18
+
+onlyif mysql
+statement ok
+create temp table t3(c int);
+
+onlyif mysql
+query
+copy into t3 from @data/csv/numbers_1.csv file_format = (type = CSV);
+----
+csv/numbers_1.csv 18 0 NULL NULL
+
+onlyif mysql
+query
+copy into t3 from @data/csv/numbers_2.csv file_format = (type = CSV);
+----
+csv/numbers_2.csv 18 0 NULL NULL
+
+onlyif mysql
+query
+copy into t3 from @data/csv/numbers_1.csv file_format = (type = CSV);
+----

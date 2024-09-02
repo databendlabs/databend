@@ -38,6 +38,7 @@ pub use statistics::*;
 // currently, used by versioned readers only
 pub(crate) use testing::*;
 pub use utils::parse_storage_prefix;
+pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;

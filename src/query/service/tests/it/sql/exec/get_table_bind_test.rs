@@ -977,7 +977,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_session_id(&self) -> String {
+    fn get_session_id(&self) -> Result<String> {
         todo!()
     }
 
