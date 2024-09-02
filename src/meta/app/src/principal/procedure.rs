@@ -21,7 +21,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;
 
-use crate::principal::procedur_name_ident::ProcedureNameIdent;
+use crate::principal::procedure_id_ident::ProcedureIdIdent;
+use crate::principal::procedure_name_ident::ProcedureNameIdent;
 use crate::schema::CreateOption;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -29,7 +30,7 @@ use crate::KeyWithTenant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcedureInfo {
-    pub ident: ProcedureIdent,
+    pub ident: ProcedureIdIdent,
     pub name_ident: ProcedureNameIdent,
     pub meta: ProcedureMeta,
 }
@@ -38,46 +39,6 @@ pub struct ProcedureInfo {
 pub struct ProcedureIdent {
     pub procedure_id: u64,
     pub seq: u64,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
-pub struct ProcedureId {
-    pub procedure_id: u64,
-}
-
-impl ProcedureId {
-    pub fn new(procedure_id: u64) -> Self {
-        ProcedureId { procedure_id }
-    }
-}
-
-impl From<u64> for ProcedureId {
-    fn from(procedure_id: u64) -> Self {
-        ProcedureId { procedure_id }
-    }
-}
-
-impl Display for ProcedureId {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.procedure_id)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ProcedureIdToName {
-    pub procedure_id: u64,
-}
-
-impl Display for ProcedureIdToName {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.procedure_id)
-    }
-}
-
-impl ProcedureIdToName {
-    pub fn new(procedure_id: u64) -> Self {
-        ProcedureIdToName { procedure_id }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -311,74 +272,5 @@ pub struct ListProcedureReq {
 impl ListProcedureReq {
     pub fn tenant(&self) -> &Tenant {
         &self.tenant
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::principal::procedur_name_ident::ProcedureNameIdentRaw;
-    use crate::principal::ProcedureId;
-    use crate::principal::ProcedureIdToName;
-    use crate::principal::ProcedureMeta;
-
-    impl kvapi::KeyCodec for ProcedureId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.procedure_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let procedure_id = parser.next_u64()?;
-            Ok(Self { procedure_id })
-        }
-    }
-
-    /// "__fd_procedure_by_id/<procedure_id>"
-    impl kvapi::Key for ProcedureId {
-        const PREFIX: &'static str = "__fd_procedure_by_id";
-
-        type ValueType = ProcedureMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
-
-    impl kvapi::KeyCodec for ProcedureIdToName {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.procedure_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let procedure_id = parser.next_u64()?;
-            Ok(Self { procedure_id })
-        }
-    }
-
-    /// "__fd_procedure_id_to_name/<procedure_id> -> ProcedureNameIdent"
-    impl kvapi::Key for ProcedureIdToName {
-        const PREFIX: &'static str = "__fd_procedure_id_to_name";
-
-        type ValueType = ProcedureNameIdentRaw;
-
-        fn parent(&self) -> Option<String> {
-            Some(ProcedureId::new(self.procedure_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for ProcedureMeta {
-        type KeyType = ProcedureId;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for ProcedureNameIdentRaw {
-        type KeyType = ProcedureIdToName;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
