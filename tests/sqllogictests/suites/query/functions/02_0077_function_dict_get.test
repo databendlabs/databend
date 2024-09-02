@@ -1,0 +1,3 @@
+query T
+SELECT select dict_get(test, 'value', 'a');
+----

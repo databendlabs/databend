@@ -77,19 +77,19 @@ impl Binder {
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
         if source.to_lowercase() == *"mysql" {
-            let required_options = ["host", "port", "username", "password", "db"];
+            let required_options = ["host", "port", "username", "password", "db", "table"];
             for option in required_options {
                 if !options.contains_key(option) {
                     return Err(ErrorCode::MissingDictionaryOption(
                         "The mysql configurations are missing one or more required options. "
                             .to_owned()
-                            + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
+                            + "Please ensure you have provided values for 'host', 'port', 'username', 'password', 'db' and 'table'.",
                     ));
                 }
             }
             if required_options.len() != options.len() {
                 return Err(ErrorCode::UnsupportedDictionaryOption(format!(
-                    "Some provided options are not recognized."
+                    "Some provided options are not recognized"
                 )));
             }
             let port = match options.get("port") {

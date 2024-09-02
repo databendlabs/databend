@@ -3916,7 +3916,7 @@ impl<'a> TypeChecker<'a> {
             r.dictionary_meta
         } else {
             return Err(ErrorCode::UnknownDictionary(format!(
-                "Unkown dictionary {}",
+                "Unknown dictionary {}",
                 dict_name.clone(),
             )));
         };

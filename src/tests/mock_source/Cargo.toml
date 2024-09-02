@@ -1,0 +1,14 @@
+[package]
+name = "mock_source"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+mini-redis = "0.4"
+
+[lints]
+workspace = true

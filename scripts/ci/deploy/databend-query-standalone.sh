@@ -10,9 +10,10 @@ BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 killall databend-query || true
 killall databend-meta || true
+killall databend-mock-source || true
 sleep 1
 
-for bin in databend-query databend-meta; do
+for bin in databend-query databend-meta databend-mock-source; do
 	if test -n "$(pgrep $bin)"; then
 		echo "The $bin is not killed. force killing."
 		killall -9 $bin || true
@@ -32,3 +33,9 @@ nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databen
 
 echo "Waiting on databend-query 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
+
+echo 'Start databend-mock-source...'
+nohup target/${BUILD_PROFILE}/databend-mock-source --single --log-level=INFO &
+
+echo "Waiting on databend-mock-source 10 seconds..."
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 6379
