@@ -22,6 +22,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
@@ -295,7 +296,9 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        let dropped = self.ctx.meta.drop_index(&req.name_ident).await?;
+        let res = self.ctx.meta.drop_index(&req.name_ident).await;
+        let dropped = res.map_err(KVAppError::from)?;
+
         if dropped.is_none() {
             if req.if_exists {
                 // Alright

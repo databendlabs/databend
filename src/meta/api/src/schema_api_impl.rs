@@ -218,7 +218,6 @@ use log::warn;
 use ConditionResult::Eq;
 
 use crate::assert_table_exist;
-use crate::base_api::BaseApi;
 use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
@@ -234,6 +233,8 @@ use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::list_keys;
 use crate::list_u64_value;
+use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::remove_db_from_share;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -993,35 +994,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn drop_index(
         &self,
         name_ident: &IndexNameIdent,
-    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, KVAppError> {
-        debug!(req :? =(&name_ident); "SchemaApi: {}", func_name!());
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let mut txn = TxnRequest::default();
-
-            let get_res = self.get_id_and_value(name_ident).await?;
-            let Some((seq_id, seq_meta)) = get_res else {
-                return Ok(None);
-            };
-
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-            let id_to_name_ident =
-                IndexIdToNameIdent::new_generic(name_ident.tenant(), seq_id.data);
-
-            txn_delete_exact(&mut txn, name_ident, seq_id.seq);
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            txn.if_then.push(txn_op_del(&id_to_name_ident));
-
-            let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(name_ident :? =name_ident,id :? = seq_id,succ = succ;"drop_index");
-
-            if succ {
-                return Ok(Some((seq_id, seq_meta)));
-            }
-        }
+    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, MetaTxnError> {
+        let dropped = self
+            .remove_id_value(name_ident, |id| {
+                vec![IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
+            })
+            .await?;
+        Ok(dropped)
     }
 
     #[logcall::logcall]
