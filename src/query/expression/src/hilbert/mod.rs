@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A comparable row format inspired by apache/arrow-rs.
-//! Use this module to convert column-oriented data into row-oriented data.
-//! It's mainly used for sort processors.
+mod index;
+#[rustfmt::skip]
+mod lut;
+mod state;
 
-mod fixed;
-mod row_converter;
-mod variable;
-
-pub use fixed::FixedLengthEncoding;
-pub use row_converter::RowConverter;
+pub use index::*;
+pub use lut::LUT;
+pub use state::*;

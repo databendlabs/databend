@@ -29,6 +29,7 @@ mod geo_h3;
 mod geography;
 mod geometry;
 mod hash;
+mod hilbert;
 mod map;
 mod math;
 mod other;
@@ -64,4 +65,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     bitmap::register(registry);
     geometry::register(registry);
     geography::register(registry);
+    hilbert::register(registry);
 }

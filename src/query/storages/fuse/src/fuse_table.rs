@@ -60,6 +60,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sharing::create_share_table_operator;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
+use databend_common_sql::parse_hilbert_cluster_key;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -75,9 +76,11 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -453,12 +456,18 @@ impl FuseTable {
         let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
             return vec![];
         };
-        let cluster_keys =
-            parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
-        cluster_keys
-            .into_iter()
-            .map(|v| v.data_type().clone())
-            .collect()
+        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        match cluster_type {
+            ClusterType::Hilbert => vec![DataType::Binary],
+            ClusterType::Linear => {
+                let cluster_keys =
+                    parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+                cluster_keys
+                    .into_iter()
+                    .map(|v| v.data_type().clone())
+                    .collect()
+            }
+        }
     }
 
     pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
@@ -510,7 +519,13 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_cluster_keys(ctx, table_meta.clone(), order).unwrap();
+            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            let cluster_keys = match cluster_type {
+                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
+                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
+            }
+            .unwrap();
+
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {
@@ -555,15 +570,25 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
+        cluster_type: String,
     ) -> Result<()> {
         // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str()
             && *old_cluster_key_str == cluster_key_str
         {
-            return Ok(());
+            let old_cluster_type = self
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
+                .to_string()
+                .to_lowercase();
+            if cluster_type == old_cluster_type {
+                return Ok(());
+            }
         }
         let mut new_table_meta = self.get_table_info().meta.clone();
+        new_table_meta
+            .options
+            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type);
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
