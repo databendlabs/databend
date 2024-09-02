@@ -56,10 +56,11 @@ impl HashJoinProbeState {
 
         // Probe hash table and update `outer_scan_map`.
         if probe_state.probe_with_selection {
-            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
-            for idx in selection.iter() {
-                let key = unsafe { keys.key_unchecked(*idx as usize) };
-                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+            let selection = probe_state.selection.as_slice();
+            for selection_idx in process_state.next_idx..probe_state.selection_count {
+                let key_idx = unsafe { *selection.get_unchecked(selection_idx) };
+                let key = unsafe { keys.key_unchecked(key_idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(key_idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
                 let (match_count, mut next_ptr) =
@@ -77,9 +78,9 @@ impl HashJoinProbeState {
                 }
             }
         } else {
-            for idx in process_state.next_idx..process_state.input.num_rows() {
-                let key = unsafe { keys.key_unchecked(idx) };
-                let ptr = unsafe { *pointers.get_unchecked(idx) };
+            for key_idx in process_state.next_idx..process_state.input.num_rows() {
+                let key = unsafe { keys.key_unchecked(key_idx) };
+                let ptr = unsafe { *pointers.get_unchecked(key_idx) };
 
                 // Probe hash table and fill `build_indexes`.
                 let (match_count, mut next_ptr) =
