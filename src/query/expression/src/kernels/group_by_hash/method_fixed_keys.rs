@@ -32,6 +32,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
+use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
@@ -265,23 +266,28 @@ macro_rules! impl_hash_method_fixed_keys {
                 &self,
                 key_state: &'a KeysState,
             ) -> Result<Self::HashKeyIter<'a>> {
-                use crate::types::ArgType;
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => Ok(col.iter()),
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
                 }
             }
 
-            fn build_keys_accessor_and_hashes(
+            fn build_keys_accessor(
                 &self,
                 keys_state: KeysState,
-                hashes: &mut Vec<u64>,
             ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-                use crate::types::ArgType;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
+                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
+                    }
+                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
+                }
+            }
+
+            fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
                         hashes.extend(col.iter().map(|key| key.fast_hash()));
-                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
                     }
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
                 }
@@ -342,15 +348,20 @@ macro_rules! impl_hash_method_fixed_large_keys {
                 }
             }
 
-            fn build_keys_accessor_and_hashes(
+            fn build_keys_accessor(
                 &self,
                 keys_state: KeysState,
-                hashes: &mut Vec<u64>,
             ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
+                match keys_state {
+                    KeysState::$name(v) => Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(v))),
+                    _ => unreachable!(),
+                }
+            }
+
+            fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
                 match keys_state {
                     KeysState::$name(v) => {
                         hashes.extend(v.iter().map(|key| key.fast_hash()));
-                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(v)))
                     }
                     _ => unreachable!(),
                 }

@@ -153,10 +153,9 @@ impl HashJoinProbeState {
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
                 // Build `keys` and get the hashes of `keys`.
-                let keys = table.hash_method.build_keys_accessor_and_hashes(
-                    process_state.keys_state.clone(),
-                    &mut probe_state.hashes,
-                )?;
+                let keys = table
+                    .hash_method
+                    .build_keys_accessor(process_state.keys_state.clone())?;
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
@@ -301,9 +300,10 @@ impl HashJoinProbeState {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(probe_keys, input_num_rows)?;
-                let keys = table
+                table
                     .hash_method
-                    .build_keys_accessor_and_hashes(keys_state.clone(), &mut probe_state.hashes)?;
+                    .build_keys_hashes(&keys_state, &mut probe_state.hashes);
+                let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
 
                 probe_state.process_state = Some(ProcessState {
                     input,
