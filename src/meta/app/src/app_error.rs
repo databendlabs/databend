@@ -19,6 +19,7 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::principal::procedure_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
@@ -1279,7 +1280,7 @@ pub enum AppError {
 
     // Procedure
     #[error(transparent)]
-    UnknownProcedure(#[from] UnknownProcedure),
+    UnknownProcedure(#[from] UnknownError<procedure_name_ident::Resource>),
 
     #[error(transparent)]
     ProcedureAlreadyExists(#[from] ProcedureAlreadyExists),
