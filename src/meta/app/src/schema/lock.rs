@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KeyError;
@@ -47,7 +46,7 @@ pub enum LockType {
 }
 
 impl LockType {
-    pub fn revision_from_str(&self, s: &str) -> Result<u64, KeyError> {
+    pub fn revision_from_str(&self, s: &str) -> std::result::Result<u64, KeyError> {
         match self {
             LockType::TABLE => {
                 let key = TableLockIdent::from_str_key(s)?;
@@ -56,7 +55,7 @@ impl LockType {
         }
     }
 
-    pub fn key_from_str(&self, s: &str) -> Result<LockKey, KeyError> {
+    pub fn key_from_str(&self, s: &str) -> std::result::Result<LockKey, KeyError> {
         match self {
             LockType::TABLE => {
                 let key = TableLockIdent::from_str_key(s)?;

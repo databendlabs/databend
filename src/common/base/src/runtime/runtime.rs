@@ -458,7 +458,7 @@ where
 }
 
 #[track_caller]
-pub fn try_spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
+pub fn try_spawn_blocking<F, R>(f: F) -> std::result::Result<tokio::task::JoinHandle<R>, F>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
@@ -480,7 +480,7 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 #[track_caller]
-pub fn try_block_on<F: Future>(future: F) -> Result<F::Output, F> {
+pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(future),
         #[expect(clippy::disallowed_methods)]

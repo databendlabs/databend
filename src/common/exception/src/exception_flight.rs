@@ -12,25 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_arrow::arrow_format::flight::data::FlightData;
 
-use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
 use crate::Result;
 use crate::SerializedError;
 
 impl From<ErrorCode> for FlightData {
     fn from(error: ErrorCode) -> Self {
-        let serialized_error = serde_json::to_vec::<SerializedError>(&SerializedError {
-            code: error.code(),
-            name: error.name(),
-            message: error.message(),
-            span: error.span(),
-            backtrace: error.backtrace_str(),
-        })
-        .unwrap();
+        let serialized_error =
+            serde_json::to_vec::<SerializedError>(&SerializedError::from(&error)).unwrap();
 
         FlightData {
             data_body: serialized_error,
@@ -47,28 +38,7 @@ impl TryFrom<FlightData> for ErrorCode {
     fn try_from(flight_data: FlightData) -> Result<Self> {
         match serde_json::from_slice::<SerializedError>(&flight_data.data_body) {
             Err(error) => Ok(ErrorCode::from(error)),
-            Ok(serialized_error) => match serialized_error.backtrace.len() {
-                0 => Ok(ErrorCode::create(
-                    serialized_error.code,
-                    serialized_error.name,
-                    serialized_error.message,
-                    String::new(),
-                    None,
-                    None,
-                )
-                .set_span(serialized_error.span)),
-                _ => Ok(ErrorCode::create(
-                    serialized_error.code,
-                    serialized_error.name,
-                    serialized_error.message,
-                    String::new(),
-                    None,
-                    Some(ErrorCodeBacktrace::Serialized(Arc::new(
-                        serialized_error.backtrace,
-                    ))),
-                )
-                .set_span(serialized_error.span)),
-            },
+            Ok(serialized_error) => Ok(ErrorCode::from(&serialized_error)),
         }
     }
 }
