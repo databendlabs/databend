@@ -34,7 +34,7 @@ mod schema_api_test_suite;
 mod sequence_api;
 pub(crate) mod testing;
 pub mod txn_backoff;
-pub(crate) mod util;
+pub mod util;
 
 pub mod crud;
 mod sequence_api_impl;

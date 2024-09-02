@@ -23,7 +23,6 @@ use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::VirtualColumnNotFound;
 use databend_common_meta_app::primitive::Id;
-use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseType;
@@ -404,28 +403,6 @@ pub fn db_id_has_to_exist(seq: u64, db_id: u64, msg: impl Display) -> Result<(),
         ));
 
         Err(KVAppError::AppError(app_err))
-    } else {
-        Ok(())
-    }
-}
-
-/// Return OK if a procedure_id or procedure_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownProcedure error
-pub fn procedure_has_to_exist(
-    seq: u64,
-    procedure_name_ident: &ProcedureNameIdent,
-    msg: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        debug!(seq = seq, db_name_ident :? =(procedure_name_ident); "procedure does not exist");
-
-        Err(KVAppError::AppError(AppError::UnknownProcedure(
-            UnknownProcedure::new(
-                procedure_name_ident.procedure_name(),
-                format!("{}: {}", msg, procedure_name_ident.display()),
-            ),
-        )))
     } else {
         Ok(())
     }

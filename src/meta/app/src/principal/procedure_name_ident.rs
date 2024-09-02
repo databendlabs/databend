@@ -33,27 +33,26 @@ impl ProcedureNameIdentRaw {
 }
 
 mod kvapi_impl {
-
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::primitive::Id;
-    use crate::principal::ProcedureId;
+    use crate::principal::procedure_id_ident::ProcedureId;
     use crate::principal::ProcedureNameIdent;
     use crate::tenant_key::resource::TenantResource;
+    use crate::KeyWithTenant;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_procedure";
         const TYPE: &'static str = "ProcedureNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<ProcedureId>;
+        type ValueType = ProcedureId;
     }
 
-    impl kvapi::Value for Id<ProcedureId> {
+    impl kvapi::Value for ProcedureId {
         type KeyType = ProcedureNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.inner().to_string_key()]
+        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            [self.into_t_ident(key.tenant()).to_string_key()]
         }
     }
 
