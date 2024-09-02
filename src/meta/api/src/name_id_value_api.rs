@@ -39,6 +39,7 @@ use crate::txn_op_del;
 use crate::util::fetch_id;
 use crate::util::send_txn;
 use crate::util::txn_cond_eq_seq;
+use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
 
 /// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
@@ -62,7 +63,7 @@ where
 {
     /// Create a two level `name -> id -> value` mapping.
     ///
-    /// `associated_ops` is used to generate additional key-values to add or remove along with the main operation.
+    /// `associated_records` is used to generate additional key-values to add or remove along with the main operation.
     /// Such operations do not have any condition constraints.
     /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
     ///
@@ -78,7 +79,7 @@ where
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
     {
-        debug!(name_ident :? =name_ident; "SchemaApi: {}", func_name!());
+        debug!(name_ident :? =name_ident; "NameIdValueApi: {}", func_name!());
 
         let tenant = name_ident.tenant();
 
@@ -137,6 +138,55 @@ where
 
             if succ {
                 return Ok(Ok(id));
+            }
+        }
+    }
+
+    /// Remove the `name -> id -> value` mapping by name, along with associated records, such `id->name` reverse index.
+    ///
+    /// Returns the removed `SeqV<id>` and `SeqV<value>`, if the name exists.
+    /// Otherwise, returns None.
+    ///
+    /// `associated_records` is used to generate additional key-values to remove along with the main operation.
+    /// Such operations do not have any condition constraints.
+    /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
+    async fn remove_id_value<A>(
+        &self,
+        name_ident: &K,
+        associated_keys: A,
+    ) -> Result<Option<(SeqV<DataId<IdRsc>>, SeqV<IdRsc::ValueType>)>, MetaTxnError>
+    where
+        A: Fn(DataId<IdRsc>) -> Vec<String> + Send,
+    {
+        debug!(key :? =name_ident; "NameIdValueApi: {}", func_name!());
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut txn = TxnRequest::default();
+
+            let get_res = self.get_id_value(name_ident).await?;
+            let Some((seq_id, seq_meta)) = get_res else {
+                return Ok(None);
+            };
+
+            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+
+            txn_delete_exact(&mut txn, name_ident, seq_id.seq);
+            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+
+            // Remove associated
+            let ks = associated_keys(seq_id.data);
+            for k in ks {
+                txn.if_then.push(TxnOp::delete(k));
+            }
+
+            let (succ, _responses) = send_txn(self, txn).await?;
+            debug!(key :? =name_ident, id :? =&id_ident,succ = succ; "{}", func_name!());
+
+            if succ {
+                return Ok(Some((seq_id, seq_meta)));
             }
         }
     }
