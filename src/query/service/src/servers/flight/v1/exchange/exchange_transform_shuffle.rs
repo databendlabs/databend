@@ -59,14 +59,14 @@ impl Debug for ExchangeShuffleMeta {
 }
 
 impl serde::Serialize for ExchangeShuffleMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unimplemented!("Unimplemented serialize ExchangeShuffleMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ExchangeShuffleMeta")
     }

@@ -30,7 +30,7 @@ use unicode_segmentation::UnicodeSegmentation;
 /// let new_key = escape_for_key(&key);
 /// assert_eq!(Ok("data_bend%21%21".to_string()), new_key);
 /// ```
-pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
+pub fn escape_for_key(key: &str) -> std::result::Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
     fn hex(num: u8) -> u8 {
@@ -64,7 +64,7 @@ pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
 /// let original_key = unescape_for_key(&key);
 /// assert_eq!(Ok("data_bend!!".to_string()), original_key);
 /// ```
-pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
+pub fn unescape_for_key(key: &str) -> std::result::Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
     fn unhex(num: u8) -> u8 {

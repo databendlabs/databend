@@ -24,13 +24,11 @@ use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::ColumnBindingBuilder;
 use crate::plans::ScalarExpr;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
-use crate::Visibility;
 
 pub trait TypeProvider<ColumnID: ColumnIndex> {
     fn get_type(&self, column_id: &ColumnID) -> Result<DataType>;
@@ -197,25 +195,19 @@ impl ScalarExpr {
             },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBindingBuilder::new(
+                id: ColumnBinding::new_dummy_column(
                     win.display_name.clone(),
-                    usize::MAX,
                     Box::new(win.func.return_type()),
-                    Visibility::Visible,
-                )
-                .build(),
+                ),
                 data_type: win.func.return_type(),
                 display_name: win.display_name.clone(),
             },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBindingBuilder::new(
+                id: ColumnBinding::new_dummy_column(
                     agg.display_name.clone(),
-                    usize::MAX,
                     Box::new((*agg.return_type).clone()),
-                    Visibility::Visible,
-                )
-                .build(),
+                ),
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
             },
@@ -241,19 +233,19 @@ impl ScalarExpr {
             },
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: subquery.span,
-                id: new_dummy_column(subquery.data_type()),
+                id: ColumnBinding::new_dummy_column(
+                    "DUMMY".to_string(),
+                    Box::new(subquery.data_type()),
+                ),
                 data_type: subquery.data_type(),
                 display_name: "DUMMY".to_string(),
             },
             ScalarExpr::UDFCall(udf) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBindingBuilder::new(
+                id: ColumnBinding::new_dummy_column(
                     udf.display_name.clone(),
-                    usize::MAX,
                     Box::new((*udf.return_type).clone()),
-                    Visibility::Visible,
-                )
-                .build(),
+                ),
                 data_type: (*udf.return_type).clone(),
                 display_name: udf.display_name.clone(),
             },
@@ -265,13 +257,10 @@ impl ScalarExpr {
 
             ScalarExpr::AsyncFunctionCall(async_func) => RawExpr::ColumnRef {
                 span: None,
-                id: ColumnBindingBuilder::new(
+                id: ColumnBinding::new_dummy_column(
                     async_func.display_name.clone(),
-                    usize::MAX,
                     Box::new(async_func.return_type.as_ref().clone()),
-                    Visibility::Visible,
-                )
-                .build(),
+                ),
                 data_type: async_func.return_type.as_ref().clone(),
                 display_name: async_func.display_name.clone(),
             },
@@ -285,14 +274,4 @@ impl ScalarExpr {
     pub fn is_column_ref(&self) -> bool {
         matches!(self, ScalarExpr::BoundColumnRef(_))
     }
-}
-
-fn new_dummy_column(data_type: DataType) -> ColumnBinding {
-    ColumnBindingBuilder::new(
-        "DUMMY".to_string(),
-        usize::MAX,
-        Box::new(data_type),
-        Visibility::Visible,
-    )
-    .build()
 }

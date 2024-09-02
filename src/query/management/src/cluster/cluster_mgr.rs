@@ -30,7 +30,7 @@ use databend_common_meta_types::Operation;
 
 use crate::cluster::ClusterApi;
 
-pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters_v2";
+pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters_v3";
 
 pub struct ClusterMgr {
     metastore: MetaStore,

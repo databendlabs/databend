@@ -270,7 +270,7 @@ impl FuseTable {
 
                 async move {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
-                    Result::<_, ErrorCode>::Ok(pruned_segments)
+                    Result::<_>::Ok(pruned_segments)
                 }
             }));
         }

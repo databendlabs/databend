@@ -198,7 +198,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
     for AggregateMeta<Method, V>
 {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
@@ -207,7 +207,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
 impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize<'de>
     for AggregateMeta<Method, V>
 {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }

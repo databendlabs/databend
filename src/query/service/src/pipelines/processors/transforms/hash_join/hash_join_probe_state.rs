@@ -46,6 +46,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::ProbeState;
+use super::ProcessState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
@@ -141,20 +142,27 @@ impl HashJoinProbeState {
     /// Probe the hash table and retrieve matched rows as DataBlocks.
     pub fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner
-            | JoinType::LeftSemi
-            | JoinType::LeftAnti
-            | JoinType::RightSemi
-            | JoinType::RightAnti
-            | JoinType::Left
-            | JoinType::LeftMark
-            | JoinType::RightMark
-            | JoinType::LeftSingle
-            | JoinType::RightSingle
-            | JoinType::Right
-            | JoinType::Full => self.probe_join(input, probe_state),
             JoinType::Cross => self.cross_join(input, probe_state),
+            _ => self.probe_join(input, probe_state),
         }
+    }
+
+    pub fn next_probe(&self, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        let process_state = probe_state.process_state.as_ref().unwrap();
+        let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
+        with_join_hash_method!(|T| match hash_table {
+            HashJoinHashTable::T(table) => {
+                // Build `keys` and get the hashes of `keys`.
+                let keys = table
+                    .hash_method
+                    .build_keys_accessor(process_state.keys_state.clone())?;
+                // Continue to probe hash table and process data blocks.
+                self.result_blocks(probe_state, keys, &table.hash_table)
+            }
+            HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the hash table is uninitialized.",
+            )),
+        })
     }
 
     pub fn probe_join(
@@ -292,9 +300,16 @@ impl HashJoinProbeState {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(probe_keys, input_num_rows)?;
-                let keys = table
+                table
                     .hash_method
-                    .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
+                    .build_keys_hashes(&keys_state, &mut probe_state.hashes);
+                let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
+
+                probe_state.process_state = Some(ProcessState {
+                    input,
+                    keys_state,
+                    next_idx: 0,
+                });
 
                 // Perform a round of hash table probe.
                 probe_state.probe_with_selection = prefer_early_filtering;
@@ -335,7 +350,7 @@ impl HashJoinProbeState {
                 probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
 
                 // Continue to probe hash table and process data blocks.
-                self.result_blocks(&input, keys, &table.hash_table, probe_state)
+                self.result_blocks(probe_state, keys, &table.hash_table)
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",

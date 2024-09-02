@@ -436,7 +436,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -975,7 +975,7 @@ impl DefaultSettings {
     /// If the value is not a valid u64, it will be parsed as f64.
     /// Used for:
     /// set max_memory_usage = 1024*1024*1024*1.5;
-    fn parse_to_u64(v: &str) -> Result<u64, ErrorCode> {
+    fn parse_to_u64(v: &str) -> Result<u64> {
         match v.parse::<u64>() {
             Ok(val) => Ok(val),
             Err(_) => {
