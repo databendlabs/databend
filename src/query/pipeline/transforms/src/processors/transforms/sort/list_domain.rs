@@ -45,18 +45,6 @@ where
         }
     }
 
-    fn max_iter(&self, target: &T, n: usize) -> EndDomain {
-        binary_search(self, target, Some(n.into()), None)
-    }
-
-    fn max_diff(&self, target: &T, diff: usize) -> EndDomain {
-        binary_search(self, target, None, Some(diff))
-    }
-
-    fn index_gt(&self, target: &T) -> usize {
-        binary_search(self, target, None, Some(0)).min
-    }
-
     fn domain(&self) -> EndDomain {
         EndDomain {
             min: 0,
@@ -83,61 +71,40 @@ where
     }
 }
 
-fn binary_search<T, U>(ls: &U, target: &T, mut n: Option<usize>, diff: Option<usize>) -> EndDomain
-where
-    T: Ord,
-    U: List<T> + ?Sized,
-{
-    // INVARIANTS:
-    // - 0 <= left <= left + size = right <= self.len()
-    // - f returns Less for everything in self[..left]
-    // - f returns Greater for everything in self[right..]
-    let mut size = ls.len();
-    let mut domain = EndDomain { min: 0, max: size };
-    while domain.min < domain.max {
-        if let Some(n) = &mut n {
-            if *n == 0 {
-                return domain;
-            } else {
-                *n -= 1
-            }
-        }
-        if let Some(diff) = diff {
-            if size <= diff {
-                return domain;
-            }
-        }
-
-        let mid = domain.min + size / 2;
-
-        domain = if ls.cmp_value(mid, target) == Ordering::Greater {
-            EndDomain {
-                min: domain.min,
-                max: mid,
-            }
-        } else {
-            EndDomain {
-                min: mid + 1,
-                max: domain.max,
-            }
-        };
-
-        size = domain.max - domain.min;
-    }
-
-    // SAFETY: directly true from the overall invariant.
-    // Note that this is `<=`, unlike the assume in the `Ok` path.
-    // unsafe { std::hint::assert_unchecked(left <= self.len()) };
-    domain
-}
-
 #[derive(Debug)]
 pub struct Partition {
     pub ends: Vec<(usize, usize)>,
     pub total: usize,
 }
 
-pub fn calc_partition<T, U>(all_list: &[&U], expect_size: EndDomain) -> Option<Partition>
+impl Partition {
+    fn new<'a, T>(item: Item<'a, T>) -> Self {
+        let Item { domains, sum, .. } = item;
+        debug_assert!(sum.done());
+
+        Self {
+            ends: domains
+                .iter()
+                .enumerate()
+                .filter_map(|(i, domain)| {
+                    debug_assert!(domain.done());
+                    if domain.is_zero() {
+                        None
+                    } else {
+                        Some((i, domain.min))
+                    }
+                })
+                .collect(),
+            total: sum.min,
+        }
+    }
+}
+
+pub fn calc_partition<T, U>(
+    all_list: &[&U],
+    expect_size: EndDomain,
+    max_iter: usize,
+) -> Option<Partition>
 where
     T: Ord + Debug,
     U: List<T> + ?Sized,
@@ -148,98 +115,61 @@ where
         return None;
     }
 
-    println!("begen");
-
-    for _ in 0..10 {
-        for (i, item) in [
-            &candidate.min_target.as_ref(),
-            &candidate.mid_target.as_ref(),
-            &candidate.max_target.as_ref(),
-        ]
-        .iter()
-        .copied()
-        .enumerate()
-        {
-            if let Some(Item {
-                target: k,
-                domains,
-                sum,
-            }) = item
-            {
-                println!("{i} k {k:?}  {},{} domains {domains:?}", sum.min, sum.max);
-            }
-        }
-        println!();
-
-        macro_rules! overlap_cross {
-            () => {
-                Overlap::LeftCross | Overlap::Full | Overlap::RightCross
-            };
-        }
-
-        match candidate.status() {
-            (_, None, overlap_cross!()) => {
+    for _ in 0..max_iter {
+        match candidate.overlaps() {
+            (_, _, Overlap::Cross) => {
                 let sum = candidate.do_search_max();
-                if candidate.aaa(sum) {
-                    println!("end");
-                    break;
+                if candidate.is_finish(sum) {
+                    return Some(Partition::new(candidate.max_target.unwrap()));
                 }
             }
+            (_, _, Overlap::Left) => break,
             (_, None, Overlap::Right) => {
-                // let sum = candidate.do_search_max();
-                // if sum.done() {
-                //     break;
-                // }
+                let target = candidate.find_target();
+                let target = if target.is_none() {
+                    break;
+                } else {
+                    target.unwrap()
+                };
 
-                // if !candidate.expect.overlaps(sum).is_disjoint() {}
-
-                // if matches!(
-                //     candidate.expect.overlaps(sum),
-                //     Overlap::LeftCross | Overlap::Full | Overlap::RightCross
-                // ) {
-                //     continue;
-                // }
-
-                let set = candidate.find_target();
-                let mid = set.len() / 2;
-                debug_assert!(mid != 0);
-                let target = set.iter().nth(mid).unwrap();
-                println!("new target {target:?}");
                 candidate.update_mid(target);
-
-                candidate.do_search_mid();
-                println!("");
-
-                // matches!()
             }
-            (_, Some(overlap_cross!()), Overlap::Right) => {
+
+            (
+                min_overlap @ (Overlap::Cross | Overlap::Left),
+                Some(Overlap::Cross),
+                Overlap::Right,
+            ) => {
                 let sum = candidate.do_search_mid();
-                if candidate.aaa(sum) {
-                    println!("end");
-                    break;
-                }
-            }
-            (_, Some(Overlap::Right), Overlap::Right) => {
-                println!("cut_right");
-                candidate.cut_right()
-            }
-            (overlap_cross!(), Some(Overlap::Left), Overlap::Right) => {
-                let sum = candidate.do_search_min();
-                if candidate.aaa(sum) {
-                    println!("end");
-                    break;
-                }
-            }
-            (Overlap::Left, Some(Overlap::Left), Overlap::Right) => {
-                println!("cut_left");
-                candidate.cut_left()
-            }
 
-            _ => todo!(),
+                match candidate.expect.overlaps(sum) {
+                    Overlap::Right => candidate.cut_right(),
+                    Overlap::Left if matches!(min_overlap, Overlap::Left) => candidate.cut_left(),
+                    Overlap::Cross if sum.done() => {
+                        return Some(Partition::new(candidate.mid_target.unwrap()));
+                    }
+                    Overlap::Cross | Overlap::Left => (),
+                }
+            }
+            (Overlap::Cross, Some(Overlap::Left), Overlap::Right) => {
+                let sum = candidate.do_search_min();
+                if candidate.is_finish(sum) {
+                    return Some(Partition::new(candidate.min_target.unwrap()));
+                }
+            }
+            x => {
+                debug_assert!(true, "unreachable {x:?}");
+                break;
+            }
         };
     }
 
-    None
+    loop {
+        let sum = candidate.do_search_max();
+        if sum.done() {
+            return Some(Partition::new(candidate.max_target.unwrap()));
+        }
+    }
 }
 
 struct Candidate<'a, T, U>
@@ -276,28 +206,26 @@ where
     }
 
     fn init(&mut self) -> bool {
-        let max_target: Option<&T> =
-            self.all_list
-                .iter()
-                .fold(None, |acc, ls| match (acc, ls.last()) {
-                    (Some(acc), Some(last)) => Some(acc.min(last)),
+        let target: (Option<&T>, Option<&T>) =
+            self.all_list.iter().fold((None, None), |(min, max), ls| {
+                let min = match (min, ls.first()) {
+                    (Some(acc), Some(v)) => Some(acc.min(v)),
                     (None, v @ Some(_)) | (v @ Some(_), None) => v,
                     (None, None) => None,
-                });
-        let max_target = if let Some(v) = max_target {
-            v
+                };
+                let max = match (max, ls.last()) {
+                    (Some(acc), Some(v)) => Some(acc.min(v)),
+                    (None, v @ Some(_)) | (v @ Some(_), None) => v,
+                    (None, None) => None,
+                };
+
+                (min, max)
+            });
+        let (min_target, max_target) = if let (Some(min), Some(max)) = target {
+            (min, max)
         } else {
             return false;
         };
-
-        let min_target: Option<&T> =
-            self.all_list
-                .iter()
-                .fold(None, |acc, ls| match (acc, ls.first()) {
-                    (Some(acc), Some(last)) => Some(acc.min(last)),
-                    (None, v @ Some(_)) | (v @ Some(_), None) => v,
-                    (None, None) => None,
-                });
 
         let domains = self
             .all_list
@@ -321,7 +249,7 @@ where
         });
 
         self.min_target = Some(Item {
-            target: min_target.unwrap(),
+            target: min_target,
             domains: domains.clone(),
             sum,
         });
@@ -341,7 +269,7 @@ where
         do_search(self.all_list, self.mid_target.as_mut().unwrap())
     }
 
-    fn find_target<'b>(&'b self) -> BTreeSet<&'a T> {
+    fn find_target<'b>(&'b self) -> Option<&'a T> {
         let Item {
             target: min_target,
             domains: min_domains,
@@ -354,7 +282,7 @@ where
             ..
         } = self.max_target.as_ref().unwrap();
 
-        let mut targets_set = BTreeSet::new();
+        let mut targets = BTreeSet::new();
 
         for ((min_domain, max_domain), ls) in min_domains
             .iter()
@@ -371,17 +299,18 @@ where
             .five_point();
             for v in five.into_iter().filter_map(|i| {
                 let v = &ls[i];
-                if v > min_target && v < max_target {
+                if v >= min_target && v <= max_target {
                     Some(v)
                 } else {
                     None
                 }
             }) {
-                targets_set.insert(v);
+                targets.insert(v);
             }
         }
 
-        targets_set
+        let n = targets.len();
+        targets.into_iter().nth(n / 2)
     }
 
     fn update_mid(&mut self, target: &'a T) {
@@ -404,7 +333,11 @@ where
         })
     }
 
-    fn status(&self) -> (Overlap, Option<Overlap>, Overlap) {
+    fn is_finish(&self, domain: EndDomain) -> bool {
+        domain.done() && matches!(self.expect.overlaps(domain), Overlap::Cross)
+    }
+
+    fn overlaps(&self) -> (Overlap, Option<Overlap>, Overlap) {
         (
             self.expect.overlaps(self.min_target.as_ref().unwrap().sum),
             self.mid_target
@@ -420,10 +353,6 @@ where
 
     fn cut_right(&mut self) {
         self.max_target = self.mid_target.take()
-    }
-
-    fn aaa(&self, domain: EndDomain) -> bool {
-        domain.done() && !self.expect.overlaps(domain).is_disjoint()
     }
 }
 
@@ -469,12 +398,7 @@ impl EndDomain {
             return Overlap::Right;
         }
 
-        match (rhs.min < self.min, rhs.max > self.max) {
-            (true, true) => Overlap::Full,
-            (true, false) => Overlap::LeftCross,
-            (false, true) => Overlap::RightCross,
-            (false, false) => Overlap::Full,
-        }
+        return Overlap::Cross;
     }
 
     fn left_half(&self) -> EndDomain {
@@ -520,19 +444,8 @@ impl EndDomain {
 #[derive(Debug)]
 enum Overlap {
     Left,
-    LeftCross,
-    Full,
-    RightCross,
+    Cross,
     Right,
-}
-
-impl Overlap {
-    fn is_disjoint(&self) -> bool {
-        match &self {
-            Overlap::Right | Overlap::Left => true,
-            Overlap::LeftCross | Overlap::RightCross | Overlap::Full => false,
-        }
-    }
 }
 
 impl std::ops::Add for EndDomain {
@@ -580,31 +493,35 @@ mod tests {
     }
 
     #[test]
-    fn test_binary_search() {
-        let ls = &[1, 2, 3, 4, 4, 4, 5, 6, 7, 7, 8];
+    fn test_calc_partition() {
+        {
+            let all_list: Vec<Vec<i32>> = vec![vec![]];
+            let all_list: Vec<_> = all_list.iter().map(|v| v.as_slice()).collect();
+            run_test(&all_list, (5..=10).into(), 10);
+        }
 
-        assert_eq!(0, ls.index_gt(&-1));
-        assert_eq!(6, ls.index_gt(&4));
-        assert_eq!(2, ls.index_gt(&2));
-        assert_eq!(11, ls.index_gt(&100));
+        {
+            let all_list: Vec<Vec<i32>> = vec![
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5],
+            ];
+            let all_list: Vec<_> = all_list.iter().map(|v| v.as_slice()).collect();
+            run_test(&all_list, (5..=10).into(), 10);
+        }
 
-        assert_eq!(EndDomain { min: 0, max: 11 }, ls.max_diff(&4, 100));
-        assert_eq!(EndDomain { min: 6, max: 11 }, ls.max_diff(&4, 5));
-        assert_eq!(EndDomain { min: 6, max: 8 }, ls.max_diff(&4, 2));
-        assert_eq!(EndDomain { min: 6, max: 6 }, ls.max_diff(&4, 0));
+        for _ in 0..100 {
+            let all_list = rand_data();
+            let all_list: Vec<_> = all_list.iter().map(|v| v.as_slice()).collect();
 
-        assert_eq!(EndDomain { min: 0, max: 11 }, ls.max_iter(&1, 0));
-        assert_eq!(EndDomain { min: 0, max: 5 }, ls.max_iter(&1, 1));
-        assert_eq!(EndDomain { min: 0, max: 2 }, ls.max_iter(&1, 2));
-        assert_eq!(EndDomain { min: 6, max: 6 }, ls.max_iter(&4, 100));
+            run_test(&all_list, (5..=10).into(), 10)
+        }
     }
 
-    #[test]
-    fn test_calc_partition() {
+    fn rand_data() -> Vec<Vec<i32>> {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
-        let all_list = (0..5)
+        (0..5)
             .map(|_| {
                 let rows: usize = rng.gen_range(0..=20);
                 let mut data = (0..rows)
@@ -613,18 +530,45 @@ mod tests {
                 data.sort();
                 data
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    }
 
-        // let all_list = vec![
-        //     vec![1, 2, 3, 4],
-        //     vec![10, 100, 2000],
-        //     vec![4, 5, 6, 7],
-        //     vec![0, 2, 4, 5],
-        //     // vec![1, 1, 1, 1],
-        // ];
+    fn run_test(all_list: &[&[i32]], expect_size: EndDomain, max_iter: usize) {
+        let got = calc_partition(all_list, expect_size, max_iter);
 
-        let all_list: Vec<_> = all_list.iter().map(|v| v.as_slice()).collect();
+        let got = if got.is_none() {
+            let sum: usize = all_list.iter().map(|ls| ls.len()).sum();
+            assert_eq!(sum, 0);
 
-        let x = calc_partition(&all_list, (5..=10).into());
+            return;
+        } else {
+            got.unwrap()
+        };
+
+        // println!("total {}", got.total);
+
+        let sum: usize = got.ends.iter().map(|(_, end)| *end).sum();
+        assert_eq!(sum, got.total, "all_list {all_list:?}");
+
+        let x = got
+            .ends
+            .iter()
+            .copied()
+            .map(|(i, end)| {
+                let ls = all_list[i];
+                (ls[..end].last(), ls[end..].first())
+            })
+            .fold((None, None), |acc, (end, start)| {
+                (acc.0.max(end), match (acc.1, start) {
+                    (None, None) => None,
+                    (None, v @ Some(_)) | (v @ Some(_), None) => v,
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                })
+            });
+        match x {
+            (Some(a), Some(b)) => assert!(a < b, "all_list {all_list:?}"),
+            (None, None) => unreachable!(),
+            _ => (),
+        }
     }
 }
