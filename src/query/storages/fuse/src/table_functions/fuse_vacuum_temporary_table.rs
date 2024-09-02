@@ -30,6 +30,7 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
 use futures_util::TryStreamExt;
 use log::debug;
+use log::info;
 use uuid::Uuid;
 
 use crate::sessions::TableContext;
@@ -84,7 +85,7 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
                 .is_none()
             {
                 let path = format!("{}/{}", TEMP_TABLE_STORAGE_PREFIX, session_id);
-                debug!("Removing temporary table: {}", path);
+                info!("Removing temporary table: {}", path);
                 op.remove_all(&path).await?;
             }
         }
