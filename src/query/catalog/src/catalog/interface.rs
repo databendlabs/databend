@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -318,7 +318,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             .get_db_info()
             .database_id
             .db_id;
-        let req = TenantDictionaryIdent::new(
+        let req = DictionaryNameIdent::new(
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
@@ -497,13 +497,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>>;
 
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>>;
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>>;
 
     async fn list_dictionaries(
         &self,

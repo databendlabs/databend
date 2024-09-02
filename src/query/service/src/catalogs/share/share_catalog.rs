@@ -30,7 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -760,7 +760,7 @@ impl Catalog for ShareCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        _dict_ident: TenantDictionaryIdent,
+        _dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         unimplemented!()
     }
@@ -768,7 +768,7 @@ impl Catalog for ShareCatalog {
     #[async_backtrace::framed]
     async fn get_dictionary(
         &self,
-        _req: TenantDictionaryIdent,
+        _req: DictionaryNameIdent,
     ) -> Result<Option<GetDictionaryReply>> {
         unimplemented!()
     }

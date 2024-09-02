@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_sql::plans::DropDictionaryPlan;
 
@@ -53,7 +53,7 @@ impl Interpreter for DropDictionaryInterpreter {
         let db_id = self.plan.database_id;
         let dict_name = self.plan.dictionary.as_str();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let dict_ident = TenantDictionaryIdent::new(
+        let dict_ident = DictionaryNameIdent::new(
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
