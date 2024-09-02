@@ -13,18 +13,19 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+mod context;
 pub mod exception;
 mod exception_backtrace;
 mod exception_code;
 mod exception_flight;
 mod exception_into;
-mod with_context;
 
+pub use context::display_error_stack;
+pub use context::ErrorFrame;
+pub use context::ResultExt;
 pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;
 pub use exception_backtrace::set_backtrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 pub use exception_into::SerializedError;
-pub use with_context::ErrorWithContext;
-pub use with_context::WithContext;

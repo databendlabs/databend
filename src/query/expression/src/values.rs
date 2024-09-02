@@ -1454,7 +1454,7 @@ impl Column {
 /// Serialize a column to a base64 string.
 /// Because we may use serde::json/bincode to serialize the column, so we wrap it into string
 impl Serialize for Column {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         let bytes = serialize_column(self);
         let base64_str = general_purpose::STANDARD.encode(bytes);
@@ -1463,7 +1463,7 @@ impl Serialize for Column {
 }
 
 impl<'de> Deserialize<'de> for Column {
-    fn deserialize<D>(deserializer: D) -> Result<Column, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Column, D::Error>
     where D: Deserializer<'de> {
         struct ColumnVisitor;
 
@@ -1474,7 +1474,7 @@ impl<'de> Deserialize<'de> for Column {
                 formatter.write_str("an arrow chunk with exactly one column")
             }
 
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            fn visit_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
             where E: serde::de::Error {
                 let bytes = general_purpose::STANDARD.decode(v).unwrap();
                 let column = deserialize_column(&bytes)
