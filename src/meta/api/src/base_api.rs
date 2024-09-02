@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
+
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 
 use crate::kv_pb_api::KVPbApi;
@@ -62,7 +68,7 @@ pub trait BaseApi: KVApi<Error = MetaError> {
         K: KeyWithTenant,
         K: Sync,
         IdResource: TenantResource + Send + Sync + 'static,
-        <IdResource as TenantResource>::ValueType: FromToProto,
+        IdResource::ValueType: FromToProto,
         TIdent<IdResource, DataId<IdResource>>: kvapi::Key<ValueType = V>,
         V: FromToProto + Sync + 'static,
         A: Fn(DataId<IdResource>) -> Vec<(String, Vec<u8>)> + Send,
@@ -127,6 +133,77 @@ pub trait BaseApi: KVApi<Error = MetaError> {
             if succ {
                 return Ok(Ok(id));
             }
+        }
+    }
+
+    async fn get_id_value<K, IdResource>(
+        &self,
+        key: &K,
+    ) -> Result<Option<(SeqV<DataId<IdResource>>, SeqV<IdResource::ValueType>)>, MetaError>
+    where
+        K: kvapi::Key<ValueType = DataId<IdResource>> + KeyWithTenant + Sync,
+        IdResource: TenantResource + Send + Sync,
+        IdResource::ValueType: FromToProto,
+    {
+        self.get_id_and_value(key).await
+    }
+
+    /// list by key prefix, returns a list of `(key, id, value)`
+    ///
+    /// This function list all the ids by a key prefix,
+    /// then get the `id->value` mapping and finally zip these two together.
+    // Using `async fn` does not allow using `impl Iterator` in the return type.
+    // Thus we use `impl Future` instead.
+    fn list_id_value<K, IdResource>(
+        &self,
+        prefix: &DirName<K>,
+        // ) -> Result<impl Drop, MetaError>
+    ) -> impl Future<
+        Output = Result<
+            impl Iterator<Item = (K, DataId<IdResource>, SeqV<IdResource::ValueType>)>,
+            MetaError,
+        >,
+    > + Send
+    where
+        K: kvapi::Key<ValueType = DataId<IdResource>> + KeyWithTenant + Send + Sync + 'static,
+        IdResource: TenantResource + Send + Sync,
+        IdResource::ValueType: FromToProto + Send + Sync + 'static,
+    {
+        async move {
+            let tenant = prefix.key().tenant();
+            let strm = self.list_pb(prefix).await?;
+            let name_ids = strm.try_collect::<Vec<_>>().await?;
+
+            let id_idents = name_ids.iter().map(|itm| {
+                let id = itm.seqv.data;
+                id.into_t_ident(tenant)
+            });
+
+            #[allow(deprecated)]
+            let strm = self.get_pb_values(id_idents).await?;
+            let seq_metas = strm.try_collect::<Vec<_>>().await?;
+
+            if seq_metas.len() != name_ids.len() {
+                return Err(InvalidReply::new(
+                    "seq_metas.len() {} != name_ids.len() {}",
+                    &AnyError::error(format!(
+                        "seq_metas.len() {} != name_ids.len() {}",
+                        seq_metas.len(),
+                        name_ids.len()
+                    )),
+                )
+                .into());
+            }
+
+            let name_id_values =
+                name_ids
+                    .into_iter()
+                    .zip(seq_metas)
+                    .filter_map(|(itm, opt_seq_meta)| {
+                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv.data, seq_meta))
+                    });
+
+            Ok(name_id_values)
         }
     }
 }

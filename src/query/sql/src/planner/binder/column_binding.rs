@@ -19,11 +19,10 @@ use crate::IndexType;
 use crate::Visibility;
 
 // Please use `ColumnBindingBuilder` to construct a new `ColumnBinding`
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Hash)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
     pub database_name: Option<String>,
-    /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
     /// Column Position of this `ColumnBinding` in current context
     pub column_position: Option<usize>,
@@ -39,6 +38,23 @@ pub struct ColumnBinding {
     pub visibility: Visibility,
 
     pub virtual_computed_expr: Option<String>,
+}
+
+const DUMMY_INDEX: usize = usize::MAX;
+impl ColumnBinding {
+    pub fn new_dummy_column(name: String, data_type: Box<DataType>) -> Self {
+        ColumnBinding {
+            database_name: None,
+            table_name: None,
+            column_position: None,
+            table_index: None,
+            column_name: name,
+            index: DUMMY_INDEX,
+            data_type,
+            visibility: Visibility::Visible,
+            virtual_computed_expr: None,
+        }
+    }
 }
 
 impl ColumnIndex for ColumnBinding {}
