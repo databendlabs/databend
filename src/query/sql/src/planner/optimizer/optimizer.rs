@@ -67,7 +67,7 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
-
+    #[educe(Debug(ignore))]
     sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
@@ -99,8 +99,11 @@ impl OptimizerContext {
         self
     }
 
-    pub fn with_sample_executor(mut self, sample_executor: Arc<dyn QuerySampleExecutor>) -> Self {
-        self.sample_executor = Some(sample_executor);
+    pub fn with_sample_executor(
+        mut self,
+        sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    ) -> Self {
+        self.sample_executor = sample_executor;
         self
     }
 }

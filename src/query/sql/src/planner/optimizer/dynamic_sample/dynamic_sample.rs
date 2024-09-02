@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::filter_selectivity_sample::filter_selectivity_sample;
@@ -33,12 +34,9 @@ pub async fn dynamic_sample(
         RelOperator::Filter(_) => {
             filter_selectivity_sample(ctx, metadata, s_expr, sample_executor).await
         }
-        RelOperator::Join(_) => {
-            unimplemented!("derive_cardinality_by_sample for join is not supported yet")
-        }
-        _ => unreachable!(
-            "Invalid plan for derive_cardinality_by_sample: {:?}",
+        _ => Err(ErrorCode::Unimplemented(format!(
+            "derive_cardinality_by_sample for {:?} is not supported yet",
             s_expr.plan()
-        ),
+        ))),
     }
 }

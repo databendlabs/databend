@@ -17,9 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::QuerySampleExecutor;
-use databend_common_sql::optimizer::SExpr;
 use futures_util::TryStreamExt;
 
 use crate::pipelines::executor::ExecutorSettings;

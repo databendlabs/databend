@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
+use crate::optimizer::dynamic_sample::dynamic_sample;
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
+use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
@@ -24,10 +27,13 @@ use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct JoinNode {
+    pub ctx: Arc<dyn TableContext>,
+    pub metadata: MetadataRef,
     pub join_type: JoinType,
     pub leaves: Arc<Vec<IndexType>>,
     pub children: Arc<Vec<JoinNode>>,
@@ -36,6 +42,7 @@ pub struct JoinNode {
     // Cache cardinality/s_expr after computing.
     pub cardinality: Option<f64>,
     pub s_expr: Option<SExpr>,
+    pub sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 impl JoinNode {
@@ -49,8 +56,29 @@ impl JoinNode {
             self.s_expr = Some(self.s_expr(relations));
             self.s_expr.as_ref().unwrap()
         };
-        let rel_expr = RelExpr::with_s_expr(s_expr);
-        let card = rel_expr.derive_cardinality()?.cardinality;
+        let card = if let Some(sample_executor) = &self.sample_executor {
+            match dynamic_sample(
+                self.ctx.clone(),
+                self.metadata.clone(),
+                s_expr,
+                sample_executor.clone(),
+            )
+            .await
+            {
+                Ok(card) => {
+                    dbg!(card);
+                    card
+                }
+                Err(e) => {
+                    dbg!(e);
+                    let rel_expr = RelExpr::with_s_expr(s_expr);
+                    rel_expr.derive_cardinality()?.cardinality
+                }
+            }
+        } else {
+            let rel_expr = RelExpr::with_s_expr(s_expr);
+            rel_expr.derive_cardinality()?.cardinality
+        };
         self.cardinality = Some(card);
         Ok(card)
     }

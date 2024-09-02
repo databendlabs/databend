@@ -30,8 +30,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
-tonic = { workspace = true }
 tokio = "1.39.2"
+tonic = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]

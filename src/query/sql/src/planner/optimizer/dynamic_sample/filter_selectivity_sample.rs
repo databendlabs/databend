@@ -31,7 +31,6 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
-use crate::plans::Filter;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::MetadataRef;
@@ -45,7 +44,6 @@ pub async fn filter_selectivity_sample(
 ) -> Result<f64> {
     // filter cardinality by sample will be called in `dphyp`, so we can ensure the filter is in complex query(contains not only one table)
     // Because it's meaningless for filter cardinality by sample in single table query.
-    let filter = Filter::try_from(s_expr.plan().clone())?;
     let child = s_expr.child(0)?;
     if let RelOperator::Scan(mut scan) = child.plan().clone() {
         // Get the table's num_rows
@@ -91,7 +89,7 @@ pub async fn filter_selectivity_sample(
         new_s_expr = SExpr::create_unary(Arc::new(count_agg.into()), Arc::new(new_s_expr));
 
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), true);
-        let plan = builder.build(s_expr, HashSet::new()).await?;
+        let plan = builder.build(&new_s_expr, HashSet::new()).await?;
 
         let result = sample_executor.execute_query(&plan).await?;
         if let Some(block) = result.first() {
