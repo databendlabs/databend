@@ -37,7 +37,7 @@ mod share_api_impl;
 mod share_api_test_suite;
 pub(crate) mod testing;
 pub mod txn_backoff;
-pub(crate) mod util;
+pub mod util;
 
 pub mod crud;
 mod sequence_api_impl;
@@ -69,7 +69,6 @@ pub use util::is_all_db_data_removed;
 pub use util::is_db_need_to_be_remove;
 pub use util::list_keys;
 pub use util::list_u64_value;
-pub use util::procedure_has_to_exist;
 pub use util::remove_db_from_share;
 pub use util::send_txn;
 pub use util::serialize_struct;

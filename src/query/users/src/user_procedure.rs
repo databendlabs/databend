@@ -27,7 +27,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_procedure(&self, tenant: &Tenant, req: CreateProcedureReq) -> Result<()> {
         let procedure_api = self.procedure_api(tenant);
-        procedure_api.create_procedure(req).await?;
+        let _ = procedure_api.create_procedure(req).await?;
         Ok(())
     }
 
