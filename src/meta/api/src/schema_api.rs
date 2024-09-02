@@ -50,7 +50,6 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReply;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
@@ -63,7 +62,6 @@ use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
@@ -151,24 +149,17 @@ pub trait SchemaApi: Send + Sync {
         name_ident: &IndexNameIdent,
     ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, KVAppError>;
 
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
+    async fn get_index(
+        &self,
+        name_ident: &IndexNameIdent,
+    ) -> Result<Option<GetIndexReply>, MetaError>;
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
 
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
-
-    async fn list_index_ids_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<u64>, KVAppError>;
-
-    async fn list_indexes_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+    ) -> Result<Vec<(String, IndexId, IndexMeta)>, KVAppError>;
 
     // virtual column
 
