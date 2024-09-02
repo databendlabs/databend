@@ -117,7 +117,7 @@ impl Binder {
             .get_procedure(&tenant, req)
             .await?;
         Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-            script: procedure.meta.script,
+            script: procedure.procedure_meta.script,
         })))
     }
 

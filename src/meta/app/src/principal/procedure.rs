@@ -35,7 +35,7 @@ pub struct ProcedureInfo {
     pub meta: ProcedureMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProcedureIdent {
     pub procedure_id: u64,
     pub seq: u64,
@@ -74,48 +74,6 @@ impl Display for ProcedureMeta {
     }
 }
 
-/// Save procedure name id list history.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Default, PartialEq)]
-pub struct ProcedureIdList {
-    pub id_list: Vec<u64>,
-}
-
-impl ProcedureIdList {
-    pub fn new() -> ProcedureIdList {
-        ProcedureIdList::default()
-    }
-
-    pub fn len(&self) -> usize {
-        self.id_list.len()
-    }
-
-    pub fn id_list(&self) -> &Vec<u64> {
-        &self.id_list
-    }
-
-    pub fn append(&mut self, table_id: u64) {
-        self.id_list.push(table_id);
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.id_list.is_empty()
-    }
-
-    pub fn pop(&mut self) -> Option<u64> {
-        self.id_list.pop()
-    }
-
-    pub fn last(&mut self) -> Option<&u64> {
-        self.id_list.last()
-    }
-}
-
-impl Display for ProcedureIdList {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DB id list: {:?}", self.id_list)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateProcedureReq {
     pub create_option: CreateOption,
@@ -125,34 +83,23 @@ pub struct CreateProcedureReq {
 
 impl Display for CreateProcedureReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self.create_option {
-            CreateOption::Create => write!(
-                f,
-                "create_procedure:{}/{}={:?}",
-                self.name_ident.tenant_name(),
-                self.name_ident.procedure_name(),
-                self.meta
-            ),
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_procedure_if_not_exists:{}/{}={:?}",
-                self.name_ident.tenant_name(),
-                self.name_ident.procedure_name(),
-                self.meta
-            ),
-
-            CreateOption::CreateOrReplace => write!(
-                f,
-                "create_or_replace_procedure:{}/{}={:?}",
-                self.name_ident.tenant_name(),
-                self.name_ident.procedure_name(),
-                self.meta
-            ),
-        }
+        let typ = match self.create_option {
+            CreateOption::Create => "create_procedure",
+            CreateOption::CreateIfNotExists => "create_procedure_if_not_exists",
+            CreateOption::CreateOrReplace => "create_or_replace_procedure",
+        };
+        write!(
+            f,
+            "{}:{}/{}={:?}",
+            typ,
+            self.name_ident.tenant_name(),
+            self.name_ident.procedure_name(),
+            self.meta
+        )
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateProcedureReply {
     pub procedure_id: u64,
 }
@@ -176,7 +123,7 @@ impl Display for RenameProcedureReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameProcedureReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -254,10 +201,10 @@ impl GetProcedureReq {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GetProcedureReply {
     pub id: u64,
-    pub index_meta: ProcedureMeta,
+    pub procedure_meta: ProcedureMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProcedureInfoFilter {
     // include all dropped procedures
     IncludeDropped,

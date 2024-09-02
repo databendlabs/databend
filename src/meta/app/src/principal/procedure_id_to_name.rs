@@ -72,7 +72,7 @@ mod tests {
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_background_job_id_ident() {
+    fn test_procedure_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = ProcedureIdToNameIdent::new_generic(tenant, ProcedureId::new(3));
 
@@ -83,7 +83,7 @@ mod tests {
     }
 
     #[test]
-    fn test_background_job_id_ident_with_key_space() {
+    fn test_procedure_id_ident_with_key_space() {
         // TODO(xp): implement this test
         // let tenant = Tenant::new_literal("test");
         // let ident = ProcedureIdToNameIdent::new(tenant, 3);
