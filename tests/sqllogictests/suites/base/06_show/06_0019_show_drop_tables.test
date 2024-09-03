@@ -36,5 +36,11 @@ select count(name)>=2 from system.tables_with_history where name='t' and databas
 ----
 1
 
+query T
+select name, database from system.tables_with_history where database='db1' and dropped_on is not null;
+----
+t db1
+t db1
+
 statement ok
 drop database db1;

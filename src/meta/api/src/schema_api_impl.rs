@@ -2003,7 +2003,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             ))));
         }
 
-        let mut tb_info_list = vec![];
         let now = Utc::now();
         let table_id_list = table_id_list.unwrap();
         let inner_keys: Vec<String> = table_id_list
@@ -2016,17 +2015,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .to_string_key()
             })
             .collect();
-        get_table_history(
-            self,
-            tenant,
-            database_name,
-            &mut tb_info_list,
-            &now,
-            table_id_history,
-            table_id_list,
-            &inner_keys,
-        )
-        .await?;
+        let metas = get_table_meta_history(self, &now, table_id_list, &inner_keys).await?;
+        let meta = metas.into_iter();
+        let tb_info_list = meta
+            .map(|(table_id, seq, meta)| {
+                Arc::new(TableInfo {
+                    ident: TableIdent { table_id, seq },
+                    desc: format!("'{}'.'{}'", database_name, table_name),
+                    name: table_name.to_string(),
+                    meta,
+                    tenant: tenant.tenant_name().to_string(),
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                })
+            })
+            .collect();
+
         debug!(
             name :% =(&table_id_history);
             "get_table_history"
@@ -2069,7 +2073,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let table_id_list_keys = list_keys(self, &dir_name).await?;
 
-        let mut tb_info_list = vec![];
+        let mut tbs_info_list = vec![];
         let now = Utc::now();
         let keys: Vec<String> = table_id_list_keys
             .iter()
@@ -2114,21 +2118,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         .to_string_key()
                     })
                     .collect();
-                get_table_history(
-                    self,
-                    tenant_dbname.tenant(),
-                    tenant_dbname.database_name(),
-                    &mut tb_info_list,
-                    &now,
-                    &table_id_list_key,
-                    tb_id_list,
-                    &inner_keys,
-                )
-                .await?;
+                let metas = get_table_meta_history(self, &now, tb_id_list, &inner_keys).await?;
+                let tb_info_list: Vec<Arc<TableInfo>> = metas
+                    .into_iter()
+                    .map(|(table_id, seq, meta)| {
+                        Arc::new(TableInfo {
+                            ident: TableIdent { table_id, seq },
+                            desc: format!(
+                                "'{}'.'{}'",
+                                tenant_dbname.database_name(),
+                                table_id_list_key.table_name,
+                            ),
+                            name: table_id_list_key.table_name.to_string(),
+                            meta,
+                            tenant: tenant_dbname.tenant_name().to_string(),
+                            db_type: DatabaseType::NormalDB,
+                            catalog_info: Default::default(),
+                        })
+                    })
+                    .collect();
+                tbs_info_list.extend(tb_info_list);
             }
         }
 
-        return Ok(tb_info_list);
+        return Ok(tbs_info_list);
     }
 
     #[logcall::logcall]
@@ -3988,16 +4001,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 }
 
-async fn get_table_history(
+async fn get_table_meta_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &Tenant,
-    db_name: &str,
-    tb_info_list: &mut Vec<Arc<TableInfo>>,
     now: &DateTime<Utc>,
-    table_id_list_key: &TableIdHistoryIdent,
     tb_id_list: TableIdList,
     inner_keys: &[String],
-) -> Result<(), KVAppError> {
+) -> Result<Vec<(u64, u64, TableMeta)>, KVAppError> {
+    let mut tb_metas = vec![];
     let mut table_id_iter = tb_id_list.id_list.into_iter();
     for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
         let tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(kv_api, c).await?;
@@ -4014,25 +4024,10 @@ async fn get_table_history(
                 continue;
             }
 
-            let db_type = DatabaseType::NormalDB;
-
-            let tb_info = TableInfo {
-                ident: TableIdent {
-                    table_id,
-                    seq: tb_meta_seq,
-                },
-                desc: format!("'{}'.'{}'", db_name, table_id_list_key.table_name.clone()),
-                name: table_id_list_key.table_name.clone(),
-                meta: tb_meta,
-                tenant: tenant.tenant_name().to_string(),
-                db_type,
-                catalog_info: Default::default(),
-            };
-
-            tb_info_list.push(Arc::new(tb_info));
+            tb_metas.push((table_id, tb_meta_seq, tb_meta));
         }
     }
-    Ok(())
+    Ok(tb_metas)
 }
 
 async fn construct_drop_virtual_column_txn_operations(
