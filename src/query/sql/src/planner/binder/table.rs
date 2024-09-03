@@ -153,14 +153,24 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+    fn bind_cte_scan(
+        &mut self,
+        cte_info: &CteInfo,
+        mut bind_context: BindContext,
+    ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
         let mut offsets = vec![];
-        for (idx, column) in cte_info.columns.iter().enumerate() {
+        for (idx, column) in bind_context.columns.iter_mut().enumerate() {
+            let new_index = self.metadata.write().add_derived_column(
+                column.column_name.clone(),
+                *column.data_type.clone(),
+                None,
+            );
+            column.index = new_index;
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
@@ -177,7 +187,7 @@ impl Binder {
             }
             .into(),
         ));
-        Ok(cte_scan)
+        Ok((cte_scan, bind_context))
     }
 
     pub(crate) fn bind_cte(
@@ -299,8 +309,7 @@ impl Binder {
                 cte_info.used_count += 1;
             });
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        let s_expr = self.bind_cte_scan(&cte_info)?;
-        Ok((s_expr, new_bind_context))
+        self.bind_cte_scan(&cte_info, new_bind_context)
     }
 
     pub(crate) fn bind_r_cte_scan(
