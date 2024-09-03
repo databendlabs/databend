@@ -374,4 +374,18 @@ where
             (0, 0)
         }
     }
+
+    fn next_matched_ptr(&self, key: &Self::Key, mut ptr: u64) -> u64 {
+        loop {
+            if ptr == 0 {
+                break;
+            }
+            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
+            if key == &raw_entry.key {
+                return ptr;
+            }
+            ptr = raw_entry.next;
+        }
+        0
+    }
 }

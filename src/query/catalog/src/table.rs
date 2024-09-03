@@ -156,8 +156,9 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key: String,
+        cluster_type: String,
     ) -> Result<()> {
-        let (_, _) = (ctx, cluster_key);
+        let (_, _, _) = (ctx, cluster_key, cluster_type);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Altering table cluster keys is not supported for the '{}' engine.",
@@ -436,6 +437,10 @@ pub trait Table: Sync + Send {
         let is_id_temp = is_temp_table_id(self.get_id());
         assert_eq!(is_temp, is_id_temp);
         is_temp
+    }
+
+    fn is_stream(&self) -> bool {
+        self.engine() == "STREAM"
     }
 
     fn use_own_sample_block(&self) -> bool {

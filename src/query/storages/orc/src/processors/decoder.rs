@@ -65,7 +65,7 @@ impl AccumulatingTransform for StripeDecoder {
 
         let decoder = NaiveStripeDecoder::new(stripe.stripe, self.arrow_schema.clone(), 8192)
             .map_err(|e| map_orc_error(e, &stripe.path))?;
-        let batches: Result<Vec<RecordBatch>, _> = decoder.into_iter().collect();
+        let batches: std::result::Result<Vec<RecordBatch>, _> = decoder.into_iter().collect();
         let batches = batches.map_err(|e| map_orc_error(e, &stripe.path))?;
         let mut blocks = vec![];
         for batch in batches {

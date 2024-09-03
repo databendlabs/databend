@@ -394,10 +394,10 @@ select a, b FROM test order by a
 4 4
 
 # since auto re-clustering is disabled, the table is not expected to be re-clustered
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) FROM clustering_information('db_09_0023','test')
 ----
-(a + 1, b) 3 2 0.0 1.0 {"00001":3}
+(a + 1, b) linear 3 2 0.0 1.0 {"00001":3}
 
 statement ok
 DROP TABLE test

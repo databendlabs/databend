@@ -156,6 +156,13 @@ pub struct CacheValue<T> {
 }
 
 impl<T> CacheValue<T> {
+    pub fn new(inner: T, mem_bytes: usize) -> Self {
+        Self {
+            inner: Arc::new(inner),
+            mem_bytes,
+        }
+    }
+
     pub fn get_inner(&self) -> Arc<T> {
         self.inner.clone()
     }

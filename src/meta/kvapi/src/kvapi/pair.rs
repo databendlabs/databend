@@ -17,4 +17,68 @@ use databend_common_meta_types::SeqV;
 use crate::kvapi;
 
 /// A Key-Value pair for type Key. The value has a seq number.
-pub type Pair<K> = (K, SeqV<<K as kvapi::Key>::ValueType>);
+pub struct Pair<K>
+where K: kvapi::Key
+{
+    key: K,
+    seq_v: SeqV<K::ValueType>,
+}
+
+impl<K> Pair<K>
+where K: kvapi::Key
+{
+    pub fn new(key: K, seq_v: SeqV<K::ValueType>) -> Self {
+        Self { key, seq_v }
+    }
+
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    pub fn seq_value(&self) -> &SeqV<K::ValueType> {
+        &self.seq_v
+    }
+}
+
+/// Same as `Pair`, but the key is a `SeqV` and also have a seq number.
+pub struct SeqPair<K>
+where K: kvapi::Key
+{
+    key: SeqV<K>,
+    seq_v: SeqV<K::ValueType>,
+}
+
+impl<K> SeqPair<K>
+where K: kvapi::Key
+{
+    pub fn new(key: SeqV<K>, seq_v: SeqV<K::ValueType>) -> Self {
+        Self { key, seq_v }
+    }
+
+    pub fn seq_key(&self) -> &SeqV<K> {
+        &self.key
+    }
+
+    pub fn seq_value(&self) -> &SeqV<K::ValueType> {
+        &self.seq_v
+    }
+
+    pub fn into_pair(self) -> Pair<K> {
+        Pair {
+            key: self.key.data,
+            seq_v: self.seq_v,
+        }
+    }
+
+    pub fn unpack(self) -> (SeqV<K>, SeqV<K::ValueType>) {
+        (self.key, self.seq_v)
+    }
+}
+
+impl<K> From<SeqPair<K>> for Pair<K>
+where K: kvapi::Key
+{
+    fn from(sp: SeqPair<K>) -> Self {
+        sp.into_pair()
+    }
+}

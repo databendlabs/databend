@@ -30,6 +30,23 @@ set window_partition_spilling_bytes_threshold_per_proc = 1;
 include ./queries.test
 
 statement ok
+set max_block_size = 2;
+
+statement ok
+create or replace table t as select 0 AS c1, i_category as c2 from (select i_category, i_class from item group by i_category, i_class) limit 60;
+
+query T
+select sum(rank) from (select rank() over (partition by c1, c2) as rank FROM t);
+----
+60
+
+statement ok
+drop table if exists t;
+
+statement ok
+set max_block_size = 65536;
+
+statement ok
 set join_spilling_memory_ratio = 60;
 
 statement ok

@@ -19,8 +19,13 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::schema::catalog_name_ident;
+use crate::schema::dictionary_name_ident;
+use crate::schema::index_name_ident;
+use crate::schema::DictionaryIdentity;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
+use crate::tenant_key::ident::TIdent;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
@@ -60,22 +65,6 @@ impl DatabaseAlreadyExists {
     pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("CatalogAlreadyExists: `{catalog_name}` while `{context}`")]
-pub struct CatalogAlreadyExists {
-    catalog_name: String,
-    context: String,
-}
-
-impl CatalogAlreadyExists {
-    pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            catalog_name: catalog_name.into(),
             context: context.into(),
         }
     }
@@ -829,58 +818,12 @@ impl CreateIndexWithDropTime {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("IndexAlreadyExists: `{index_name}` while `{context}`")]
-pub struct IndexAlreadyExists {
-    index_name: String,
-    context: String,
-}
-
-impl IndexAlreadyExists {
-    pub fn new(index_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            index_name: index_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownIndex: `{index_name}` while `{context}`")]
-pub struct UnknownIndex {
-    index_name: String,
-    context: String,
-}
-
-impl UnknownIndex {
-    pub fn new(index_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            index_name: index_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("DropIndexWithDropTime: drop {index_name} with drop time")]
 pub struct DropIndexWithDropTime {
     index_name: String,
 }
 
 impl DropIndexWithDropTime {
-    pub fn new(index_name: impl Into<String>) -> Self {
-        Self {
-            index_name: index_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("GetIndexWithDropTime: get {index_name} with drop time")]
-pub struct GetIndexWithDropTime {
-    index_name: String,
-}
-
-impl GetIndexWithDropTime {
     pub fn new(index_name: impl Into<String>) -> Self {
         Self {
             index_name: index_name.into(),
@@ -1030,38 +973,6 @@ impl WrongSequenceCount {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DictionaryAlreadyExists: `{dictionary_name}` while `{context}`")]
-pub struct DictionaryAlreadyExists {
-    dictionary_name: String,
-    context: String,
-}
-
-impl DictionaryAlreadyExists {
-    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownDictionary: `{dictionary_name}` while `{context}`")]
-pub struct UnknownDictionary {
-    dictionary_name: String,
-    context: String,
-}
-
-impl UnknownDictionary {
-    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1107,7 +1018,7 @@ pub enum AppError {
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
-    CatalogAlreadyExists(#[from] CatalogAlreadyExists),
+    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::Resource>),
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
@@ -1125,7 +1036,7 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
-    UnknownCatalog(#[from] UnknownCatalog),
+    UnknownCatalog(#[from] UnknownError<catalog_name_ident::Resource>),
 
     #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),
@@ -1192,16 +1103,13 @@ pub enum AppError {
     CreateIndexWithDropTime(#[from] CreateIndexWithDropTime),
 
     #[error(transparent)]
-    IndexAlreadyExists(#[from] IndexAlreadyExists),
+    IndexAlreadyExists(#[from] ExistError<index_name_ident::IndexName>),
 
     #[error(transparent)]
-    UnknownIndex(#[from] UnknownIndex),
+    UnknownIndex(#[from] UnknownError<index_name_ident::IndexName>),
 
     #[error(transparent)]
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
-
-    #[error(transparent)]
-    GetIndexWithDropTime(#[from] GetIndexWithDropTime),
 
     #[error(transparent)]
     DuplicatedIndexColumnId(#[from] DuplicatedIndexColumnId),
@@ -1216,10 +1124,10 @@ pub enum AppError {
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
-    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::Resource>),
+    BackgroundJobAlreadyExists(#[from] ExistError<job_ident::BackgroundJobName>),
 
     #[error(transparent)]
-    UnknownBackgroundJob(#[from] UnknownError<job_ident::Resource>),
+    UnknownBackgroundJob(#[from] UnknownError<job_ident::BackgroundJobName>),
 
     #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
@@ -1254,10 +1162,34 @@ pub enum AppError {
 
     // dictionary
     #[error(transparent)]
-    DictionaryAlreadyExists(#[from] DictionaryAlreadyExists),
+    DictionaryAlreadyExists(
+        #[from] ExistError<dictionary_name_ident::DictionaryNameRsc, DictionaryIdentity>,
+    ),
 
     #[error(transparent)]
-    UnknownDictionary(#[from] UnknownDictionary),
+    UnknownDictionary(
+        #[from] UnknownError<dictionary_name_ident::DictionaryNameRsc, DictionaryIdentity>,
+    ),
+}
+
+impl AppError {
+    /// Create an `unknown` TIdent error.
+    pub fn unknown<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    where
+        N: Clone,
+        AppError: From<UnknownError<R, N>>,
+    {
+        AppError::from(ident.unknown_error(ctx))
+    }
+
+    /// Create an `exist` TIdent error.
+    pub fn exists<R, N>(ident: &TIdent<R, N>, ctx: impl Display) -> AppError
+    where
+        N: Clone,
+        AppError: From<ExistError<R, N>>,
+    {
+        AppError::from(ident.exist_error(ctx))
+    }
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
@@ -1290,21 +1222,9 @@ impl AppErrorMessage for UnknownDatabase {
     }
 }
 
-impl AppErrorMessage for UnknownCatalog {
-    fn message(&self) -> String {
-        format!("Unknown catalog '{}'", self.catalog_name)
-    }
-}
-
 impl AppErrorMessage for DatabaseAlreadyExists {
     fn message(&self) -> String {
         format!("Database '{}' already exists", self.db_name)
-    }
-}
-
-impl AppErrorMessage for CatalogAlreadyExists {
-    fn message(&self) -> String {
-        format!("Catalog '{}' already exists", self.catalog_name)
     }
 }
 
@@ -1552,27 +1472,9 @@ impl AppErrorMessage for CreateIndexWithDropTime {
     }
 }
 
-impl AppErrorMessage for IndexAlreadyExists {
-    fn message(&self) -> String {
-        format!("Index '{}' already exists", self.index_name)
-    }
-}
-
-impl AppErrorMessage for UnknownIndex {
-    fn message(&self) -> String {
-        format!("Unknown index '{}'", self.index_name)
-    }
-}
-
 impl AppErrorMessage for DropIndexWithDropTime {
     fn message(&self) -> String {
         format!("Drop Index '{}' with drop time", self.index_name)
-    }
-}
-
-impl AppErrorMessage for GetIndexWithDropTime {
-    fn message(&self) -> String {
-        format!("Get Index '{}' with drop time", self.index_name)
     }
 }
 
@@ -1683,19 +1585,6 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
-// dictionary
-impl AppErrorMessage for DictionaryAlreadyExists {
-    fn message(&self) -> String {
-        format!("Dictionary '{}' already exists", self.dictionary_name)
-    }
-}
-
-impl AppErrorMessage for UnknownDictionary {
-    fn message(&self) -> String {
-        format!("Unknown dictionary '{}'", self.dictionary_name)
-    }
-}
-
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1780,7 +1669,6 @@ impl From<AppError> for ErrorCode {
             AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
             AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
-            AppError::GetIndexWithDropTime(err) => ErrorCode::GetIndexWithDropTime(err.message()),
             AppError::DuplicatedIndexColumnId(err) => {
                 ErrorCode::DuplicatedIndexColumnId(err.message())
             }

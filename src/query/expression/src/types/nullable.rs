@@ -403,6 +403,13 @@ impl<T: ValueType> NullableColumnBuilder<T> {
         self.validity.push(false);
     }
 
+    pub fn push_repeat_null(&mut self, repeat: usize) {
+        for _ in 0..repeat {
+            T::push_default(&mut self.builder);
+        }
+        self.validity.extend_constant(repeat, false);
+    }
+
     pub fn append_column(&mut self, other: &NullableColumn<T>) {
         T::append_column(&mut self.builder, &other.column);
         self.validity.extend_from_bitmap(&other.validity)

@@ -55,7 +55,7 @@ impl Settings {
         unsafe { self.unchecked_try_get_string(key) }
     }
 
-    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
+    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
             None => match self.configs.get(key) {
@@ -349,6 +349,10 @@ impl Settings {
 
     pub fn get_hide_options_in_show_create_table(&self) -> Result<bool> {
         Ok(self.try_get_u64("hide_options_in_show_create_table")? != 0)
+    }
+
+    pub fn get_enable_planner_cache(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_planner_cache")? != 0)
     }
 
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {

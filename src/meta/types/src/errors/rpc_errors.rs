@@ -20,7 +20,7 @@ use crate::MetaNetworkError;
 /// It includes two sub errors:
 /// - Error that occurs when sending the RPC.
 /// - Error that is returned by remove service.
-#[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ForwardRPCError {
     #[error(transparent)]
     NetworkError(#[from] MetaNetworkError),

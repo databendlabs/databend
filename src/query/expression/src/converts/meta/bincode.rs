@@ -17,7 +17,6 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -201,7 +200,7 @@ impl From<Column> for LegacyColumn {
 // Serialize a column to a base64 string.
 // Because we may use serde::json/bincode to serialize the column, so we wrap it into string
 impl Serialize for LegacyColumn {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         let c: Column = self.clone().into();
 
@@ -210,7 +209,7 @@ impl Serialize for LegacyColumn {
 }
 
 impl<'de> Deserialize<'de> for LegacyColumn {
-    fn deserialize<D>(deserializer: D) -> Result<LegacyColumn, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<LegacyColumn, D::Error>
     where D: Deserializer<'de> {
         let c: Column = Deserialize::deserialize(deserializer)?;
         Ok(c.into())

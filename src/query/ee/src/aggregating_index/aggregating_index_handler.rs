@@ -19,7 +19,6 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -42,11 +41,7 @@ impl AggregatingIndexHandler for RealAggregatingIndexHandler {
     }
 
     #[async_backtrace::framed]
-    async fn do_drop_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: DropIndexReq,
-    ) -> Result<DropIndexReply> {
+    async fn do_drop_index(&self, catalog: Arc<dyn Catalog>, req: DropIndexReq) -> Result<()> {
         catalog.drop_index(req).await
     }
 

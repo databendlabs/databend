@@ -57,6 +57,7 @@ pub struct PipelineBuilder {
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
+    pub(crate) is_exchange_neighbor: bool,
 }
 
 impl PipelineBuilder {
@@ -78,6 +79,7 @@ impl PipelineBuilder {
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
+            is_exchange_neighbor: false,
         }
     }
 
@@ -133,9 +135,25 @@ impl PipelineBuilder {
         }
     }
 
+    fn is_exchange_neighbor(&self, plan: &PhysicalPlan) -> bool {
+        let mut is_empty = true;
+        let mut all_exchange_source = true;
+        for children in plan.children() {
+            is_empty = false;
+            if !matches!(children, PhysicalPlan::ExchangeSource(_)) {
+                all_exchange_source = false;
+            }
+        }
+
+        !is_empty && all_exchange_source
+    }
+
     #[recursive::recursive]
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
+        let is_exchange_neighbor = self.is_exchange_neighbor;
+        self.is_exchange_neighbor |= self.is_exchange_neighbor(plan);
+
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
             PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
@@ -235,6 +253,9 @@ impl PipelineBuilder {
             PhysicalPlan::ColumnMutation(column_mutation) => {
                 self.build_column_mutation(column_mutation)
             }
-        }
+        }?;
+
+        self.is_exchange_neighbor = is_exchange_neighbor;
+        Ok(())
     }
 }

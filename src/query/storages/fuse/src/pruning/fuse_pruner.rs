@@ -19,7 +19,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
@@ -379,7 +378,7 @@ impl FusePruner {
                             res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
                     }
-                    Result::<_, ErrorCode>::Ok((res, deleted_segments))
+                    Result::<_>::Ok((res, deleted_segments))
                 }
             }));
         }
@@ -454,7 +453,7 @@ impl FusePruner {
                         )
                         .await?;
 
-                    Result::<_, ErrorCode>::Ok(res)
+                    Result::<_>::Ok(res)
                 }
             }));
             segment_idx += 1;

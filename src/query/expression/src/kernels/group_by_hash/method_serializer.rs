@@ -56,16 +56,23 @@ impl HashMethod for HashMethodSerializer {
         }
     }
 
-    fn build_keys_accessor_and_hashes(
+    fn build_keys_accessor(
         &self,
         keys_state: KeysState,
-        hashes: &mut Vec<u64>,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Column(Column::Binary(col)) => {
-                hashes.extend(col.iter().map(hash_join_fast_string_hash));
                 let (data, offsets) = col.into_buffer();
                 Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
+        match keys_state {
+            KeysState::Column(Column::Binary(col)) => {
+                hashes.extend(col.iter().map(hash_join_fast_string_hash));
             }
             _ => unreachable!(),
         }

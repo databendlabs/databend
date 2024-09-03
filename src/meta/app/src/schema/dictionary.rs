@@ -25,7 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use educe::Educe;
 
-use super::tenant_dictionary_ident::TenantDictionaryIdent;
+use super::dictionary_name_ident::DictionaryNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
@@ -122,7 +122,7 @@ impl DictionaryMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDictionaryReq {
-    pub dictionary_ident: TenantDictionaryIdent,
+    pub dictionary_ident: DictionaryNameIdent,
     pub dictionary_meta: DictionaryMeta,
 }
 
@@ -137,23 +137,6 @@ pub struct GetDictionaryReply {
     pub dictionary_meta: DictionaryMeta,
     /// Any change to a dictionary causes the seq to increment
     pub dictionary_meta_seq: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct DictionaryId {
-    pub dictionary_id: u64,
-}
-
-impl DictionaryId {
-    pub fn new(dictionary_id: u64) -> DictionaryId {
-        DictionaryId { dictionary_id }
-    }
-}
-
-impl Display for DictionaryId {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DictionaryId{{{}}}", self.dictionary_id)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,7 +165,7 @@ impl ListDictionaryReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReq {
     pub dictionary_meta: DictionaryMeta,
-    pub dictionary_ident: TenantDictionaryIdent,
+    pub dictionary_ident: DictionaryNameIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -98,15 +98,22 @@ impl HashMethod for HashMethodDictionarySerializer {
         }
     }
 
-    fn build_keys_accessor_and_hashes(
+    fn build_keys_accessor(
         &self,
         keys_state: KeysState,
-        hashes: &mut Vec<u64>,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Dictionary { dictionaries, .. } => {
-                hashes.extend(dictionaries.iter().map(|key| key.fast_hash()));
                 Ok(Box::new(DicKeyAccessor::new(dictionaries)))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
+        match keys_state {
+            KeysState::Dictionary { dictionaries, .. } => {
+                hashes.extend(dictionaries.iter().map(|key| key.fast_hash()));
             }
             _ => unreachable!(),
         }

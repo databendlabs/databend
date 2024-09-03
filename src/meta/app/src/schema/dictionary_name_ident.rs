@@ -18,12 +18,12 @@ use crate::tenant_key::ident::TIdent;
 use crate::KeyWithTenant;
 
 /// A dictionary identity belonging to a tenant.
-pub type TenantDictionaryIdent = TIdent<Resource, DictionaryIdentity>;
-pub type TenantDictionaryIdentRaw = TIdent<Resource, DictionaryIdentity>;
+pub type DictionaryNameIdent = TIdent<DictionaryNameRsc, DictionaryIdentity>;
+pub type DictionaryNameIdentRaw = TIdent<DictionaryNameRsc, DictionaryIdentity>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::DictionaryNameRsc;
 
-impl TenantDictionaryIdent {
+impl DictionaryNameIdent {
     pub fn new(tenant: impl ToTenant, dictionary: DictionaryIdentity) -> Self {
         Self::new_generic(tenant, dictionary)
     }
@@ -45,19 +45,19 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::DictionaryId;
+    use crate::schema::dictionary_id_ident::DictionaryId;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct DictionaryNameRsc;
+    impl TenantResource for DictionaryNameRsc {
         const PREFIX: &'static str = "__fd_dictionaries";
-        const TYPE: &'static str = "TenantDictionaryIdent";
+        const TYPE: &'static str = "DictionaryName";
         const HAS_TENANT: bool = true;
         type ValueType = DictionaryId;
     }
 
     impl kvapi::Value for DictionaryId {
-        type KeyType = super::TenantDictionaryIdent;
+        type KeyType = super::DictionaryNameIdent;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
