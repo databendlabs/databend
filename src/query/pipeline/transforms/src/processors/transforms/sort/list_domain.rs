@@ -15,33 +15,34 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
-use std::ops::Index;
 
-pub trait List<T>
-where
-    T: Ord,
-    Self: Index<usize, Output = T> + Debug,
+pub trait List
+where Self: Debug
 {
+    type Item<'a>: Ord + Debug
+    where Self: 'a;
+
     fn len(&self) -> usize;
-    fn cmp_value(&self, i: usize, target: &T) -> Ordering;
+    fn cmp_value<'a>(&'a self, i: usize, target: &Self::Item<'a>) -> Ordering;
+    fn index(&self, i: usize) -> Self::Item<'_>;
 
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    fn first(&self) -> Option<&T> {
+    fn first(&self) -> Option<Self::Item<'_>> {
         if self.is_empty() {
             None
         } else {
-            Some(&self[0])
+            Some(self.index(0))
         }
     }
 
-    fn last(&self) -> Option<&T> {
+    fn last(&self) -> Option<Self::Item<'_>> {
         if self.is_empty() {
             None
         } else {
-            Some(&self[self.len() - 1])
+            Some(self.index(self.len() - 1))
         }
     }
 
@@ -52,12 +53,12 @@ where
         }
     }
 
-    fn search(&self, target: &T, domain: EndDomain) -> EndDomain {
+    fn search<'a>(&'a self, target: &Self::Item<'a>, domain: EndDomain) -> EndDomain {
         if domain.done() {
             return domain;
         }
         let mid = domain.mid();
-        return if self.cmp_value(mid, target) == Ordering::Greater {
+        if self.cmp_value(mid, target) == Ordering::Greater {
             EndDomain {
                 min: domain.min,
                 max: mid,
@@ -67,18 +68,20 @@ where
                 min: mid + 1,
                 max: domain.max,
             }
-        };
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct Partition {
     pub ends: Vec<(usize, usize)>,
+    #[allow(dead_code)]
     pub total: usize,
 }
 
 impl Partition {
-    fn new<'a, T>(item: Item<'a, T>) -> Self {
+    fn new<T>(item: Item<'_, T>) -> Self
+    where T: List {
         let Item { domains, sum, .. } = item;
         debug_assert!(sum.done());
 
@@ -100,14 +103,13 @@ impl Partition {
     }
 }
 
-pub fn calc_partition<T, U>(
-    all_list: &[&U],
+pub fn calc_partition<T>(
+    all_list: &[T],
     expect_size: EndDomain,
     max_iter: usize,
 ) -> Option<Partition>
 where
-    T: Ord + Debug,
-    U: List<T> + ?Sized,
+    T: List,
 {
     let mut candidate = Candidate::new(all_list, expect_size);
 
@@ -125,14 +127,11 @@ where
             }
             (_, _, Overlap::Left) => break,
             (_, None, Overlap::Right) => {
-                let target = candidate.find_target();
-                let target = if target.is_none() {
-                    break;
+                if let Some(target) = candidate.find_target() {
+                    candidate.update_mid(target);
                 } else {
-                    target.unwrap()
-                };
-
-                candidate.update_mid(target);
+                    break;
+                }
             }
 
             (
@@ -158,8 +157,11 @@ where
                 }
             }
             x => {
-                debug_assert!(true, "unreachable {x:?}");
-                break;
+                if cfg!(debug_assertions) {
+                    unreachable!("unreachable {x:?}");
+                } else {
+                    break;
+                }
             }
         };
     }
@@ -172,30 +174,30 @@ where
     }
 }
 
-struct Candidate<'a, T, U>
-where
-    T: Ord + Debug,
-    U: List<T> + ?Sized,
+struct Candidate<'a, T>
+where T: List
 {
-    all_list: &'a [&'a U],
+    all_list: &'a [T],
     expect: EndDomain,
     min_target: Option<Item<'a, T>>,
     mid_target: Option<Item<'a, T>>,
     max_target: Option<Item<'a, T>>,
 }
 
-struct Item<'a, T> {
-    target: &'a T,
+struct Item<'a, T>
+where
+    T: List + 'a,
+    T::Item<'a>: Debug,
+{
+    target: T::Item<'a>,
     domains: Vec<EndDomain>,
     sum: EndDomain,
 }
 
-impl<'a, T, U> Candidate<'a, T, U>
-where
-    T: Ord + Debug,
-    U: List<T> + ?Sized,
+impl<'a, T> Candidate<'a, T>
+where T: List
 {
-    fn new(all_list: &'a [&'a U], expect: EndDomain) -> Self {
+    fn new(all_list: &'a [T], expect: EndDomain) -> Self {
         Self {
             all_list,
             expect,
@@ -206,7 +208,7 @@ where
     }
 
     fn init(&mut self) -> bool {
-        let target: (Option<&T>, Option<&T>) =
+        let target: (Option<T::Item<'a>>, Option<T::Item<'a>>) =
             self.all_list.iter().fold((None, None), |(min, max), ls| {
                 let min = match (min, ls.first()) {
                     (Some(acc), Some(v)) => Some(acc.min(v)),
@@ -269,7 +271,7 @@ where
         do_search(self.all_list, self.mid_target.as_mut().unwrap())
     }
 
-    fn find_target<'b>(&'b self) -> Option<&'a T> {
+    fn find_target<'b>(&'b self) -> Option<T::Item<'a>> {
         let Item {
             target: min_target,
             domains: min_domains,
@@ -298,8 +300,8 @@ where
             }
             .five_point();
             for v in five.into_iter().filter_map(|i| {
-                let v = &ls[i];
-                if v >= min_target && v <= max_target {
+                let v = ls.index(i);
+                if v >= *min_target && v <= *max_target {
                     Some(v)
                 } else {
                     None
@@ -313,7 +315,7 @@ where
         targets.into_iter().nth(n / 2)
     }
 
-    fn update_mid(&mut self, target: &'a T) {
+    fn update_mid(&mut self, target: T::Item<'a>) {
         let max = self.max_target.as_ref().unwrap();
 
         let domains = max
@@ -356,11 +358,8 @@ where
     }
 }
 
-fn do_search<'a, T, U>(all_list: &[&U], item: &mut Item<'a, T>) -> EndDomain
-where
-    T: Ord + Debug,
-    U: List<T> + ?Sized,
-{
+fn do_search<'a, T>(all_list: &'a [T], item: &mut Item<'a, T>) -> EndDomain
+where T: List + 'a {
     let Item {
         target,
         domains,
@@ -397,8 +396,7 @@ impl EndDomain {
         if rhs.min > self.max {
             return Overlap::Right;
         }
-
-        return Overlap::Cross;
+        Overlap::Cross
     }
 
     fn left_half(&self) -> EndDomain {
@@ -461,11 +459,7 @@ impl std::ops::Add for EndDomain {
 
 impl std::iter::Sum for EndDomain {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        if let Some(domain) = iter.reduce(|acc, v| acc + v) {
-            domain
-        } else {
-            EndDomain::default()
-        }
+        iter.reduce(|acc, v| acc + v).unwrap_or_default()
     }
 }
 
@@ -482,13 +476,19 @@ impl From<std::ops::RangeInclusive<usize>> for EndDomain {
 mod tests {
     use super::*;
 
-    impl List<i32> for [i32] {
-        fn cmp_value(&self, i: usize, target: &i32) -> Ordering {
+    impl List for &[i32] {
+        type Item<'a> = &'a i32 where Self: 'a;
+
+        fn cmp_value(&self, i: usize, target: &&i32) -> Ordering {
             self[i].cmp(target)
         }
 
         fn len(&self) -> usize {
-            self.len()
+            (*self).len()
+        }
+
+        fn index(&self, i: usize) -> &i32 {
+            &self[i]
         }
     }
 

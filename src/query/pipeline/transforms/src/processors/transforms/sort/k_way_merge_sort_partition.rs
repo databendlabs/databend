@@ -22,6 +22,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
+use super::list_domain::calc_partition;
+use super::list_domain::EndDomain;
+use super::list_domain::List;
 use super::utils::u32_entry;
 use super::Rows;
 use super::SortedStream;
@@ -37,6 +40,7 @@ where
     buffer: Vec<DataBlock>,
     rows: Vec<Option<R>>,
     pending_streams: VecDeque<usize>,
+    batch_rows: usize,
     _limit: Option<usize>, // todo
 
     total_rows: usize,
@@ -52,7 +56,7 @@ where
         schema: DataSchemaRef,
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
-        _batch_rows: usize,
+        batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
         // We only create a merger when there are at least two streams.
@@ -69,6 +73,7 @@ where
             buffer,
             rows,
             pending_streams,
+            batch_rows,
             _limit: limit,
             total_rows: 0,
             cur_task: 1,
@@ -104,36 +109,16 @@ where
     }
 
     pub fn calc_partition_point(&self) -> Vec<(usize, usize)> {
-        let task_max: Option<R::Item<'_>> =
-            (0..self.buffer.len()).fold(None, |acc, i| match (acc, self.last(i)) {
-                (Some(acc), Some(last)) => Some(acc.min(last)),
-                (None, v @ Some(_)) | (v @ Some(_), None) => v,
-                (None, None) => None,
-            });
-
-        let mut task = Vec::new();
-        let task_max = match task_max {
-            Some(task_max) => task_max,
-            None => return task,
-        };
-
-        for i in 0..self.buffer.len() {
-            match self.first(i) {
-                None => continue,
-                Some(first) if first > task_max => {
-                    continue;
-                }
-                _ => (),
-            }
-
-            if self.last(i).unwrap() <= task_max {
-                task.push((i, self.buffer[i].num_rows()))
-            } else {
-                let pp = self.rows_partition_point(i, &task_max);
-                task.push((i, pp))
-            };
-        }
-        task
+        let partition = calc_partition(
+            &self.rows,
+            EndDomain {
+                min: self.batch_rows,
+                max: self.batch_rows * 2,
+            },
+            20, // todo what parameters are appropriate?
+        )
+        .unwrap();
+        partition.ends
     }
 
     pub fn next_task(&mut self) -> Result<Vec<DataBlock>> {
@@ -182,14 +167,6 @@ where
         u32_entry(id)
     }
 
-    fn first(&self, i: usize) -> Option<R::Item<'_>> {
-        self.rows[i].as_ref().map(|rows| rows.first())
-    }
-
-    fn last(&self, i: usize) -> Option<R::Item<'_>> {
-        self.rows[i].as_ref().map(|rows| rows.last())
-    }
-
     fn slice(&mut self, i: usize, pp: usize) -> DataBlock {
         let block = &self.buffer[i];
         let rows = self.rows[i].as_ref();
@@ -208,32 +185,22 @@ where
             first_block
         }
     }
+}
 
-    fn rows_partition_point<'a>(&'a self, i: usize, target: &R::Item<'a>) -> usize {
-        let rows = self.rows[i].as_ref().unwrap();
-
-        // INVARIANTS:
-        // - 0 <= left <= left + size = right <= self.len()
-        // - f returns Less for everything in self[..left]
-        // - f returns Greater for everything in self[right..]
-        let mut size = rows.len();
-        let mut left = 0;
-        let mut right = size;
-        while left < right {
-            let mid = left + size / 2;
-
-            (left, right) = if rows.row(mid).cmp(target) == Ordering::Greater {
-                (left, mid)
-            } else {
-                (mid + 1, right)
-            };
-
-            size = right - left;
+impl<R: Rows> List for Option<R> {
+    type Item<'a> = R::Item<'a> where R: 'a;
+    fn len(&self) -> usize {
+        match self {
+            Some(r) => r.len(),
+            None => 0,
         }
+    }
 
-        // SAFETY: directly true from the overall invariant.
-        // Note that this is `<=`, unlike the assume in the `Ok` path.
-        // unsafe { std::hint::assert_unchecked(left <= self.len()) };
-        left
+    fn cmp_value<'a>(&'a self, i: usize, target: &R::Item<'a>) -> Ordering {
+        self.as_ref().unwrap().row(i).cmp(target)
+    }
+
+    fn index(&self, i: usize) -> R::Item<'_> {
+        self.as_ref().unwrap().row(i)
     }
 }
