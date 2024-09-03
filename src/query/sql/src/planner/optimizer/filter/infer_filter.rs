@@ -14,8 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::hash::Hash;
-use std::hash::Hasher;
 
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
@@ -43,11 +41,11 @@ use crate::ColumnSet;
 // 3. [A = B and A = C] => [B = C]
 pub struct InferFilterOptimizer<'a> {
     // All ScalarExprs.
-    exprs: Vec<FilterScalarExpr>,
+    exprs: Vec<ScalarExpr>,
     // The index of ScalarExpr in `exprs`.
-    expr_index: HashMap<FilterScalarExpr, usize>,
+    expr_index: HashMap<ScalarExpr, usize>,
     // The equal ScalarExprs of each ScalarExpr.
-    expr_equal_to: Vec<Vec<FilterScalarExpr>>,
+    expr_equal_to: Vec<Vec<ScalarExpr>>,
     // The predicates of each ScalarExpr.
     expr_predicates: Vec<Vec<Predicate>>,
     // If the whole predicates is false.
@@ -170,33 +168,30 @@ impl<'a> InferFilterOptimizer<'a> {
 
     fn add_expr(
         &mut self,
-        expr: FilterScalarExpr,
+        expr: &ScalarExpr,
         expr_predicates: Vec<Predicate>,
-        expr_equal_to: Vec<FilterScalarExpr>,
+        expr_equal_to: Vec<ScalarExpr>,
     ) {
         self.expr_index.insert(expr.clone(), self.exprs.len());
-        self.exprs.push(expr);
+        self.exprs.push(expr.clone());
         self.expr_predicates.push(expr_predicates);
         self.expr_equal_to.push(expr_equal_to);
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
-        let left = FilterScalarExpr::new(left.clone());
-        let right = FilterScalarExpr::new(right.clone());
-        match self.expr_index.get(&left) {
+        match self.expr_index.get(left) {
             Some(index) => self.expr_equal_to[*index].push(right.clone()),
-            None => self.add_expr(left.clone(), vec![], vec![right.clone()]),
+            None => self.add_expr(left, vec![], vec![right.clone()]),
         };
 
-        match self.expr_index.get(&right) {
+        match self.expr_index.get(right) {
             Some(index) => self.expr_equal_to[*index].push(left.clone()),
-            None => self.add_expr(right.clone(), vec![], vec![left.clone()]),
+            None => self.add_expr(right, vec![], vec![left.clone()]),
         };
     }
 
     fn add_expr_predicate(&mut self, expr: &ScalarExpr, new_predicate: Predicate) -> Result<()> {
-        let expr = FilterScalarExpr::new(expr.clone());
-        match self.expr_index.get(&expr) {
+        match self.expr_index.get(expr) {
             Some(index) => {
                 let predicates = &mut self.expr_predicates[*index];
                 for predicate in predicates.iter_mut() {
@@ -437,7 +432,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 let expr = self.exprs[parent_index].clone();
                 let predicates = self.expr_predicates[index].clone();
                 for predicate in predicates {
-                    self.add_expr_predicate(&expr.inner, predicate)?;
+                    self.add_expr_predicate(&expr, predicate)?;
                 }
             }
         }
@@ -453,7 +448,7 @@ impl<'a> InferFilterOptimizer<'a> {
                     func_name: String::from(predicate.op.to_func_name()),
                     params: vec![],
                     arguments: vec![
-                        expr.inner.clone(),
+                        expr.clone(),
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
                     ],
                 }));
@@ -475,8 +470,8 @@ impl<'a> InferFilterOptimizer<'a> {
                                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                                 params: vec![],
                                 arguments: vec![
-                                    self.exprs[equal_indexes[i]].inner.clone(),
-                                    self.exprs[equal_indexes[j]].inner.clone(),
+                                    self.exprs[equal_indexes[i]].clone(),
+                                    self.exprs[equal_indexes[j]].clone(),
                                 ],
                             }));
                         }
@@ -492,9 +487,9 @@ impl<'a> InferFilterOptimizer<'a> {
         // The ReplaceScalarExpr is used to replace the ScalarExpr of a predicate.
         struct ReplaceScalarExpr<'a> {
             // The index of ScalarExpr in `exprs`.
-            expr_index: &'a HashMap<FilterScalarExpr, usize>,
+            expr_index: &'a HashMap<ScalarExpr, usize>,
             // The equal ScalarExprs of each ScalarExpr.
-            expr_equal_to: &'a Vec<Vec<FilterScalarExpr>>,
+            expr_equal_to: &'a Vec<Vec<ScalarExpr>>,
             // The columns used by the predicate.
             column_set: HashSet<usize>,
             // If the predicate can be replaced to generate a new predicate.
@@ -510,15 +505,14 @@ impl<'a> InferFilterOptimizer<'a> {
 
         impl<'a> VisitorMut<'_> for ReplaceScalarExpr<'a> {
             fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-                let filter_expr = FilterScalarExpr::new(expr.clone());
-                if let Some(index) = self.expr_index.get(&filter_expr) {
+                if let Some(index) = self.expr_index.get(expr) {
                     let equal_to = &self.expr_equal_to[*index];
                     if !equal_to.is_empty() {
                         let used_columns = expr.used_columns();
                         for column in used_columns {
                             self.column_set.insert(column);
                         }
-                        *expr = equal_to[0].inner.clone();
+                        *expr = equal_to[0].clone();
                         return Ok(());
                     }
                 }
@@ -591,44 +585,6 @@ impl<'a> InferFilterOptimizer<'a> {
         }
 
         result_predicates
-    }
-}
-
-#[derive(Clone, Debug)]
-struct FilterScalarExpr {
-    inner: ScalarExpr,
-}
-
-impl FilterScalarExpr {
-    fn new(inner: ScalarExpr) -> Self {
-        Self { inner }
-    }
-}
-
-impl Eq for FilterScalarExpr {}
-
-impl PartialEq for FilterScalarExpr {
-    #[recursive::recursive]
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.inner, &other.inner) {
-            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => {
-                l.column.index == r.column.index && l.column.table_index == r.column.table_index
-            }
-            _ => self.inner.eq(&other.inner),
-        }
-    }
-}
-
-impl Hash for FilterScalarExpr {
-    #[recursive::recursive]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.inner {
-            ScalarExpr::BoundColumnRef(v) => {
-                v.column.index.hash(state);
-                v.column.table_index.hash(state);
-            }
-            _ => self.inner.hash(state),
-        }
     }
 }
 
