@@ -1,5 +1,5 @@
 [package]
-name = "mock_source"
+name = "databend-mock-xsource"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

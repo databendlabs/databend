@@ -1,3 +1,20 @@
-query T
-SELECT select dict_get(test, 'value', 'a');
+query TT
+SELECT dict_get(d5, 'value', 'a')
 ----
+100
+
+query TT
+SELECT dict_get(d5, 'value', 'b')
+----
+abc
+
+statement error 1006
+select dict_get(d5, 'value11','a')
+
+statement error 3114
+select dict_get(test, 'value','b')
+
+query TT
+SELECT dict_get(d5, 'value', 'test')
+----
+

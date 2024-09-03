@@ -5114,6 +5114,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-mock-xsource"
+version = "0.1.0"
+dependencies = [
+ "mini-redis",
+ "tokio",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
@@ -10223,14 +10231,6 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "mock_source"
-version = "0.1.0"
-dependencies = [
- "mini-redis",
- "tokio",
 ]
 
 [[package]]

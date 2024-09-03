@@ -68,7 +68,7 @@ d3 CREATE DICTIONARY d3 ( a INT NULL, b VARCHAR NULL ) PRIMARY KEY a SOURCE(mysq
 query TT
 show create dictionary d5
 ----
-d5 CREATE DICTIONARY d5 ( key STRING NOT NULL, value STRING NOT NULL ) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+d5 CREATE DICTIONARY d5 ( key VARCHAR NOT NULL, value VARCHAR NOT NULL ) PRIMARY KEY key SOURCE(redis(db_index='0' host='127.0.0.1' password='[HIDDEN]' port='6379'))
 
 statement error 3114
 show create dictionary test
