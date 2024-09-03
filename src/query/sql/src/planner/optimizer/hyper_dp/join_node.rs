@@ -66,8 +66,8 @@ impl JoinNode {
             .await
             {
                 Ok(card) => {
-                    dbg!(card);
-                    card
+                    dbg!(card.cardinality);
+                    card.cardinality
                 }
                 Err(e) => {
                     dbg!(e);

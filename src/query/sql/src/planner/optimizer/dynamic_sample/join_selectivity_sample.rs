@@ -15,37 +15,35 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::optimizer::dynamic_sample::filter_selectivity_sample::filter_selectivity_sample;
-use crate::optimizer::dynamic_sample::join_selectivity_sample::join_selectivity_sample;
+use crate::optimizer::dynamic_sample::dynamic_sample;
 use crate::optimizer::QuerySampleExecutor;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
-use crate::plans::Operator;
-use crate::plans::RelOperator;
+use crate::plans::Join;
 use crate::MetadataRef;
 
-#[async_recursion::async_recursion(#[recursive::recursive])]
-pub async fn dynamic_sample(
+pub async fn join_selectivity_sample(
     ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     s_expr: &SExpr,
     sample_executor: Arc<dyn QuerySampleExecutor>,
 ) -> Result<Arc<StatInfo>> {
-    match s_expr.plan() {
-        RelOperator::Filter(_) => {
-            filter_selectivity_sample(ctx, metadata, s_expr, sample_executor).await
-        }
-        RelOperator::Join(_) => {
-            join_selectivity_sample(ctx, metadata, s_expr, sample_executor).await
-        }
-        RelOperator::Scan(_) => s_expr.plan().derive_stats(&RelExpr::with_s_expr(s_expr)),
-        _ => Err(ErrorCode::Unimplemented(format!(
-            "derive_cardinality_by_sample for {:?} is not supported yet",
-            s_expr.plan()
-        ))),
-    }
+    let left_stat_info = dynamic_sample(
+        ctx.clone(),
+        metadata.clone(),
+        s_expr.child(0)?,
+        sample_executor.clone(),
+    )
+    .await?;
+    let right_stat_info = dynamic_sample(
+        ctx.clone(),
+        metadata.clone(),
+        s_expr.child(1)?,
+        sample_executor.clone(),
+    )
+    .await?;
+    let join = Join::try_from(s_expr.plan().clone())?;
+    join.derive_join_stats(left_stat_info, right_stat_info)
 }

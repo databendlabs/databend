@@ -23,11 +23,15 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
+use num_traits::ToPrimitive;
 
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::QuerySampleExecutor;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::optimizer::SelectivityEstimator;
+use crate::optimizer::StatInfo;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -41,12 +45,12 @@ pub async fn filter_selectivity_sample(
     metadata: MetadataRef,
     s_expr: &SExpr,
     sample_executor: Arc<dyn QuerySampleExecutor>,
-) -> Result<f64> {
+) -> Result<Arc<StatInfo>> {
     // filter cardinality by sample will be called in `dphyp`, so we can ensure the filter is in complex query(contains not only one table)
     // Because it's meaningless for filter cardinality by sample in single table query.
     let child = s_expr.child(0)?;
+    let child_rel_expr = RelExpr::with_s_expr(child);
     if let RelOperator::Scan(mut scan) = child.plan().clone() {
-        // Get the table's num_rows
         let num_rows = scan
             .statistics
             .table_stats
@@ -57,52 +61,72 @@ pub async fn filter_selectivity_sample(
         // Calculate sample size (0.2% of total data)
         let sample_size = (num_rows as f64 * 0.002).ceil();
 
-        // 2. Construct sample field and add it to scan
         scan.sample = Some(Sample {
             sample_level: SampleLevel::ROW,
             sample_conf: SampleConfig::RowsNum(sample_size),
         });
 
-        // Replace old scan in s_expr
         let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
         let mut new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
+        let collect_statistics_optimizer =
+            CollectStatisticsOptimizer::new(ctx.clone(), metadata.clone());
+        new_s_expr = collect_statistics_optimizer.run(&new_s_expr).await?;
 
-        // Wrap a count aggregate plan to original s_expr
-        let count_agg = Aggregate {
-            mode: AggregateMode::Initial,
-            group_items: vec![],
-            aggregate_functions: vec![ScalarItem {
-                scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                    func_name: "count".to_string(),
-                    distinct: false,
-                    params: vec![],
-                    args: vec![],
-                    return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                    display_name: "".to_string(),
-                }),
-                index: 0, // Assuming 0 is the correct index for the count result
-            }],
-            from_distinct: false,
-            limit: None,
-            grouping_sets: None,
-        };
-        new_s_expr = SExpr::create_unary(Arc::new(count_agg.into()), Arc::new(new_s_expr));
+        new_s_expr = SExpr::create_unary(
+            Arc::new(create_count_aggregate(AggregateMode::Partial).into()),
+            Arc::new(new_s_expr),
+        );
+        new_s_expr = SExpr::create_unary(
+            Arc::new(create_count_aggregate(AggregateMode::Final).into()),
+            Arc::new(new_s_expr),
+        );
 
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), true);
-        let plan = builder.build(&new_s_expr, HashSet::new()).await?;
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+        let mut required = HashSet::new();
+        required.insert(0);
+        let plan = builder.build(&new_s_expr, required).await?;
 
         let result = sample_executor.execute_query(&plan).await?;
         if let Some(block) = result.first() {
             if let Some(count) = block.get_last_column().as_number() {
-                if let Some(NumberScalar::UInt64(sampled_count)) = count.index(0) {
+                dbg!(count);
+                if let Some(number_scalar) = count.index(0) {
                     // Compute and return selectivity
-                    let selectivity = sampled_count as f64 / sample_size as f64;
-                    return Ok(selectivity);
+                    let selectivity = number_scalar.to_f64().to_f64().unwrap() / sample_size as f64;
+                    dbg!(selectivity);
+                    let mut statistics = child_rel_expr.derive_cardinality()?.statistics.clone();
+                    let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+                    sb.update_other_statistic_by_selectivity(selectivity);
+                    return Ok(Arc::new(StatInfo {
+                        cardinality: selectivity * num_rows as f64,
+                        statistics,
+                    }));
                 }
             }
         }
     }
-    return Err(ErrorCode::Internal(
+    Err(ErrorCode::Internal(
         "Failed to calculate filter selectivity by sample".to_string(),
-    ));
+    ))
+}
+
+fn create_count_aggregate(mode: AggregateMode) -> Aggregate {
+    Aggregate {
+        mode,
+        group_items: vec![],
+        aggregate_functions: vec![ScalarItem {
+            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                func_name: "count(*)".to_string(),
+                distinct: false,
+                params: vec![],
+                args: vec![],
+                return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                display_name: "".to_string(),
+            }),
+            index: 0,
+        }],
+        from_distinct: false,
+        limit: None,
+        grouping_sets: None,
+    }
 }
