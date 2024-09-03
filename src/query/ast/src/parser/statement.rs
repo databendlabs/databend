@@ -2670,11 +2670,12 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     });
 
     let source_table = map(
-        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
-        |((catalog, database, table), alias)| MergeSource::Table {
+        rule!(#dot_separated_idents_1_to_3 ~ #max_batch_size? ~ #table_alias?),
+        |((catalog, database, table), max_batch_size, alias)| MergeSource::Table {
             catalog,
             database,
             table,
+            max_batch_size,
             alias,
         },
     );

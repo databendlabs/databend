@@ -158,6 +158,7 @@ pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub max_batch_size: Option<u64>,
 }
 
 impl Display for TableRef {
@@ -170,6 +171,10 @@ impl Display for TableRef {
             write!(f, "{}.", database)?;
         }
         write!(f, "{}", self.table)?;
+
+        if let Some(max_batch_size) = self.max_batch_size {
+            write!(f, " MAX_BATCH_SIZE_HINT {max_batch_size}")?;
+        }
         Ok(())
     }
 }

@@ -595,6 +595,13 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     )(i)
 }
 
+pub fn max_batch_size(i: Input) -> IResult<u64> {
+    map(
+        rule! { MAX_BATCH_SIZE_HINT ~ ^#literal_u64 },
+        |(_, size)| size,
+    )(i)
+}
+
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
     map(
         rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
@@ -744,13 +751,13 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ (MAX_BATCH_SIZE_HINT ~ ^#literal_u64)? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #max_batch_size? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
             (catalog, database, table),
             temporal,
             opt_consume,
-            opt_batch_limit,
+            max_batch_size,
             alias,
             pivot,
             unpivot,
@@ -766,7 +773,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 alias,
                 temporal,
                 consume: opt_consume.is_some(),
-                max_batch_size: opt_batch_limit.map(|(_, size)| size),
+                max_batch_size,
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
                 sample: table_sample,

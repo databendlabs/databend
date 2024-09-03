@@ -182,6 +182,7 @@ pub enum MergeSource {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
+        max_batch_size: Option<u64>,
     },
 }
 
@@ -207,6 +208,7 @@ impl MergeSource {
                 catalog,
                 database,
                 table,
+                max_batch_size,
                 alias,
             } => TableReference::Table {
                 span: None,
@@ -216,7 +218,7 @@ impl MergeSource {
                 alias: alias.clone(),
                 temporal: None,
                 consume: false,
-                max_batch_size: None,
+                max_batch_size: *max_batch_size,
                 pivot: None,
                 unpivot: None,
                 sample: None,
@@ -250,12 +252,16 @@ impl Display for MergeSource {
                 catalog,
                 database,
                 table,
+                max_batch_size,
                 alias,
             } => {
                 write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
+                if let Some(max_batch_size) = max_batch_size {
+                    write!(f, " MAX_BATCH_SIZE_HINT {max_batch_size}")?;
+                }
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }
