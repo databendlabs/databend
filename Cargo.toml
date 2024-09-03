@@ -400,6 +400,7 @@ arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
+borsh = { git = "https://github.com/dqhl76/borsh-rs.git", rev = "6609a44" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
@@ -408,4 +409,3 @@ orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "174537
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
-borsh = { git = "https://github.com/dqhl76/borsh-rs.git", rev = "6609a44"}
