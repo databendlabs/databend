@@ -3782,7 +3782,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Batch get all catalog-metas.
         // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
-        #[allow(deprecated)]
         let seq_metas = self.get_pb_values(kv_keys.clone()).await?;
         let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
 

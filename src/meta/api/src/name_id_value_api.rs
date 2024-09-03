@@ -281,7 +281,6 @@ where
                 id.into_t_ident(tenant)
             });
 
-            #[allow(deprecated)]
             let strm = self.get_pb_values(id_idents).await?;
             let seq_metas = strm.try_collect::<Vec<_>>().await?;
 
