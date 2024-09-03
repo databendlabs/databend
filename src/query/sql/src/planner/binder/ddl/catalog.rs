@@ -37,7 +37,6 @@ use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
-use databend_common_meta_app::schema::ShareCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
 use crate::binder::parse_storage_params_from_uri;
@@ -167,10 +166,6 @@ impl Binder {
                 let opt = parse_iceberg_rest_catalog(options.clone())?;
                 CatalogOption::Iceberg(opt)
             }
-            CatalogType::Share => {
-                let opt = parse_share_catalog(options.clone())?;
-                CatalogOption::Share(opt)
-            }
         };
 
         Ok(CatalogMeta {
@@ -247,30 +242,4 @@ fn parse_iceberg_rest_catalog(
     };
 
     Ok(option)
-}
-
-fn parse_share_catalog(mut options: BTreeMap<String, String>) -> Result<ShareCatalogOption> {
-    let input = options
-        .remove("name")
-        .ok_or_else(|| ErrorCode::InvalidArgument("share name for share catalog is not specified"))?
-        .to_lowercase();
-    let tenant_share: Vec<String> = input.split('.').map(|s| s.to_string()).collect();
-    if tenant_share.len() != 2 {
-        return Err(ErrorCode::InvalidArgument(
-            "invalid share name for share catalog",
-        ));
-    }
-
-    let share_endpoint = options
-        .remove("endpoint")
-        .ok_or_else(|| {
-            ErrorCode::InvalidArgument("share endpoint name for share catalog is not specified")
-        })?
-        .to_lowercase();
-
-    Ok(ShareCatalogOption {
-        provider: tenant_share[0].clone(),
-        share_name: tenant_share[1].clone(),
-        share_endpoint,
-    })
 }
