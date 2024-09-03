@@ -35,6 +35,7 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 use futures::future::FutureExt;
 use futures::future::TryFutureExt;
+use futures::stream;
 use futures::stream::BoxStream;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
@@ -46,6 +47,7 @@ pub(crate) use self::codec::encode_operation;
 pub use self::upsert_pb::UpsertPB;
 use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_api::errors::PbApiWriteError;
+use crate::kv_pb_api::errors::StreamReadEof;
 
 /// This trait provides a way to access a kv store with `kvapi::Key` type key and protobuf encoded value.
 pub trait KVPbApi: KVApi {
@@ -160,7 +162,9 @@ pub trait KVPbApi: KVApi {
     }
 
     /// Same as `get_pb_stream` but does not return keys, only values.
-    #[deprecated(note = "stream may be closed. The caller must check it")]
+    ///
+    /// It guaranteed to return the same number of results as the input keys.
+    /// If the backend stream closed before all keys are processed, the following items is filled with `StreamReadEof` Error.
     fn get_pb_values<K, I>(
         &self,
         keys: I,
@@ -195,7 +199,9 @@ pub trait KVPbApi: KVApi {
     /// The key will be converted to string and the returned value is decoded by `FromToProto`.
     /// It returns the same error as `KVApi::Error`,
     /// thus it requires KVApi::Error can describe a decoding error, i.e., `impl From<PbApiReadError>`.
-    #[deprecated(note = "stream may be closed. The caller must check it")]
+    ///
+    /// It guaranteed to return the same number of results as the input keys.
+    /// If the backend stream closed before all keys are processed, the following items is filled with `StreamReadEof` Error.
     fn get_pb_stream<K, I>(
         &self,
         keys: I,
@@ -244,6 +250,8 @@ pub trait KVPbApi: KVApi {
             .collect::<Vec<_>>();
 
         async move {
+            let sent = keys.len();
+
             let strm = self.get_kv_stream(&keys).await?;
 
             let strm = strm.map(|r: Result<StreamItem, Self::Error>| {
@@ -260,6 +268,26 @@ pub trait KVPbApi: KVApi {
 
                 Ok((k, v))
             });
+
+            // If the backend stream is closed, fill it with `StreamReadEof` error.
+
+            let strm = strm
+                // chain with a stream of `StreamReadEof` error but without received count set.
+                .chain(stream::once(async move {
+                    Err(PbApiReadError::StreamReadEof(StreamReadEof::new(
+                        sent as u64,
+                        0,
+                    )))
+                }))
+                .take(sent)
+                // set received count for `StreamReadEof` error after `sent`
+                .enumerate()
+                .map(move |(i, mut r)| {
+                    if let Err(PbApiReadError::StreamReadEof(e)) = &mut r {
+                        e.set_received(i as u64)
+                    }
+                    r
+                });
 
             Ok(strm.boxed())
         }
@@ -387,6 +415,8 @@ mod tests {
 
     //
     struct Foo {
+        /// Whether to return without exhausting the input for `get_kv_stream`.
+        early_return: Option<usize>,
         kvs: BTreeMap<String, SeqV>,
     }
 
@@ -403,7 +433,14 @@ mod tests {
             keys: &[String],
         ) -> Result<KVStream<Self::Error>, Self::Error> {
             let mut res = Vec::with_capacity(keys.len());
-            for key in keys {
+            for (i, key) in keys.iter().enumerate() {
+                // For tesing early return stream.
+                if let Some(early_return) = self.early_return {
+                    if i >= early_return {
+                        break;
+                    }
+                }
+
                 let k = key.clone();
                 let v = self.kvs.get(key).cloned();
 
@@ -428,6 +465,51 @@ mod tests {
     // TODO: test upsert_kv
     // TODO: test list_kv
 
+    /// If the backend stream returns early, the returned stream should be filled with error item at the end.
+    #[tokio::test]
+    async fn test_mget_early_return() -> anyhow::Result<()> {
+        let catalog_meta = CatalogMeta {
+            catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                address: "127.0.0.1:10000".to_string(),
+                storage_params: None,
+            }),
+            created_on: DateTime::<Utc>::MIN_UTC,
+        };
+        let v = catalog_meta.to_pb()?.encode_to_vec();
+
+        let foo = Foo {
+            early_return: Some(2),
+            kvs: vec![
+                (s("__fd_catalog_by_id/1"), SeqV::new(1, v.clone())),
+                (s("__fd_catalog_by_id/2"), SeqV::new(2, v.clone())),
+                (s("__fd_catalog_by_id/3"), SeqV::new(3, v.clone())),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        let tenant = Tenant::new_literal("dummy");
+
+        // Get key value pairs
+        {
+            let strm = foo
+                .get_pb_stream([
+                    CatalogIdIdent::new(&tenant, 1),
+                    CatalogIdIdent::new(&tenant, 2),
+                    CatalogIdIdent::new(&tenant, 4),
+                ])
+                .await?;
+
+            let got = strm.try_collect::<Vec<_>>().await;
+            assert_eq!(
+                got.unwrap_err().to_string(),
+                r#"InvalidReply: StreamReadEOF: expected 3 items but only received 2 items; source: "#
+            );
+        }
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_mget() -> anyhow::Result<()> {
         let catalog_meta = CatalogMeta {
@@ -449,6 +531,7 @@ mod tests {
         let v = catalog_meta.to_pb()?.encode_to_vec();
 
         let foo = Foo {
+            early_return: None,
             kvs: vec![
                 (s("__fd_catalog_by_id/1"), SeqV::new(1, v.clone())),
                 (s("__fd_catalog_by_id/2"), SeqV::new(2, v.clone())),
@@ -462,7 +545,6 @@ mod tests {
 
         // Get key value pairs
         {
-            #[allow(deprecated)]
             let strm = foo
                 .get_pb_stream([
                     CatalogIdIdent::new(&tenant, 1),
@@ -488,7 +570,6 @@ mod tests {
 
         // Get values
         {
-            #[allow(deprecated)]
             let strm = foo
                 .get_pb_values([
                     CatalogIdIdent::new(&tenant, 1),

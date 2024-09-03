@@ -23,4 +23,5 @@ pub use self::decode_error::PbDecodeError;
 pub use self::encode_error::PbEncodeError;
 pub use self::read_error::NoneValue;
 pub use self::read_error::PbApiReadError;
+pub use self::read_error::StreamReadEof;
 pub use self::write_error::PbApiWriteError;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
 
@@ -33,6 +34,23 @@ impl NoneValue {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[error("StreamReadEOF: expected {expected} items but only received {received} items")]
+pub struct StreamReadEof {
+    expected: u64,
+    received: u64,
+}
+
+impl StreamReadEof {
+    pub fn new(expected: u64, received: u64) -> Self {
+        StreamReadEof { expected, received }
+    }
+
+    pub fn set_received(&mut self, received: u64) {
+        self.received = received;
+    }
+}
+
 /// An error occurs when reading protobuf encoded value from kv store.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("PbApiReadError: {0}")]
@@ -40,6 +58,7 @@ pub enum PbApiReadError<E> {
     PbDecodeError(#[from] PbDecodeError),
     KeyError(#[from] kvapi::KeyError),
     NoneValue(#[from] NoneValue),
+    StreamReadEof(#[from] StreamReadEof),
     /// Error returned from KVApi.
     KvApiError(E),
 }
@@ -54,6 +73,9 @@ impl From<PbApiReadError<MetaError>> for MetaError {
             PbApiReadError::PbDecodeError(e) => MetaError::from(e),
             PbApiReadError::KeyError(e) => MetaError::from(InvalidReply::new("", &e)),
             PbApiReadError::NoneValue(e) => MetaError::from(InvalidReply::new("", &e)),
+            PbApiReadError::StreamReadEof(e) => {
+                MetaError::from(InvalidReply::new(e.to_string(), &AnyError::error("")))
+            }
             PbApiReadError::KvApiError(e) => e,
         }
     }
