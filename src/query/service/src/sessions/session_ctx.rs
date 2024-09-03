@@ -354,7 +354,7 @@ impl SessionContext {
         self.client_session_id.read().clone()
     }
 
-    pub fn set_client_session_id(&self, id: String) {
-        *self.client_session_id.write() = Some(id);
+    pub fn set_client_session_id(&mut self, id: String) {
+        *self.client_session_id.write() = Some(id.to_string());
     }
 }

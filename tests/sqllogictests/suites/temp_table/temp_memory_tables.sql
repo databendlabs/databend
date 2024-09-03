@@ -14,7 +14,7 @@ statement ok
 insert into t2 values(1,1),(2,2)
 
 query I
-select a+b from t2
+select a+b from t2 order by a+b
 ----
 2
 4
@@ -28,7 +28,7 @@ create temp table t2(a int,b int)  engine=MEMORY;
 statement error 1005
 create temp table t2(a INT auto_increment) engine=MEMORY;
 
-statement error 1105
+statement error 1006
 create temp table t3(a int,b int) engine=null engine=MEMORY;
 
 statement ok

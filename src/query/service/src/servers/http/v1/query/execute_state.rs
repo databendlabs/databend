@@ -42,6 +42,7 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::http_query::ResponseState;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
@@ -332,6 +333,9 @@ impl ExecuteState {
         format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
     ) -> Result<()> {
         info!("http query prepare to plan sql");
+        if let Some(cid) = session.get_client_session_id() {
+            ClientSessionManager::instance().on_query_start(&cid, &session)
+        }
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
