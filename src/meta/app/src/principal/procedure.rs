@@ -144,7 +144,7 @@ impl Display for DropProcedureReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropProcedureReply {
     pub procedure_id: u64,
 }
@@ -174,7 +174,7 @@ impl UndropProcedureReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropProcedureReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
