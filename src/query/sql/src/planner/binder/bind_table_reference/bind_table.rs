@@ -46,6 +46,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
         consume: bool,
+        max_batch_size: Option<u64>,
         sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
         let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
@@ -103,6 +104,7 @@ impl Binder {
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
+                max_batch_size,
                 self.ctx.clone().get_abort_checker(),
             ) {
                 Ok(table) => table,
@@ -169,6 +171,7 @@ impl Binder {
                     database.as_str(),
                     table_name.as_str(),
                     consume,
+                    max_batch_size,
                 ))?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));

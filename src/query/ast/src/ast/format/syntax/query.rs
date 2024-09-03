@@ -320,6 +320,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             alias,
             temporal,
             consume,
+            max_batch_size,
             pivot,
             unpivot,
             sample,
@@ -341,6 +342,11 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         })
         .append(if consume {
             RcDoc::text(" WITH CONSUME")
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(size) = max_batch_size {
+            RcDoc::text(format!(" MAX_BATCH_SIZE_HINT {size}"))
         } else {
             RcDoc::nil()
         })

@@ -36,6 +36,7 @@ impl Binder {
                 pivot: _,
                 unpivot: _,
                 consume,
+                max_batch_size,
                 sample,
             } => self.bind_table(
                 bind_context,
@@ -46,6 +47,7 @@ impl Binder {
                 alias,
                 temporal,
                 *consume,
+                *max_batch_size,
                 sample,
             ),
             TableReference::TableFunction {

@@ -711,7 +711,7 @@ impl TableContext for CtxDelegation {
         _catalog: &str,
         _database: &str,
         _table: &str,
-        _max_batch_size: u64,
+        _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }

@@ -315,77 +315,12 @@ impl QueryContextShared {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_table_with_batch(
-        &self,
-        catalog_name: &str,
-        database: &str,
-        table: &str,
-        max_batch_size: u64,
-    ) -> Result<Arc<dyn Table>> {
-        // Always get same table metadata in the same query
-        let table_meta_key = (
-            catalog_name.to_string(),
-            database.to_string(),
-            table.to_string(),
-        );
-
-        let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
-        let res = match already_in_cache {
-            false => {
-                let tenant = self.get_tenant();
-                let catalog = self
-                    .catalog_manager
-                    .get_catalog(
-                        tenant.tenant_name(),
-                        catalog_name,
-                        self.session.session_ctx.session_state(),
-                    )
-                    .await?;
-                let cache_table = catalog.get_table(&tenant, database, table).await?;
-                if !cache_table.is_stream() {
-                    return Err(ErrorCode::StorageUnsupported(
-                        "MAX_BATCH_SIZE_HINT only support in STREAM",
-                    ));
-                }
-
-                let stream = StreamTable::try_from_table(cache_table.as_ref())?;
-                let cache_table = self
-                    .cache_stream_source_table(catalog, stream, Some(max_batch_size))
-                    .await?;
-
-                let ret = self
-                    .tables_refs
-                    .lock()
-                    .insert(table_meta_key, cache_table.clone());
-                assert!(ret.is_none());
-                cache_table
-            }
-            true => {
-                let cache_table = self
-                    .tables_refs
-                    .lock()
-                    .get(&table_meta_key)
-                    .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
-                    .clone();
-                let stream = StreamTable::try_from_table(cache_table.as_ref())?;
-                let actual_batch_limit = stream.max_batch_size();
-                if actual_batch_limit != Some(max_batch_size) {
-                    return Err(ErrorCode::StorageUnsupported(
-                        "Within the same transaction, the batch size for a stream must remain consistent",
-                    ));
-                }
-                cache_table
-            }
-        };
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
     pub async fn get_table(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
 
@@ -393,7 +328,10 @@ impl QueryContextShared {
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
         let res = match already_in_cache {
-            false => self.get_table_to_cache(catalog, database, table).await?,
+            false => {
+                self.get_table_to_cache(catalog, database, table, max_batch_size)
+                    .await?
+            }
             true => self
                 .tables_refs
                 .lock()
@@ -401,16 +339,6 @@ impl QueryContextShared {
                 .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone(),
         };
-
-        if res.is_stream() {
-            let stream = StreamTable::try_from_table(res.as_ref())?;
-            let actual_batch_limit = stream.max_batch_size();
-            if actual_batch_limit != None {
-                return Err(ErrorCode::StorageUnsupported(
-                    "Within the same transaction, the batch size for a stream must remain consistent",
-                ));
-            }
-        }
 
         Ok(res)
     }
@@ -421,6 +349,7 @@ impl QueryContextShared {
         catalog_name: &str,
         database: &str,
         table: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (
@@ -437,20 +366,16 @@ impl QueryContextShared {
             )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;
-        let cache_table = if cache_table.is_stream() {
-            let stream = StreamTable::try_from_table(cache_table.as_ref())?;
-            self.cache_stream_source_table(catalog, stream, None)
-                .await?
-        } else {
-            cache_table
-        };
+        let cache_table = self
+            .cache_stream_source_table(catalog, cache_table, max_batch_size)
+            .await?;
 
-        let ret = self
-            .tables_refs
-            .lock()
-            .insert(table_meta_key, cache_table.clone());
-        assert!(ret.is_none());
-        Ok(cache_table)
+        let mut tables_refs = self.tables_refs.lock();
+
+        match tables_refs.entry(table_meta_key) {
+            Entry::Occupied(v) => Ok(v.get().clone()),
+            Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
+        }
     }
 
     // Cache the source table of a stream table to ensure can get the same table metadata.
@@ -458,9 +383,14 @@ impl QueryContextShared {
     async fn cache_stream_source_table(
         &self,
         catalog: Arc<dyn Catalog>,
-        stream: &StreamTable,
+        table: Arc<dyn Table>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        if !table.is_stream() {
+            return Ok(table);
+        }
+
+        let stream = StreamTable::try_from_table(table.as_ref())?;
         let source_database_name = stream.source_database_name(catalog.as_ref()).await?;
         let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
         let meta_key = (
@@ -472,25 +402,27 @@ impl QueryContextShared {
         let source_table = match already_in_cache {
             false => {
                 let stream_desc = &stream.get_table_info().desc;
-                let source_table = match catalog.get_stream_source_table(stream_desc)? {
-                    Some(source_table) => source_table,
-                    None => {
-                        let source_table = stream
-                            .navigate_within_batch_limit(
-                                catalog.as_ref(),
-                                &self.get_tenant(),
-                                &source_database_name,
-                                &source_table_name,
+                let source_table =
+                    match catalog.get_stream_source_table(stream_desc, max_batch_size)? {
+                        Some(source_table) => source_table,
+                        None => {
+                            let source_table = stream
+                                .navigate_within_batch_limit(
+                                    catalog.as_ref(),
+                                    &self.get_tenant(),
+                                    &source_database_name,
+                                    &source_table_name,
+                                    max_batch_size,
+                                )
+                                .await?;
+                            catalog.cache_stream_source_table(
+                                stream.get_table_info().clone(),
+                                source_table.get_table_info().clone(),
                                 max_batch_size,
-                            )
-                            .await?;
-                        catalog.cache_stream_source_table(
-                            stream.get_table_info().clone(),
-                            source_table.get_table_info().clone(),
-                        );
-                        source_table
-                    }
-                };
+                            );
+                            source_table
+                        }
+                    };
 
                 let mut tables_refs = self.tables_refs.lock();
                 tables_refs.entry(meta_key).or_insert(source_table.clone());

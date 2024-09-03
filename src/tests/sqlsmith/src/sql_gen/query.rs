@@ -479,6 +479,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             // TODO
             temporal: None,
             consume: false,
+            max_batch_size: None,
             // TODO
             pivot: None,
             // TODO

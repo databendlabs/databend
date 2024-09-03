@@ -63,6 +63,7 @@ impl Dataframe {
             alias: None,
             temporal: None,
             consume: false,
+            max_batch_size: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -88,6 +89,7 @@ impl Dataframe {
                 catalog,
                 database,
                 "one",
+                None,
                 None,
                 query_ctx.clone().get_abort_checker(),
             )?;
@@ -465,6 +467,7 @@ impl Dataframe {
                 alias: None,
                 temporal: None,
                 consume: false,
+                max_batch_size: None,
                 pivot: None,
                 unpivot: None,
                 sample: None,

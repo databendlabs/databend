@@ -564,17 +564,9 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
         },
     );
 
-    let stream_batch = map(
-        rule! {
-           MAX_BATCH_SIZE_HINT ~ ^#literal_u64
-        },
-        |(_, size)| TemporalClause::StreamBatch(size),
-    );
-
     rule!(
         #time_travel
         | #changes
-        | #stream_batch
     )(i)
 }
 
@@ -691,6 +683,7 @@ pub enum TableReferenceElement {
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
         consume: bool,
+        max_batch_size: Option<u64>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -751,12 +744,13 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ (WITH ~ CONSUME)? ~ #temporal_clause? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ (MAX_BATCH_SIZE_HINT ~ ^#literal_u64)? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
             (catalog, database, table),
-            opt_consume,
             temporal,
+            opt_consume,
+            opt_batch_limit,
             alias,
             pivot,
             unpivot,
@@ -772,6 +766,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 alias,
                 temporal,
                 consume: opt_consume.is_some(),
+                max_batch_size: opt_batch_limit.map(|(_, size)| size),
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
                 sample: table_sample,
@@ -920,6 +915,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 alias,
                 temporal,
                 consume,
+                max_batch_size,
                 pivot,
                 unpivot,
                 sample,
@@ -931,6 +927,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 alias,
                 temporal,
                 consume,
+                max_batch_size,
                 pivot,
                 unpivot,
                 sample,

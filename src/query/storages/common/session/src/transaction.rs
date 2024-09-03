@@ -66,9 +66,10 @@ pub struct TxnBuffer {
 }
 
 #[derive(Debug, Clone)]
-struct StreamSnapshot {
+pub struct StreamSnapshot {
     pub stream: TableInfo,
     pub source: TableInfo,
+    pub max_batch_size: Option<u64>,
 }
 
 impl TxnBuffer {
@@ -179,10 +180,19 @@ impl TxnManager {
     }
 
     // for caching stream table to impl the rr semantics
-    pub fn upsert_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
+    pub fn upsert_stream_table(
+        &mut self,
+        stream: TableInfo,
+        source: TableInfo,
+        max_batch_size: Option<u64>,
+    ) {
         self.txn_buffer
             .stream_tables
-            .insert(stream.ident.table_id, StreamSnapshot { stream, source });
+            .insert(stream.ident.table_id, StreamSnapshot {
+                stream,
+                source,
+                max_batch_size,
+            });
     }
 
     pub fn upsert_table_desc_to_id(&mut self, table: TableInfo) {
@@ -191,12 +201,12 @@ impl TxnManager {
             .insert(table.desc.clone(), table.ident.table_id);
     }
 
-    pub fn get_stream_table_source(&self, stream_desc: &str) -> Option<TableInfo> {
+    pub fn get_stream_table(&self, stream_desc: &str) -> Option<StreamSnapshot> {
         self.txn_buffer
             .table_desc_to_id
             .get(stream_desc)
             .and_then(|id| self.txn_buffer.stream_tables.get(id))
-            .map(|snapshot| snapshot.source.clone())
+            .cloned()
     }
 
     pub fn get_table_from_buffer(

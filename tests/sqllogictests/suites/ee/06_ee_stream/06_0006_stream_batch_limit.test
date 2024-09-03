@@ -1,0 +1,109 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS db_stream_06;
+
+statement ok
+CREATE DATABASE db_stream_06;
+
+statement ok
+use db_stream_06
+
+statement ok
+CREATE TABLE t1(a int);
+
+statement ok
+CREATE STREAM s ON TABLE t1;
+
+statement ok
+INSERT INTO t1 values(1);
+
+statement ok
+INSERT INTO t1 values(2);
+
+query I
+select a from s max_batch_size_hint 1;
+----
+1
+
+query I
+select a from s order by a;
+----
+1
+2
+
+statement ok
+CREATE TABLE t2(a int);
+
+statement ok
+insert into t2 select a from s max_batch_size_hint 1;
+
+query I
+select a from t2;
+----
+1
+
+query I
+select a from s order by a;
+----
+2
+
+statement error 3902
+select s.a from s max_batch_size_hint 1 join s as s1 on s.a=s1.a;
+
+statement error 3902
+select a from t1 max_batch_size_hint 1;
+
+statement ok
+INSERT INTO t1 values(3);
+
+statement ok
+BEGIN;
+
+statement ok
+insert into t2 select a from s max_batch_size_hint 1;
+
+statement error 3902
+insert into t2 select a from s;
+
+statement ok
+COMMIT;
+
+query I
+select a from t2 order by a;
+----
+1
+
+query I
+select a from s with consume max_batch_size_hint 1;
+----
+2
+
+query I
+select a from s order by a;
+----
+3
+
+statement ok
+DROP STREAM s;
+
+statement ok
+DROP TABLE t1 ALL;
+
+statement ok
+DROP TABLE t2 ALL;
+
+statement ok
+DROP DATABASE db_stream_06;

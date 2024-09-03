@@ -958,9 +958,6 @@ impl Table for FuseTable {
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))
             }
-            TimeNavigation::StreamBatch(_) => Err(ErrorCode::StorageUnsupported(
-                "MAX_BATCH_SIZE_HINT only support in STREAM",
-            )),
         }
     }
 
@@ -971,6 +968,7 @@ impl Table for FuseTable {
         database_name: &str,
         table_name: &str,
         _consume: bool,
+        _max_batch_size: Option<u64>,
     ) -> Result<String> {
         let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {

@@ -592,7 +592,6 @@ impl Display for ChangesInterval {
 pub enum TemporalClause {
     TimeTravel(TimeTravelPoint),
     Changes(ChangesInterval),
-    StreamBatch(u64),
 }
 
 impl Display for TemporalClause {
@@ -603,9 +602,6 @@ impl Display for TemporalClause {
             }
             TemporalClause::Changes(changes) => {
                 write!(f, "{}", changes)?;
-            }
-            TemporalClause::StreamBatch(size) => {
-                write!(f, "MAX_BATCH_SIZE_HINT {}", size)?;
             }
         }
         Ok(())
@@ -680,6 +676,7 @@ pub enum TableReference {
         temporal: Option<TemporalClause>,
         /// whether consume the table
         consume: bool,
+        max_batch_size: Option<u64>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -756,6 +753,7 @@ impl Display for TableReference {
                 alias,
                 temporal,
                 consume,
+                max_batch_size,
                 pivot,
                 unpivot,
                 sample,
@@ -771,6 +769,10 @@ impl Display for TableReference {
 
                 if *consume {
                     write!(f, " WITH CONSUME")?;
+                }
+
+                if let Some(max_batch_size) = max_batch_size {
+                    write!(f, " MAX_BATCH_SIZE_HINT {max_batch_size}")?;
                 }
 
                 if let Some(alias) = alias {

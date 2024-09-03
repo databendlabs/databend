@@ -104,6 +104,7 @@ use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
+use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_session::SessionState;
@@ -334,6 +335,38 @@ impl QueryContext {
 
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_from_shared(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        let table = self
+            .shared
+            .get_table(catalog, database, table, max_batch_size)
+            .await?;
+        // the better place to do this is in the QueryContextShared::get_table() method,
+        // but there is no way to access dyn TableContext.
+        let table: Arc<dyn Table> = match table.engine() {
+            "ICEBERG" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                IcebergTable::try_create(info.to_owned())?.into()
+            }
+            "DELTA" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                DeltaTable::try_create(info.to_owned())?.into()
+            }
+            _ => table,
+        };
+        Ok(table)
     }
 }
 
@@ -874,25 +907,8 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        let table = self.shared.get_table(catalog, database, table).await?;
-        // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
-        // but there is no way to access dyn TableContext.
-        let table: Arc<dyn Table> = match table.engine() {
-            "ICEBERG" => {
-                let sp = get_storage_params_from_options(self, table.options()).await?;
-                let mut info = table.get_table_info().to_owned();
-                info.meta.storage_params = Some(sp);
-                IcebergTable::try_create(info.to_owned())?.into()
-            }
-            "DELTA" => {
-                let sp = get_storage_params_from_options(self, table.options()).await?;
-                let mut info = table.get_table_info().to_owned();
-                info.meta.storage_params = Some(sp);
-                DeltaTable::try_create(info.to_owned())?.into()
-            }
-            _ => table,
-        };
-        Ok(table)
+        self.get_table_from_shared(catalog, database, table, None)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -901,11 +917,25 @@ impl TableContext for QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
-        max_batch_size: u64,
+        max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        self.shared
-            .get_table_with_batch(catalog, database, table, max_batch_size)
-            .await
+        let table = self
+            .get_table_from_shared(catalog, database, table, max_batch_size)
+            .await?;
+        if table.is_stream() {
+            let stream = StreamTable::try_from_table(table.as_ref())?;
+            let actual_batch_limit = stream.max_batch_size();
+            if actual_batch_limit != max_batch_size {
+                return Err(ErrorCode::StorageUnsupported(
+                    "Within the same transaction, the batch size for a stream must remain consistent",
+                ));
+            }
+        } else if max_batch_size.is_some() {
+            return Err(ErrorCode::StorageUnsupported(
+                "MAX_BATCH_SIZE_HINT only support in STREAM",
+            ));
+        }
+        Ok(table)
     }
 
     #[async_backtrace::framed]

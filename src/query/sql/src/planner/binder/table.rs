@@ -519,32 +519,23 @@ impl Binder {
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        max_batch_size: Option<u64>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
-            match navigation {
-                None => {
-                    // Resolve table with ctx
-                    // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
-                    // we will invoke here twice for t1, so in the past, we use catalog every time to get the
-                    // newest snapshot, we can't get consistent snapshot
-                    self.ctx
-                        .get_table(catalog_name, database_name, table_name)
-                        .await
-                }
-                Some(TimeNavigation::StreamBatch(size)) => {
-                    self.ctx
-                        .get_table_with_batch(catalog_name, database_name, table_name, *size)
-                        .await
-                }
-                Some(desc) => {
-                    let table_meta = self
-                        .ctx
-                        .get_table(catalog_name, database_name, table_name)
-                        .await?;
-                    table_meta.navigate_to(desc, abort_checker).await
-                }
+            // Resolve table with ctx
+            // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
+            // we will invoke here twice for t1, so in the past, we use catalog every time to get the
+            // newest snapshot, we can't get consistent snapshot
+            let mut table_meta = self
+                .ctx
+                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
+                .await?;
+
+            if let Some(desc) = navigation {
+                table_meta = table_meta.navigate_to(desc, abort_checker).await?;
             }
+            Ok(table_meta)
         })
     }
 
@@ -571,7 +562,6 @@ impl Binder {
                     desc: format!("{interval}"),
                 }))
             }
-            Some(TemporalClause::StreamBatch(size)) => Ok(Some(TimeNavigation::StreamBatch(*size))),
             None => Ok(None),
         }
     }

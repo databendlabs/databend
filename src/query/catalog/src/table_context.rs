@@ -268,7 +268,7 @@ pub trait TableContext: Send + Sync {
         catalog: &str,
         database: &str,
         table: &str,
-        max_batch_size: u64,
+        max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>>;
 
     async fn filter_out_copied_files(

@@ -751,13 +751,23 @@ impl Catalog for DatabaseCatalog {
         })
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
-        self.mutable_catalog.get_stream_source_table(_stream_desc)
+    fn get_stream_source_table(
+        &self,
+        stream_desc: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
+        self.mutable_catalog
+            .get_stream_source_table(stream_desc, max_batch_size)
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        stream: TableInfo,
+        source: TableInfo,
+        max_batch_size: Option<u64>,
+    ) {
         self.mutable_catalog
-            .cache_stream_source_table(_stream, _source)
+            .cache_stream_source_table(stream, source, max_batch_size)
     }
 
     /// Dictionary

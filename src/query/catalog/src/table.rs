@@ -333,8 +333,9 @@ pub trait Table: Sync + Send {
         database_name: &str,
         table_name: &str,
         consume: bool,
+        max_batch_size: Option<u64>,
     ) -> Result<String> {
-        let (_, _, _, _) = (ctx, database_name, table_name, consume);
+        let (_, _, _, _, _) = (ctx, database_name, table_name, consume, max_batch_size);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -505,7 +506,6 @@ pub enum TimeNavigation {
         at: NavigationPoint,
         end: Option<NavigationPoint>,
     },
-    StreamBatch(u64),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

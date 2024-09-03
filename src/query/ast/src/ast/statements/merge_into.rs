@@ -216,6 +216,7 @@ impl MergeSource {
                 alias: alias.clone(),
                 temporal: None,
                 consume: false,
+                max_batch_size: None,
                 pivot: None,
                 unpivot: None,
                 sample: None,
