@@ -1988,61 +1988,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_history(&self, req: GetTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tenant_dbname_tbname = &req.inner;
-        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
-
-        // Get db by name to ensure presence
-
-        let res = get_db_or_err(
-            self,
-            &tenant_dbname,
-            format!("get_table_history: {}", tenant_dbname.display()),
-        )
-        .await;
-
-        let (seq_db_id, db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let table_id_history = match db_meta.from_share {
-            Some(ref share_name_ident_raw) => {
-                let share_ident = share_name_ident_raw.clone().to_tident(());
-                error!(
-                    "get_table_history {:?} from share {:?}",
-                    tenant_dbname, share_ident,
-                );
-                return Err(KVAppError::AppError(AppError::CannotAccessShareTable(
-                    CannotAccessShareTable::new(
-                        &tenant_dbname_tbname.tenant.tenant,
-                        share_ident.name(),
-                        &tenant_dbname_tbname.table_name,
-                    ),
-                )));
-            }
-            None => {
-                // Get table by tenant,db_id, table_name to assert presence.
-                TableIdHistoryIdent {
-                    database_id: *seq_db_id.data,
-                    table_name: tenant_dbname_tbname.table_name.clone(),
-                }
-            }
-        };
-
-        let (meta_seq, table_id_list) = get_pb_value(self, &table_id_history).await?;
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        database_name: &str,
+        table_id_history: &TableIdHistoryIdent,
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+        let table_name = &table_id_history.table_name;
+        let (meta_seq, table_id_list) = get_pb_value(self, table_id_history).await?;
         if meta_seq == 0 || table_id_list.is_none() {
             return Err(KVAppError::AppError(AppError::from(UnknownTable::new(
-                &tenant_dbname_tbname.table_name,
-                format!(
-                    "get_table_history: {}.{}",
-                    tenant_dbname.database_name(),
-                    tenant_dbname_tbname.table_name()
-                ),
+                table_name,
+                format!("get_table_history: {}.{}", database_name, table_name),
             ))));
         }
 
@@ -2061,10 +2018,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .collect();
         get_table_history(
             self,
-            &tenant_dbname,
+            tenant,
+            database_name,
             &mut tb_info_list,
             &now,
-            &table_id_history,
+            table_id_history,
             table_id_list,
             &inner_keys,
         )
@@ -2158,7 +2116,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     .collect();
                 get_table_history(
                     self,
-                    tenant_dbname,
+                    tenant_dbname.tenant(),
+                    tenant_dbname.database_name(),
                     &mut tb_info_list,
                     &now,
                     &table_id_list_key,
@@ -4031,7 +3990,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
 async fn get_table_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant_dbname: &DatabaseNameIdent,
+    tenant: &Tenant,
+    db_name: &str,
     tb_info_list: &mut Vec<Arc<TableInfo>>,
     now: &DateTime<Utc>,
     table_id_list_key: &TableIdHistoryIdent,
@@ -4054,12 +4014,6 @@ async fn get_table_history(
                 continue;
             }
 
-            let tenant_dbname_tbname: TableNameIdent = TableNameIdent {
-                tenant: tenant_dbname.tenant().clone(),
-                db_name: tenant_dbname.database_name().to_string(),
-                table_name: table_id_list_key.table_name.clone(),
-            };
-
             let db_type = DatabaseType::NormalDB;
 
             let tb_info = TableInfo {
@@ -4067,14 +4021,10 @@ async fn get_table_history(
                     table_id,
                     seq: tb_meta_seq,
                 },
-                desc: format!(
-                    "'{}'.'{}'",
-                    tenant_dbname.database_name(),
-                    tenant_dbname_tbname.table_name
-                ),
+                desc: format!("'{}'.'{}'", db_name, table_id_list_key.table_name.clone()),
                 name: table_id_list_key.table_name.clone(),
                 meta: tb_meta,
-                tenant: tenant_dbname.tenant_name().to_string(),
+                tenant: tenant.tenant_name().to_string(),
                 db_type,
                 catalog_info: Default::default(),
             };

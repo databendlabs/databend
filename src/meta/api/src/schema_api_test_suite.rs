@@ -1861,8 +1861,16 @@ impl SchemaApiTestSuite {
 
                 info!("--- get table history after drop");
                 {
-                    let req = GetTableReq::new(&tenant, db_name, tbl_name);
-                    let got = mt.get_table_history(req).await.unwrap()[0].clone();
+                    let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
+
+                    let got = mt
+                        .get_table_history(&tenant, db_name, &TableIdHistoryIdent {
+                            database_id: cur_db.database_id.db_id,
+                            table_name: tbl_name.to_string(),
+                        })
+                        .await
+                        .unwrap()[0]
+                        .clone();
                     let want = TableInfo {
                         ident: tb_ident_2,
                         desc: format!("'{}'.'{}'", db_name, tbl_name),

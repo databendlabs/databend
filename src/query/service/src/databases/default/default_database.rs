@@ -15,8 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::CannotAccessShareTable;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -32,6 +36,7 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -41,6 +46,8 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::KeyWithTenant;
+use log::error;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -138,14 +145,32 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn get_table_history(&self, table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        if let Some(ref share_name_ident_raw) = self.db_info.meta.from_share {
+            let share_ident = share_name_ident_raw.clone().to_tident(());
+            error!(
+                "get_table_history {:?} from share {:?}",
+                self.db_info.name_ident, share_ident,
+            );
+            return Err(ErrorCode::from(KVAppError::AppError(
+                AppError::CannotAccessShareTable(CannotAccessShareTable::new(
+                    &self.db_info.name_ident.tenant().tenant,
+                    share_ident.name(),
+                    table_name,
+                )),
+            )));
+        }
+
         let table_infos = self
             .ctx
             .meta
-            .get_table_history(GetTableReq::new(
-                self.get_tenant(),
-                self.get_db_name(),
-                table_name,
-            ))
+            .get_table_history(
+                self.db_info.name_ident.tenant(),
+                self.db_info.name_ident.database_name(),
+                &TableIdHistoryIdent {
+                    database_id: self.db_info.database_id.db_id,
+                    table_name: table_name.to_string(),
+                },
+            )
             .await?;
 
         // disable refresh in history table
