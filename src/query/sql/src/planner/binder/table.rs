@@ -157,6 +157,7 @@ impl Binder {
         &mut self,
         cte_info: &CteInfo,
         mut bind_context: BindContext,
+        used_count: usize,
     ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
@@ -165,12 +166,13 @@ impl Binder {
         let mut fields = vec![];
         let mut offsets = vec![];
         for (idx, column) in bind_context.columns.iter_mut().enumerate() {
-            let new_index = self.metadata.write().add_derived_column(
-                column.column_name.clone(),
-                *column.data_type.clone(),
-                None,
-            );
-            column.index = new_index;
+            if used_count != 0 {
+                column.index = self.metadata.write().add_derived_column(
+                    column.column_name.clone(),
+                    *column.data_type.clone(),
+                    None,
+                );
+            }
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
@@ -303,13 +305,14 @@ impl Binder {
         };
         // `bind_context` is the main BindContext for the whole query
         // Update the `used_count` which will be used in runtime phase
+        let used_count = cte_info.used_count;
         self.ctes_map
             .entry(table_name.clone())
             .and_modify(|cte_info| {
                 cte_info.used_count += 1;
             });
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        self.bind_cte_scan(&cte_info, new_bind_context)
+        self.bind_cte_scan(&cte_info, new_bind_context, used_count)
     }
 
     pub(crate) fn bind_r_cte_scan(
