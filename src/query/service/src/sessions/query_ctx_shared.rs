@@ -353,18 +353,29 @@ impl QueryContextShared {
                     .cache_stream_source_table(catalog, stream, Some(max_batch_size))
                     .await?;
 
-                let mut tables_refs = self.tables_refs.lock();
-                match tables_refs.entry(table_meta_key) {
-                    Entry::Occupied(v) => v.get().clone(),
-                    Entry::Vacant(v) => v.insert(cache_table).clone(),
-                }
+                let ret = self
+                    .tables_refs
+                    .lock()
+                    .insert(table_meta_key, cache_table.clone());
+                assert!(ret.is_none());
+                cache_table
             }
-            true => self
-                .tables_refs
-                .lock()
-                .get(&table_meta_key)
-                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
-                .clone(),
+            true => {
+                let cache_table = self
+                    .tables_refs
+                    .lock()
+                    .get(&table_meta_key)
+                    .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
+                    .clone();
+                let stream = StreamTable::try_from_table(cache_table.as_ref())?;
+                let actual_batch_limit = stream.max_batch_size();
+                if actual_batch_limit != Some(max_batch_size) {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "Within the same transaction, the batch size for a stream must remain consistent",
+                    ));
+                }
+                cache_table
+            }
         };
         Ok(res)
     }
@@ -390,6 +401,16 @@ impl QueryContextShared {
                 .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone(),
         };
+
+        if res.is_stream() {
+            let stream = StreamTable::try_from_table(res.as_ref())?;
+            let actual_batch_limit = stream.max_batch_size();
+            if actual_batch_limit != None {
+                return Err(ErrorCode::StorageUnsupported(
+                    "Within the same transaction, the batch size for a stream must remain consistent",
+                ));
+            }
+        }
 
         Ok(res)
     }
@@ -424,12 +445,12 @@ impl QueryContextShared {
             cache_table
         };
 
-        let mut tables_refs = self.tables_refs.lock();
-
-        match tables_refs.entry(table_meta_key) {
-            Entry::Occupied(v) => Ok(v.get().clone()),
-            Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
-        }
+        let ret = self
+            .tables_refs
+            .lock()
+            .insert(table_meta_key, cache_table.clone());
+        assert!(ret.is_none());
+        Ok(cache_table)
     }
 
     // Cache the source table of a stream table to ensure can get the same table metadata.
@@ -486,7 +507,11 @@ impl QueryContextShared {
         let mut stream_info = stream.get_table_info().to_owned();
         stream_info.meta.schema = source_table.schema();
 
-        Ok(StreamTable::create(stream_info, Some(source_table)))
+        Ok(StreamTable::create(
+            stream_info,
+            max_batch_size,
+            Some(source_table),
+        ))
     }
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {

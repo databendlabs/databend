@@ -63,6 +63,7 @@ pub enum StreamStatus {
 
 pub struct StreamTable {
     info: TableInfo,
+    max_batch_size: Option<u64>,
 
     source_table: Option<Arc<dyn Table>>,
 }
@@ -71,12 +72,21 @@ impl StreamTable {
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(StreamTable {
             info,
+            max_batch_size: None,
             source_table: None,
         }))
     }
 
-    pub fn create(info: TableInfo, source_table: Option<Arc<dyn Table>>) -> Arc<dyn Table> {
-        Arc::new(StreamTable { info, source_table })
+    pub fn create(
+        info: TableInfo,
+        max_batch_size: Option<u64>,
+        source_table: Option<Arc<dyn Table>>,
+    ) -> Arc<dyn Table> {
+        Arc::new(StreamTable {
+            info,
+            max_batch_size,
+            source_table,
+        })
     }
 
     pub fn description() -> StorageDescription {
@@ -132,7 +142,6 @@ impl StreamTable {
         source_tb_name: &str,
         batch_limit: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        let stream_desc = &self.get_table_info().desc;
         let source = catalog
             .get_table(tenant, source_db_name, source_tb_name)
             .await
@@ -141,23 +150,25 @@ impl StreamTable {
                     "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
                     source_db_name,
                     source_tb_name,
-                    stream_desc,
+                    self.get_table_info().desc,
                     err.message()
                 ))
             })?;
 
+        let Some(batch_limit) = batch_limit else {
+            return Ok(source);
+        };
+
+        let source_desc = &source.get_table_info().desc;
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
                 "Base table {} dropped, cannot read from stream {}",
-                stream_desc, self.info.desc,
+                source_desc, self.info.desc,
             )));
         }
 
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-        fuse_table.check_changes_valid(stream_desc, self.offset()?)?;
-        let Some(batch_limit) = batch_limit else {
-            return Ok(source);
-        };
+        fuse_table.check_changes_valid(source_desc, self.offset()?)?;
 
         let (base_row_count, base_timsestamp) = if let Some(base_loc) = self.snapshot_loc() {
             let (base, _) =
@@ -200,6 +211,10 @@ impl StreamTable {
         } else {
             Ok(source)
         }
+    }
+
+    pub fn max_batch_size(&self) -> Option<u64> {
+        self.max_batch_size
     }
 
     pub fn offset(&self) -> Result<u64> {
