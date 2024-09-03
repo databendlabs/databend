@@ -50,12 +50,19 @@ pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
     for row in rows.as_array().unwrap() {
         let mut parsed_row = Vec::new();
         for col in row.as_array().unwrap() {
-            let cell = col.as_str().unwrap();
-            // If the result is empty, we'll use `(empty)` to mark it explicitly to avoid confusion
-            if cell.is_empty() {
-                parsed_row.push("(empty)".to_string());
-            } else {
-                parsed_row.push(cell.to_string());
+            match col {
+                Value::Null => {
+                    parsed_row.push("NULL".to_string());
+                }
+                Value::String(cell) => {
+                    // If the result is empty, we'll use `(empty)` to mark it explicitly to avoid confusion
+                    if cell.is_empty() {
+                        parsed_row.push("(empty)".to_string());
+                    } else {
+                        parsed_row.push(cell.to_string());
+                    }
+                }
+                _ => unreachable!(),
             }
         }
         parsed_rows.push(parsed_row);
