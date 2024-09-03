@@ -225,7 +225,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
-    /// List the tables name by meta ids.
+    /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -253,7 +253,15 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    /// List all tables in a database.This will not list temporary tables.
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "'list_temporary_tables' not implemented",
+        ))
+    }
+
     async fn list_tables_history(
         &self,
         tenant: &Tenant,

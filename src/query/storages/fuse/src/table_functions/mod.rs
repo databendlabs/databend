@@ -22,6 +22,7 @@ mod fuse_encoding;
 mod fuse_segment;
 mod fuse_snapshot;
 mod fuse_statistic;
+mod fuse_vacuum_temporary_table;
 mod table_args;
 
 pub use clustering_information::ClusteringInformationFunc;
@@ -38,4 +39,5 @@ pub use fuse_encoding::FuseEncodingFunc;
 pub use fuse_segment::FuseSegmentFunc;
 pub use fuse_snapshot::FuseSnapshotFunc;
 pub use fuse_statistic::FuseStatisticsFunc;
+pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
 pub use table_args::*;
