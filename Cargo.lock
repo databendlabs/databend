@@ -5114,7 +5114,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-mock-xsource"
+name = "databend-mock-source"
 version = "0.1.0"
 dependencies = [
  "mini-redis",

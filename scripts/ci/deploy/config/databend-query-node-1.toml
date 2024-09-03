@@ -44,9 +44,6 @@ udf_server_allow_insecure = true
 
 cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 
-redis_handler_host = "0.0.0.0"
-redis_handler_port = 6379
-
 [[query.users]]
 name = "root"
 auth_type = "no_password"
