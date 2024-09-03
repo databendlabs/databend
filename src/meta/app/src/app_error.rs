@@ -1168,29 +1168,16 @@ pub enum AppError {
     ),
 
     #[error(transparent)]
-<<<<<<< HEAD
     UnknownDictionary(
         #[from] UnknownError<dictionary_name_ident::DictionaryNameRsc, DictionaryIdentity>,
     ),
 
     // Procedure
     #[error(transparent)]
-    UnknownProcedure(#[from] UnknownProcedure),
-
-    #[error(transparent)]
-    ProcedureAlreadyExists(#[from] ProcedureAlreadyExists),
-=======
-    UnknownDictionary(#[from] UnknownDictionary),
-<<<<<<< HEAD
->>>>>>> 16f088a754 (refactor procedure mgr: use DataId)
-=======
-
-    #[error(transparent)]
     ProcedureAlreadyExists(#[from] ExistError<procedure_name_ident::ProcedureName>),
 
     #[error(transparent)]
     UnknownProcedure(#[from] UnknownError<procedure_name_ident::ProcedureName>),
->>>>>>> 6cec315b7f (remove ProcedureIdList, refactor procedure_mgr)
 }
 
 impl AppError {
