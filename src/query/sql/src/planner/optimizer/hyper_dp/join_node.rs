@@ -56,29 +56,9 @@ impl JoinNode {
             self.s_expr = Some(self.s_expr(relations));
             self.s_expr.as_ref().unwrap()
         };
-        let card = if let Some(sample_executor) = &self.sample_executor {
-            match dynamic_sample(
-                self.ctx.clone(),
-                self.metadata.clone(),
-                s_expr,
-                sample_executor.clone(),
-            )
-            .await
-            {
-                Ok(card) => {
-                    dbg!(card.cardinality);
-                    card.cardinality
-                }
-                Err(e) => {
-                    dbg!(e);
-                    let rel_expr = RelExpr::with_s_expr(s_expr);
-                    rel_expr.derive_cardinality()?.cardinality
-                }
-            }
-        } else {
-            let rel_expr = RelExpr::with_s_expr(s_expr);
-            rel_expr.derive_cardinality()?.cardinality
-        };
+
+        let rel_expr = RelExpr::with_s_expr(s_expr);
+        let card = rel_expr.derive_cardinality()?.cardinality;
         self.cardinality = Some(card);
         Ok(card)
     }

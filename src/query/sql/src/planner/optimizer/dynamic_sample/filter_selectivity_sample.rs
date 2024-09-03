@@ -89,18 +89,18 @@ pub async fn filter_selectivity_sample(
         let result = sample_executor.execute_query(&plan).await?;
         if let Some(block) = result.first() {
             if let Some(count) = block.get_last_column().as_number() {
-                dbg!(count);
                 if let Some(number_scalar) = count.index(0) {
                     // Compute and return selectivity
                     let selectivity = number_scalar.to_f64().to_f64().unwrap() / sample_size as f64;
-                    dbg!(selectivity);
                     let mut statistics = child_rel_expr.derive_cardinality()?.statistics.clone();
                     let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                     sb.update_other_statistic_by_selectivity(selectivity);
-                    return Ok(Arc::new(StatInfo {
+                    let stat_info = Arc::new(StatInfo {
                         cardinality: selectivity * num_rows as f64,
                         statistics,
-                    }));
+                    });
+                    *s_expr.stat_info.lock().unwrap() = Some(stat_info.clone());
+                    return Ok(stat_info);
                 }
             }
         }
@@ -116,7 +116,7 @@ fn create_count_aggregate(mode: AggregateMode) -> Aggregate {
         group_items: vec![],
         aggregate_functions: vec![ScalarItem {
             scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                func_name: "count(*)".to_string(),
+                func_name: "count".to_string(),
                 distinct: false,
                 params: vec![],
                 args: vec![],

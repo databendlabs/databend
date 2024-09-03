@@ -141,7 +141,8 @@ impl DPhpy {
             for table_index in dphyp.table_index_map.keys() {
                 self.table_index_map.insert(*table_index, relation_idx);
             }
-            self.join_relations.push(JoinRelation::new(&new_s_expr));
+            self.join_relations
+                .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
             return Ok((new_s_expr, true));
         }
 
@@ -151,9 +152,9 @@ impl DPhpy {
                     // Check if relation contains filter, if exists, check if the filter in `filters`
                     // If exists, remove it from `filters`
                     self.check_filter(relation);
-                    JoinRelation::new(relation)
+                    JoinRelation::new(relation, self.sample_executor.clone())
                 } else {
-                    JoinRelation::new(s_expr)
+                    JoinRelation::new(s_expr, self.sample_executor.clone())
                 };
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
@@ -216,7 +217,8 @@ impl DPhpy {
                 }
                 if !is_inner_join {
                     let new_s_expr = self.new_children(s_expr).await?;
-                    self.join_relations.push(JoinRelation::new(&new_s_expr));
+                    self.join_relations
+                        .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
                     Ok((Arc::new(new_s_expr), true))
                 } else {
                     let left_res = self
@@ -276,7 +278,8 @@ impl DPhpy {
             }
             RelOperator::UnionAll(_) => {
                 let new_s_expr = self.new_children(s_expr).await?;
-                self.join_relations.push(JoinRelation::new(&new_s_expr));
+                self.join_relations
+                    .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
                 Ok((Arc::new(new_s_expr), true))
             }
             RelOperator::Exchange(_) => {
@@ -379,7 +382,9 @@ impl DPhpy {
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
-            let ce = relation.cardinality()?;
+            let ce = relation
+                .cardinality(self.ctx.clone(), self.metadata.clone())
+                .await?;
             let join = JoinNode {
                 ctx: self.ctx.clone(),
                 metadata: self.metadata.clone(),
