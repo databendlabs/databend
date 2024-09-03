@@ -363,6 +363,7 @@ impl ShareApiTestSuite {
                 tb_id: table_id,
                 db_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             };
             let res = mt.drop_table_by_id(plan).await?;
             let (share_db_id, share_specs) = res.spec_vec.unwrap();
@@ -2468,6 +2469,7 @@ impl ShareApiTestSuite {
                 tb_id: table_id,
                 db_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             };
             let _res = mt.drop_table_by_id(plan).await;
 
