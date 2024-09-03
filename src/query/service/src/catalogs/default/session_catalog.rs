@@ -365,6 +365,7 @@ impl Catalog for SessionCatalog {
         self.inner.list_tables(tenant, db_name).await
     }
 
+    // Get one table identified as dropped by db and table name.
     async fn get_single_table_history(
         &self,
         tenant: &Tenant,
