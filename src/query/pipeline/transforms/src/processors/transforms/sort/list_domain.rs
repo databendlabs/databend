@@ -75,7 +75,6 @@ where Self: Debug
 #[derive(Debug)]
 pub struct Partition {
     pub ends: Vec<(usize, usize)>,
-    #[allow(dead_code)]
     pub total: usize,
 }
 
@@ -133,14 +132,12 @@ where
                     break;
                 }
             }
-
             (
                 min_overlap @ (Overlap::Cross | Overlap::Left),
                 Some(Overlap::Cross),
                 Overlap::Right,
             ) => {
                 let sum = candidate.do_search_mid();
-
                 match candidate.expect.overlaps(sum) {
                     Overlap::Right => candidate.cut_right(),
                     Overlap::Left if matches!(min_overlap, Overlap::Left) => candidate.cut_left(),
@@ -152,8 +149,12 @@ where
             }
             (Overlap::Cross, Some(Overlap::Left), Overlap::Right) => {
                 let sum = candidate.do_search_min();
-                if candidate.is_finish(sum) {
-                    return Some(Partition::new(candidate.min_target.unwrap()));
+                match candidate.expect.overlaps(sum) {
+                    Overlap::Left => candidate.cut_left(),
+                    Overlap::Cross if sum.done() => {
+                        return Some(Partition::new(candidate.min_target.unwrap()));
+                    }
+                    Overlap::Cross | Overlap::Right => (),
                 }
             }
             x => {
@@ -536,13 +537,13 @@ mod tests {
     fn run_test(all_list: &[&[i32]], expect_size: EndDomain, max_iter: usize) {
         let got = calc_partition(all_list, expect_size, max_iter);
 
-        let got = if got.is_none() {
+        let got = if let Some(p) = got {
+            p
+        } else {
             let sum: usize = all_list.iter().map(|ls| ls.len()).sum();
             assert_eq!(sum, 0);
 
             return;
-        } else {
-            got.unwrap()
         };
 
         // println!("total {}", got.total);

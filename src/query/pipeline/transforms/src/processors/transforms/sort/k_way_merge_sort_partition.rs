@@ -25,6 +25,7 @@ use databend_common_expression::SortColumnDescription;
 use super::list_domain::calc_partition;
 use super::list_domain::EndDomain;
 use super::list_domain::List;
+use super::list_domain::Partition;
 use super::utils::u32_entry;
 use super::Rows;
 use super::SortedStream;
@@ -41,7 +42,7 @@ where
     rows: Vec<Option<R>>,
     pending_streams: VecDeque<usize>,
     batch_rows: usize,
-    _limit: Option<usize>, // todo
+    limit: Option<usize>,
 
     total_rows: usize,
     cur_task: u32,
@@ -74,16 +75,15 @@ where
             rows,
             pending_streams,
             batch_rows,
-            _limit: limit,
+            limit,
             total_rows: 0,
             cur_task: 1,
         }
     }
 
     pub fn is_finished(&self) -> bool {
-        !self.has_pending_stream() && self.buffer.iter().all(|b| b.is_empty())
-        // && self.temp_sorted_num_rows == 0)
-        // || self.limit == Some(0)
+        self.limit.map_or(false, |limit| self.total_rows >= limit)
+            || !self.has_pending_stream() && self.buffer.iter().all(|b| b.is_empty())
     }
 
     pub fn has_pending_stream(&self) -> bool {
@@ -108,19 +108,6 @@ where
         Ok(())
     }
 
-    pub fn calc_partition_point(&self) -> Vec<(usize, usize)> {
-        let partition = calc_partition(
-            &self.rows,
-            EndDomain {
-                min: self.batch_rows,
-                max: self.batch_rows * 2,
-            },
-            20, // todo what parameters are appropriate?
-        )
-        .unwrap();
-        partition.ends
-    }
-
     pub fn next_task(&mut self) -> Result<Vec<DataBlock>> {
         if self.is_finished() {
             return Ok(vec![]);
@@ -136,15 +123,27 @@ where
         Ok(self.build_task())
     }
 
-    pub fn build_task(&mut self) -> Vec<DataBlock> {
-        let partition_points = self.calc_partition_point();
+    fn calc_partition_point(&self) -> Partition {
+        calc_partition(
+            &self.rows,
+            EndDomain {
+                min: self.batch_rows,
+                max: self.batch_rows * 2,
+            },
+            20, // todo what parameters are appropriate?
+        )
+        .unwrap()
+    }
+
+    fn build_task(&mut self) -> Vec<DataBlock> {
+        let partition = self.calc_partition_point();
 
         let task_id = self.next_task_id();
-        let rows: usize = partition_points.iter().map(|(_, pp)| *pp).sum();
-        self.total_rows += rows;
-        let rows = u32_entry(rows as u32);
+        self.total_rows += partition.total;
+        let rows = u32_entry(partition.total as u32);
 
-        let task: Vec<_> = partition_points
+        let task: Vec<_> = partition
+            .ends
             .iter()
             .map(|&(input, pp)| {
                 let block = self.slice(input, pp);

@@ -129,7 +129,7 @@ impl PipelineBuilder {
                         add_k_way_merge_sort(
                             &mut self.main_pipeline,
                             plan_schema,
-                            3,
+                            3, // todo
                             block_size,
                             limit,
                             sort_desc,
