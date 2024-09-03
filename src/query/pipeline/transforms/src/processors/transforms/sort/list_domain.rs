@@ -79,9 +79,9 @@ pub struct Partition {
 }
 
 impl Partition {
-    fn new<T>(item: Item<'_, T>) -> Self
+    fn new<T>(item: TargetItem<'_, T>) -> Self
     where T: List {
-        let Item { domains, sum, .. } = item;
+        let TargetItem { domains, sum, .. } = item;
         debug_assert!(sum.done());
 
         Self {
@@ -180,12 +180,12 @@ where T: List
 {
     all_list: &'a [T],
     expect: EndDomain,
-    min_target: Option<Item<'a, T>>,
-    mid_target: Option<Item<'a, T>>,
-    max_target: Option<Item<'a, T>>,
+    min_target: Option<TargetItem<'a, T>>,
+    mid_target: Option<TargetItem<'a, T>>,
+    max_target: Option<TargetItem<'a, T>>,
 }
 
-struct Item<'a, T>
+struct TargetItem<'a, T>
 where
     T: List + 'a,
     T::Item<'a>: Debug,
@@ -245,13 +245,13 @@ where T: List
             .collect::<Vec<_>>();
         let sum: EndDomain = domains.iter().copied().sum();
 
-        self.max_target = Some(Item {
+        self.max_target = Some(TargetItem {
             target: max_target,
             domains: domains.clone(),
             sum,
         });
 
-        self.min_target = Some(Item {
+        self.min_target = Some(TargetItem {
             target: min_target,
             domains: domains.clone(),
             sum,
@@ -273,13 +273,13 @@ where T: List
     }
 
     fn find_target<'b>(&'b self) -> Option<T::Item<'a>> {
-        let Item {
+        let TargetItem {
             target: min_target,
             domains: min_domains,
             ..
         } = self.min_target.as_ref().unwrap();
 
-        let Item {
+        let TargetItem {
             target: max_target,
             domains: max_domains,
             ..
@@ -329,7 +329,7 @@ where T: List
             .collect::<Vec<_>>();
         let sum: EndDomain = domains.iter().copied().sum();
 
-        self.mid_target = Some(Item {
+        self.mid_target = Some(TargetItem {
             target,
             domains,
             sum,
@@ -359,9 +359,9 @@ where T: List
     }
 }
 
-fn do_search<'a, T>(all_list: &'a [T], item: &mut Item<'a, T>) -> EndDomain
+fn do_search<'a, T>(all_list: &'a [T], item: &mut TargetItem<'a, T>) -> EndDomain
 where T: List + 'a {
-    let Item {
+    let TargetItem {
         target,
         domains,
         sum,

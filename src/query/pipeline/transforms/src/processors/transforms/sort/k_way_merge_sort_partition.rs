@@ -83,7 +83,7 @@ where
 
     pub fn is_finished(&self) -> bool {
         self.limit.map_or(false, |limit| self.total_rows >= limit)
-            || !self.has_pending_stream() && self.buffer.iter().all(|b| b.is_empty())
+            || !self.has_pending_stream() && self.rows.iter().all(|x| x.is_none())
     }
 
     pub fn has_pending_stream(&self) -> bool {
@@ -124,13 +124,14 @@ where
     }
 
     fn calc_partition_point(&self) -> Partition {
+        // todo: Consider loading multiple blocks at the same time so that we can avoid cutting out too small a task
         calc_partition(
             &self.rows,
             EndDomain {
                 min: self.batch_rows,
                 max: self.batch_rows * 2,
             },
-            20, // todo what parameters are appropriate?
+            20, // todo: what parameters are appropriate?
         )
         .unwrap()
     }
