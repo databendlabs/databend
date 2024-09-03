@@ -159,11 +159,11 @@ impl PhysicalPlan {
             }
             PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
-                let left_child = materialized_cte.left.format_join(metadata)?;
                 let right_child = materialized_cte.right.format_join(metadata)?;
+                let left_child = materialized_cte.left.format_join(metadata)?;
                 let children = vec![
-                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
                     FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
                 ];
                 Ok(FormatTreeNode::with_children(
                     format!("MaterializedCte: {}", materialized_cte.cte_idx),
@@ -1762,8 +1762,8 @@ fn materialized_cte_to_format_tree(
             "output columns: [{}]",
             format_output_columns(plan.output_schema()?, metadata, true)
         )),
-        to_format_tree(&plan.left, metadata, profs)?,
         to_format_tree(&plan.right, metadata, profs)?,
+        to_format_tree(&plan.left, metadata, profs)?,
     ];
     Ok(FormatTreeNode::with_children(
         "MaterializedCTE".to_string(),

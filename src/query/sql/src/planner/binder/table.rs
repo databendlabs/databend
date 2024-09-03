@@ -157,7 +157,6 @@ impl Binder {
         &mut self,
         cte_info: &CteInfo,
         mut bind_context: BindContext,
-        used_count: usize,
     ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
@@ -165,14 +164,17 @@ impl Binder {
         // Get the fields in the cte
         let mut fields = vec![];
         let mut offsets = vec![];
+        let mut materialized_indexes = vec![];
         for (idx, column) in bind_context.columns.iter_mut().enumerate() {
-            if used_count != 0 {
-                column.index = self.metadata.write().add_derived_column(
-                    column.column_name.clone(),
-                    *column.data_type.clone(),
-                    None,
-                );
-            }
+            let materialized_index = column.index;
+            materialized_indexes.push(materialized_index);
+            column.index = self.metadata.write().add_derived_column(
+                column.column_name.clone(),
+                *column.data_type.clone(),
+                None,
+            );
+            self.m_cte_materialized_indexes
+                .insert(column.index, materialized_index);
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
@@ -183,6 +185,7 @@ impl Binder {
             CteScan {
                 cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
+                materialized_indexes,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
                 stat: Arc::new(StatInfo::default()),
@@ -305,14 +308,13 @@ impl Binder {
         };
         // `bind_context` is the main BindContext for the whole query
         // Update the `used_count` which will be used in runtime phase
-        let used_count = cte_info.used_count;
         self.ctes_map
             .entry(table_name.clone())
             .and_modify(|cte_info| {
                 cte_info.used_count += 1;
             });
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        self.bind_cte_scan(&cte_info, new_bind_context, used_count)
+        self.bind_cte_scan(&cte_info, new_bind_context)
     }
 
     pub(crate) fn bind_r_cte_scan(

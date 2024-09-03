@@ -277,15 +277,15 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_materialized_cte(&mut self, plan: &MaterializedCte) -> Result<PhysicalPlan> {
-        let left = self.replace(&plan.left)?;
         let right = self.replace(&plan.right)?;
+        let left = self.replace(&plan.left)?;
 
         Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
             cte_idx: plan.cte_idx,
-            left_output_columns: plan.left_output_columns.clone(),
+            materialized_output_columns: plan.materialized_output_columns.clone(),
         }))
     }
 

@@ -231,43 +231,48 @@ impl PipelineBuilder {
         &mut self,
         materialized_cte: &MaterializedCte,
     ) -> Result<()> {
-        self.expand_left_side_pipeline(
-            &materialized_cte.left,
+        self.expand_materialized_side_pipeline(
+            &materialized_cte.right,
             materialized_cte.cte_idx,
-            &materialized_cte.left_output_columns,
+            &materialized_cte.materialized_output_columns,
         )?;
-        self.build_pipeline(&materialized_cte.right)
+        self.build_pipeline(&materialized_cte.left)
     }
 
-    fn expand_left_side_pipeline(
+    fn expand_materialized_side_pipeline(
         &mut self,
-        left_side: &PhysicalPlan,
+        materialized_side: &PhysicalPlan,
         cte_idx: IndexType,
-        left_output_columns: &[ColumnBinding],
+        materialized_output_columns: &[ColumnBinding],
     ) -> Result<()> {
-        let left_side_ctx = QueryContext::create_from(self.ctx.clone());
+        let materialized_side_ctx = QueryContext::create_from(self.ctx.clone());
         let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
         self.cte_state.insert(cte_idx, state.clone());
-        let mut left_side_builder = PipelineBuilder::create(
+        let mut materialized_side_builder = PipelineBuilder::create(
             self.func_ctx.clone(),
             self.settings.clone(),
-            left_side_ctx,
+            materialized_side_ctx,
             self.main_pipeline.get_scopes(),
         );
-        left_side_builder.cte_state = self.cte_state.clone();
-        left_side_builder.hash_join_states = self.hash_join_states.clone();
-        let mut left_side_pipeline = left_side_builder.finalize(left_side)?;
-        assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
+        materialized_side_builder.cte_state = self.cte_state.clone();
+        materialized_side_builder.hash_join_states = self.hash_join_states.clone();
+        let mut materialized_side_pipeline =
+            materialized_side_builder.finalize(materialized_side)?;
+        assert!(
+            materialized_side_pipeline
+                .main_pipeline
+                .is_pulling_pipeline()?
+        );
 
         PipelineBuilder::build_result_projection(
             &self.func_ctx,
-            left_side.output_schema()?,
-            left_output_columns,
-            &mut left_side_pipeline.main_pipeline,
+            materialized_side.output_schema()?,
+            materialized_output_columns,
+            &mut materialized_side_pipeline.main_pipeline,
             false,
         )?;
 
-        left_side_pipeline.main_pipeline.add_sink(|input| {
+        materialized_side_pipeline.main_pipeline.add_sink(|input| {
             let transform = Sinker::<MaterializedCteSink>::create(
                 input,
                 MaterializedCteSink::create(self.ctx.clone(), cte_idx, state.clone())?,
@@ -275,8 +280,9 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(transform))
         })?;
         self.pipelines
-            .push(left_side_pipeline.main_pipeline.finalize());
-        self.pipelines.extend(left_side_pipeline.sources_pipelines);
+            .push(materialized_side_pipeline.main_pipeline.finalize());
+        self.pipelines
+            .extend(materialized_side_pipeline.sources_pipelines);
         Ok(())
     }
 }

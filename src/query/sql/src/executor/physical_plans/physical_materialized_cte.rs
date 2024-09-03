@@ -31,12 +31,12 @@ pub struct MaterializedCte {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub cte_idx: IndexType,
-    pub left_output_columns: Vec<ColumnBinding>,
+    pub materialized_output_columns: Vec<ColumnBinding>,
 }
 
 impl MaterializedCte {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let fields = self.right.output_schema()?.fields().clone();
+        let fields = self.left.output_schema()?.fields().clone();
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -58,27 +58,40 @@ impl PhysicalPlanBuilder {
             .used_columns
             .clone();
         // Get the intersection of `left_used_column` and `right_used_column`
-        let left_required = left_output_column
+        let materialize_required = left_output_column
+            .iter()
+            .map(|index| {
+                if let Some(materialized_index) = cte.materialized_indexes.get(index) {
+                    *materialized_index
+                } else {
+                    *index
+                }
+            })
+            .collect::<ColumnSet>()
             .intersection(&right_used_column)
             .cloned()
             .collect::<ColumnSet>();
 
-        let mut required_output_columns = vec![];
-        for column in cte.left_output_columns.iter() {
-            if left_required.contains(&column.index) {
-                required_output_columns.push(column.clone());
+        let mut materialized_output_columns = vec![];
+        for column in cte.materialized_output_columns.iter() {
+            if materialize_required.contains(&column.index) {
+                materialized_output_columns.push(column.clone());
             }
         }
         self.cte_output_columns
-            .insert(cte.cte_idx, required_output_columns.clone());
+            .insert(cte.cte_idx, materialized_output_columns.clone());
+
+        let materialized_right =
+            Box::new(self.build(s_expr.child(1)?, materialize_required).await?);
+        let left = Box::new(self.build(s_expr.child(0)?, required).await?);
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
             plan_id: 0,
-            left: Box::new(self.build(s_expr.child(0)?, left_required).await?),
-            right: Box::new(self.build(s_expr.child(1)?, required).await?),
+            left,
+            right: materialized_right,
             cte_idx: cte.cte_idx,
-            left_output_columns: required_output_columns,
+            materialized_output_columns,
         }))
     }
 }

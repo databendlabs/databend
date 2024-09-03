@@ -49,15 +49,21 @@ impl PhysicalPlanBuilder {
         used_columns = required.intersection(&used_columns).cloned().collect();
         let mut pruned_fields = vec![];
         let mut pruned_offsets = vec![];
+        let mut pruned_materialized_indexes = vec![];
         let cte_output_columns = self.cte_output_columns.get(&cte_scan.cte_idx.0).unwrap();
-        for field in cte_scan.fields.iter() {
+        for (field, column_index) in cte_scan
+            .fields
+            .iter()
+            .zip(cte_scan.materialized_indexes.iter())
+        {
             if used_columns.contains(&field.name().parse()?) {
                 pruned_fields.push(field.clone());
+                pruned_materialized_indexes.push(*column_index);
             }
         }
-        for field in pruned_fields.iter() {
+        for column_index in pruned_materialized_indexes.iter() {
             for (offset, col) in cte_output_columns.iter().enumerate() {
-                if col.index.eq(&field.name().parse::<IndexType>()?) {
+                if col.index.eq(column_index) {
                     pruned_offsets.push(offset);
                     break;
                 }
