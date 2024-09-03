@@ -2005,25 +2005,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let now = Utc::now();
         let table_id_list = table_id_list.unwrap();
-        let inner_keys: Vec<String> = table_id_list
-            .id_list
-            .iter()
-            .map(|table_id| {
-                TableId {
-                    table_id: *table_id,
-                }
-                .to_string_key()
-            })
-            .collect();
-        let metas = get_table_meta_history(self, &now, table_id_list, &inner_keys).await?;
+
+        let metas = get_table_meta_history(self, &now, table_id_list).await?;
         let meta = metas.into_iter();
         let tb_info_list = meta
-            .map(|(table_id, seq, meta)| {
+            .map(|(table_id, seqv)| {
                 Arc::new(TableInfo {
-                    ident: TableIdent { table_id, seq },
+                    ident: TableIdent {
+                        table_id: table_id.table_id,
+                        seq: seqv.seq(),
+                    },
                     desc: format!("'{}'.'{}'", database_name, table_name),
                     name: table_name.to_string(),
-                    meta,
+                    meta: seqv.data,
                     tenant: tenant.tenant_name().to_string(),
                     db_type: DatabaseType::NormalDB,
                     catalog_info: Default::default(),
@@ -2108,29 +2102,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     "get_tables_history"
                 );
 
-                let inner_keys: Vec<String> = tb_id_list
-                    .id_list
-                    .iter()
-                    .map(|table_id| {
-                        TableId {
-                            table_id: *table_id,
-                        }
-                        .to_string_key()
-                    })
-                    .collect();
-                let metas = get_table_meta_history(self, &now, tb_id_list, &inner_keys).await?;
+                let metas = get_table_meta_history(self, &now, tb_id_list).await?;
                 let tb_info_list: Vec<Arc<TableInfo>> = metas
                     .into_iter()
-                    .map(|(table_id, seq, meta)| {
+                    .map(|(table_id, seqv)| {
                         Arc::new(TableInfo {
-                            ident: TableIdent { table_id, seq },
+                            ident: TableIdent {
+                                table_id: table_id.table_id,
+                                seq: seqv.seq(),
+                            },
                             desc: format!(
                                 "'{}'.'{}'",
                                 tenant_dbname.database_name(),
                                 table_id_list_key.table_name,
                             ),
                             name: table_id_list_key.table_name.to_string(),
-                            meta,
+                            meta: seqv.data,
                             tenant: tenant_dbname.tenant_name().to_string(),
                             db_type: DatabaseType::NormalDB,
                             catalog_info: Default::default(),
@@ -4005,9 +3992,18 @@ async fn get_table_meta_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     now: &DateTime<Utc>,
     tb_id_list: TableIdList,
-    inner_keys: &[String],
-) -> Result<Vec<(u64, u64, TableMeta)>, KVAppError> {
+) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
     let mut tb_metas = vec![];
+    let inner_keys: Vec<String> = tb_id_list
+        .id_list
+        .iter()
+        .map(|table_id| {
+            TableId {
+                table_id: *table_id,
+            }
+            .to_string_key()
+        })
+        .collect();
     let mut table_id_iter = tb_id_list.id_list.into_iter();
     for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
         let tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(kv_api, c).await?;
@@ -4024,7 +4020,7 @@ async fn get_table_meta_history(
                 continue;
             }
 
-            tb_metas.push((table_id, tb_meta_seq, tb_meta));
+            tb_metas.push((TableId { table_id }, SeqV::new(tb_meta_seq, tb_meta)));
         }
     }
     Ok(tb_metas)
