@@ -185,7 +185,6 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
@@ -3784,19 +3783,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
         let seq_metas = self.get_pb_values(kv_keys.clone()).await?;
         let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
-
-        if seq_metas.len() != kv_keys.len() {
-            let err = InvalidReply::new(
-                "list_catalogs",
-                &AnyError::error(format!(
-                    "mismatched catalog-meta count: got: {}, expect: {}",
-                    seq_metas.len(),
-                    kv_keys.len()
-                )),
-            );
-            let meta_net_err = MetaNetworkError::from(err);
-            return Err(KVAppError::MetaError(meta_net_err.into()));
-        }
 
         let mut catalog_infos = Vec::with_capacity(kv_keys.len());
 

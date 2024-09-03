@@ -22,9 +22,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
@@ -283,18 +281,6 @@ where
 
             let strm = self.get_pb_values(id_idents).await?;
             let seq_metas = strm.try_collect::<Vec<_>>().await?;
-
-            if seq_metas.len() != name_ids.len() {
-                return Err(InvalidReply::new(
-                    "seq_metas.len() {} != name_ids.len() {}",
-                    &AnyError::error(format!(
-                        "seq_metas.len() {} != name_ids.len() {}",
-                        seq_metas.len(),
-                        name_ids.len()
-                    )),
-                )
-                .into());
-            }
 
             let name_id_values =
                 name_ids
