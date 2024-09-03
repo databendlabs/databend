@@ -253,6 +253,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    // Get one table identified as dropped by db and table name.
     async fn get_single_table_history(
         &self,
         tenant: &Tenant,

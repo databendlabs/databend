@@ -368,7 +368,8 @@ impl Catalog for SessionCatalog {
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
         self.temp_tbl_mgr.lock().list_tables()
     }
-    
+
+    // Get one table identified as dropped by db and table name.
     async fn get_single_table_history(
         &self,
         tenant: &Tenant,
