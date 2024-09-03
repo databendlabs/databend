@@ -523,7 +523,7 @@ query T
 explain select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
-├── output columns: [t.i (#0), exists (select * from t where i > 10) (#2)]
+├── output columns: [t.i (#0), EXISTS (SELECT * FROM t WHERE i > 10) (#2)]
 ├── expressions: [exists_scalar (#4)]
 ├── estimated rows: 4.00
 └── HashJoin

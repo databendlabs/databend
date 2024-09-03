@@ -53,7 +53,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -1175,14 +1175,14 @@ impl Catalog for FakedCatalog {
 
     async fn drop_dictionary(
         &self,
-        _dict_ident: TenantDictionaryIdent,
+        _dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         todo!()
     }
 
     async fn get_dictionary(
         &self,
-        _req: TenantDictionaryIdent,
+        _req: DictionaryNameIdent,
     ) -> Result<Option<GetDictionaryReply>> {
         todo!()
     }

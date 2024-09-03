@@ -16,14 +16,18 @@ use std::future::Future;
 
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
@@ -33,6 +37,7 @@ use futures::TryStreamExt;
 use log::debug;
 
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::UpsertPB;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_op_del;
@@ -189,6 +194,54 @@ where
                 return Ok(Some((seq_id, seq_meta)));
             }
         }
+    }
+
+    /// Update the value part of `name -> id -> value`, identified by name.
+    ///
+    /// Returns the value before update if success, otherwise None.
+    ///
+    /// This function does not modify the `name -> id` mapping.
+    async fn update_id_value(
+        &self,
+        key: &K,
+        value: IdRsc::ValueType,
+    ) -> Result<Option<(DataId<IdRsc>, IdRsc::ValueType)>, MetaError> {
+        let got = self.get_id_value(key).await?;
+
+        let Some((seq_id, seq_meta)) = got else {
+            return Ok(None);
+        };
+
+        let tenant = key.tenant();
+        let id_ident = seq_id.data.into_t_ident(tenant);
+        let transition = self.update_by_id(id_ident, value).await?;
+
+        if transition.is_changed() {
+            Ok(Some((seq_id.data, seq_meta.data)))
+        } else {
+            // update_by_id always succeed, unless the id->value mapping is removed.
+            Ok(None)
+        }
+    }
+
+    /// Update the value part of `id -> value` mapping by id.
+    ///
+    /// It returns the state transition of the update operation: `(prev, result)`.
+    async fn update_by_id(
+        &self,
+        id_ident: TIdent<IdRsc, DataId<IdRsc>>,
+        value: IdRsc::ValueType,
+    ) -> Result<Change<IdRsc::ValueType>, MetaError> {
+        let reply = self
+            .upsert_pb(&UpsertPB::new(
+                id_ident,
+                MatchSeq::GE(1),
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
+
+        Ok(reply)
     }
 
     /// Get the `name -> id -> value` mapping by name.

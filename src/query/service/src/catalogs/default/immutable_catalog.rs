@@ -21,7 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -531,7 +531,7 @@ impl Catalog for ImmutableCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        _dict_ident: TenantDictionaryIdent,
+        _dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         unimplemented!()
     }
@@ -539,7 +539,7 @@ impl Catalog for ImmutableCatalog {
     #[async_backtrace::framed]
     async fn get_dictionary(
         &self,
-        _req: TenantDictionaryIdent,
+        _req: DictionaryNameIdent,
     ) -> Result<Option<GetDictionaryReply>> {
         unimplemented!()
     }

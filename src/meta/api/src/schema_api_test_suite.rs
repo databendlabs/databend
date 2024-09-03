@@ -40,10 +40,10 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -7450,11 +7450,11 @@ impl SchemaApiTestSuite {
             assert!(res.is_empty());
         }
 
-        let dict_ident1 = TenantDictionaryIdent::new(
+        let dict_ident1 = DictionaryNameIdent::new(
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name1.to_string()),
         );
-        let dict_ident2 = TenantDictionaryIdent::new(
+        let dict_ident2 = DictionaryNameIdent::new(
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name2.to_string()),
         );
@@ -7490,8 +7490,8 @@ impl SchemaApiTestSuite {
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
             let dict_reply = res.unwrap();
-            assert_eq!(dict_reply.dictionary_id, dict_id);
-            assert_eq!(dict_reply.dictionary_meta.source, "mysql".to_string());
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.data.source, "mysql".to_string());
 
             let req = dict_ident2.clone();
             let res = mt.get_dictionary(req).await?;
@@ -7511,8 +7511,8 @@ impl SchemaApiTestSuite {
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
             let dict_reply = res.unwrap();
-            assert_eq!(dict_reply.dictionary_id, dict_id);
-            assert_eq!(dict_reply.dictionary_meta.source, "postgresql".to_string());
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.source, "postgresql".to_string());
         }
 
         {
