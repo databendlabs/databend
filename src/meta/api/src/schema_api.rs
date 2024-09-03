@@ -78,6 +78,7 @@ use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -97,7 +98,6 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
@@ -212,12 +212,11 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
 
-    async fn get_table_history(
+    async fn get_table_meta_history(
         &self,
-        tenant: &Tenant,
         database_name: &str,
         table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
 
     async fn get_tables_history(
         &self,

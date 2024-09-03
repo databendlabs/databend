@@ -1988,12 +1988,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_history(
+    async fn get_table_meta_history(
         &self,
-        tenant: &Tenant,
         database_name: &str,
         table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
         let table_name = &table_id_history.table_name;
         let (meta_seq, table_id_list) = get_pb_value(self, table_id_history).await?;
         if meta_seq == 0 || table_id_list.is_none() {
@@ -2007,29 +2006,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id_list = table_id_list.unwrap();
 
         let metas = get_table_meta_history(self, &now, table_id_list).await?;
-        let meta = metas.into_iter();
-        let tb_info_list = meta
-            .map(|(table_id, seqv)| {
-                Arc::new(TableInfo {
-                    ident: TableIdent {
-                        table_id: table_id.table_id,
-                        seq: seqv.seq(),
-                    },
-                    desc: format!("'{}'.'{}'", database_name, table_name),
-                    name: table_name.to_string(),
-                    meta: seqv.data,
-                    tenant: tenant.tenant_name().to_string(),
-                    db_type: DatabaseType::NormalDB,
-                    catalog_info: Default::default(),
-                })
-            })
-            .collect();
 
         debug!(
             name :% =(&table_id_history);
-            "get_table_history"
+            "get_table_meta_history"
         );
-        return Ok(tb_info_list);
+        return Ok(metas);
     }
 
     #[logcall::logcall]

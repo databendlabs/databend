@@ -1864,7 +1864,7 @@ impl SchemaApiTestSuite {
                     let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
 
                     let got = mt
-                        .get_table_history(&tenant, db_name, &TableIdHistoryIdent {
+                        .get_table_meta_history(db_name, &TableIdHistoryIdent {
                             database_id: cur_db.database_id.db_id,
                             table_name: tbl_name.to_string(),
                         })
@@ -1879,8 +1879,8 @@ impl SchemaApiTestSuite {
                         tenant: tenant_name.to_string(),
                         ..Default::default()
                     };
-                    assert_eq!(got.meta.created_on, want.meta.created_on);
-                    assert!(got.meta.drop_on.is_some());
+                    assert_eq!(got.1.data.created_on, want.meta.created_on);
+                    assert!(got.1.data.drop_on.is_some());
                 }
             }
 
