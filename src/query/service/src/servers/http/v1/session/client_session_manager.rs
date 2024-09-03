@@ -75,7 +75,7 @@ impl QueryState {
     pub fn has_expired(&self, now: &Instant) -> bool {
         match self {
             QueryState::InUse => false,
-            QueryState::Idle(t) => (*now - *t) > Duration::from_secs(4 * 3600),
+            QueryState::Idle(t) => (*now - *t) > SESSION_TOKEN_VALIDITY,
         }
     }
 }
@@ -129,10 +129,10 @@ impl ClientSessionManager {
                     guard.remove(id);
                 }
             }
-            for (_id, mgr) in expired {
-                drop_all_temp_tables(mgr).await.ok();
+            for (id, mgr) in expired {
+                drop_all_temp_tables(&id, mgr).await.ok();
             }
-            tokio::time::sleep(Duration::from_secs(900)).await;
+            tokio::time::sleep(SESSION_TOKEN_VALIDITY / 4).await;
         }
     }
 
@@ -318,7 +318,7 @@ impl ClientSessionManager {
                 .ok();
             let state = self.session_state.lock().remove(&claim.session_id);
             if let Some(state) = state {
-                drop_all_temp_tables(state.temp_tbl_mgr).await?;
+                drop_all_temp_tables(&claim.session_id, state.temp_tbl_mgr).await?;
             }
         };
         Ok(())

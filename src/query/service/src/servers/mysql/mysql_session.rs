@@ -100,7 +100,7 @@ impl MySQLConnection {
                     .drop_client_session_id(&session_id)
                     .await
                     .ok();
-                drop_all_temp_tables(session.temp_tbl_mgr()).await
+                drop_all_temp_tables(&session_id, session.temp_tbl_mgr()).await
             });
             let _ = futures::executor::block_on(join_handle);
         });
