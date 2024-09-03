@@ -206,10 +206,7 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
 
-    async fn get_single_table_history(
-        &self,
-        req: GetTableReq,
-    ) -> Result<Arc<TableInfo>, KVAppError>;
+    async fn get_table_history(&self, req: GetTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
     async fn get_tables_history(
         &self,

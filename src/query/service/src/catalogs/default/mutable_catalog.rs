@@ -446,14 +446,14 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_single_table_history(
+    async fn get_table_history(
         &self,
         tenant: &Tenant,
         db_name: &str,
         table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.get_single_table_history(table_name).await
+        db.get_table_history(table_name).await
     }
 
     #[async_backtrace::framed]

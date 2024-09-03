@@ -967,12 +967,12 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn get_single_table_history(
+    async fn get_table_history(
         &self,
         _tenant: &Tenant,
         _db_name: &str,
         _table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 

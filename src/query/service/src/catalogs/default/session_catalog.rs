@@ -366,14 +366,14 @@ impl Catalog for SessionCatalog {
     }
 
     // Get one table identified as dropped by db and table name.
-    async fn get_single_table_history(
+    async fn get_table_history(
         &self,
         tenant: &Tenant,
         db_name: &str,
         table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Vec<Arc<dyn Table>>> {
         self.inner
-            .get_single_table_history(tenant, db_name, table_name)
+            .get_table_history(tenant, db_name, table_name)
             .await
     }
     async fn list_tables_history(
