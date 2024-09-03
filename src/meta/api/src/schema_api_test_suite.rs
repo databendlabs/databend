@@ -1507,6 +1507,7 @@ impl SchemaApiTestSuite {
             table_name: table_name.to_string(),
             tb_id: table_id,
             engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         })
         .await?;
 
@@ -1838,6 +1839,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
 
@@ -1869,6 +1871,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 };
                 let res = mt.drop_table_by_id(plan).await;
                 let err = res.unwrap_err();
@@ -1889,6 +1892,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
             }
@@ -4154,6 +4158,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
             }
@@ -4180,6 +4185,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
                 let table_id = resp.table_id;
@@ -4255,6 +4261,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
             }
@@ -4282,6 +4289,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
                 let table_id = resp.table_id;
@@ -4457,6 +4465,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
             }
@@ -4698,6 +4707,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name_ident.table_name.clone(),
                 tb_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4750,6 +4760,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4808,6 +4819,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4910,6 +4922,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -7677,6 +7690,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             db_id: self.db_id,
             tb_id: self.table_id,
             engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         };
         self.mt.drop_table_by_id(req.clone()).await?;
 

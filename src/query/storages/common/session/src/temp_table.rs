@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::SeqV;
 use databend_common_storage::DataOperator;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -349,8 +350,12 @@ pub async fn drop_table_by_id(
                     return Ok(None);
                 }
             }
+            let key = InMemoryDataKey {
+                temp_prefix: Some(req.session_id.clone()),
+                table_id: *tb_id,
+            };
             let mut in_mem_data = IN_MEMORY_DATA.write();
-            in_mem_data.remove(tb_id).ok_or_else(|| {
+            in_mem_data.remove(&key).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "Table not found in memory data {:?}, drop table request: {:?}",
                     in_mem_data, req
@@ -362,7 +367,7 @@ pub async fn drop_table_by_id(
     Ok(Some(DropTableReply { spec_vec: None }))
 }
 
-pub async fn drop_all_temp_tables(mgr: TempTblMgrRef) -> Result<()> {
+pub async fn drop_all_temp_tables(session_id: &str, mgr: TempTblMgrRef) -> Result<()> {
     let (fuse_dirs, mem_tbl_ids) = {
         let mut guard = mgr.lock();
         let mut fuse_dirs = Vec::new();
@@ -389,7 +394,11 @@ pub async fn drop_all_temp_tables(mgr: TempTblMgrRef) -> Result<()> {
     if !mem_tbl_ids.is_empty() {
         let mut in_mem_data = IN_MEMORY_DATA.write();
         for id in mem_tbl_ids {
-            in_mem_data.remove(&id);
+            let key = InMemoryDataKey {
+                temp_prefix: Some(session_id.to_string()),
+                table_id: id,
+            };
+            in_mem_data.remove(&key);
         }
     }
     Ok(())

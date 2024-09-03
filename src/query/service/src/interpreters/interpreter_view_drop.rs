@@ -94,6 +94,7 @@ impl Interpreter for DropViewInterpreter {
                     tb_id: table.get_id(),
                     db_id: db.get_db_info().database_id.db_id,
                     engine: table.engine().to_string(),
+                    session_id: self.ctx.get_session_id()?,
                 })
                 .await?;
         };

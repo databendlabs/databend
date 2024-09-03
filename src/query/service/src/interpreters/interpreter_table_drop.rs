@@ -126,6 +126,7 @@ impl Interpreter for DropTableInterpreter {
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().database_id.db_id,
                 engine: tbl.engine().to_string(),
+                session_id: self.ctx.get_session_id()?,
             })
             .await?;
 
