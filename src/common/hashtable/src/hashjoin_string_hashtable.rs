@@ -325,4 +325,33 @@ where A: Allocator + Clone + 'static
             (0, 0)
         }
     }
+
+    fn next_matched_ptr(&self, key: &Self::Key, mut ptr: u64) -> u64 {
+        loop {
+            if ptr == 0 {
+                break;
+            }
+            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
+            // Compare `early` and the length of the string, the size of `early` is 4.
+            let min_len = std::cmp::min(
+                STRING_EARLY_SIZE,
+                std::cmp::min(key.len(), raw_entry.length as usize),
+            );
+            if raw_entry.length as usize == key.len()
+                && key[0..min_len] == raw_entry.early[0..min_len]
+            {
+                let key_ref = unsafe {
+                    std::slice::from_raw_parts(
+                        raw_entry.key as *const u8,
+                        raw_entry.length as usize,
+                    )
+                };
+                if key == key_ref {
+                    return ptr;
+                }
+            }
+            ptr = raw_entry.next;
+        }
+        0
+    }
 }

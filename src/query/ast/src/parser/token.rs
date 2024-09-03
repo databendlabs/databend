@@ -656,6 +656,8 @@ pub enum TokenKind {
     HAVING,
     #[token("HIGH", ignore(ascii_case))]
     HIGH,
+    #[token("HILBERT", ignore(ascii_case))]
+    HILBERT,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
     #[token("HIVE", ignore(ascii_case))]
@@ -728,6 +730,8 @@ pub enum TokenKind {
     KILL,
     #[token("LATERAL", ignore(ascii_case))]
     LATERAL,
+    #[token("LINEAR", ignore(ascii_case))]
+    LINEAR,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]

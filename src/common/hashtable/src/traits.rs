@@ -566,4 +566,7 @@ pub trait HashJoinHashtableLike {
         occupied: usize,
         capacity: usize,
     ) -> (usize, u64);
+
+    // Find the next matched ptr.
+    fn next_matched_ptr(&self, key: &Self::Key, ptr: u64) -> u64;
 }

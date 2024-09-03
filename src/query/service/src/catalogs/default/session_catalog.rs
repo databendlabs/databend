@@ -23,7 +23,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -46,7 +46,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
@@ -184,7 +183,7 @@ impl Catalog for SessionCatalog {
         self.inner.create_index(req).await
     }
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
         self.inner.drop_index(req).await
     }
 
@@ -364,6 +363,10 @@ impl Catalog for SessionCatalog {
 
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.inner.list_tables(tenant, db_name).await
+    }
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.temp_tbl_mgr.lock().list_tables()
     }
 
     async fn list_tables_history(
@@ -655,15 +658,12 @@ impl Catalog for SessionCatalog {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         self.inner.drop_dictionary(dict_ident).await
     }
 
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         self.inner.get_dictionary(req).await
     }
 

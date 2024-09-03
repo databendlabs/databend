@@ -23,7 +23,7 @@ use crate::tenant_key::ident::TIdent;
 ///
 /// It includes a prefix to store the `ValueType`.
 /// This trait is used to define a concrete [`TIdent`] can be used as a `kvapi::Key`.
-pub trait TenantResource {
+pub trait TenantResource: 'static {
     /// The key prefix to store in meta-service.
     const PREFIX: &'static str;
 

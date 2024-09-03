@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -43,7 +43,6 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
@@ -167,7 +166,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply>;
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
 
@@ -226,7 +225,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
-    /// List the tables name by meta ids.
+    /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -254,7 +253,15 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    /// List all tables in a database.This will not list temporary tables.
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        Err(ErrorCode::Unimplemented(
+            "'list_temporary_tables' not implemented",
+        ))
+    }
+
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
@@ -319,7 +326,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             .get_db_info()
             .database_id
             .db_id;
-        let req = TenantDictionaryIdent::new(
+        let req = DictionaryNameIdent::new(
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
@@ -498,13 +505,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>>;
 
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>>;
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>>;
 
     async fn list_dictionaries(
         &self,

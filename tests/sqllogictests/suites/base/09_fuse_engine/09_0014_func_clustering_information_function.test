@@ -29,15 +29,15 @@ select min, max, level from clustering_statistics('default','t09_0014') order by
 [1, 2] [3, 1] 0
 [4, 4] [4, 4] 0
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014')
 ----
-(b, a) 3 1 0.6667 1.6667 {"00001":1,"00002":2}
+(b, a) linear 3 1 0.6667 1.6667 {"00001":1,"00002":2}
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014', '(a)')
 ----
-(a) 3 1 0.6667 1.6667 {"00001":1,"00002":2}
+(a) linear 3 1 0.6667 1.6667 {"00001":1,"00002":2}
 
 statement ok
 ALTER TABLE t09_0014 DROP CLUSTER KEY
@@ -48,10 +48,10 @@ select * from clustering_information('default','t09_0014')
 statement error 1118
 select * from clustering_statistics('default','t09_0014')
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014', '(b, a)')
 ----
-(b, a) 3 1 0.6667 1.6667 {"00001":1,"00002":2}
+(b, a) linear 3 1 0.6667 1.6667 {"00001":1,"00002":2}
 
 statement ok
 drop table t09_0014
@@ -65,25 +65,25 @@ insert into t09_0014_1 values ('abc'), ('abd')
 statement ok
 insert into t09_0014_1 values ('xyy'), ('xyz')
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(c)')
 ----
-(c) 2 0 0.0 1.0 {"00001":2}
+(c) linear 2 0 0.0 1.0 {"00001":2}
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1))')
 ----
-(SUBSTRING(c FROM 1)) 2 0 0.0 1.0 {"00001":2}
+(SUBSTRING(c FROM 1)) linear 2 0 0.0 1.0 {"00001":2}
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1,2))')
 ----
-(SUBSTRING(c FROM 1 FOR 2)) 2 2 0.0 1.0 {"00001":2}
+(SUBSTRING(c FROM 1 FOR 2)) linear 2 2 0.0 1.0 {"00001":2}
 
-query TIIFFT
+query TTIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,2,2))')
 ----
-(SUBSTRING(c FROM 2 FOR 2)) 2 0 1.0 2.0 {"00002":2}
+(SUBSTRING(c FROM 2 FOR 2)) linear 2 0 1.0 2.0 {"00002":2}
 
 statement ok
 drop table t09_0014_1

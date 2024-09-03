@@ -15,7 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -39,8 +42,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
@@ -49,21 +50,19 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReply;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
@@ -90,8 +89,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -100,10 +97,12 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 
 use crate::kv_app_error::KVAppError;
+use crate::meta_txn_error::MetaTxnError;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
@@ -143,26 +142,29 @@ pub trait SchemaApi: Send + Sync {
 
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError>;
 
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
+    /// Drop index and returns the dropped id and meta.
+    ///
+    /// If there is no such record, it returns `Ok(None)`.
+    async fn drop_index(
+        &self,
+        name_ident: &IndexNameIdent,
+    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, MetaTxnError>;
 
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
+    async fn get_index(
+        &self,
+        name_ident: &IndexNameIdent,
+    ) -> Result<Option<GetIndexReply>, MetaError>;
 
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
+    async fn update_index(
+        &self,
+        id_ident: IndexIdIdent,
+        index_meta: IndexMeta,
+    ) -> Result<Change<IndexMeta>, MetaError>;
 
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
-
-    async fn list_index_ids_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<u64>, KVAppError>;
-
-    async fn list_indexes_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+    ) -> Result<Vec<(String, IndexId, IndexMeta)>, KVAppError>;
 
     // virtual column
 
@@ -325,13 +327,13 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError>;
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaTxnError>;
 
     async fn get_dictionary(
         &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>, KVAppError>;
+        req: DictionaryNameIdent,
+    ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError>;
 
     async fn list_dictionaries(
         &self,

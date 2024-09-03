@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod discovery;
 mod http_query_handlers;
 mod query;
 mod session;
@@ -19,6 +20,7 @@ mod stage;
 pub mod string_block;
 mod suggestions;
 
+pub use discovery::discovery_nodes;
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
