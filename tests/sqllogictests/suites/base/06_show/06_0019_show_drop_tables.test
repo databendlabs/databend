@@ -14,6 +14,12 @@ statement ok
 drop table db1.t;
 
 statement ok
+create table db1.t(id int);
+
+statement ok
+drop table db1.t;
+
+statement ok
 show drop tables from db1;
 
 statement ok
@@ -24,6 +30,11 @@ show drop tables from db1 like '%t';
 
 statement ok
 show drop tables from db1 where name='t_never_exist$$$$';
+
+query T
+select count(name)>=2 from system.tables_with_history where name='t' and database='db1';
+----
+1
 
 statement ok
 drop database db1;

@@ -137,11 +137,11 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn get_single_table_history(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self
+    async fn get_table_history(&self, table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self
             .ctx
             .meta
-            .get_single_table_history(GetTableReq::new(
+            .get_table_history(GetTableReq::new(
                 self.get_tenant(),
                 self.get_db_name(),
                 table_name,
@@ -149,7 +149,7 @@ impl Database for DefaultDatabase {
             .await?;
 
         // disable refresh in history table
-        self.get_table_by_info(table_info.as_ref())
+        self.load_tables(table_infos)
     }
 
     #[async_backtrace::framed]

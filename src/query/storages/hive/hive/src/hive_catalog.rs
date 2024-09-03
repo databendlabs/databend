@@ -460,12 +460,12 @@ impl Catalog for HiveCatalog {
         Ok(tables)
     }
 
-    async fn get_single_table_history(
+    async fn get_table_history(
         &self,
         _tenant: &Tenant,
         _db_name: &str,
         _table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get table history in HIVE catalog",
         ))

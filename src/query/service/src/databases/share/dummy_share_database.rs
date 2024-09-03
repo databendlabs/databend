@@ -82,7 +82,7 @@ impl Database for DummyShareDatabase {
 
     // Get one table history by db and table name.
     #[async_backtrace::framed]
-    async fn get_single_table_history(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table_history(&self, _table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied from a dummy shared database".to_string(),
         ))

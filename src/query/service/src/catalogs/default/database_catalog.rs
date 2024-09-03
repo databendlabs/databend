@@ -402,22 +402,22 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_single_table_history(
+    async fn get_table_history(
         &self,
         tenant: &Tenant,
         db_name: &str,
         table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Vec<Arc<dyn Table>>> {
         let res = self
             .immutable_catalog
-            .get_single_table_history(tenant, db_name, table_name)
+            .get_table_history(tenant, db_name, table_name)
             .await;
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
-                        .get_single_table_history(tenant, db_name, table_name)
+                        .get_table_history(tenant, db_name, table_name)
                         .await
                 } else {
                     Err(e)
