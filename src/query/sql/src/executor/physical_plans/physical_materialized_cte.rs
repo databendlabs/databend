@@ -63,9 +63,9 @@ impl PhysicalPlanBuilder {
         let used_column_offset = self.cet_used_column_offsets.get(&cte.cte_idx).unwrap();
         for (offset, column) in cte.materialized_output_columns.iter().enumerate() {
             if used_column_offset.contains(&offset) {
+                cte_scan_offset.push(materialized_output_columns.len());
                 materialize_required.insert(column.index);
                 materialized_output_columns.push(column.clone());
-                cte_scan_offset.push(offset);
             } else {
                 cte_scan_offset.push(0);
             }
