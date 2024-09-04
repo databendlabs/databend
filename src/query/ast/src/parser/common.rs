@@ -30,7 +30,6 @@ use crate::ast::Identifier;
 use crate::ast::IdentifierType;
 use crate::ast::SetType;
 use crate::ast::TableRef;
-use crate::ast::WithOptions;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::with_options;
@@ -238,7 +237,7 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
             catalog,
             database,
             table,
-            with_options: with_options.map(WithOptions::from),
+            with_options,
         },
     )(i)
 }

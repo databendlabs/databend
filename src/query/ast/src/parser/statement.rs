@@ -2675,7 +2675,7 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
             catalog,
             database,
             table,
-            with_options: with_options.map(WithOptions::from),
+            with_options,
             alias,
         },
     );
@@ -3979,7 +3979,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     })(i)
 }
 
-fn option_to_string(i: Input) -> IResult<String> {
+pub fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
 
     rule!(

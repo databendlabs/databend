@@ -22,6 +22,9 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_with_options::check_with_opt_valid;
+use databend_common_catalog::table_with_options::get_with_opt_consume;
+use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
@@ -57,11 +60,15 @@ impl Binder {
             table_identifier.table_name_alias(),
         );
 
-        let (consume, max_batch_size, with_opts_str) = with_options
-            .as_ref()
-            .map_or((false, None, String::new()), |opts| {
-                (opts.consume, opts.max_batch_size, format!(" {opts}"))
-            });
+        let (consume, max_batch_size, with_opts_str) = if let Some(with_options) = with_options {
+            check_with_opt_valid(with_options)?;
+            let consume = get_with_opt_consume(with_options)?;
+            let max_batch_size = get_with_opt_max_batch_size(with_options)?;
+            let with_opts_str = format!(" {with_options}");
+            (consume, max_batch_size, with_opts_str)
+        } else {
+            (false, None, String::new())
+        };
 
         // Check and bind common table expression
         let ctes_map = self.ctes_map.clone();

@@ -12,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use super::Lambda;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
 use crate::ast::Identifier;
+use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
 use crate::Span;
@@ -565,47 +567,16 @@ impl Display for Unpivot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum WithOption {
-    Consume,
-    MaxBatchSize(u64),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct WithOptions {
-    /// whether consume the table
-    pub consume: bool,
-    pub max_batch_size: Option<u64>,
+    pub options: BTreeMap<String, String>,
 }
 
 impl Display for WithOptions {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let mut options = vec![];
-        if self.consume {
-            options.push("CONSUME".to_string());
-        }
-        if let Some(size) = self.max_batch_size {
-            options.push(format!("MAX_BATCH_SIZE_HINT = {}", size));
-        }
-
-        if !options.is_empty() {
-            write!(f, "WITH ({})", options.join(", "))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl WithOptions {
-    pub fn from(opts: Vec<WithOption>) -> Self {
-        let mut options: WithOptions = Default::default();
-        for opt in opts.into_iter() {
-            match opt {
-                WithOption::Consume => options.consume = true,
-                WithOption::MaxBatchSize(size) => options.max_batch_size = Some(size),
-            }
-        }
-        options
+        write!(f, "WITH (")?;
+        write_comma_separated_string_map(f, &self.options)?;
+        write!(f, ")")
     }
 }
 

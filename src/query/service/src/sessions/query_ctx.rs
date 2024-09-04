@@ -932,7 +932,7 @@ impl TableContext for QueryContext {
             }
         } else if max_batch_size.is_some() {
             return Err(ErrorCode::StorageUnsupported(
-                "MAX_BATCH_SIZE_HINT only support in STREAM",
+                "MAX_BATCH_SIZE only support in STREAM",
             ));
         }
         Ok(table)

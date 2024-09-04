@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -22,14 +24,15 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use super::stage::file_location;
-use super::stage::select_stage_option;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
+use crate::parser::stage::file_location;
+use crate::parser::stage::select_stage_option;
 use crate::parser::statement::hint;
+use crate::parser::statement::set_table_option;
 use crate::parser::statement::top_n;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
@@ -595,25 +598,16 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     )(i)
 }
 
-pub fn with_options(i: Input) -> IResult<Vec<WithOption>> {
-    let with_option = alt((
-        map(rule! { CONSUME }, |_| WithOption::Consume),
-        map(
-            rule! { MAX_BATCH_SIZE_HINT ~ "=" ~ #literal_u64 },
-            |(_, _, size)| WithOption::MaxBatchSize(size),
-        ),
-    ));
-
+pub fn with_options(i: Input) -> IResult<WithOptions> {
     alt((
-        map(rule! { WITH ~ CONSUME }, |_| vec![WithOption::Consume]),
+        map(rule! { WITH ~ CONSUME }, |_| WithOptions {
+            options: BTreeMap::from([("consume".to_string(), "true".to_string())]),
+        }),
         map(
-            rule! { WITH ~ "(" ~ (#with_option ~ ","?)* ~ ")" },
-            |(_, _, options, _)| {
-                options
-                    .into_iter()
-                    .map(|(option, _)| option)
-                    .collect::<Vec<_>>()
+            rule! {
+                WITH ~ "(" ~ #set_table_option ~ ")"
             },
+            |(_, _, options, _)| WithOptions { options },
         ),
     ))(i)
 }
@@ -705,7 +699,7 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        with_options: Option<Vec<WithOption>>,
+        with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -945,7 +939,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
-                with_options: with_options.map(WithOptions::from),
+                with_options,
                 pivot,
                 unpivot,
                 sample,
