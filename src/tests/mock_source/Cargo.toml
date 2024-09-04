@@ -7,8 +7,8 @@ publish.workspace = true
 edition.workspace = true
 
 [dependencies]
-tokio = { workspace = true }
 mini-redis = "0.4"
+tokio = { workspace = true }
 
 [lints]
 workspace = true
