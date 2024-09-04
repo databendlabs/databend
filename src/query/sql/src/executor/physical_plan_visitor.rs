@@ -285,6 +285,7 @@ pub trait PhysicalPlanReplacer {
             left: Box::new(left),
             right: Box::new(right),
             cte_idx: plan.cte_idx,
+            cte_scan_offset: plan.cte_scan_offset.clone(),
             materialized_output_columns: plan.materialized_output_columns.clone(),
         }))
     }

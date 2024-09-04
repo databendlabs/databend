@@ -78,6 +78,7 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         right_side_builder.cte_state = self.cte_state.clone();
+        right_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         right_side_builder.hash_join_states = self.hash_join_states.clone();
 
         let mut right_res = right_side_builder.finalize(&range_join.right)?;
@@ -148,6 +149,7 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         build_side_builder.cte_state = self.cte_state.clone();
+        build_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         build_side_builder.hash_join_states = self.hash_join_states.clone();
         let mut build_res = build_side_builder.finalize(build)?;
 
@@ -231,6 +233,10 @@ impl PipelineBuilder {
         &mut self,
         materialized_cte: &MaterializedCte,
     ) -> Result<()> {
+        self.cte_scan_offsets.insert(
+            materialized_cte.cte_idx,
+            materialized_cte.cte_scan_offset.clone(),
+        );
         self.expand_materialized_side_pipeline(
             &materialized_cte.right,
             materialized_cte.cte_idx,
@@ -255,6 +261,7 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         materialized_side_builder.cte_state = self.cte_state.clone();
+        materialized_side_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         materialized_side_builder.hash_join_states = self.hash_join_states.clone();
         let mut materialized_side_pipeline =
             materialized_side_builder.finalize(materialized_side)?;

@@ -65,6 +65,11 @@ impl PhysicalPlanBuilder {
             for (offset, col) in cte_output_columns.iter().enumerate() {
                 if col.index.eq(column_index) {
                     pruned_offsets.push(offset);
+                    self.cet_used_column_offsets
+                        .entry(cte_scan.cte_idx.0)
+                        .and_modify(|column_offsets| {
+                            column_offsets.insert(offset);
+                        });
                     break;
                 }
             }
