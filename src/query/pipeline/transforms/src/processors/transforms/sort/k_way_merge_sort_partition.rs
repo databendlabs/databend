@@ -41,7 +41,6 @@ where
     buffer: Vec<DataBlock>,
     rows: Vec<Option<R>>,
     pending_streams: VecDeque<usize>,
-    batch_rows: usize,
     limit: Option<usize>,
 
     total_rows: usize,
@@ -71,7 +70,7 @@ where
         let rows = vec![None; streams.len()];
         let pending_streams = (0..streams.len()).collect();
 
-        fn get_env<T>(key: &str, default: T) -> T {
+        fn get_env<T: std::str::FromStr + Copy>(key: &str, default: T) -> T {
             std::env::var(key).map_or(default, |s| s.parse::<T>().unwrap_or(default))
         }
 
@@ -96,7 +95,6 @@ where
             buffer,
             rows,
             pending_streams,
-            batch_rows,
             limit,
             total_rows: 0,
             cur_task: 1,

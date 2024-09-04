@@ -246,7 +246,7 @@ where T: List
         }
 
         self.do_search_max(None);
-        return Partition::new(self.max_target.unwrap());
+        Partition::new(self.max_target.unwrap())
     }
 
     fn do_search_max(&mut self, n: Option<usize>) -> EndDomain {
