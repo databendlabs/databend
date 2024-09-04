@@ -15,13 +15,18 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::CannotAccessShareTable;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
@@ -32,6 +37,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -41,6 +48,9 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_types::SeqValue;
+use log::error;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -137,6 +147,61 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_history(&self, table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        if let Some(ref share_name_ident_raw) = self.db_info.meta.from_share {
+            let share_ident = share_name_ident_raw.clone().to_tident(());
+            error!(
+                "get_table_history {:?} from share {:?}",
+                self.db_info.name_ident, share_ident,
+            );
+            return Err(ErrorCode::from(KVAppError::AppError(
+                AppError::CannotAccessShareTable(CannotAccessShareTable::new(
+                    &self.db_info.name_ident.tenant().tenant,
+                    share_ident.name(),
+                    table_name,
+                )),
+            )));
+        }
+
+        let metas = self
+            .ctx
+            .meta
+            .get_table_meta_history(
+                self.db_info.name_ident.database_name(),
+                &TableIdHistoryIdent {
+                    database_id: self.db_info.database_id.db_id,
+                    table_name: table_name.to_string(),
+                },
+            )
+            .await?;
+
+        let table_infos: Vec<Arc<TableInfo>> = metas
+            .into_iter()
+            .map(|(table_id, seqv)| {
+                Arc::new(TableInfo {
+                    ident: TableIdent {
+                        table_id: table_id.table_id,
+                        seq: seqv.seq(),
+                    },
+                    desc: format!(
+                        "'{}'.'{}'",
+                        self.db_info.name_ident.database_name(),
+                        table_name
+                    ),
+                    name: table_name.to_string(),
+                    meta: seqv.data,
+                    tenant: self.db_info.name_ident.tenant_name().to_string(),
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                })
+            })
+            .collect();
+
+        // disable refresh in history table
+        self.load_tables(table_infos)
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.list_table_infos().await?;
         self.load_tables(table_infos)
@@ -152,7 +217,7 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_table_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .get_tables_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?
             .into_iter()
             .filter(|i| i.meta.drop_on.is_some())

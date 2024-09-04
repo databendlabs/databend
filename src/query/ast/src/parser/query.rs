@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -22,14 +24,15 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use super::stage::file_location;
-use super::stage::select_stage_option;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
+use crate::parser::stage::file_location;
+use crate::parser::stage::select_stage_option;
 use crate::parser::statement::hint;
+use crate::parser::statement::set_table_option;
 use crate::parser::statement::top_n;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
@@ -595,6 +598,20 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     )(i)
 }
 
+pub fn with_options(i: Input) -> IResult<WithOptions> {
+    alt((
+        map(rule! { WITH ~ CONSUME }, |_| WithOptions {
+            options: BTreeMap::from([("consume".to_string(), "true".to_string())]),
+        }),
+        map(
+            rule! {
+                WITH ~ "(" ~ #set_table_option ~ ")"
+            },
+            |(_, _, options, _)| WithOptions { options },
+        ),
+    ))(i)
+}
+
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
     map(
         rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
@@ -682,7 +699,7 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        consume: bool,
+        with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -743,12 +760,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
             (catalog, database, table),
             temporal,
-            opt_consume,
+            with_options,
             alias,
             pivot,
             unpivot,
@@ -763,7 +780,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 table,
                 alias,
                 temporal,
-                consume: opt_consume.is_some(),
+                with_options,
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
                 sample: table_sample,
@@ -911,7 +928,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
-                consume,
+                with_options,
                 pivot,
                 unpivot,
                 sample,
@@ -922,7 +939,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
-                consume,
+                with_options,
                 pivot,
                 unpivot,
                 sample,

@@ -231,6 +231,18 @@ impl Catalog for FakedCatalog {
         self.cat.get_table(tenant, db_name, table_name).await
     }
 
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(Vec::from([self
+            .cat
+            .get_table(tenant, db_name, table_name)
+            .await?]))
+    }
+
     async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
@@ -810,6 +822,16 @@ impl TableContext for CtxDelegation {
         }
     }
 
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table(catalog, database, table).await
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
@@ -974,7 +996,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_session_id(&self) -> Result<String> {
+    fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
 

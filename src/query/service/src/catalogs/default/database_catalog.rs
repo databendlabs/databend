@@ -402,6 +402,31 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .get_table_history(tenant, db_name, table_name)
+            .await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    self.mutable_catalog
+                        .get_table_history(tenant, db_name, table_name)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
@@ -751,13 +776,23 @@ impl Catalog for DatabaseCatalog {
         })
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
-        self.mutable_catalog.get_stream_source_table(_stream_desc)
+    fn get_stream_source_table(
+        &self,
+        stream_desc: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
+        self.mutable_catalog
+            .get_stream_source_table(stream_desc, max_batch_size)
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        stream: TableInfo,
+        source: TableInfo,
+        max_batch_size: Option<u64>,
+    ) {
         self.mutable_catalog
-            .cache_stream_source_table(_stream, _source)
+            .cache_stream_source_table(stream, source, max_batch_size)
     }
 
     /// Dictionary

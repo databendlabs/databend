@@ -253,6 +253,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    // Get one table identified as dropped by db and table name.
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>>;
+
     /// List all tables in a database.This will not list temporary tables.
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
 
@@ -474,13 +482,22 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    fn get_stream_source_table(
+        &self,
+        _stream_desc: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
             "'get_stream_source_table' not implemented",
         ))
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        _stream: TableInfo,
+        _source: TableInfo,
+        _max_batch_size: Option<u64>,
+    ) {
         unimplemented!()
     }
 

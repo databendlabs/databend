@@ -29,6 +29,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -126,6 +127,11 @@ impl Interpreter for DropTableInterpreter {
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().database_id.db_id,
                 engine: tbl.engine().to_string(),
+                session_id: tbl
+                    .options()
+                    .get(OPT_KEY_TEMP_PREFIX)
+                    .cloned()
+                    .unwrap_or_default(),
             })
             .await?;
 

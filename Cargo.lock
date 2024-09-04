@@ -3729,9 +3729,11 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "databend-common-tracing",
  "fastrace",
  "log",
  "tempfile",
+ "test-harness",
 ]
 
 [[package]]
@@ -4628,6 +4630,8 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
  "fastrace",
+ "futures",
+ "log",
 ]
 
 [[package]]

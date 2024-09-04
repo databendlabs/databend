@@ -46,7 +46,8 @@ use super::sort::utils::u32_entry;
 use super::sort::KWaySortPartitioner;
 use super::sort::Merger;
 use super::sort::Rows;
-use super::sort::SimpleRows;
+use super::sort::SimpleRowsAsc;
+use super::sort::SimpleRowsDesc;
 use super::sort::SortedStream;
 use super::transform_multi_sort_merge::InputBlockStream;
 
@@ -67,73 +68,57 @@ pub fn add_k_way_merge_sort(
     match pipeline.output_len() {
         0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
         1 => Ok(()),
-        pipe_size => {
-            struct Args {
-                schema: DataSchemaRef,
-                stream_size: usize,
-                worker: usize,
-                sort_desc: Arc<Vec<SortColumnDescription>>,
-                block_size: usize,
-                limit: Option<usize>,
-                remove_order_col: bool,
-                enable_loser_tree: bool,
-            }
-
-            fn add<R>(args: Args, pipeline: &mut Pipeline) -> Result<()>
-            where R: Rows + Send + 'static {
-                if args.enable_loser_tree {
-                    let b = Builder::<LoserTreeSort<R>> {
-                        schema: args.schema,
-                        stream_size: args.stream_size,
-                        worker: args.worker,
-                        sort_desc: args.sort_desc,
-                        block_size: args.block_size,
-                        limit: args.limit,
-                        remove_order_col: args.remove_order_col,
+        stream_size => {
+            macro_rules! add {
+                ($algo: ty) => {{
+                    let b = Builder::<$algo> {
+                        schema,
+                        stream_size,
+                        worker,
+                        sort_desc,
+                        block_size,
+                        limit,
+                        remove_order_col,
                         _a: Default::default(),
                     };
                     b.build(pipeline)
-                } else {
-                    let b = Builder::<HeapSort<R>> {
-                        schema: args.schema,
-                        stream_size: args.stream_size,
-                        worker: args.worker,
-                        sort_desc: args.sort_desc,
-                        block_size: args.block_size,
-                        limit: args.limit,
-                        remove_order_col: args.remove_order_col,
-                        _a: Default::default(),
-                    };
-                    b.build(pipeline)
-                }
+                }};
             }
 
-            let args = Args {
-                schema,
-                stream_size: pipe_size,
-                worker,
-                sort_desc,
-                block_size,
-                limit,
-                remove_order_col,
-                enable_loser_tree,
-            };
-
-            if args.sort_desc.len() == 1 {
-                let sort_type = args.schema.field(args.sort_desc[0].offset).data_type();
+            if sort_desc.len() == 1 {
+                let sort_type = schema.field(sort_desc[0].offset).data_type();
+                let asc = sort_desc[0].asc;
                 match_template! {
                     T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
                     match sort_type {
-                        DataType::T => add::<SimpleRows<T>>(args, pipeline),
-                        DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                            NumberDataType::NUM_TYPE =>
-                                add::<SimpleRows<NumberType<NUM_TYPE>>>(args, pipeline),
-                        }),
-                        _ => add::<BinaryColumn>(args, pipeline),
+                        DataType::T => return match (enable_loser_tree, asc) {
+                            (true, true) => add!(LoserTreeSort<SimpleRowsAsc<T>>),
+                            (true, false) => add!(LoserTreeSort<SimpleRowsDesc<T>>),
+                            (false, true) => add!(HeapSort<SimpleRowsAsc<T>>),
+                            (false, false) => add!(HeapSort<SimpleRowsDesc<T>>),
+                        },
+                        DataType::Number(num_ty) => {
+                            return with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                                NumberDataType::NUM_TYPE => match (enable_loser_tree, asc) {
+                                    (true, true) =>
+                                        add!(LoserTreeSort<SimpleRowsAsc<NumberType<NUM_TYPE>>>),
+                                    (true, false) =>
+                                        add!(LoserTreeSort<SimpleRowsDesc<NumberType<NUM_TYPE>>>),
+                                    (false, true) =>
+                                        add!(HeapSort<SimpleRowsAsc<NumberType<NUM_TYPE>>>),
+                                    (false, false) =>
+                                        add!(HeapSort<SimpleRowsDesc<NumberType<NUM_TYPE>>>),
+                                },
+                            })
+                        }
+                        _ => (),
                     }
                 }
+            };
+            if enable_loser_tree {
+                add!(LoserTreeSort<BinaryColumn>)
             } else {
-                add::<BinaryColumn>(args, pipeline)
+                add!(HeapSort<BinaryColumn>)
             }
         }
     }

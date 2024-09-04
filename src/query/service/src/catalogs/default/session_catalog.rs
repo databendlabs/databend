@@ -369,6 +369,18 @@ impl Catalog for SessionCatalog {
         self.temp_tbl_mgr.lock().list_tables()
     }
 
+    // Get one table identified as dropped by db and table name.
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        self.inner
+            .get_table_history(tenant, db_name, table_name)
+            .await
+    }
+
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
@@ -608,13 +620,25 @@ impl Catalog for SessionCatalog {
     }
 
     // Get stream source table from buffer by stream desc.
-    fn get_stream_source_table(&self, stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    fn get_stream_source_table(
+        &self,
+        stream_desc: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
         let is_active = self.txn_mgr.lock().is_active();
         if is_active {
             self.txn_mgr
                 .lock()
-                .get_stream_table_source(stream_desc)
-                .map(|table_info| self.get_table_by_info(&table_info))
+                .get_stream_table(stream_desc)
+                .map(|stream| {
+                    if stream.max_batch_size != max_batch_size {
+                        Err(ErrorCode::StorageUnsupported(
+                            "Within the same transaction, the batch size for a stream must remain consistent",
+                        ))
+                    } else {
+                        self.get_table_by_info(&stream.source)
+                    }
+                    })
                 .transpose()
         } else {
             Ok(None)
@@ -622,10 +646,17 @@ impl Catalog for SessionCatalog {
     }
 
     // Cache stream source table to buffer.
-    fn cache_stream_source_table(&self, stream: TableInfo, source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        stream: TableInfo,
+        source: TableInfo,
+        max_batch_size: Option<u64>,
+    ) {
         let is_active = self.txn_mgr.lock().is_active();
         if is_active {
-            self.txn_mgr.lock().upsert_stream_table(stream, source);
+            self.txn_mgr
+                .lock()
+                .upsert_stream_table(stream, source, max_batch_size);
         }
     }
 

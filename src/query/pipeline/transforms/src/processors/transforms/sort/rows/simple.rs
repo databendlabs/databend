@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
+use std::cmp::Reverse;
 use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -33,83 +30,28 @@ use databend_common_expression::Value;
 use super::RowConverter;
 use super::Rows;
 
-pub type DateRows = SimpleRows<DateType>;
-pub type TimestampRows = SimpleRows<TimestampType>;
-pub type StringRows = SimpleRows<StringType>;
-
-/// Row structure for single simple types. (numbers, date, timestamp)
-#[derive(Clone, Copy, Debug)]
-pub struct SimpleRow<T: ValueType> {
-    inner: T::Scalar,
-    desc: bool,
-}
-
 /// Rows structure for single simple types. (numbers, date, timestamp)
 #[derive(Clone, Debug)]
-pub struct SimpleRows<T: ValueType> {
+pub struct SimpleRowsAsc<T: ValueType> {
     inner: T::Column,
-    desc: bool,
 }
 
-impl<T> Ord for SimpleRow<T>
-where
-    T: ValueType,
-    T::Scalar: Ord,
-{
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.desc {
-            self.inner.cmp(&other.inner).reverse()
-        } else {
-            self.inner.cmp(&other.inner)
-        }
-    }
-}
-
-impl<T> PartialOrd for SimpleRow<T>
-where
-    T: ValueType,
-    T::Scalar: Ord,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T> PartialEq for SimpleRow<T>
-where
-    T: ValueType,
-    T::Scalar: Ord,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner && self.desc == other.desc
-    }
-}
-
-impl<T> Eq for SimpleRow<T>
-where
-    T: ValueType,
-    T::Scalar: Ord,
-{
-}
-
-impl<T> Rows for SimpleRows<T>
+impl<T> Rows for SimpleRowsAsc<T>
 where
     T: ArgType,
-    T::Scalar: Ord,
+    for<'a> T::ScalarRef<'a>: Ord,
 {
-    type Item<'a> = SimpleRow<T>;
+    type Item<'a> = T::ScalarRef<'a>
+    where Self: 'a;
+
     type Type = T;
 
     fn len(&self) -> usize {
         T::column_len(&self.inner)
     }
 
-    fn row(&self, index: usize) -> Self::Item<'_> {
-        let inner = unsafe { T::index_column_unchecked(&self.inner, index) };
-        SimpleRow {
-            inner: T::to_owned_scalar(inner),
-            desc: self.desc,
-        }
+    fn row(&self, index: usize) -> T::ScalarRef<'_> {
+        unsafe { T::index_column_unchecked(&self.inner, index) }
     }
 
     fn to_column(&self) -> Column {
@@ -118,49 +60,118 @@ where
 
     fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
         let inner = T::try_downcast_column(col)?;
-        Some(Self {
-            inner,
-            desc: !desc[0].asc,
-        })
+
+        if desc[0].asc {
+            Some(Self { inner })
+        } else {
+            None
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
         Self {
             inner: T::slice_column(&self.inner, range),
-            desc: self.desc,
         }
     }
 }
 
-pub type DateConverter = SimpleRowConverter<DateType>;
-pub type TimestampConverter = SimpleRowConverter<TimestampType>;
-pub type StringConverter = SimpleRowConverter<StringType>;
+/// Rows structure for single simple types. (numbers, date, timestamp)
+#[derive(Clone, Debug)]
+pub struct SimpleRowsDesc<T: ValueType> {
+    inner: T::Column,
+}
+
+impl<T> Rows for SimpleRowsDesc<T>
+where
+    T: ArgType,
+    for<'a> T::ScalarRef<'a>: Ord,
+{
+    type Item<'a> = Reverse<T::ScalarRef<'a>>
+    where Self: 'a;
+
+    type Type = T;
+
+    fn len(&self) -> usize {
+        T::column_len(&self.inner)
+    }
+
+    fn row(&self, index: usize) -> Reverse<T::ScalarRef<'_>> {
+        let value = unsafe { T::index_column_unchecked(&self.inner, index) };
+        Reverse(value)
+    }
+
+    fn to_column(&self) -> Column {
+        T::upcast_column(self.inner.clone())
+    }
+
+    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self> {
+        let inner = T::try_downcast_column(col)?;
+
+        if !desc[0].asc {
+            Some(Self { inner })
+        } else {
+            None
+        }
+    }
+
+    fn slice(&self, range: Range<usize>) -> Self {
+        Self {
+            inner: T::slice_column(&self.inner, range),
+        }
+    }
+}
 
 /// If there is only one sort field and its type is a primitive type,
 /// use this converter.
 pub struct SimpleRowConverter<T> {
-    desc: bool,
     _t: PhantomData<T>,
 }
 
-impl<T> RowConverter<SimpleRows<T>> for SimpleRowConverter<T>
+impl<T> RowConverter<SimpleRowsAsc<T>> for SimpleRowConverter<T>
 where
     T: ArgType,
-    T::Scalar: Ord,
+    for<'a> T::ScalarRef<'a>: Ord,
 {
     fn create(
         sort_columns_descriptions: &[SortColumnDescription],
         _: DataSchemaRef,
     ) -> Result<Self> {
         assert!(sort_columns_descriptions.len() == 1);
-
-        Ok(Self {
-            desc: !sort_columns_descriptions[0].asc,
-            _t: PhantomData,
-        })
+        assert!(sort_columns_descriptions[0].asc);
+        Ok(Self { _t: PhantomData })
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRows<T>> {
+    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsAsc<T>> {
+        self.convert_rows(columns, num_rows, true)
+    }
+}
+
+impl<T> RowConverter<SimpleRowsDesc<T>> for SimpleRowConverter<T>
+where
+    T: ArgType,
+    for<'a> T::ScalarRef<'a>: Ord,
+{
+    fn create(
+        sort_columns_descriptions: &[SortColumnDescription],
+        _: DataSchemaRef,
+    ) -> Result<Self> {
+        assert!(sort_columns_descriptions.len() == 1);
+        assert!(!sort_columns_descriptions[0].asc);
+        Ok(Self { _t: PhantomData })
+    }
+
+    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsDesc<T>> {
+        self.convert_rows(columns, num_rows, false)
+    }
+}
+
+impl<T: ArgType> SimpleRowConverter<T> {
+    fn convert_rows<R: Rows>(
+        &mut self,
+        columns: &[BlockEntry],
+        num_rows: usize,
+        asc: bool,
+    ) -> Result<R> {
         assert!(columns.len() == 1);
         let col = &columns[0];
         if col.data_type != T::data_type() {
@@ -179,10 +190,13 @@ where
             Value::Column(c) => c.clone(),
         };
 
-        let rows = SimpleRows {
-            inner: T::try_downcast_column(&col).unwrap(),
-            desc: self.desc,
-        };
-        Ok(rows)
+        let desc = [SortColumnDescription {
+            offset: 0,
+            asc,
+            nulls_first: false,
+            is_nullable: false,
+        }];
+
+        R::from_column(&col, &desc)
     }
 }

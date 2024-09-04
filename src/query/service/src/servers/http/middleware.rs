@@ -304,6 +304,9 @@ impl<E> HTTPSessionEndpoint<E> {
         }
 
         let client_session_id = self.auth_manager.auth(&mut session, &credential).await?;
+        if let Some(id) = client_session_id.clone() {
+            session.set_client_session_id(id)
+        }
         let databend_token = match credential {
             Credential::DatabendToken { token, .. } => Some(token),
             _ => None,

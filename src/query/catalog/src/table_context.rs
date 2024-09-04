@@ -263,6 +263,14 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
 
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>>;
+
     async fn filter_out_copied_files(
         &self,
         catalog_name: &str,
@@ -363,7 +371,7 @@ pub trait TableContext: Send + Sync {
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
 
-    fn get_session_id(&self) -> Result<String>;
+    fn get_temp_table_prefix(&self) -> Result<String>;
 
     fn session_state(&self) -> SessionState;
 

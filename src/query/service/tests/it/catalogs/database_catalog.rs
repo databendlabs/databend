@@ -192,6 +192,7 @@ async fn test_catalogs_table() -> Result<()> {
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().database_id.db_id,
                 engine: tbl.engine().to_string(),
+                session_id: "".to_string(),
             })
             .await;
         assert!(res.is_ok());

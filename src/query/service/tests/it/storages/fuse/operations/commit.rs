@@ -706,6 +706,16 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_table_with_batch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
@@ -871,7 +881,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_session_id(&self) -> Result<String> {
+    fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
 
@@ -964,6 +974,15 @@ impl Catalog for FakedCatalog {
         _db_name: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn get_table_history(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 

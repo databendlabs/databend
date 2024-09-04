@@ -272,6 +272,16 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(vec![self.get_table(tenant, db_name, table_name).await?])
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         self.sys_db_meta.get_all_tables(db_name)
     }
