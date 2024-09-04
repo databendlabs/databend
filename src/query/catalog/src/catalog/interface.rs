@@ -482,13 +482,22 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    fn get_stream_source_table(
+        &self,
+        _stream_desc: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
             "'get_stream_source_table' not implemented",
         ))
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        _stream: TableInfo,
+        _source: TableInfo,
+        _max_batch_size: Option<u64>,
+    ) {
         unimplemented!()
     }
 

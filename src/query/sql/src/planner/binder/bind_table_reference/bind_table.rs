@@ -17,10 +17,14 @@ use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
+use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_with_options::check_with_opt_valid;
+use databend_common_catalog::table_with_options::get_with_opt_consume;
+use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
@@ -45,7 +49,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
-        consume: bool,
+        with_options: &Option<WithOptions>,
         sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
         let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
@@ -55,6 +59,16 @@ impl Binder {
             table_identifier.table_name(),
             table_identifier.table_name_alias(),
         );
+
+        let (consume, max_batch_size, with_opts_str) = if let Some(with_options) = with_options {
+            check_with_opt_valid(with_options)?;
+            let consume = get_with_opt_consume(with_options)?;
+            let max_batch_size = get_with_opt_max_batch_size(with_options)?;
+            let with_opts_str = format!(" {with_options}");
+            (consume, max_batch_size, with_opts_str)
+        } else {
+            (false, None, String::new())
+        };
 
         // Check and bind common table expression
         let ctes_map = self.ctes_map.clone();
@@ -99,11 +113,11 @@ impl Binder {
             )?
         } else {
             match self.resolve_data_source(
-                tenant.tenant_name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
+                max_batch_size,
                 self.ctx.clone().get_abort_checker(),
             ) {
                 Ok(table) => table,
@@ -169,7 +183,7 @@ impl Binder {
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
-                    consume,
+                    &with_opts_str,
                 ))?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));

@@ -478,7 +478,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             alias: None,
             // TODO
             temporal: None,
-            consume: false,
+            with_options: None,
             // TODO
             pivot: None,
             // TODO
