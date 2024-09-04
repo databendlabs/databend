@@ -93,7 +93,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -3906,7 +3906,7 @@ impl<'a> TypeChecker<'a> {
             catalog.get_database(&tenant, db_name.as_str()),
         )?;
         let db_id = db.get_db_info().database_id.db_id;
-        let req = TenantDictionaryIdent::new(
+        let req = DictionaryNameIdent::new(
             tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name.clone()),
         );

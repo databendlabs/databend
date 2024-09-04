@@ -20,7 +20,7 @@ use tokio::net::TcpStream;
 #[tokio::main]
 async fn main() {
     // Bind the listener to the address
-    let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:6379").await.unwrap();
 
     loop {
         // The second item contains the ip and port of the new connection.
@@ -43,6 +43,20 @@ async fn process(socket: TcpStream) {
 
     // A hashmap is used to store data
     let mut db = HashMap::new();
+
+    let u8s = "100".to_string().as_bytes();
+    let res = Vec::new();
+    for u in u8s {
+        res.append(*u);
+    }
+    db.insert("a".to_string(), res);
+
+    let u8s1 = "200".to_string().as_bytes();
+    let res1 = Vec::new();
+    for u in u8s1 {
+        res1.append(*u);
+    }
+    db.insert("b".to_string(), res1);
 
     // Connection, provided by `mini-redis`, handles parsing frames from
     // the socket
