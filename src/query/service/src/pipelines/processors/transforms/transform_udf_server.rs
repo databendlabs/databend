@@ -181,7 +181,7 @@ impl AsyncTransform for TransformUdfServer {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        for func in self.funcs.iter().cloned() {
+        for func in self.funcs.iter() {
             let rows = data_block.num_rows();
             let batch_rows = self.request_bacth_rows as usize;
             let tasks: Vec<_> = (0..rows)
