@@ -60,17 +60,19 @@ pub async fn filter_selectivity_sample(
 
         // Calculate sample size (0.2% of total data)
         let sample_size = (num_rows as f64 * 0.002).ceil();
-
-        scan.sample = Some(Sample {
-            sample_level: SampleLevel::ROW,
-            sample_conf: SampleConfig::RowsNum(sample_size),
-        });
-
-        let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
-        let mut new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
-        let collect_statistics_optimizer =
-            CollectStatisticsOptimizer::new(ctx.clone(), metadata.clone());
-        new_s_expr = collect_statistics_optimizer.run(&new_s_expr).await?;
+        let mut new_s_expr = s_expr.clone();
+        // If the table is too small, we don't need to sample.
+        if sample_size >= 10.0 {
+            scan.sample = Some(Sample {
+                sample_level: SampleLevel::ROW,
+                sample_conf: SampleConfig::RowsNum(sample_size),
+            });
+            let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+            new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
+            let collect_statistics_optimizer =
+                CollectStatisticsOptimizer::new(ctx.clone(), metadata.clone());
+            new_s_expr = collect_statistics_optimizer.run(&new_s_expr).await?;
+        }
 
         new_s_expr = SExpr::create_unary(
             Arc::new(create_count_aggregate(AggregateMode::Partial).into()),
@@ -91,12 +93,12 @@ pub async fn filter_selectivity_sample(
             if let Some(count) = block.get_last_column().as_number() {
                 if let Some(number_scalar) = count.index(0) {
                     // Compute and return selectivity
-                    let selectivity = number_scalar.to_f64().to_f64().unwrap() / sample_size as f64;
+                    let selectivity = number_scalar.to_f64().to_f64().unwrap() / sample_size;
                     let mut statistics = child_rel_expr.derive_cardinality()?.statistics.clone();
                     let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                     sb.update_other_statistic_by_selectivity(selectivity);
                     let stat_info = Arc::new(StatInfo {
-                        cardinality: selectivity * num_rows as f64,
+                        cardinality: (selectivity * num_rows as f64).ceil(),
                         statistics,
                     });
                     *s_expr.stat_info.lock().unwrap() = Some(stat_info.clone());

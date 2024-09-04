@@ -73,8 +73,8 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-url = "2.3.1"
 tokio = "1.39.2"
+url = "2.3.1"
 
 [lints]
 workspace = true

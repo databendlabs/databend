@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(clippy::module_inception)]
 mod dynamic_sample;
 mod filter_selectivity_sample;
 mod join_selectivity_sample;

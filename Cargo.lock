@@ -3345,7 +3345,6 @@ dependencies = [
  "serde_json",
  "tantivy",
  "thiserror",
- "tokio",
  "tonic",
 ]
 

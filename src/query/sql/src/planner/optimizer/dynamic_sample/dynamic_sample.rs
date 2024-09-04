@@ -17,7 +17,6 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::filter_selectivity_sample::filter_selectivity_sample;
@@ -80,9 +79,10 @@ pub async fn dynamic_sample(
             join_selectivity_sample(ctx, metadata, s_expr, sample_executor).await
         }
         RelOperator::Scan(_) => s_expr.plan().derive_stats(&RelExpr::with_s_expr(s_expr)),
-        _ => Err(ErrorCode::Unimplemented(format!(
-            "derive_cardinality_by_sample for {:?} is not supported yet",
-            s_expr.plan()
-        ))),
+        // Todo: add more operators here, and support more query patterns.
+        _ => {
+            let rel_expr = RelExpr::with_s_expr(s_expr);
+            rel_expr.derive_cardinality()
+        }
     }
 }

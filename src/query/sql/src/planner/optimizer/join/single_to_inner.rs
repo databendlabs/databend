@@ -46,7 +46,7 @@ impl SingleToInnerOptimizer {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
             let new_child = Self::single_to_inner(child)?;
-            if !new_child.eq(&child) {
+            if !new_child.eq(child) {
                 children_changed = true;
             }
             children.push(Arc::new(new_child));
