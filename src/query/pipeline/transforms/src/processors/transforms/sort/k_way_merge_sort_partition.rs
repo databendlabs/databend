@@ -22,7 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
-use super::list_domain::calc_partition;
+use super::list_domain::Candidate;
 use super::list_domain::EndDomain;
 use super::list_domain::List;
 use super::list_domain::Partition;
@@ -46,6 +46,11 @@ where
 
     total_rows: usize,
     cur_task: u32,
+
+    min_task: usize,
+    max_task: usize,
+    max_iter: usize,
+    search_per_iter: usize,
 }
 
 impl<R, S> KWaySortPartitioner<R, S>
@@ -60,12 +65,29 @@ where
         batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
-        // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let rows = vec![None; streams.len()];
         let pending_streams = (0..streams.len()).collect();
+
+        fn get_env<T>(key: &str, default: T) -> T {
+            std::env::var(key).map_or(default, |s| s.parse::<T>().unwrap_or(default))
+        }
+
+        let min_task =
+            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MIN_TASK_FACTOR", 1.0)) as usize;
+        assert!(min_task > 0);
+
+        let max_task =
+            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MIN_TASK_FACTOR", 2.0)) as usize;
+        assert!(max_task > 0);
+
+        let max_iter = get_env("K_WAY_MERGE_SORT_MAX_ITER", 20);
+        assert!(max_iter > 0);
+
+        let search_per_iter = get_env("K_WAY_MERGE_SORT_SEARCH_PER_ITER", 3);
+        assert!(search_per_iter > 0);
 
         Self {
             schema,
@@ -78,6 +100,11 @@ where
             limit,
             total_rows: 0,
             cur_task: 1,
+
+            min_task,
+            max_task,
+            max_iter,
+            search_per_iter,
         }
     }
 
@@ -124,16 +151,17 @@ where
     }
 
     fn calc_partition_point(&self) -> Partition {
+        let mut candidate = Candidate::new(&self.rows, EndDomain {
+            min: self.min_task,
+            max: self.max_task,
+        });
+        candidate.init();
+
+        // if candidate.is_small_task() {
         // todo: Consider loading multiple blocks at the same time so that we can avoid cutting out too small a task
-        calc_partition(
-            &self.rows,
-            EndDomain {
-                min: self.batch_rows,
-                max: self.batch_rows * 2,
-            },
-            20, // todo: what parameters are appropriate?
-        )
-        .unwrap()
+        // }
+
+        candidate.calc_partition(self.search_per_iter, self.max_iter)
     }
 
     fn build_task(&mut self) -> Vec<DataBlock> {
