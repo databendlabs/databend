@@ -35,7 +35,7 @@ impl Binder {
                 temporal,
                 pivot: _,
                 unpivot: _,
-                consume,
+                with_options,
                 sample,
             } => self.bind_table(
                 bind_context,
@@ -45,7 +45,7 @@ impl Binder {
                 table,
                 alias,
                 temporal,
-                *consume,
+                with_options,
                 sample,
             ),
             TableReference::TableFunction {

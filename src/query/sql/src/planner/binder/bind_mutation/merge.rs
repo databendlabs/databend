@@ -56,7 +56,7 @@ impl Binder {
             table: stmt.table_ident.clone(),
             alias: stmt.target_alias.clone(),
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,

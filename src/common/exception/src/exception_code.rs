@@ -357,6 +357,7 @@ build_exceptions! {
     StreamAlreadyExists(2732),
     IllegalStream(2733),
     StreamVersionMismatched(2734),
+    WithOptionInvalid(2735),
 
     // dynamic error codes.
     IllegalDynamicTable(2740),
