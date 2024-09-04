@@ -222,7 +222,6 @@ select a from s with (consume, max_batch_size_hint = 2) order by a;
 3
 4
 
-
 #####################################
 # consume stream with hint in txn   #
 #####################################
@@ -272,9 +271,6 @@ select a from s order by a;
 ----
 3
 4
-
-
-
 
 
 
