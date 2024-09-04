@@ -17,6 +17,7 @@ use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
+use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
@@ -45,8 +46,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
-        consume: bool,
-        max_batch_size: Option<u64>,
+        with_options: &Option<WithOptions>,
         sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
         let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
@@ -56,6 +56,12 @@ impl Binder {
             table_identifier.table_name(),
             table_identifier.table_name_alias(),
         );
+
+        let (consume, max_batch_size, with_opts_str) = with_options
+            .as_ref()
+            .map_or((false, None, String::new()), |opts| {
+                (opts.consume, opts.max_batch_size, format!(" {opts}"))
+            });
 
         // Check and bind common table expression
         let ctes_map = self.ctes_map.clone();
@@ -170,8 +176,7 @@ impl Binder {
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
-                    consume,
-                    max_batch_size,
+                    &with_opts_str,
                 ))?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));

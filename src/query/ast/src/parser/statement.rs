@@ -2670,12 +2670,12 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     });
 
     let source_table = map(
-        rule!(#dot_separated_idents_1_to_3 ~ #max_batch_size? ~ #table_alias?),
-        |((catalog, database, table), max_batch_size, alias)| MergeSource::Table {
+        rule!(#dot_separated_idents_1_to_3 ~ #with_options? ~ #table_alias?),
+        |((catalog, database, table), with_options, alias)| MergeSource::Table {
             catalog,
             database,
             table,
-            max_batch_size,
+            with_options: with_options.map(WithOptions::from),
             alias,
         },
     );
@@ -4159,8 +4159,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             temporal: None,
-            consume: false,
-            max_batch_size: None,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -4180,8 +4179,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             temporal: None,
-            consume: false,
-            max_batch_size: None,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,

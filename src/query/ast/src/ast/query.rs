@@ -565,6 +565,50 @@ impl Display for Unpivot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum WithOption {
+    Consume,
+    MaxBatchSize(u64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+pub struct WithOptions {
+    /// whether consume the table
+    pub consume: bool,
+    pub max_batch_size: Option<u64>,
+}
+
+impl Display for WithOptions {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut options = vec![];
+        if self.consume {
+            options.push("CONSUME".to_string());
+        }
+        if let Some(size) = self.max_batch_size {
+            options.push(format!("MAX_BATCH_SIZE_HINT = {}", size));
+        }
+
+        if !options.is_empty() {
+            write!(f, "WITH ({})", options.join(", "))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl WithOptions {
+    pub fn from(opts: Vec<WithOption>) -> Self {
+        let mut options: WithOptions = Default::default();
+        for opt in opts.into_iter() {
+            match opt {
+                WithOption::Consume => options.consume = true,
+                WithOption::MaxBatchSize(size) => options.max_batch_size = Some(size),
+            }
+        }
+        options
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
     pub append_only: bool,
@@ -674,9 +718,7 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        /// whether consume the table
-        consume: bool,
-        max_batch_size: Option<u64>,
+        with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -752,8 +794,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
-                consume,
-                max_batch_size,
+                with_options,
                 pivot,
                 unpivot,
                 sample,
@@ -767,12 +808,8 @@ impl Display for TableReference {
                     write!(f, " {temporal}")?;
                 }
 
-                if *consume {
-                    write!(f, " WITH CONSUME")?;
-                }
-
-                if let Some(max_batch_size) = max_batch_size {
-                    write!(f, " MAX_BATCH_SIZE_HINT {max_batch_size}")?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
                 }
 
                 if let Some(alias) = alias {

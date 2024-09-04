@@ -332,10 +332,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
-        max_batch_size: Option<u64>,
+        with_options: &str,
     ) -> Result<String> {
-        let (_, _, _, _, _) = (ctx, database_name, table_name, consume, max_batch_size);
+        let (_, _, _, _) = (ctx, database_name, table_name, with_options);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",

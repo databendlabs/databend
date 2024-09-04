@@ -428,21 +428,11 @@ impl Table for StreamTable {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
-        max_batch_size: Option<u64>,
+        with_options: &str,
     ) -> Result<String> {
         let table = self.source_table(ctx).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let max_batch_size = if let Some(size) = max_batch_size {
-            format!(" max_batch_size_hint {}", size)
-        } else {
-            "".to_string()
-        };
-        let table_desc = if consume {
-            format!("{database_name}.{table_name} with consume{max_batch_size}")
-        } else {
-            format!("{database_name}.{table_name}{max_batch_size}")
-        };
+        let table_desc = format!("{database_name}.{table_name}{with_options}");
         fuse_table
             .get_changes_query(
                 &self.mode(),

@@ -43,7 +43,7 @@ select a from s order by a;
 # with hint expect only 1 row  #
 ################################
 query I
-select a from s max_batch_size_hint 1;
+select a from s with (max_batch_size_hint = 1);
 ----
 1
 
@@ -55,7 +55,7 @@ CREATE TABLE t2(a int);
 # consuming stream with hint   #
 ################################
 statement ok
-insert into t2 select a from s max_batch_size_hint 1;
+insert into t2 select a from s with (max_batch_size_hint = 1);
 
 # expect only 1 row inserted into t2
 query I
@@ -74,10 +74,10 @@ select a from s order by a;
 ################################################
 
 statement error 3902
-select s.a from s max_batch_size_hint 1 join s as s1 on s.a=s1.a;
+select s.a from s with (max_batch_size_hint = 1) join s as s1 on s.a=s1.a;
 
 statement error 3902
-select a from t1 max_batch_size_hint 1;
+select a from t1 with (max_batch_size_hint = 1);
 
 
 #################################################################
@@ -104,7 +104,7 @@ statement ok
 BEGIN;
 
 statement ok
-insert into t2 select a from s max_batch_size_hint 1;
+insert into t2 select a from s with (max_batch_size_hint = 1);
 
 # inside txn, consuming stream s again,
 # with inconsistent max_batch_size_hint is not allowed
@@ -138,7 +138,7 @@ statement ok
 remove @test_stage_stream_06;
 
 statement ok
-copy into @test_stage_stream_06/case1 from s max_batch_size_hint 1;
+copy into @test_stage_stream_06/case1 from s with (max_batch_size_hint = 1);
 
 # there should be only 1 row copied into stage
 query  T
@@ -168,7 +168,7 @@ select a from s order by a;
 
 # expect only one row {3} inserted (and consumed)
 query II
-merge into t2 using s max_batch_size_hint 1 on t2.a=s.a when matched then delete when not matched then insert(a) values(s.a);
+merge into t2 using s with (max_batch_size_hint = 1) on t2.a=s.a when matched then delete when not matched then insert(a) values(s.a);
 ----
 1 0
 
@@ -180,7 +180,7 @@ select a from t2 order by a;
 
 # expect one row left in stream
 query I
-select a from s with consume max_batch_size_hint 1;
+select a from s with (consume, max_batch_size_hint = 1);
 ----
 4
 
@@ -210,14 +210,14 @@ insert into t values(4);
 
 # expect size of the result set is larger than hint (1)
 query T
-select a from s with consume max_batch_size_hint 1 order by a;
+select a from s with (consume, max_batch_size_hint = 1) order by a;
 ----
 1
 2
 
 # expect 2 rows
 query T
-select a from s with consume max_batch_size_hint 2 order by a;
+select a from s with (consume, max_batch_size_hint = 2) order by a;
 ----
 3
 4
@@ -249,10 +249,10 @@ statement ok
 begin;
 
 statement ok
-insert into t1 select a from s max_batch_size_hint 1;
+insert into t1 select a from s with (max_batch_size_hint = 1);
 
 statement ok
-insert into t1 select a from s max_batch_size_hint 1;
+insert into t1 select a from s with (max_batch_size_hint = 1);
 
 statement ok
 commit;

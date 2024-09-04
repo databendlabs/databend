@@ -42,13 +42,12 @@ impl<'a> Binder {
                         &table.database,
                         &table.table,
                     );
-                let batch_limit_str = if let Some(batch_limit) = table.max_batch_size {
-                    format!(" MAX_BATCH_SIZE_HINT {batch_limit}")
-                } else {
-                    "".to_string()
-                };
+                let with_options_str = table
+                    .with_options
+                    .as_ref()
+                    .map_or(String::new(), |with_options| format!(" {with_options}"));
                 let subquery = format!(
-                    "SELECT * FROM \"{catalog_name}\".\"{database_name}\".\"{table_name}\"{batch_limit_str}"
+                    "SELECT * FROM \"{catalog_name}\".\"{database_name}\".\"{table_name}\"{with_options_str}"
                 );
                 let tokens = tokenize_sql(&subquery)?;
                 let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;

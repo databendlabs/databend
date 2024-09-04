@@ -177,12 +177,11 @@ impl TableRefVisitor {
             database,
             table,
             temporal,
-            consume,
-            max_batch_size,
+            with_options,
             ..
         } = table_ref
         {
-            if temporal.is_some() || *consume || max_batch_size.is_some() {
+            if temporal.is_some() || with_options.is_some() {
                 self.cache_miss = true;
                 return;
             }

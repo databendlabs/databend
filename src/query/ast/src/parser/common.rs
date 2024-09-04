@@ -30,9 +30,10 @@ use crate::ast::Identifier;
 use crate::ast::IdentifierType;
 use crate::ast::SetType;
 use crate::ast::TableRef;
+use crate::ast::WithOptions;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
-use crate::parser::query::max_batch_size;
+use crate::parser::query::with_options;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
@@ -231,13 +232,13 @@ pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
 pub fn table_ref(i: Input) -> IResult<TableRef> {
     map(
         rule! {
-           #dot_separated_idents_1_to_3 ~ #max_batch_size?
+           #dot_separated_idents_1_to_3 ~ #with_options?
         },
-        |((catalog, database, table), max_batch_size)| TableRef {
+        |((catalog, database, table), with_options)| TableRef {
             catalog,
             database,
             table,
-            max_batch_size,
+            with_options: with_options.map(WithOptions::from),
         },
     )(i)
 }

@@ -595,11 +595,27 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     )(i)
 }
 
-pub fn max_batch_size(i: Input) -> IResult<u64> {
-    map(
-        rule! { MAX_BATCH_SIZE_HINT ~ ^#literal_u64 },
-        |(_, size)| size,
-    )(i)
+pub fn with_options(i: Input) -> IResult<Vec<WithOption>> {
+    let with_option = alt((
+        map(rule! { CONSUME }, |_| WithOption::Consume),
+        map(
+            rule! { MAX_BATCH_SIZE_HINT ~ "=" ~ #literal_u64 },
+            |(_, _, size)| WithOption::MaxBatchSize(size),
+        ),
+    ));
+
+    alt((
+        map(rule! { WITH ~ CONSUME }, |_| vec![WithOption::Consume]),
+        map(
+            rule! { WITH ~ "(" ~ (#with_option ~ ","?)* ~ ")" },
+            |(_, _, options, _)| {
+                options
+                    .into_iter()
+                    .map(|(option, _)| option)
+                    .collect::<Vec<_>>()
+            },
+        ),
+    ))(i)
 }
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
@@ -689,8 +705,7 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        consume: bool,
-        max_batch_size: Option<u64>,
+        with_options: Option<Vec<WithOption>>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -751,13 +766,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #max_batch_size? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
             (catalog, database, table),
             temporal,
-            opt_consume,
-            max_batch_size,
+            with_options,
             alias,
             pivot,
             unpivot,
@@ -772,8 +786,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 table,
                 alias,
                 temporal,
-                consume: opt_consume.is_some(),
-                max_batch_size,
+                with_options,
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
                 sample: table_sample,
@@ -921,8 +934,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
-                consume,
-                max_batch_size,
+                with_options,
                 pivot,
                 unpivot,
                 sample,
@@ -933,8 +945,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 temporal,
-                consume,
-                max_batch_size,
+                with_options: with_options.map(WithOptions::from),
                 pivot,
                 unpivot,
                 sample,
