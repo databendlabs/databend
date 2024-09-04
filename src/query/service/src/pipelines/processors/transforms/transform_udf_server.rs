@@ -65,6 +65,97 @@ impl TransformUdfServer {
         };
         Ok(AsyncRetryWrapper::create(s))
     }
+
+    // data_block is spilt into multiple blocks, each block is processed by transform_inner
+    async fn transform_inner(
+        ctx: Arc<QueryContext>,
+        connect_timeout: u64,
+        request_timeout: u64,
+        func: UdfFunctionDesc,
+        mut data_block: DataBlock,
+    ) -> Result<DataBlock> {
+        let server_addr = func.udf_type.as_server().unwrap();
+        // construct input record_batch
+        let num_rows = data_block.num_rows();
+        let block_entries = func
+            .arg_indices
+            .iter()
+            .map(|i| {
+                let arg = data_block.get_by_offset(*i).clone();
+                if contains_variant(&arg.data_type) {
+                    let new_arg = BlockEntry::new(
+                        arg.data_type.clone(),
+                        transform_variant(&arg.value, true)?,
+                    );
+                    Ok(new_arg)
+                } else {
+                    Ok(arg)
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let fields = block_entries
+            .iter()
+            .enumerate()
+            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone()))
+            .collect::<Vec<_>>();
+        let data_schema = DataSchema::new(fields);
+
+        let input_batch = DataBlock::new(block_entries, num_rows)
+            .to_record_batch_with_dataschema(&data_schema)
+            .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+
+        let mut client =
+            UDFFlightClient::connect(server_addr, connect_timeout, request_timeout, 65536)
+                .await?
+                .with_tenant(ctx.get_tenant().tenant_name())?
+                .with_func_name(&func.func_name)?
+                .with_query_id(&ctx.get_id())?;
+
+        let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
+        let schema = DataSchema::try_from(&(*result_batch.schema()))?;
+        let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
+            .map_err(|err| {
+                ErrorCode::UDFDataError(format!(
+                    "Cannot convert arrow record batch to data block: {err}"
+                ))
+            })?;
+
+        let result_fields = result_schema.fields();
+        if result_fields.is_empty() || result_block.is_empty() {
+            return Err(ErrorCode::EmptyDataFromServer(
+                "Get empty data from UDF Server",
+            ));
+        }
+
+        if result_fields[0].data_type() != &*func.data_type {
+            return Err(ErrorCode::UDFSchemaMismatch(format!(
+                "UDF server return incorrect type, expected: {}, but got: {}",
+                func.data_type,
+                result_fields[0].data_type()
+            )));
+        }
+        if result_block.num_rows() != num_rows {
+            return Err(ErrorCode::UDFDataError(format!(
+                "UDF server should return {} rows, but it returned {} rows",
+                num_rows,
+                result_block.num_rows()
+            )));
+        }
+
+        let col = if contains_variant(&func.data_type) {
+            let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
+            BlockEntry {
+                data_type: result_fields[0].data_type().clone(),
+                value,
+            }
+        } else {
+            result_block.get_by_offset(0).clone()
+        };
+
+        data_block.add_column(col);
+        Ok(data_block)
+    }
 }
 
 impl AsyncRetry for TransformUdfServer {
@@ -90,91 +181,37 @@ impl AsyncTransform for TransformUdfServer {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        for func in &self.funcs {
-            let server_addr = func.udf_type.as_server().unwrap();
-            // construct input record_batch
-            let num_rows = data_block.num_rows();
-            let block_entries = func
-                .arg_indices
-                .iter()
-                .map(|i| {
-                    let arg = data_block.get_by_offset(*i).clone();
-                    if contains_variant(&arg.data_type) {
-                        let new_arg = BlockEntry::new(
-                            arg.data_type.clone(),
-                            transform_variant(&arg.value, true)?,
-                        );
-                        Ok(new_arg)
-                    } else {
-                        Ok(arg)
-                    }
+        for func in self.funcs.iter() {
+            let rows = data_block.num_rows();
+            let batch_rows = self.request_bacth_rows as usize;
+            let tasks: Vec<_> = (0..rows)
+                .step_by(batch_rows)
+                .map(|start| {
+                    let mini_batch = data_block.slice(start..start + batch_rows.min(rows - start));
+                    let ctx = self.ctx.clone();
+                    let connect_timeout = self.connect_timeout;
+                    let request_timeout = self.request_timeout;
+                    let func = func.clone();
+
+                    databend_common_base::runtime::spawn({
+                        Self::transform_inner(
+                            ctx,
+                            connect_timeout,
+                            request_timeout,
+                            func,
+                            mini_batch,
+                        )
+                    })
                 })
+                .collect();
+
+            let blocks = futures::future::join_all(tasks).await;
+            let blocks: Vec<DataBlock> = blocks
+                .into_iter()
+                .map(|b| b.unwrap())
                 .collect::<Result<Vec<_>>>()?;
 
-            let fields = block_entries
-                .iter()
-                .enumerate()
-                .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone()))
-                .collect::<Vec<_>>();
-            let data_schema = DataSchema::new(fields);
-
-            let input_batch = DataBlock::new(block_entries, num_rows)
-                .to_record_batch_with_dataschema(&data_schema)
-                .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
-
-            let mut client = UDFFlightClient::connect(
-                server_addr,
-                self.connect_timeout,
-                self.request_timeout,
-                self.request_bacth_rows,
-            )
-            .await?
-            .with_tenant(self.ctx.get_tenant().tenant_name())?
-            .with_func_name(&func.func_name)?
-            .with_query_id(&self.ctx.get_id())?;
-
-            let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
-            let schema = DataSchema::try_from(&(*result_batch.schema()))?;
-            let (result_block, result_schema) =
-                DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "Cannot convert arrow record batch to data block: {err}"
-                    ))
-                })?;
-
-            let result_fields = result_schema.fields();
-            if result_fields.is_empty() || result_block.is_empty() {
-                return Err(ErrorCode::EmptyDataFromServer(
-                    "Get empty data from UDF Server",
-                ));
-            }
-
-            if result_fields[0].data_type() != &*func.data_type {
-                return Err(ErrorCode::UDFSchemaMismatch(format!(
-                    "UDF server return incorrect type, expected: {}, but got: {}",
-                    func.data_type,
-                    result_fields[0].data_type()
-                )));
-            }
-            if result_block.num_rows() != num_rows {
-                return Err(ErrorCode::UDFDataError(format!(
-                    "UDF server should return {} rows, but it returned {} rows",
-                    num_rows,
-                    result_block.num_rows()
-                )));
-            }
-
-            let col = if contains_variant(&func.data_type) {
-                let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
-                BlockEntry {
-                    data_type: result_fields[0].data_type().clone(),
-                    value,
-                }
-            } else {
-                result_block.get_by_offset(0).clone()
-            };
-
-            data_block.add_column(col);
+            data_block = DataBlock::concat(&blocks)?;
         }
         Ok(data_block)
     }
