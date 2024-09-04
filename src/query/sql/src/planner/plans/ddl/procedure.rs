@@ -38,7 +38,7 @@ impl ExecuteImmediatePlan {
 pub struct CreateProcedurePlan {
     pub create_option: CreateOption,
     pub tenant: Tenant,
-    pub name: String,
+    pub name: ProcedureNameIdent,
     pub meta: ProcedureMeta,
 }
 
@@ -46,7 +46,7 @@ impl From<CreateProcedurePlan> for CreateProcedureReq {
     fn from(p: CreateProcedurePlan) -> Self {
         CreateProcedureReq {
             create_option: p.create_option,
-            name_ident: ProcedureNameIdent::new(&p.tenant, &p.name),
+            name_ident: p.name,
             meta: p.meta,
         }
     }
@@ -56,7 +56,7 @@ impl From<&CreateProcedurePlan> for CreateProcedureReq {
     fn from(p: &CreateProcedurePlan) -> Self {
         CreateProcedureReq {
             create_option: p.create_option,
-            name_ident: ProcedureNameIdent::new(&p.tenant, &p.name),
+            name_ident: p.name.clone(),
             meta: p.meta.clone(),
         }
     }

@@ -22968,7 +22968,23 @@ DESCRIBE PROCEDURE p1()
 DescProcedure(
     DescProcedureStmt {
         name: "p1",
-        args: None,
+        args: [],
+    },
+)
+
+
+---------- Input ----------
+describe PROCEDURE p1(string, timestamp)
+---------- Output ---------
+DESCRIBE PROCEDURE p1(STRING, TIMESTAMP) 
+---------- AST ------------
+DescProcedure(
+    DescProcedureStmt {
+        name: "p1",
+        args: [
+            String,
+            Timestamp,
+        ],
     },
 )
 
@@ -22976,12 +22992,29 @@ DescProcedure(
 ---------- Input ----------
 drop PROCEDURE p1()
 ---------- Output ---------
-DROP PROCEDURE p1() 
+DROP PROCEDURE p1()
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
-        name: "p1",
-        args: None,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+drop PROCEDURE p1(int, string)
+---------- Output ---------
+DROP PROCEDURE p1(Int32,STRING)
+---------- AST ------------
+DropProcedure(
+    DropProcedureStmt {
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "Int32,STRING",
+        },
     },
 )
 
@@ -23042,11 +23075,75 @@ $$
 CreateProcedure(
     CreateProcedureStmt {
         create_option: Create,
-        name: "p1",
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
         language: SQL,
         args: None,
         return_type: [
-            ProcedureReturnType {
+            ProcedureType {
+                name: None,
+                data_type: NotNull(
+                    String,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+create PROCEDURE p1(a int, b string) returns string not null language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: Create,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "Int32,STRING",
+        },
+        language: SQL,
+        args: Some(
+            [
+                ProcedureType {
+                    name: Some(
+                        "a",
+                    ),
+                    data_type: Int32,
+                },
+                ProcedureType {
+                    name: Some(
+                        "b",
+                    ),
+                    data_type: String,
+                },
+            ],
+        ),
+        return_type: [
+            ProcedureType {
                 name: None,
                 data_type: NotNull(
                     String,
@@ -23085,11 +23182,14 @@ $$
 CreateProcedure(
     CreateProcedureStmt {
         create_option: Create,
-        name: "p1",
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
         language: SQL,
         args: None,
         return_type: [
-            ProcedureReturnType {
+            ProcedureType {
                 name: Some(
                     "a",
                 ),
@@ -23097,7 +23197,7 @@ CreateProcedure(
                     String,
                 ),
             },
-            ProcedureReturnType {
+            ProcedureType {
                 name: Some(
                     "b",
                 ),

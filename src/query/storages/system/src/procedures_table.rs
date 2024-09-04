@@ -80,11 +80,11 @@ impl AsyncSystemTable for ProceduresTable {
         let mut created_ons = Vec::with_capacity(procedures.len());
 
         for procedure in &procedures {
-            names.push(procedure.name_ident.procedure_name());
+            names.push(procedure.name_ident.procedure_name().name.to_string());
             procedure_ids.push(*procedure.ident.procedure_id());
             arguments.push(format!(
                 "{} RETURN ({})",
-                procedure.name_ident.procedure_name(),
+                procedure.name_ident.procedure_name().display(),
                 procedure.meta.return_types.iter().join(",")
             ));
             languages.push(procedure.meta.procedure_language.as_str());

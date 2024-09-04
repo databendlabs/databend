@@ -23,6 +23,7 @@ use databend_common_expression::types::DataType;
 
 use crate::principal::procedure_id_ident::ProcedureIdIdent;
 use crate::principal::procedure_name_ident::ProcedureNameIdent;
+use crate::principal::ProcedureIdentity;
 use crate::schema::CreateOption;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -93,7 +94,7 @@ impl Display for CreateProcedureReq {
             "{}:{}/{}={:?}",
             typ,
             self.name_ident.tenant_name(),
-            self.name_ident.procedure_name(),
+            self.name_ident.procedure_name().display(),
             self.meta
         )
     }
@@ -117,7 +118,7 @@ impl Display for RenameProcedureReq {
             f,
             "rename_procedure:{}/{}=>{}",
             self.name_ident.tenant_name(),
-            self.name_ident.procedure_name(),
+            self.name_ident.procedure_name().display(),
             self.new_procedure_name
         )
     }
@@ -139,7 +140,7 @@ impl Display for DropProcedureReq {
             "drop_procedure(if_exists={}):{}/{}",
             self.if_exists,
             self.name_ident.tenant_name(),
-            self.name_ident.procedure_name(),
+            self.name_ident.procedure_name().display(),
         )
     }
 }
@@ -148,34 +149,6 @@ impl Display for DropProcedureReq {
 pub struct DropProcedureReply {
     pub procedure_id: u64,
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropProcedureReq {
-    pub name_ident: ProcedureNameIdent,
-}
-
-impl Display for UndropProcedureReq {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "undrop_procedure:{}/{}",
-            self.name_ident.tenant_name(),
-            self.name_ident.procedure_name(),
-        )
-    }
-}
-
-impl UndropProcedureReq {
-    pub fn tenant(&self) -> &Tenant {
-        self.name_ident.tenant()
-    }
-    pub fn procedure_name(&self) -> &str {
-        self.name_ident.procedure_name()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropProcedureReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetProcedureReq {
@@ -191,7 +164,7 @@ impl Deref for GetProcedureReq {
 }
 
 impl GetProcedureReq {
-    pub fn new(tenant: impl ToTenant, procedure_name: impl ToString) -> GetProcedureReq {
+    pub fn new(tenant: impl ToTenant, procedure_name: ProcedureIdentity) -> GetProcedureReq {
         GetProcedureReq {
             inner: ProcedureNameIdent::new(tenant, procedure_name),
         }

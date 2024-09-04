@@ -974,6 +974,20 @@ error:
 
 
 ---------- Input ----------
+desc procedure p1(array, c int)
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | desc procedure p1(array, c int)
+  | ----             ------^ unexpected `,`, expecting `(`
+  | |                ||     
+  | |                |while parsing type name
+  | |                while parsing (<type_name>, ...)
+  | while parsing `DESC PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
 drop procedure p1
 ---------- Output ---------
 error: 
@@ -982,6 +996,18 @@ error:
 1 | drop procedure p1
   | ----             ^ unexpected end of input, expecting `(`
   | |                
+  | while parsing `DROP PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+drop procedure p1(a int)
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | drop procedure p1(a int)
+  | ----              ^ unexpected `a`, expecting `DATE`, `ARRAY`, `VARCHAR`, `VARIANT`, `SMALLINT`, `DATETIME`, `VARBINARY`, `CHARACTER`, `)`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `MAP`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `BINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `CHAR`, `TEXT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, or `NULLABLE`
+  | |                  
   | while parsing `DROP PROCEDURE <procedure_name>()`
 
 
@@ -1015,6 +1041,27 @@ error:
   | ------                        -----        ^^^ unexpected `not`, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `BOOLEAN`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `GEOGRAPHY`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `SMALLINT`, `BIGINT`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
   | |                             |             
   | |                             while parsing TABLE(<var_name> <type_name>, ...)
+  | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
+
+
+---------- Input ----------
+create PROCEDURE p1(int, string) returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | create PROCEDURE p1(int, string) returns table(string not null, int null) language sql comment = 'test' as $$
+  | ------             -   ^ unexpected `,`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, or `NULLABLE`
+  | |                  |    
+  | |                  while parsing (<var_name> <type_name>, ...)
   | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
 
 
