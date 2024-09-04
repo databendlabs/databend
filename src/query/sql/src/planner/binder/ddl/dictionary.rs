@@ -170,7 +170,7 @@ impl Binder {
                 ));
             }
             for table_field in schema.fields() {
-                if *table_field.data_type() != TableDataType::String {
+                if table_field.data_type().remove_nullable() != TableDataType::String {
                     return Err(ErrorCode::BadArguments(
                         "The type of Redis field must be string",
                     ));
