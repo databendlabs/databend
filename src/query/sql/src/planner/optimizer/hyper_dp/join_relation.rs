@@ -58,7 +58,7 @@ impl JoinRelation {
             .await
             {
                 Ok(card) => card.cardinality,
-                Err(e) => {
+                Err(_) => {
                     let rel_expr = RelExpr::with_s_expr(&self.s_expr);
                     rel_expr.derive_cardinality()?.cardinality
                 }

@@ -33,20 +33,28 @@ impl SingleToInnerOptimizer {
     }
 
     fn single_to_inner(s_expr: &SExpr) -> Result<SExpr> {
-        let s_expr = if let RelOperator::Join(join) = s_expr.plan.as_ref() {
+        let mut s_expr = if let RelOperator::Join(join) = s_expr.plan.as_ref()
+            && join.single_to_inner.is_some()
+        {
             let mut join = join.clone();
-            if join.single_to_inner.is_some() {
-                join.join_type = JoinType::Inner;
-            }
+            join.join_type = JoinType::Inner;
             s_expr.replace_plan(Arc::new(RelOperator::Join(join)))
         } else {
             s_expr.clone()
         };
+        let mut children_changed = false;
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
-            let child = Self::single_to_inner(child)?;
-            children.push(Arc::new(child));
+            let new_child = Self::single_to_inner(child)?;
+            if !new_child.eq(&child) {
+                children_changed = true;
+            }
+            children.push(Arc::new(new_child));
         }
-        Ok(s_expr.replace_children(children))
+        if children_changed {
+            s_expr = s_expr.replace_children(children);
+        }
+
+        Ok(s_expr)
     }
 }

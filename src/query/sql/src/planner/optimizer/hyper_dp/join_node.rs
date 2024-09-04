@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use crate::optimizer::dynamic_sample::dynamic_sample;
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
 use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
@@ -32,8 +31,6 @@ use crate::ScalarExpr;
 
 #[derive(Clone)]
 pub struct JoinNode {
-    pub ctx: Arc<dyn TableContext>,
-    pub metadata: MetadataRef,
     pub join_type: JoinType,
     pub leaves: Arc<Vec<IndexType>>,
     pub children: Arc<Vec<JoinNode>>,
@@ -42,7 +39,6 @@ pub struct JoinNode {
     // Cache cardinality/s_expr after computing.
     pub cardinality: Option<f64>,
     pub s_expr: Option<SExpr>,
-    pub sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 impl JoinNode {

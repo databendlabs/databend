@@ -130,10 +130,19 @@ impl<'a> RecursiveOptimizer<'a> {
     #[recursive::recursive]
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
+        let mut children_changed = false;
         for expr in s_expr.children() {
-            optimized_children.push(Arc::new(self.run(expr)?));
+            let optimized_child = self.run(expr)?;
+            if !optimized_child.eq(expr) {
+                children_changed = true;
+            }
+            optimized_children.push(Arc::new(optimized_child));
         }
-        let optimized_expr = s_expr.replace_children(optimized_children);
+        let mut optimized_expr = s_expr.clone();
+        if children_changed {
+            optimized_expr = s_expr.replace_children(optimized_children);
+        }
+
         let result = self.apply_transform_rules(&optimized_expr, self.rules)?;
 
         Ok(result)

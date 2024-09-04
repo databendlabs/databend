@@ -386,8 +386,6 @@ impl DPhpy {
                 .cardinality(self.ctx.clone(), self.metadata.clone())
                 .await?;
             let join = JoinNode {
-                ctx: self.ctx.clone(),
-                metadata: self.metadata.clone(),
                 join_type: JoinType::Inner,
                 leaves: Arc::new(nodes.clone()),
                 children: Arc::new(vec![]),
@@ -395,7 +393,6 @@ impl DPhpy {
                 cost: 0.0,
                 cardinality: Some(ce),
                 s_expr: None,
-                sample_executor: self.sample_executor.clone(),
             };
             self.dp_table.insert(nodes, join);
         }
@@ -654,8 +651,6 @@ impl DPhpy {
         let parent_node = self.dp_table.get(&parent_set);
         let mut join_node = if !join_conditions.is_empty() {
             JoinNode {
-                ctx: self.ctx.clone(),
-                metadata: self.metadata.clone(),
                 join_type: JoinType::Inner,
                 leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
@@ -667,12 +662,9 @@ impl DPhpy {
                 join_conditions: Arc::new(join_conditions),
                 cardinality: None,
                 s_expr: None,
-                sample_executor: self.sample_executor.clone(),
             }
         } else {
             JoinNode {
-                ctx: self.ctx.clone(),
-                metadata: self.metadata.clone(),
                 join_type: JoinType::Cross,
                 leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
@@ -684,7 +676,6 @@ impl DPhpy {
                 join_conditions: Arc::new(vec![]),
                 cardinality: None,
                 s_expr: None,
-                sample_executor: self.sample_executor.clone(),
             }
         };
         if join_node.join_type == JoinType::Inner {
