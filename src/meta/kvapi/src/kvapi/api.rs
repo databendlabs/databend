@@ -92,6 +92,8 @@ pub trait KVApi: Send + Sync {
             );
         }
 
+        debug!("mget: keys: {:?}; values: {:?}", keys, seq_values);
+
         Ok(seq_values)
     }
 

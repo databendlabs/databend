@@ -3634,7 +3634,6 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
- "enumflags2",
  "fastrace",
  "futures",
  "log",
@@ -3729,9 +3728,11 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "databend-common-tracing",
  "fastrace",
  "log",
  "tempfile",
+ "test-harness",
 ]
 
 [[package]]
