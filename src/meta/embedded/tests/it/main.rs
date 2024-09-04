@@ -16,3 +16,4 @@
 
 mod kv_api_impl;
 mod schema_api_impl;
+mod testing;

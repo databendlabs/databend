@@ -476,9 +476,10 @@ impl StateMachine {
         condition: &Vec<TxnCondition>,
     ) -> Result<bool, MetaStorageError> {
         for cond in condition {
-            debug!(condition :% =(cond); "txn_execute_condition");
+            let res = self.txn_execute_one_condition(txn_tree, cond)?;
+            debug!(condition :% =(cond), res=res; "txn_execute_condition");
 
-            if !self.txn_execute_one_condition(txn_tree, cond)? {
+            if !res {
                 return Ok(false);
             }
         }
