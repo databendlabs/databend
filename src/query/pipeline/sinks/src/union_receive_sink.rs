@@ -48,9 +48,7 @@ impl AsyncSink for UnionReceiveSink {
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         if let Some(sender) = self.sender.as_ref() {
-            if sender.send(data_block).await.is_err() {
-                return Err(ErrorCode::Internal("UnionReceiveSink sender failed"));
-            };
+            return Ok(sender.send(data_block).await.is_err());
         }
 
         Ok(false)
