@@ -78,6 +78,8 @@ use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -210,8 +212,16 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
 
-    async fn get_table_history(&self, req: ListTableReq)
-    -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    async fn get_table_meta_history(
+        &self,
+        database_name: &str,
+        table_id_history: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
+
+    async fn get_tables_history(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 

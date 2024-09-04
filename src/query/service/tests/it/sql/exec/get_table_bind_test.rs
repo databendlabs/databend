@@ -231,6 +231,18 @@ impl Catalog for FakedCatalog {
         self.cat.get_table(tenant, db_name, table_name).await
     }
 
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(Vec::from([self
+            .cat
+            .get_table(tenant, db_name, table_name)
+            .await?]))
+    }
+
     async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }

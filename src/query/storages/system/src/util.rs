@@ -194,6 +194,14 @@ pub fn find_eq_or_filter(
                             }
                         }
                     }
+                    // show drop tables will specific is_not_null(dropped_on)
+                    "is_not_null" => {
+                        if let Expr::ColumnRef { id, .. } = args[0].clone() {
+                            if id != "dropped_on" {
+                                *invalid_optimize = true;
+                            }
+                        }
+                    }
                     _ => {
                         // Any other function makes it invalid.
                         *invalid_optimize = true;
