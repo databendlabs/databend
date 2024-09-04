@@ -369,7 +369,7 @@ pub trait TableContext: Send + Sync {
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
 
-    fn get_session_id(&self) -> String;
+    fn get_temp_table_prefix(&self) -> Result<String>;
 
     fn session_state(&self) -> SessionState;
 

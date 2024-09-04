@@ -45,7 +45,7 @@ pub enum BloomIndexColumns {
 impl FromStr for BloomIndexColumns {
     type Err = ErrorCode;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s.trim().is_empty() {
             return Ok(BloomIndexColumns::None);
         }

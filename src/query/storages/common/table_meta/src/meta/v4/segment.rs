@@ -260,7 +260,7 @@ impl CompactSegmentInfo {
 
 impl TryFrom<Arc<CompactSegmentInfo>> for SegmentInfo {
     type Error = ErrorCode;
-    fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self, Self::Error> {
+    fn try_from(value: Arc<CompactSegmentInfo>) -> std::result::Result<Self, Self::Error> {
         let blocks = value.block_metas()?;
         Ok(SegmentInfo {
             format_version: value.format_version,
@@ -272,7 +272,7 @@ impl TryFrom<Arc<CompactSegmentInfo>> for SegmentInfo {
 
 impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
     type Error = ErrorCode;
-    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
+    fn try_from(value: &CompactSegmentInfo) -> std::result::Result<Self, Self::Error> {
         let blocks = value.block_metas()?;
         Ok(SegmentInfo {
             format_version: value.format_version,
@@ -285,7 +285,7 @@ impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
 impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
     type Error = ErrorCode;
 
-    fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
+    fn try_from(value: &SegmentInfo) -> std::result::Result<Self, Self::Error> {
         let bytes = value.block_raw_bytes()?;
         Ok(Self {
             format_version: value.format_version,
@@ -298,7 +298,7 @@ impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
 impl TryFrom<SegmentInfo> for CompactSegmentInfo {
     type Error = ErrorCode;
 
-    fn try_from(value: SegmentInfo) -> Result<Self, Self::Error> {
+    fn try_from(value: SegmentInfo) -> std::result::Result<Self, Self::Error> {
         let bytes = value.block_raw_bytes()?;
         Ok(Self {
             format_version: value.format_version,

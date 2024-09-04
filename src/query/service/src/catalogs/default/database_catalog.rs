@@ -25,7 +25,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -404,6 +404,31 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .get_table_history(tenant, db_name, table_name)
+            .await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    self.mutable_catalog
+                        .get_table_history(tenant, db_name, table_name)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
@@ -416,6 +441,10 @@ impl Catalog for DatabaseCatalog {
                 }
             }
         }
+    }
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.mutable_catalog.list_temporary_tables()
     }
 
     #[async_backtrace::framed]
@@ -772,16 +801,13 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         self.mutable_catalog.drop_dictionary(dict_ident).await
     }
 
     #[async_backtrace::framed]
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         self.mutable_catalog.get_dictionary(req).await
     }
 

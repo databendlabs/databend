@@ -40,10 +40,10 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -1507,6 +1507,7 @@ impl SchemaApiTestSuite {
             table_name: table_name.to_string(),
             tb_id: table_id,
             engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         })
         .await?;
 
@@ -1838,6 +1839,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
 
@@ -1858,6 +1860,30 @@ impl SchemaApiTestSuite {
                         tbl_name
                     );
                 }
+
+                info!("--- get table history after drop");
+                {
+                    let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
+
+                    let got = mt
+                        .get_table_meta_history(db_name, &TableIdHistoryIdent {
+                            database_id: cur_db.database_id.db_id,
+                            table_name: tbl_name.to_string(),
+                        })
+                        .await
+                        .unwrap()[0]
+                        .clone();
+                    let want = TableInfo {
+                        ident: tb_ident_2,
+                        desc: format!("'{}'.'{}'", db_name, tbl_name),
+                        name: tbl_name.into(),
+                        meta: table_meta(created_on),
+                        tenant: tenant_name.to_string(),
+                        ..Default::default()
+                    };
+                    assert_eq!(got.1.data.created_on, want.meta.created_on);
+                    assert!(got.1.data.drop_on.is_some());
+                }
             }
 
             info!("--- drop table with if_exists = false again, error");
@@ -1869,6 +1895,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 };
                 let res = mt.drop_table_by_id(plan).await;
                 let err = res.unwrap_err();
@@ -1889,6 +1916,7 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
             }
@@ -4014,7 +4042,7 @@ impl SchemaApiTestSuite {
             assert!(table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
 
             assert_eq!(res.len(), 1);
@@ -4032,7 +4060,7 @@ impl SchemaApiTestSuite {
             upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
 
             assert_eq!(res.len(), 0);
@@ -4154,6 +4182,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
             }
@@ -4180,6 +4209,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
                 let table_id = resp.table_id;
@@ -4255,6 +4285,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
             }
@@ -4282,6 +4313,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
                 let table_id = resp.table_id;
@@ -4457,6 +4489,7 @@ impl SchemaApiTestSuite {
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
+                    session_id: "".to_string(),
                 })
                 .await?;
             }
@@ -4669,7 +4702,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4698,13 +4731,14 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name_ident.table_name.clone(),
                 tb_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4726,7 +4760,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4750,13 +4784,14 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4783,7 +4818,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4808,13 +4843,14 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4835,7 +4871,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4872,7 +4908,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let _res = mt.create_table(req.clone()).await?;
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -4910,6 +4946,7 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
                 engine: "FUSE".to_string(),
+                session_id: "".to_string(),
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4918,7 +4955,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -4955,7 +4992,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_table_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_name))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -7437,11 +7474,11 @@ impl SchemaApiTestSuite {
             assert!(res.is_empty());
         }
 
-        let dict_ident1 = TenantDictionaryIdent::new(
+        let dict_ident1 = DictionaryNameIdent::new(
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name1.to_string()),
         );
-        let dict_ident2 = TenantDictionaryIdent::new(
+        let dict_ident2 = DictionaryNameIdent::new(
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name2.to_string()),
         );
@@ -7477,8 +7514,8 @@ impl SchemaApiTestSuite {
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
             let dict_reply = res.unwrap();
-            assert_eq!(dict_reply.dictionary_id, dict_id);
-            assert_eq!(dict_reply.dictionary_meta.source, "mysql".to_string());
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.data.source, "mysql".to_string());
 
             let req = dict_ident2.clone();
             let res = mt.get_dictionary(req).await?;
@@ -7498,8 +7535,8 @@ impl SchemaApiTestSuite {
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
             let dict_reply = res.unwrap();
-            assert_eq!(dict_reply.dictionary_id, dict_id);
-            assert_eq!(dict_reply.dictionary_meta.source, "postgresql".to_string());
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.source, "postgresql".to_string());
         }
 
         {
@@ -7677,6 +7714,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             db_id: self.db_id,
             tb_id: self.table_id,
             engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         };
         self.mt.drop_table_by_id(req.clone()).await?;
 

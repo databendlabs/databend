@@ -32,6 +32,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
@@ -342,6 +343,13 @@ impl Session {
         self.session_ctx.set_txn_mgr(txn_mgr)
     }
 
+    pub fn temp_tbl_mgr(&self) -> TempTblMgrRef {
+        self.session_ctx.temp_tbl_mgr()
+    }
+    pub fn set_temp_tbl_mgr(&self, temp_tbl_mgr: TempTblMgrRef) {
+        self.session_ctx.set_temp_tbl_mgr(temp_tbl_mgr)
+    }
+
     pub fn set_query_priority(&self, priority: u8) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.set_priority(priority);
@@ -367,8 +375,26 @@ impl Session {
         self.session_ctx.get_client_session_id()
     }
 
-    pub fn set_client_session_id(&self, id: String) {
+    pub fn set_client_session_id(&mut self, id: String) {
         self.session_ctx.set_client_session_id(id)
+    }
+    pub fn get_temp_table_prefix(&self) -> Result<String> {
+        let typ = self.typ.read().clone();
+        match typ {
+            SessionType::MySQL => Ok(self.id.clone()),
+            SessionType::HTTPQuery => {
+                if let Some(id) = self.get_client_session_id() {
+                    Ok(id)
+                } else {
+                    Err(ErrorCode::BadArguments(
+                        "can not use temp table in http handler if token is not used",
+                    ))
+                }
+            }
+            t => Err(ErrorCode::BadArguments(format!(
+                "can not use temp table in session type {t}"
+            ))),
+        }
     }
 }
 

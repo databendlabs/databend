@@ -20,7 +20,9 @@ use databend_common_meta_types::MatchSeq;
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
 use crate::schema::catalog_name_ident;
+use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
+use crate::schema::DictionaryIdentity;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::ident::TIdent;
@@ -971,38 +973,6 @@ impl WrongSequenceCount {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DictionaryAlreadyExists: `{dictionary_name}` while `{context}`")]
-pub struct DictionaryAlreadyExists {
-    dictionary_name: String,
-    context: String,
-}
-
-impl DictionaryAlreadyExists {
-    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownDictionary: `{dictionary_name}` while `{context}`")]
-pub struct UnknownDictionary {
-    dictionary_name: String,
-    context: String,
-}
-
-impl UnknownDictionary {
-    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1192,10 +1162,14 @@ pub enum AppError {
 
     // dictionary
     #[error(transparent)]
-    DictionaryAlreadyExists(#[from] DictionaryAlreadyExists),
+    DictionaryAlreadyExists(
+        #[from] ExistError<dictionary_name_ident::DictionaryNameRsc, DictionaryIdentity>,
+    ),
 
     #[error(transparent)]
-    UnknownDictionary(#[from] UnknownDictionary),
+    UnknownDictionary(
+        #[from] UnknownError<dictionary_name_ident::DictionaryNameRsc, DictionaryIdentity>,
+    ),
 }
 
 impl AppError {
@@ -1608,19 +1582,6 @@ impl AppErrorMessage for SequenceError {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
         }
-    }
-}
-
-// dictionary
-impl AppErrorMessage for DictionaryAlreadyExists {
-    fn message(&self) -> String {
-        format!("Dictionary '{}' already exists", self.dictionary_name)
-    }
-}
-
-impl AppErrorMessage for UnknownDictionary {
-    fn message(&self) -> String {
-        format!("Unknown dictionary '{}'", self.dictionary_name)
     }
 }
 

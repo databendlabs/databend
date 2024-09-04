@@ -51,8 +51,10 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
@@ -165,8 +167,8 @@ fn log_query_start(ctx: &QueryContext) {
     InterpreterMetrics::record_query_start(ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
-
-    if session.get_type().is_user_session() {
+    let typ = session.get_type();
+    if typ.is_user_session() {
         SessionManager::instance().status.write().query_start(now);
     }
 
@@ -182,8 +184,14 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     let session = ctx.get_current_session();
 
     session.get_status().write().query_finish();
-    if session.get_type().is_user_session() {
-        SessionManager::instance().status.write().query_finish(now)
+    let typ = session.get_type();
+    if typ.is_user_session() {
+        SessionManager::instance().status.write().query_finish(now);
+        if typ == SessionType::HTTPQuery {
+            if let Some(cid) = session.get_client_session_id() {
+                ClientSessionManager::instance().on_query_finish(&cid, &session)
+            }
+        }
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
@@ -242,10 +250,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
 }
 
-pub fn on_execution_finished(
-    info: &ExecutionInfo,
-    query_ctx: Arc<QueryContext>,
-) -> Result<(), ErrorCode> {
+pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);
 

@@ -60,6 +60,7 @@ use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
+use databend_common_storages_system::TemporaryTablesTable;
 use databend_common_storages_system::TerseStreamsTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
@@ -140,6 +141,7 @@ impl SystemDatabase {
             NotificationHistoryTable::create(sys_db_meta.next_table_id()),
             ViewsTableWithHistory::create(sys_db_meta.next_table_id()),
             ViewsTableWithoutHistory::create(sys_db_meta.next_table_id()),
+            TemporaryTablesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

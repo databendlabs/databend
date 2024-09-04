@@ -35,5 +35,6 @@ pub use hash_join_probe_state::HashJoinProbeState;
 pub use hash_join_spiller::HashJoinSpiller;
 pub use hash_join_state::*;
 pub use probe_state::ProbeState;
+pub use probe_state::ProcessState;
 pub use transform_hash_join_build::TransformHashJoinBuild;
 pub use transform_hash_join_probe::TransformHashJoinProbe;

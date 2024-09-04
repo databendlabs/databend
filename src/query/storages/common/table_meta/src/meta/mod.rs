@@ -43,6 +43,7 @@ pub use utils::try_extract_uuid_str_from_path;
 pub use utils::uuid_from_date_time;
 pub use utils::TableMetaTimestamps;
 pub use utils::V5_OBJECT_KEY_PREFIX;
+pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;

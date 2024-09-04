@@ -230,7 +230,8 @@ impl TransformHashJoinProbe {
             return self.next_step(Step::Async(AsyncStep::Spill));
         }
 
-        if !self.input_data_blocks.is_empty()
+        if self.probe_state.process_state.is_some()
+            || !self.input_data_blocks.is_empty()
             || !self.unspilled_data_blocks_need_to_probe.is_empty()
         {
             return self.next_step(Step::Sync(SyncStep::Probe));
@@ -341,6 +342,9 @@ impl Processor for TransformHashJoinProbe {
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Probe) => {
+                if self.probe_state.process_state.is_some() {
+                    return self.next_probe();
+                }
                 match self.hash_table_type {
                     HashTableType::FirstRound | HashTableType::Empty => {
                         if let Some(data_block) =
@@ -349,12 +353,7 @@ impl Processor for TransformHashJoinProbe {
                             self.probe_hash_table(data_block)?;
                         } else if let Some(data_block) = self.input_data_blocks.pop_front() {
                             let data_block = data_block.convert_to_full();
-                            if self.is_spill_happened() {
-                                self.probe_hash_table(data_block.clone())?;
-                                self.data_blocks_need_to_spill.push(data_block);
-                            } else {
-                                self.probe_hash_table(data_block)?;
-                            }
+                            self.probe_hash_table(data_block)?;
                         }
                     }
                     HashTableType::Restored => {
@@ -476,10 +475,19 @@ impl TransformHashJoinProbe {
         self.hash_table_type == HashTableType::FirstRound
     }
 
-    // Probe with hashtable
+    // Probe the hash table.
     pub(crate) fn probe_hash_table(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
+        if !data_blocks.is_empty() {
+            self.output_data_blocks.extend(data_blocks);
+        }
+        Ok(())
+    }
+
+    // Continue to probe the hash table with process state.
+    pub(crate) fn next_probe(&mut self) -> Result<()> {
+        let data_blocks = self.join_probe_state.next_probe(&mut self.probe_state)?;
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }

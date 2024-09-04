@@ -28,7 +28,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -460,6 +460,17 @@ impl Catalog for HiveCatalog {
         Ok(tables)
     }
 
+    async fn get_table_history(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table history in HIVE catalog",
+        ))
+    }
+
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
@@ -721,7 +732,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        _dict_ident: TenantDictionaryIdent,
+        _dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         unimplemented!()
     }
@@ -729,7 +740,7 @@ impl Catalog for HiveCatalog {
     #[async_backtrace::framed]
     async fn get_dictionary(
         &self,
-        _req: TenantDictionaryIdent,
+        _req: DictionaryNameIdent,
     ) -> Result<Option<GetDictionaryReply>> {
         unimplemented!()
     }

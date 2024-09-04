@@ -32,7 +32,7 @@ pub fn histogram_from_ndv(
     num_rows: u64,
     bound: Option<(Datum, Datum)>,
     num_buckets: usize,
-) -> Result<Histogram, String> {
+) -> std::result::Result<Histogram, String> {
     if ndv <= 2 {
         return if num_rows != 0 {
             Err(format!(
@@ -100,7 +100,11 @@ pub fn histogram_from_ndv(
 }
 
 trait SampleSet {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum, String>;
+    fn get_upper_bound(
+        &self,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> std::result::Result<Datum, String>;
 }
 
 pub struct UniformSampleSet {
@@ -152,7 +156,11 @@ impl UniformSampleSet {
 }
 
 impl SampleSet for UniformSampleSet {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum, String> {
+    fn get_upper_bound(
+        &self,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> std::result::Result<Datum, String> {
         match (&self.min, &self.max) {
             (Datum::Int(min), Datum::Int(max)) => {
                 let min = *min;

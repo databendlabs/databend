@@ -50,7 +50,7 @@ pub enum MetaCompression {
 impl TryFrom<u8> for MetaCompression {
     type Error = ErrorCode;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(MetaCompression::None),
             1 => Ok(MetaCompression::Zstd),
@@ -117,7 +117,7 @@ pub enum MetaEncoding {
 impl TryFrom<u8> for MetaEncoding {
     type Error = ErrorCode;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             1 => Ok(MetaEncoding::Bincode),
             2 => Ok(MetaEncoding::MessagePack),

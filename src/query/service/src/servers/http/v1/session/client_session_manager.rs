@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::Thread;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
@@ -26,9 +29,13 @@ use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_session::drop_all_temp_tables;
+use databend_storages_common_session::TempTblMgrRef;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use sha2::Digest;
 use sha2::Sha256;
+use tokio::time::Instant;
 
 use crate::servers::http::v1::session::token::unix_ts;
 use crate::servers::http::v1::SessionClaim;
@@ -54,12 +61,38 @@ fn hash_token(token: &[u8]) -> String {
     hex::encode_upper(Sha256::digest(token))
 }
 
+enum QueryState {
+    InUse,
+    Idle(Instant),
+}
+
+struct SessionState {
+    pub query_state: QueryState,
+    pub temp_tbl_mgr: TempTblMgrRef,
+}
+
+impl QueryState {
+    pub fn has_expired(&self, now: &Instant) -> bool {
+        match self {
+            QueryState::InUse => false,
+            QueryState::Idle(t) => (*now - *t) > SESSION_TOKEN_VALIDITY,
+        }
+    }
+}
+
 pub struct ClientSessionManager {
     /// store hash only for hit ratio with limited memory, feasible because:
     /// - token contain all info in itself.
     /// - for eviction, LRU itself is enough, no need to check expired tokens specifically.
     session_tokens: RwLock<LruCache<String, Option<String>>>,
     refresh_tokens: RwLock<LruCache<String, Option<String>>>,
+
+    /// add: write temp table
+    /// rm:
+    ///  - all temp table deleted
+    ///  - session closed
+    ///  - timeout
+    session_state: Mutex<BTreeMap<String, SessionState>>,
 }
 
 impl ClientSessionManager {
@@ -69,12 +102,38 @@ impl ClientSessionManager {
 
     #[async_backtrace::framed]
     pub async fn init(_cfg: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(Arc::new(Self {
+        let mgr = Arc::new(Self {
             session_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
             refresh_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
-        }));
-
+            session_state: Default::default(),
+        });
+        GlobalInstance::set(mgr.clone());
+        Thread::spawn(move || Self::check_timeout(mgr));
         Ok(())
+    }
+
+    async fn check_timeout(self: Arc<Self>) {
+        loop {
+            let now = Instant::now();
+            let expired = {
+                let guard = self.session_state.lock();
+                guard
+                    .iter()
+                    .filter(|(_, state)| state.query_state.has_expired(&now))
+                    .map(|(id, state)| (id.clone(), state.temp_tbl_mgr.clone()))
+                    .collect::<Vec<_>>()
+            };
+            {
+                let mut guard = self.session_state.lock();
+                for (id, _) in expired.iter() {
+                    guard.remove(id);
+                }
+            }
+            for (id, mgr) in expired {
+                drop_all_temp_tables(&id, mgr).await.ok();
+            }
+            tokio::time::sleep(SESSION_TOKEN_VALIDITY / 4).await;
+        }
     }
 
     /// used for both issue token for new session and renew token for existing session.
@@ -257,7 +316,43 @@ impl ClientSessionManager {
                 .drop_client_session_id(&claim.session_id)
                 .await
                 .ok();
+            let state = self.session_state.lock().remove(&claim.session_id);
+            if let Some(state) = state {
+                drop_all_temp_tables(&claim.session_id, state.temp_tbl_mgr).await?;
+            }
         };
         Ok(())
+    }
+
+    pub fn on_query_start(&self, client_session_id: &str, session: &Arc<Session>) {
+        let mut guard = self.session_state.lock();
+        guard.entry(client_session_id.to_string()).and_modify(|e| {
+            e.query_state = QueryState::InUse;
+            session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone())
+        });
+    }
+    pub fn on_query_finish(&self, client_session_id: &str, session: &Arc<Session>) {
+        let temp_tbl_mgr = session.temp_tbl_mgr();
+        let (is_empty, just_changed) = temp_tbl_mgr.lock().is_empty();
+        if !is_empty || just_changed {
+            let mut guard = self.session_state.lock();
+            match guard.entry(client_session_id.to_string()) {
+                Entry::Vacant(e) => {
+                    if !is_empty {
+                        e.insert(SessionState {
+                            query_state: QueryState::Idle(Instant::now()),
+                            temp_tbl_mgr,
+                        });
+                    }
+                }
+                Entry::Occupied(mut e) => {
+                    if !is_empty {
+                        e.get_mut().query_state = QueryState::Idle(Instant::now())
+                    } else {
+                        e.remove();
+                    }
+                }
+            }
+        }
     }
 }

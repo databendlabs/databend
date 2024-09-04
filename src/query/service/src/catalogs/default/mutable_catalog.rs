@@ -22,11 +22,14 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -114,6 +117,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::seq_value::SeqV;
@@ -297,7 +301,9 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        let dropped = self.ctx.meta.drop_index(&req.name_ident).await?;
+        let res = self.ctx.meta.drop_index(&req.name_ident).await;
+        let dropped = res.map_err(KVAppError::from)?;
+
         if dropped.is_none() {
             if req.if_exists {
                 // Alright
@@ -317,7 +323,23 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        Ok(self.ctx.meta.update_index(req).await?)
+        let tenant = &req.tenant;
+        let index_id = IndexId::new(req.index_id);
+        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
+
+        let change = self.ctx.meta.update_index(id_ident, req.index_meta).await?;
+
+        if !change.is_changed() {
+            Err(
+                KVAppError::AppError(AppError::UnknownIndex(UnknownError::new(
+                    index_id.to_string(),
+                    func_name!(),
+                )))
+                .into(),
+            )
+        } else {
+            Ok(UpdateIndexReply {})
+        }
     }
 
     #[async_backtrace::framed]
@@ -442,6 +464,17 @@ impl Catalog for MutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table(table_name).await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.get_table_history(table_name).await
     }
 
     #[async_backtrace::framed]
@@ -693,19 +726,21 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
-        let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await?;
+        let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await;
+        let reply = reply.map_err(KVAppError::from)?;
         Ok(reply)
     }
 
     #[async_backtrace::framed]
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         let reply = self.ctx.meta.get_dictionary(req.clone()).await?;
-        Ok(reply)
+        Ok(reply.map(|(seq_id, seq_meta)| GetDictionaryReply {
+            dictionary_id: *seq_id.data,
+            dictionary_meta: seq_meta.data,
+            dictionary_meta_seq: seq_meta.seq,
+        }))
     }
 
     #[async_backtrace::framed]

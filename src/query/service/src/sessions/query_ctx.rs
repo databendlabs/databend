@@ -1357,8 +1357,8 @@ impl TableContext for QueryContext {
         Ok(lock_guard)
     }
 
-    fn get_session_id(&self) -> String {
-        self.shared.session.id.clone()
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        self.shared.session.get_temp_table_prefix()
     }
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {
