@@ -39,7 +39,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::procedure_id_to_name::ProcedureIdToNameIdent;
-    use crate::principal::procedure_name_ident::ProcedureNameIdentRaw;
+    use crate::principal::ProcedureIdentity;
     use crate::tenant_key::resource::TenantResource;
 
     // TODO(TIdent): parent should return Some(ProcedureIdIdent::new(self.procedure_id).to_string_key())
@@ -48,10 +48,10 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_procedure_id_to_name";
         const TYPE: &'static str = "ProcedureIdToNameIdent";
         const HAS_TENANT: bool = false;
-        type ValueType = ProcedureNameIdentRaw;
+        type ValueType = ProcedureIdentity;
     }
 
-    impl kvapi::Value for ProcedureNameIdentRaw {
+    impl kvapi::Value for ProcedureIdentity {
         type KeyType = ProcedureIdToNameIdent;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []

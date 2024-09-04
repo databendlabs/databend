@@ -36,12 +36,12 @@ impl Display for ExecuteImmediateStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct ProcedureReturnType {
+pub struct ProcedureType {
     pub name: Option<String>,
     pub data_type: TypeName,
 }
 
-impl Display for ProcedureReturnType {
+impl Display for ProcedureType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(name) = &self.name {
             write!(f, "{} {}", name, self.data_type)
@@ -64,14 +64,26 @@ impl Display for ProcedureLanguage {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct ProcedureIdentity {
+    pub name: String,
+    pub args_type: String,
+}
+
+impl Display for ProcedureIdentity {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}({})", &self.name, &self.args_type,)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateProcedureStmt {
     pub create_option: CreateOption,
-    pub name: String,
+    pub name: ProcedureIdentity,
     pub language: ProcedureLanguage,
     // TODO(eason): Now args is alwarys none, but maybe we also need to consider arg name?
-    pub args: Option<Vec<TypeName>>,
-    pub return_type: Vec<ProcedureReturnType>,
+    pub args: Option<Vec<ProcedureType>>,
+    pub return_type: Vec<ProcedureType>,
     pub comment: Option<String>,
     pub script: String,
 }
@@ -86,15 +98,13 @@ impl Display for CreateProcedureStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        write!(f, "PROCEDURE {}", self.name)?;
+        write!(f, "PROCEDURE {}", self.name.name)?;
         if let Some(args) = &self.args {
             if args.is_empty() {
                 write!(f, "() ")?;
             } else {
                 write!(f, "(")?;
-                for arg in args {
-                    write!(f, "{}", arg)?;
-                }
+                write_comma_separated_list(f, args.clone())?;
                 write!(f, ") ")?;
             }
         } else {
@@ -127,51 +137,34 @@ impl Display for CreateProcedureStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropProcedureStmt {
-    pub name: String,
-    pub args: Option<Vec<TypeName>>,
+    pub name: ProcedureIdentity,
 }
 
 impl Display for DropProcedureStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DROP PROCEDURE {}", self.name)?;
-        if let Some(args) = &self.args {
-            if args.is_empty() {
-                write!(f, "() ")?;
-            } else {
-                write!(f, "(")?;
-                for arg in args {
-                    write!(f, "{}", arg)?;
-                }
-                write!(f, ") ")?;
-            }
-        } else {
-            write!(f, "() ")?;
-        }
+
         Ok(())
     }
 }
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescProcedureStmt {
     pub name: String,
-    pub args: Option<Vec<TypeName>>,
+    pub args: Vec<TypeName>,
 }
 
 impl Display for DescProcedureStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DESCRIBE PROCEDURE {}", self.name)?;
-        if let Some(args) = &self.args {
-            if args.is_empty() {
-                write!(f, "() ")?;
-            } else {
-                write!(f, "(")?;
-                for arg in args {
-                    write!(f, "{}", arg)?;
-                }
-                write!(f, ") ")?;
-            }
-        } else {
+
+        if self.args.is_empty() {
             write!(f, "() ")?;
+        } else {
+            write!(f, "(")?;
+            write_comma_separated_list(f, self.args.clone())?;
+            write!(f, ") ")?;
         }
+
         Ok(())
     }
 }

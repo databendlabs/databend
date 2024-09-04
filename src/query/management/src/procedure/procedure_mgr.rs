@@ -20,7 +20,6 @@ use databend_common_meta_api::serialize_struct;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::principal::procedure::ProcedureInfo;
 use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
-use databend_common_meta_app::principal::procedure_name_ident::ProcedureNameIdentRaw;
 use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
 use databend_common_meta_app::principal::DropProcedureReq;
@@ -29,6 +28,7 @@ use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ListProcedureReq;
 use databend_common_meta_app::principal::ProcedureId;
 use databend_common_meta_app::principal::ProcedureIdToNameIdent;
+use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::schema::CreateOption;
@@ -60,7 +60,7 @@ impl ProcedureMgr {
         let name_ident = &req.name_ident;
         let meta = &req.meta;
         let overriding = req.create_option.is_overriding();
-        let name_ident_raw = serialize_struct(&ProcedureNameIdentRaw::from(name_ident))?;
+        let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
 
         let create_res = self
             .kv_api
@@ -133,7 +133,7 @@ impl ProcedureMgr {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Get procedure id list by `prefix_list` "<prefix>/<tenant>"
-        let ident = ProcedureNameIdent::new(&req.tenant, "dummy");
+        let ident = ProcedureNameIdent::new(&req.tenant, ProcedureIdentity::new("", ""));
         let dir = DirName::new(ident);
 
         let name_id_metas = self.kv_api.list_id_value(&dir).await?;

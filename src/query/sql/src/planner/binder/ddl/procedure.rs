@@ -19,11 +19,12 @@ use databend_common_ast::ast::DescProcedureStmt;
 use databend_common_ast::ast::DropProcedureStmt;
 use databend_common_ast::ast::ExecuteImmediateStmt;
 use databend_common_ast::ast::ProcedureLanguage;
-use databend_common_ast::ast::ProcedureReturnType;
+use databend_common_ast::ast::ProcedureType;
 use databend_common_ast::ast::ShowOptions;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_users::UserApiProvider;
@@ -69,21 +70,21 @@ impl Binder {
         let meta = self.procedure_meta(return_type, script, comment, language)?;
         Ok(Plan::CreateProcedure(Box::new(CreateProcedurePlan {
             create_option: create_option.clone().into(),
-            tenant,
-            name: name.to_owned(),
+            tenant: tenant.to_owned(),
+            name: ProcedureNameIdent::new(&tenant, ProcedureIdentity::from(name.clone())),
             meta,
         })))
     }
 
     pub async fn bind_drop_procedure(&mut self, stmt: &DropProcedureStmt) -> Result<Plan> {
-        let DropProcedureStmt { name, args: _args } = stmt;
+        let DropProcedureStmt { name } = stmt;
 
         let tenant = self.ctx.get_tenant();
         // TODO: need parser name: ProcedureNameIdent = name + args
         Ok(Plan::DropProcedure(Box::new(DropProcedurePlan {
             if_exists: false,
             tenant: tenant.to_owned(),
-            name: ProcedureNameIdent::new(tenant, name),
+            name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
         })))
     }
 
@@ -107,11 +108,14 @@ impl Binder {
     }
 
     pub async fn bind_call_procedure(&mut self, stmt: &CallProcedureStmt) -> Result<Plan> {
-        let CallProcedureStmt { name, args: _args } = stmt;
+        let CallProcedureStmt { name, args } = stmt;
         let tenant = self.ctx.get_tenant();
         // TODO: ProcedureNameIdent = name + args_type. Need to get type in here.
         let req = GetProcedureReq {
-            inner: ProcedureNameIdent::new(tenant.clone(), name),
+            inner: ProcedureNameIdent::new(
+                tenant.clone(),
+                ProcedureIdentity::new(name, args.join(",")),
+            ),
         };
         let procedure = UserApiProvider::instance()
             .get_procedure(&tenant, req)
@@ -123,7 +127,7 @@ impl Binder {
 
     fn procedure_meta(
         &self,
-        return_type: &[ProcedureReturnType],
+        return_type: &[ProcedureType],
         script: &str,
         comment: &Option<String>,
         language: &ProcedureLanguage,

@@ -13,21 +13,23 @@
 // limitations under the License.
 
 use crate::tenant_key::ident::TIdent;
-use crate::tenant_key::raw::TIdentRaw;
-
-pub type ProcedureNameIdent = TIdent<ProcedureName>;
-pub type ProcedureNameIdentRaw = TIdentRaw<ProcedureName>;
+pub type ProcedureNameIdent = TIdent<ProcedureName, ProcedureIdentity>;
 
 pub use kvapi_impl::ProcedureName;
 
-impl ProcedureNameIdent {
-    pub fn procedure_name(&self) -> &str {
-        self.name()
-    }
-}
+use crate::principal::procedure_identity::ProcedureIdentity;
+use crate::tenant::ToTenant;
 
-impl ProcedureNameIdentRaw {
-    pub fn procedure_name(&self) -> &str {
+impl ProcedureNameIdent {
+    pub fn new(tenant: impl ToTenant, name: ProcedureIdentity) -> Self {
+        Self::new_generic(tenant, name)
+    }
+
+    pub fn new_procedure(tenant: impl ToTenant, name: impl ToString, args: impl ToString) -> Self {
+        Self::new(tenant, ProcedureIdentity::new(name, args))
+    }
+
+    pub fn procedure_name(&self) -> &ProcedureIdentity {
         self.name()
     }
 }
@@ -65,16 +67,48 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use super::ProcedureNameIdent;
+    use crate::principal::ProcedureIdentity;
     use crate::tenant::Tenant;
 
+    fn test_format_parse(procedure: &str, args: &str, expect: &str) {
+        let tenant = Tenant::new_literal("test_tenant");
+        let procedure_ident = ProcedureIdentity::new(procedure, args);
+        let tenant_procedure_ident = ProcedureNameIdent::new(tenant, procedure_ident);
+
+        let key = tenant_procedure_ident.to_string_key();
+        assert_eq!(key, expect, "'{procedure}' '{args}' '{expect}'");
+
+        let tenant_procedure_ident_parsed = ProcedureNameIdent::from_str_key(&key).unwrap();
+        assert_eq!(
+            tenant_procedure_ident, tenant_procedure_ident_parsed,
+            "'{procedure}' '{args}' '{expect}'"
+        );
+    }
+
     #[test]
-    fn test_ident() {
-        let tenant = Tenant::new_literal("test");
-        let ident = ProcedureNameIdent::new(tenant, "test1");
+    fn test_tenant_procedure_ident_as_kvapi_key() {
+        test_format_parse(
+            "procedure",
+            "",
+            "__fd_procedure/test_tenant/%27procedure%27%40%27%27",
+        );
+        test_format_parse(
+            "procedure'",
+            "int,timestamp,string",
+            "__fd_procedure/test_tenant/%27procedure%2527%27%40%27int%2ctimestamp%2cstring%27",
+        );
 
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_procedure/test/test1");
+        // With correct encoding the following two pair should not be encoded into the same string.
 
-        assert_eq!(ident, ProcedureNameIdent::from_str_key(&key).unwrap());
+        test_format_parse(
+            "p1'@'string",
+            "string",
+            "__fd_procedure/test_tenant/%27p1%2527%2540%2527string%27%40%27string%27",
+        );
+        test_format_parse(
+            "p2",
+            "int'@'string",
+            "__fd_procedure/test_tenant/%27p2%27%40%27int%2527%2540%2527string%27",
+        );
     }
 }

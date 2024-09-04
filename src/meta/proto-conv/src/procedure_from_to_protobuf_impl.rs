@@ -29,6 +29,31 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
+impl FromToProto for mt::principal::ProcedureIdentity {
+    type PB = pb::ProcedureIdentity;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::ProcedureIdentity) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(mt::principal::ProcedureIdentity {
+            name: p.name.clone(),
+            args: p.args,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::ProcedureIdentity, Incompatible> {
+        Ok(pb::ProcedureIdentity {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            args: self.args.clone(),
+        })
+    }
+}
+
 impl FromToProto for mt::principal::ProcedureMeta {
     type PB = pb::ProcedureMeta;
     fn get_pb_ver(p: &Self::PB) -> u64 {

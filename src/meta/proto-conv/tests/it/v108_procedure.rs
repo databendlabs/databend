@@ -41,3 +41,24 @@ fn v108_procedure_meta() -> anyhow::Result<()> {
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), procedure_meta_v108.as_slice(), 108, want())
 }
+
+#[test]
+fn v108_procedure_identity() -> anyhow::Result<()> {
+    let procedure_identity_v108 = vec![
+        10, 2, 112, 49, 18, 10, 115, 116, 114, 105, 110, 103, 44, 105, 110, 116, 160, 6, 108, 168,
+        6, 24,
+    ];
+
+    let want = || mt::ProcedureIdentity {
+        name: "p1".to_string(),
+        args: "string,int".to_string(),
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(
+        func_name!(),
+        procedure_identity_v108.as_slice(),
+        108,
+        want(),
+    )
+}

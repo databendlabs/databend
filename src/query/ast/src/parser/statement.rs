@@ -2178,24 +2178,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, action)| Statement::System(SystemStmt { action }),
     );
 
-    pub fn procedure_table_return(i: Input) -> IResult<ProcedureReturnType> {
+    pub fn procedure_type(i: Input) -> IResult<ProcedureType> {
         map(rule! { #ident ~ #type_name }, |(name, data_type)| {
-            ProcedureReturnType {
+            ProcedureType {
                 name: Some(name.to_string()),
                 data_type,
             }
         })(i)
     }
 
-    fn procedure_return(i: Input) -> IResult<Vec<ProcedureReturnType>> {
+    fn procedure_return(i: Input) -> IResult<Vec<ProcedureType>> {
         let procedure_table_return = map(
             rule! {
-                TABLE ~ "(" ~ #comma_separated_list1(procedure_table_return) ~ ")"
+                TABLE ~ "(" ~ #comma_separated_list1(procedure_type) ~ ")"
             },
             |(_, _, test, _)| test,
         );
         let procedure_single_return = map(rule! { #type_name }, |data_type| {
-            vec![ProcedureReturnType {
+            vec![ProcedureType {
                 name: None,
                 data_type,
             }]
@@ -2204,20 +2204,49 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #procedure_table_return: "TABLE(<var_name> <type_name>, ...)")(i)
     }
 
+    fn procedure_arg(i: Input) -> IResult<Option<Vec<ProcedureType>>> {
+        let procedure_args = map(
+            rule! {
+                "(" ~ #comma_separated_list1(procedure_type) ~ ")"
+            },
+            |(_, args, _)| Some(args),
+        );
+        let procedure_empty_args = map(
+            rule! {
+                "(" ~ ")"
+            },
+            |(_, _)| None,
+        );
+        rule!(#procedure_empty_args: "()"
+            | #procedure_args: "(<var_name> <type_name>, ...)")(i)
+    }
+
     // CREATE [ OR REPLACE ] PROCEDURE <name> ()
     // RETURNS { <result_data_type> }[ NOT NULL ]
     // LANGUAGE SQL
     // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
     let create_procedure = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ "(" ~ ")" ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
         },
-        |(_, opt_or_replace, _, name, _, _, _, return_type, _, _, opt_comment, _, script)| {
+        |(_, opt_or_replace, _, name, args, _, return_type, _, _, opt_comment, _, script)| {
             let create_option = parse_create_option(opt_or_replace.is_some(), false)?;
+
+            let name = ProcedureIdentity {
+                name: name.to_string(),
+                args_type: if let Some(args) = &args {
+                    args.iter()
+                        .map(|arg| arg.data_type.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                } else {
+                    "".to_string()
+                },
+            };
             let stmt = CreateProcedureStmt {
                 create_option,
-                name: name.to_string(),
-                args: None,
+                name,
+                args,
                 return_type,
                 language: ProcedureLanguage::SQL,
                 comment: match opt_comment {
@@ -2230,23 +2259,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let drop_procedure = map(
-        rule! {
-            DROP ~ PROCEDURE ~ #ident ~ "(" ~ ")"
-        },
-        |(_, _, name, _, _)| {
-            Statement::DropProcedure(DropProcedureStmt {
-                name: name.to_string(),
-                args: None,
-            })
-        },
-    );
     let show_procedures = map(
         rule! {
             SHOW ~ PROCEDURES ~ #show_options?
         },
         |(_, _, show_options)| Statement::ShowProcedures { show_options },
     );
+
+    fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+        let procedure_type_names = map(
+            rule! {
+                "(" ~ #comma_separated_list1(type_name) ~ ")"
+            },
+            |(_, args, _)| args,
+        );
+        let procedure_empty_types = map(
+            rule! {
+                "(" ~ ")"
+            },
+            |(_, _)| vec![],
+        );
+        rule!(#procedure_empty_types: "()"
+            | #procedure_type_names: "(<type_name>, ...)")(i)
+    }
 
     let call_procedure = map(
         rule! {
@@ -2260,14 +2295,36 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let drop_procedure = map(
+        rule! {
+            DROP ~ PROCEDURE ~ #ident ~ #procedure_type_name
+        },
+        |(_, _, name, args)| {
+            Statement::DropProcedure(DropProcedureStmt {
+                name: ProcedureIdentity {
+                    name: name.to_string(),
+                    args_type: if args.is_empty() {
+                        "".to_string()
+                    } else {
+                        args.iter()
+                            .map(|arg| arg.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    },
+                },
+            })
+        },
+    );
+
     let describe_procedure = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
         },
-        |(_, _, name, _, _)| {
+        |(_, _, name, args)| {
+            // TODO: modify to ProcedureIdentify
             Statement::DescProcedure(DescProcedureStmt {
                 name: name.to_string(),
-                args: None,
+                args,
             })
         },
     );
