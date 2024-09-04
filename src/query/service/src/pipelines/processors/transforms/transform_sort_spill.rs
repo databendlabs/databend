@@ -19,8 +19,11 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
@@ -32,15 +35,13 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::CommonRows;
-use databend_common_pipeline_transforms::processors::sort::DateRows;
 use databend_common_pipeline_transforms::processors::sort::HeapMerger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
-use databend_common_pipeline_transforms::processors::sort::SimpleRows;
+use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
+use databend_common_pipeline_transforms::processors::sort::SimpleRowsDesc;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
-use databend_common_pipeline_transforms::processors::sort::StringRows;
-use databend_common_pipeline_transforms::processors::sort::TimestampRows;
 
 use crate::spillers::Spiller;
 
@@ -398,68 +399,55 @@ pub fn create_transform_sort_spill(
 ) -> Box<dyn Processor> {
     if sort_desc.len() == 1 {
         let sort_type = schema.field(sort_desc[0].offset).data_type();
-        match sort_type {
-            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => Box::new(TransformSortSpill::<
-                    SimpleRows<NumberType<NUM_TYPE>>,
-                >::create(
-                    input,
-                    output,
-                    schema,
-                    sort_desc,
-                    limit,
-                    spiller,
-                    output_order_col
-                )),
-            }),
-            DataType::Date => Box::new(TransformSortSpill::<DateRows>::create(
-                input,
-                output,
-                schema,
-                sort_desc,
-                limit,
-                spiller,
-                output_order_col,
-            )),
-            DataType::Timestamp => Box::new(TransformSortSpill::<TimestampRows>::create(
-                input,
-                output,
-                schema,
-                sort_desc,
-                limit,
-                spiller,
-                output_order_col,
-            )),
-            DataType::String => Box::new(TransformSortSpill::<StringRows>::create(
-                input,
-                output,
-                schema,
-                sort_desc,
-                limit,
-                spiller,
-                output_order_col,
-            )),
-            _ => Box::new(TransformSortSpill::<CommonRows>::create(
-                input,
-                output,
-                schema,
-                sort_desc,
-                limit,
-                spiller,
-                output_order_col,
-            )),
+        let asc = sort_desc[0].asc;
+
+        macro_rules! create_simple {
+            ($data_type: ty) => {
+                if asc {
+                    Box::new(TransformSortSpill::<SimpleRowsAsc<$data_type>>::create(
+                        input,
+                        output,
+                        schema,
+                        sort_desc,
+                        limit,
+                        spiller,
+                        output_order_col,
+                    ))
+                } else {
+                    Box::new(TransformSortSpill::<SimpleRowsDesc<$data_type>>::create(
+                        input,
+                        output,
+                        schema,
+                        sort_desc,
+                        limit,
+                        spiller,
+                        output_order_col,
+                    ))
+                }
+            };
         }
-    } else {
-        Box::new(TransformSortSpill::<CommonRows>::create(
-            input,
-            output,
-            schema,
-            sort_desc,
-            limit,
-            spiller,
-            output_order_col,
-        ))
+
+        match sort_type {
+            DataType::Number(num_ty) => {
+                return with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => create_simple!(NumberType<NUM_TYPE>),
+                });
+            }
+            DataType::Date => return create_simple!(DateType),
+            DataType::Timestamp => return create_simple!(TimestampType),
+            DataType::String => return create_simple!(StringType),
+            _ => (),
+        }
     }
+    Box::new(TransformSortSpill::<CommonRows>::create(
+        input,
+        output,
+        schema,
+        sort_desc,
+        limit,
+        spiller,
+        output_order_col,
+    ))
 }
 
 #[cfg(test)]
@@ -479,7 +467,7 @@ mod tests {
     use databend_common_expression::SortColumnDescription;
     use databend_common_pipeline_core::processors::InputPort;
     use databend_common_pipeline_core::processors::OutputPort;
-    use databend_common_pipeline_transforms::processors::sort::SimpleRows;
+    use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
     use databend_common_storage::DataOperator;
     use itertools::Itertools;
     use rand::rngs::ThreadRng;
@@ -495,7 +483,7 @@ mod tests {
     async fn create_test_transform(
         ctx: Arc<QueryContext>,
         limit: Option<usize>,
-    ) -> Result<TransformSortSpill<SimpleRows<Int32Type>>> {
+    ) -> Result<TransformSortSpill<SimpleRowsAsc<Int32Type>>> {
         let op = DataOperator::instance().operator();
         let spiller = Spiller::create(
             ctx.clone(),
@@ -511,7 +499,7 @@ mod tests {
             is_nullable: false,
         }]);
 
-        let transform = TransformSortSpill::<SimpleRows<Int32Type>>::create(
+        let transform = TransformSortSpill::<SimpleRowsAsc<Int32Type>>::create(
             InputPort::create(),
             OutputPort::create(),
             DataSchemaRefExt::create(vec![DataField::new(
