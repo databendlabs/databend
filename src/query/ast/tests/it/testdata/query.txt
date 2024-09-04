@@ -639,7 +639,7 @@ Query {
 ---------- Input ----------
 select * from customer with consume as s
 ---------- Output ---------
-SELECT * FROM customer WITH (CONSUME) AS s
+SELECT * FROM customer WITH (consume = 'true') AS s
 ---------- AST ------------
 Query {
     span: Some(
@@ -697,8 +697,9 @@ Query {
                     temporal: None,
                     with_options: Some(
                         WithOptions {
-                            consume: true,
-                            max_batch_size: None,
+                            options: {
+                                "consume": "true",
+                            },
                         },
                     ),
                     pivot: None,
