@@ -197,7 +197,7 @@ impl Binder {
                     && *field_type != TableDataType::Date
                 {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(format!(
-                        "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`]",
+                        "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`] and must be `NOT NULL`",
                     )));
                 }
             }

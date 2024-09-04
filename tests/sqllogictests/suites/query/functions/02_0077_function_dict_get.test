@@ -10,14 +10,14 @@ CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMA
 query TT
 select dict_get(d, 'value', 'a') from t
 ----
-100
-100
-100
+abc
+abc
+abc
 
 query TT
 SELECT dict_get(d, 'value', 'b')
 ----
-abc
+def
 
 statement error 1006
 select dict_get(d, 'value11','a')

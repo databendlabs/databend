@@ -39,27 +39,13 @@ async fn process(socket: TcpStream) {
     use std::collections::HashMap;
 
     use mini_redis::Command::Get;
-    use mini_redis::Command::Set;
     use mini_redis::Command::{self};
 
     // A hashmap is used to store data
     let mut db = HashMap::new();
 
-    let v1 = "100".to_string();
-    let u8s = v1.as_bytes();
-    let mut res = Vec::new();
-    for u in u8s {
-        res.push(*u);
-    }
-    db.insert("a".to_string(), res);
-
-    let v2 = "200".to_string();
-    let u8s1 = v2.as_bytes();
-    let mut res1 = Vec::new();
-    for u in u8s1 {
-        res1.push(*u);
-    }
-    db.insert("b".to_string(), res1);
+    db.insert("a".to_string(), "abc".as_bytes().to_vec());
+    db.insert("a".to_string(), "def".as_bytes().to_vec());
 
     // Connection, provided by `mini-redis`, handles parsing frames from
     // the socket
@@ -69,11 +55,6 @@ async fn process(socket: TcpStream) {
     while let Some(frame) = connection.read_frame().await.unwrap() {
         println!("GOT: {:?}", frame);
         let response = match Command::from_frame(frame).unwrap() {
-            Set(cmd) => {
-                // The value is stored as `Vec<u8>`
-                db.insert(cmd.key().to_string(), cmd.value().to_vec());
-                Frame::Simple("OK".to_string())
-            }
             Get(cmd) => {
                 if let Some(value) = db.get(cmd.key()) {
                     // `Frame::Bulk` expects data to be of type `Bytes`. This
@@ -84,7 +65,7 @@ async fn process(socket: TcpStream) {
                     Frame::Null
                 }
             }
-            cmd => panic!("unimplemented {:?}", cmd),
+            _ => Frame::Simple("Ok".to_string()),
         };
 
         // Write the response to the client
