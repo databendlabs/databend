@@ -4918,7 +4918,6 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
- "env_logger",
  "futures",
  "futures-util",
  "jsonb",
