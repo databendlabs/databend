@@ -65,8 +65,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ctx.set_error(builder.len(), "Width must be less than or equal to 64");
                 } else {
                     let points = val.iter().collect::<Vec<_>>();
-                    let slice = hilbert_index(&points, len as usize);
-                    builder.put_slice(&slice);
+                    let dimension = points.len();
+                    if std::intrinsics::unlikely(dimension < 2 || dimension > 5) {
+                        ctx.set_error(builder.len(), "Dimension must between 2 and 5");
+                    } else {
+                        let slice = hilbert_index(&points, len as usize);
+                        builder.put_slice(&slice);
+                    }
                 }
                 builder.commit_row();
             },

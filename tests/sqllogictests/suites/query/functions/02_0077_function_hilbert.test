@@ -26,6 +26,12 @@ bff8000000000000
 statement error 1006
 SELECT hilbert_index([to_binary('6tkz2eT'), to_binary('3wnehCt')], 17165323156917005607);
 
+statement error 1006
+SELECT to_hex(hilbert_index([hilbert_key(1), hilbert_key(1), hilbert_key(1), hilbert_key(1),hilbert_key(1), hilbert_key(1)], 1));
+
+statement error 1006
+SELECT to_hex(hilbert_index([hilbert_key(1)], 1));
+
 query T
 SELECT to_hex(hilbert_index([to_binary('6tkz2eT'), to_binary('3wnehCt')], 7));
 ----
