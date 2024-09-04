@@ -15,17 +15,17 @@ abc
 abc
 
 query TT
-SELECT dict_get(d, 'value', 'b')
+SELECT dict_get(d, 'value', b)
 ----
 def
 
 statement error 1006
-select dict_get(d, 'value11','a')
+select dict_get(d, 'value11', a)
 
 statement error 3114
-select dict_get(test, 'value','b')
+select dict_get(test, 'value', b)
 
 query TT
-SELECT dict_get(d, 'value', 'test')
+SELECT dict_get(d, 'value', test)
 ----
 (empty)
