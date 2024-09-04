@@ -1,15 +1,17 @@
 statement ok
-create table t(a string)
+create or replace table t(a string)
 
 statement ok
-insert into t1 values('a'),('b'),('c')
+insert into t values('a'),('b'),('c')
 
 statement ok
-CREATE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 query TT
-select dict_get(d, 'value', a) from t1
+select dict_get(d, 'value', 'a') from t
 ----
+100
+100
 100
 
 query TT
@@ -26,4 +28,4 @@ select dict_get(test, 'value','b')
 query TT
 SELECT dict_get(d, 'value', 'test')
 ----
-
+(empty)

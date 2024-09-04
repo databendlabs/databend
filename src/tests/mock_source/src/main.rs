@@ -17,6 +17,7 @@ use mini_redis::Frame;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 
+#[allow(clippy::disallowed_methods)]
 #[tokio::main]
 async fn main() {
     // Bind the listener to the address
@@ -44,17 +45,19 @@ async fn process(socket: TcpStream) {
     // A hashmap is used to store data
     let mut db = HashMap::new();
 
-    let u8s = "100".to_string().as_bytes();
-    let res = Vec::new();
+    let v1 = "100".to_string();
+    let u8s = v1.as_bytes();
+    let mut res = Vec::new();
     for u in u8s {
-        res.append(*u);
+        res.push(*u);
     }
     db.insert("a".to_string(), res);
 
-    let u8s1 = "200".to_string().as_bytes();
-    let res1 = Vec::new();
+    let v2 = "200".to_string();
+    let u8s1 = v2.as_bytes();
+    let mut res1 = Vec::new();
     for u in u8s1 {
-        res1.append(*u);
+        res1.push(*u);
     }
     db.insert("b".to_string(), res1);
 

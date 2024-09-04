@@ -112,7 +112,7 @@ impl Binder {
                     return Err(ErrorCode::MissingDictionaryOption(
                         "The redis configuration is missing one or more required options. "
                             .to_owned()
-                            + "Please ensure you have provided values for 'host' and 'port'.",
+                            + "Please ensure you have provided values for 'host' and 'port'",
                     ));
                 }
             }
@@ -181,16 +181,20 @@ impl Binder {
         } else if source.to_lowercase() == *"mysql" {
             for table_field in schema.fields() {
                 let field_type = &table_field.data_type;
-                if !(*field_type == TableDataType::Boolean
-                    || *field_type == TableDataType::String
-                    || *field_type == TableDataType::Number(NumberDataType::Float32)
-                    || *field_type == TableDataType::Number(NumberDataType::Float64)
-                    || *field_type == TableDataType::Number(NumberDataType::Int16)
-                    || *field_type == TableDataType::Number(NumberDataType::Int32)
-                    || *field_type == TableDataType::Number(NumberDataType::Int8)
-                    || *field_type == TableDataType::Number(NumberDataType::Int64)
-                    || *field_type == TableDataType::Timestamp
-                    || *field_type == TableDataType::Date)
+                if *field_type != TableDataType::Boolean
+                    && *field_type != TableDataType::String
+                    && *field_type != TableDataType::Number(NumberDataType::Float32)
+                    && *field_type != TableDataType::Number(NumberDataType::Float64)
+                    && *field_type != TableDataType::Number(NumberDataType::Int16)
+                    && *field_type != TableDataType::Number(NumberDataType::Int32)
+                    && *field_type != TableDataType::Number(NumberDataType::Int8)
+                    && *field_type != TableDataType::Number(NumberDataType::Int64)
+                    && *field_type != TableDataType::Number(NumberDataType::UInt8)
+                    && *field_type != TableDataType::Number(NumberDataType::UInt16)
+                    && *field_type != TableDataType::Number(NumberDataType::UInt32)
+                    && *field_type != TableDataType::Number(NumberDataType::UInt64)
+                    && *field_type != TableDataType::Timestamp
+                    && *field_type != TableDataType::Date
                 {
                     return Err(ErrorCode::WrongDictionaryFieldExpr(format!(
                         "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`]",

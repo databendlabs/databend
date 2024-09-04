@@ -14,7 +14,7 @@ statement error 3117
 CREATE DICTIONARY d(c1 int, c2 Varchar) PRIMARY KEY c1 SOURCE(postgresql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
 statement ok
-CREATE DICTIONARY d(c1 int, c2 Varchar) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+CREATE DICTIONARY d(c1 int, c2 string) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
 statement ok
 CREATE DICTIONARY IF NOT EXISTS d(c1 int, c2 Varchar) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
@@ -47,7 +47,7 @@ statement ok
 create or replace dictionary d4(a Varchar, b int) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
 statement ok
-CREATE DICTIONARY d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+CREATE or replace DICTIONARY d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 statement error 3116
 create or replace dictionary d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379' db_index='19'))
@@ -55,15 +55,18 @@ create or replace dictionary d5(key string not null, value string not null) PRIM
 statement error 3118
 create or replace dictionary d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1'))
 
+statement error 3119
+create or replace dictionary d5(key int not null, value int not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
 query TT
 show create dictionary d
 ----
-d CREATE DICTIONARY d ( c1 INT NULL, c2 VARCHAR NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' username='root' table='test_table'))
+d CREATE DICTIONARY d ( c1 INT NULL, c2 VARCHAR NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root'))
 
 query TT
 show create dictionary d3
 ----
-d3 CREATE DICTIONARY d3 ( a INT NULL, b VARCHAR NULL ) PRIMARY KEY a SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' username='root' table='test_table')) COMMENT 'comment'
+d3 CREATE DICTIONARY d3 ( a INT NULL, b VARCHAR NULL ) PRIMARY KEY a SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root')) COMMENT 'comment'
 
 query TT
 show create dictionary d5
