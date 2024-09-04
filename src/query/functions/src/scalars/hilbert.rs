@@ -66,7 +66,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 if std::intrinsics::unlikely(len > 64) {
                     ctx.set_error(builder.len(), "Width must be less than or equal to 64");
-                } else if std::intrinsics::unlikely(dimension < 2 || dimension > 5) {
+                } else if std::intrinsics::unlikely(!(2..=5).contains(&dimension)) {
                     ctx.set_error(builder.len(), "Dimension must between 2 and 5");
                 } else {
                     let slice = hilbert_index(&points, len as usize);
