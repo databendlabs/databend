@@ -66,7 +66,7 @@ impl Binder {
         let source = self.normalize_object_identifier(source_name);
 
         if source.to_lowercase() != *"mysql" && source.to_lowercase() != *"redis" {
-            return Err(ErrorCode::UnsupportedDictionarySource(format!(
+            return Err(ErrorCode::BadArguments(format!(
                 "The specified source '{}' is not currently supported",
                 source.to_lowercase(),
             )));
@@ -80,7 +80,7 @@ impl Binder {
             let required_options = ["host", "port", "username", "password", "db", "table"];
             for option in required_options {
                 if !options.contains_key(option) {
-                    return Err(ErrorCode::MissingDictionaryOption(
+                    return Err(ErrorCode::BadArguments(
                         "The mysql configurations are missing one or more required options. "
                             .to_owned()
                             + "Please ensure you have provided values for 'host', 'port', 'username', 'password', 'db' and 'table'.",
@@ -88,20 +88,20 @@ impl Binder {
                 }
             }
             if required_options.len() != options.len() {
-                return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                return Err(ErrorCode::BadArguments(format!(
                     "Some provided options are not recognized"
                 )));
             }
             let port = match options.get("port") {
                 Some(p) => p.to_string(),
                 None => {
-                    return Err(ErrorCode::MissingDictionaryOption(
+                    return Err(ErrorCode::BadArguments(
                         "The redis configurations are missing `port`",
                     ));
                 }
             };
             if port.parse::<u64>().is_err() {
-                return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                return Err(ErrorCode::BadArguments(format!(
                     "The value of `port` must be UInt"
                 )));
             }
@@ -109,7 +109,7 @@ impl Binder {
             let required_options = ["host", "port"];
             for option in required_options {
                 if !options.contains_key(option) {
-                    return Err(ErrorCode::MissingDictionaryOption(
+                    return Err(ErrorCode::BadArguments(
                         "The redis configuration is missing one or more required options. "
                             .to_owned()
                             + "Please ensure you have provided values for 'host' and 'port'",
@@ -119,7 +119,7 @@ impl Binder {
             if let Some(db_index) = options.get("db_index") {
                 let db_index = db_index.parse::<u64>().unwrap();
                 if db_index > 15 {
-                    return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                    return Err(ErrorCode::BadArguments(format!(
                         "The value of `db_index` must be between [0,15]"
                     )));
                 }
@@ -140,7 +140,7 @@ impl Binder {
                 keys.insert(key);
             }
             if !keys.is_subset(&allowed_options) {
-                return Err(ErrorCode::UnsupportedDictionaryOption(format!(
+                return Err(ErrorCode::BadArguments(format!(
                     "The redis configurations must be in [`host`, `port`, `password`, `db_index`] ",
                 )));
             }
@@ -156,7 +156,7 @@ impl Binder {
         let mut fields_names: Vec<String> = Vec::new();
         for table_field in schema.fields() {
             if table_field.computed_expr.is_some() {
-                return Err(ErrorCode::WrongDictionaryFieldExpr(
+                return Err(ErrorCode::BadArguments(
                     "The table field configuration is invalid. ".to_owned()
                         + "Computed expressions for the table fields should not be set",
                 ));
@@ -166,13 +166,13 @@ impl Binder {
         // Check for redis.
         if source.to_lowercase() == *"redis" {
             if fields_names.len() != 2 {
-                return Err(ErrorCode::WrongDictionaryFieldExpr(
+                return Err(ErrorCode::BadArguments(
                     "The number of Redis fields must be two",
                 ));
             }
             for table_field in schema.fields() {
                 if *table_field.data_type() != TableDataType::String {
-                    return Err(ErrorCode::WrongDictionaryFieldExpr(
+                    return Err(ErrorCode::BadArguments(
                         "The type of Redis field must be string",
                     ));
                 }
@@ -180,23 +180,15 @@ impl Binder {
         // Check for mysql
         } else if source.to_lowercase() == *"mysql" {
             for table_field in schema.fields() {
-                let field_type = &table_field.data_type;
-                if *field_type != TableDataType::Boolean
-                    && *field_type != TableDataType::String
-                    && *field_type != TableDataType::Number(NumberDataType::Float32)
-                    && *field_type != TableDataType::Number(NumberDataType::Float64)
-                    && *field_type != TableDataType::Number(NumberDataType::Int16)
-                    && *field_type != TableDataType::Number(NumberDataType::Int32)
-                    && *field_type != TableDataType::Number(NumberDataType::Int8)
-                    && *field_type != TableDataType::Number(NumberDataType::Int64)
-                    && *field_type != TableDataType::Number(NumberDataType::UInt8)
-                    && *field_type != TableDataType::Number(NumberDataType::UInt16)
-                    && *field_type != TableDataType::Number(NumberDataType::UInt32)
-                    && *field_type != TableDataType::Number(NumberDataType::UInt64)
-                    && *field_type != TableDataType::Timestamp
-                    && *field_type != TableDataType::Date
-                {
-                    return Err(ErrorCode::WrongDictionaryFieldExpr(format!(
+                if !matches!(
+                    table_field.data_type().remove_nullable(),
+                    TableDataType::Boolean
+                        | TableDataType::String
+                        | TableDataType::Number(_)
+                        | TableDataType::Date
+                        | TableDataType::Timestamp
+                ) {
+                    return Err(ErrorCode::BadArguments(format!(
                         "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`] and must be `NOT NULL`",
                     )));
                 }

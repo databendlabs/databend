@@ -8,7 +8,7 @@ statement ok
 CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 query TT
-select dict_get(d, 'value', 'a') from t
+select dict_get(d, 'value', a) from t
 ----
 abc
 abc
