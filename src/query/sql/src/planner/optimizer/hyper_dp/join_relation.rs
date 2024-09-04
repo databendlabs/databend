@@ -49,20 +49,14 @@ impl JoinRelation {
         metadata: MetadataRef,
     ) -> Result<f64> {
         let card = if let Some(sample_executor) = &self.sample_executor {
-            match dynamic_sample(
+            dynamic_sample(
                 ctx.clone(),
                 metadata.clone(),
                 &self.s_expr,
                 sample_executor.clone(),
             )
-            .await
-            {
-                Ok(card) => card.cardinality,
-                Err(_) => {
-                    let rel_expr = RelExpr::with_s_expr(&self.s_expr);
-                    rel_expr.derive_cardinality()?.cardinality
-                }
-            }
+            .await?
+            .cardinality
         } else {
             let rel_expr = RelExpr::with_s_expr(&self.s_expr);
             rel_expr.derive_cardinality()?.cardinality

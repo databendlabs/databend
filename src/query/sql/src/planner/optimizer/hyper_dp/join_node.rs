@@ -14,11 +14,9 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
@@ -26,7 +24,6 @@ use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
-use crate::MetadataRef;
 use crate::ScalarExpr;
 
 #[derive(Clone)]
