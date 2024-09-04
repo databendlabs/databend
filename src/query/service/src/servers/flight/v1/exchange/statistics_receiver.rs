@@ -145,6 +145,7 @@ impl StatisticsReceiver {
                 ctx.get_data_cache_metrics().merge(metrics);
                 Ok(false)
             }
+            Ok(Some(DataPacket::FlightControl(_))) => unreachable!(),
         }
     }
 

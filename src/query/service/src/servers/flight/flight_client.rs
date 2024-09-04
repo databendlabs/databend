@@ -12,25 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::task::Waker;
 
 use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_arrow::arrow_format::flight::data::Action;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
-use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::func_path;
@@ -40,6 +41,7 @@ use futures::Stream;
 use futures::StreamExt;
 use futures_util::future::Either;
 use log::info;
+use log::warn;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -55,6 +57,7 @@ use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::DataPacket;
+use crate::servers::flight::v1::packets::FlightControlCommand;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
@@ -128,7 +131,7 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    pub async fn request_server_exchange(
+    pub async fn request_statistics_exchange(
         &mut self,
         query_id: &str,
         target: &str,
@@ -136,7 +139,8 @@ impl FlightClient {
         retry_times: usize,
         retry_interval: usize,
     ) -> Result<FlightExchange> {
-        let req = RequestBuilder::create(Ticket::default())
+        let (server_tx, server_rx) = async_channel::bounded(1);
+        let req = RequestBuilder::create(Box::pin(server_rx))
             .with_metadata("x-type", "request_server_exchange")?
             .with_metadata("x-target", target)?
             .with_metadata("x-query-id", query_id)?
@@ -156,12 +160,13 @@ impl FlightClient {
                 retry_times,
                 retry_interval: Duration::from_secs(retry_interval as u64),
             }),
+            server_tx,
         ))
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn do_get(
+    pub async fn request_fragment_exchange(
         &mut self,
         query_id: &str,
         target: &str,
@@ -170,7 +175,9 @@ impl FlightClient {
         retry_times: usize,
         retry_interval: usize,
     ) -> Result<FlightExchange> {
-        let request = RequestBuilder::create(Ticket::default())
+        let (server_tx, server_rx) = async_channel::bounded(1);
+
+        let request = RequestBuilder::create(Box::pin(server_rx))
             .with_metadata("x-type", "exchange_fragment")?
             .with_metadata("x-target", target)?
             .with_metadata("x-query-id", query_id)?
@@ -193,6 +200,7 @@ impl FlightClient {
                 retry_times,
                 retry_interval: Duration::from_secs(retry_interval as u64),
             }),
+            server_tx,
         ))
     }
 
@@ -209,7 +217,10 @@ impl FlightClient {
 
                 loop {
                     match futures::future::select(notified, streaming_next).await {
-                        Either::Left((_, _)) | Either::Right((None, _)) => {
+                        Either::Left((_, _)) => {
+                            break;
+                        }
+                        Either::Right((None, _)) => {
                             break;
                         }
                         Either::Right((Some(message), next_notified)) => {
@@ -230,7 +241,6 @@ impl FlightClient {
                         }
                     }
                 }
-
                 drop(streaming);
                 tx.close();
             }
@@ -243,8 +253,11 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
-        match self.inner.do_get(request).await {
+    async fn get_streaming(
+        &mut self,
+        request: Request<Pin<Box<Receiver<FlightData>>>>,
+    ) -> Result<Streaming<FlightData>> {
+        match self.inner.do_exchange(request).await {
             Ok(res) => Ok(res.into_inner()),
             Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
         }
@@ -252,15 +265,16 @@ impl FlightClient {
 
     #[async_backtrace::framed]
     async fn reconnect(&mut self, info: &ConnectionInfo, seq: usize) -> Result<FlightRxInner> {
+        let (server_tx, server_rx) = async_channel::bounded(1);
         let request = match info.fragment {
-            Some(fragment_id) => RequestBuilder::create(Ticket::default())
+            Some(fragment_id) => RequestBuilder::create(Box::pin(server_rx))
                 .with_metadata("x-type", "exchange_fragment")?
                 .with_metadata("x-target", &info.target)?
                 .with_metadata("x-query-id", &info.query_id)?
                 .with_metadata("x-fragment-id", &fragment_id.to_string())?
                 .with_metadata("x-continue-from", &seq.to_string())?
                 .build(),
-            None => RequestBuilder::create(Ticket::default())
+            None => RequestBuilder::create(Box::pin(server_rx))
                 .with_metadata("x-type", "request_server_exchange")?
                 .with_metadata("x-target", &info.target)?
                 .with_metadata("x-query-id", &info.query_id)?
@@ -272,7 +286,7 @@ impl FlightClient {
         let streaming = self.get_streaming(request).await?;
 
         let (network_notify, recv) = Self::streaming_receiver(streaming);
-        Ok(FlightRxInner::create(network_notify, recv))
+        Ok(FlightRxInner::create(network_notify, recv, server_tx))
     }
 }
 
@@ -289,11 +303,20 @@ pub struct ConnectionInfo {
 pub struct FlightRxInner {
     notify: Arc<WatchNotify>,
     rx: Receiver<Result<FlightData>>,
+    server_tx: Sender<FlightData>,
 }
 
 impl FlightRxInner {
-    pub fn create(notify: Arc<WatchNotify>, rx: Receiver<Result<FlightData>>) -> FlightRxInner {
-        FlightRxInner { rx, notify }
+    pub fn create(
+        notify: Arc<WatchNotify>,
+        rx: Receiver<Result<FlightData>>,
+        server_tx: Sender<FlightData>,
+    ) -> FlightRxInner {
+        FlightRxInner {
+            rx,
+            notify,
+            server_tx,
+        }
     }
 
     #[async_backtrace::framed]
@@ -308,6 +331,10 @@ impl FlightRxInner {
     pub fn close(&self) {
         self.rx.close();
         self.notify.notify_waiters();
+        let res = self.server_tx.send(
+            FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close)).unwrap(),
+        );
+        info!("Send close signal to flight server, result: {:?}", res);
     }
 }
 
@@ -339,7 +366,18 @@ impl RetryableFlightReceiver {
             let inner = unsafe { &*self.inner.load(Ordering::SeqCst) };
             return match inner.recv().await {
                 Ok(message) => {
-                    self.seq.fetch_add(1, Ordering::SeqCst);
+                    let ack_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+                    if message.is_some() {
+                        let error = inner
+                            .server_tx
+                            .send(FlightData::try_from(DataPacket::FlightControl(
+                                FlightControlCommand::Ack(ack_seq),
+                            ))?)
+                            .await;
+                        if error.is_err() {
+                            info!("Error while sending ack to flight : {:?}", error);
+                        }
+                    }
                     Ok(message)
                 }
                 Err(cause) => {
@@ -471,12 +509,13 @@ impl FlightExchange {
         notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
         connection_info: Option<ConnectionInfo>,
+        server_tx: Sender<FlightData>,
     ) -> FlightExchange {
         FlightExchange::Receiver(ReceiverPayload {
             seq: Arc::new(AtomicUsize::new(0)),
             info: connection_info,
             inner: Arc::new(AtomicPtr::new(Box::into_raw(Box::new(
-                FlightRxInner::create(notify, receiver),
+                FlightRxInner::create(notify, receiver, server_tx),
             )))),
         })
     }
@@ -515,98 +554,60 @@ impl FlightExchange {
 
 pub struct FlightDataAckState {
     seq: AtomicUsize,
-    auto_ack_window_size: usize,
-
-    may_retry: bool,
+    finish: AtomicBool,
     receiver: Receiver<std::result::Result<FlightData, Status>>,
-    confirmation_queue: VecDeque<(usize, std::result::Result<Arc<FlightData>, Status>)>,
+    last_packet: Option<(usize, std::result::Result<Arc<FlightData>, Status>)>,
+    clean_up_handle: Option<JoinHandle<()>>,
+    waker: Option<Waker>,
 }
 
 impl FlightDataAckState {
     pub fn create(
-        window_size: usize,
         receiver: Receiver<std::result::Result<FlightData, Status>>,
     ) -> Arc<Mutex<FlightDataAckState>> {
         Arc::new(Mutex::new(FlightDataAckState {
             receiver,
-            may_retry: true,
             seq: AtomicUsize::new(0),
-            auto_ack_window_size: window_size,
-            confirmation_queue: VecDeque::with_capacity(window_size),
+            last_packet: None,
+            finish: AtomicBool::new(false),
+            clean_up_handle: None,
+            waker: None,
         }))
     }
 
-    fn ack_message(&mut self, seq: usize) {
-        while let Some((id, _)) = self.confirmation_queue.front() {
-            if *id <= seq {
-                self.confirmation_queue.pop_front();
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn end_of_stream(&mut self) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+    fn error_of_stream(
+        &mut self,
+        cause: Status,
+    ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
         let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
-        self.ack_message(message_seq);
-
-        self.may_retry = false;
-        Poll::Ready(None)
-    }
-
-    fn error_of_stream(&mut self, cause: Status) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
-        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
-
-        // Automatically acknowledge messages outside the ACK window.
-        // A better approach is for the client to send back an ACK.
-        if message_seq >= self.auto_ack_window_size {
-            self.ack_message(message_seq - self.auto_ack_window_size);
-        }
-
-        self.confirmation_queue
-            .push_back((message_seq, Err(cause.clone())));
+        self.last_packet = Some((message_seq, Err(cause.clone())));
         Poll::Ready(Some(Err(cause)))
     }
 
-    fn message(&mut self, data: FlightData) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+    fn end_of_stream(&mut self) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+        self.seq.fetch_add(1, Ordering::SeqCst);
+        self.finish.store(true, Ordering::SeqCst);
+        Poll::Ready(None)
+    }
+
+    fn message(
+        &mut self,
+        data: FlightData,
+    ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
         let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
         let data = Arc::new(data);
         let duplicate = data.clone();
-
-        // Automatically acknowledge messages outside the ACK window.
-        // A better approach is for the client to send back an ACK.
-        if message_seq >= self.auto_ack_window_size {
-            self.ack_message(message_seq - self.auto_ack_window_size);
-        }
-
-        self.confirmation_queue.push_back((message_seq, Ok(data)));
+        self.last_packet = Some((message_seq, Ok(data)));
         Poll::Ready(Some(Ok(duplicate)))
     }
 
     fn check_resend(&mut self) -> Option<std::result::Result<Arc<FlightData>, Status>> {
         let current_seq = self.seq.load(Ordering::SeqCst);
 
-        // normal case, no resend
-        if let Some((id, _)) = self.confirmation_queue.back() {
-            if *id == current_seq - 1 {
-                return None;
-            }
-        }
-
-        // message is ack
-        if let Some((id, _)) = self.confirmation_queue.front() {
-            if *id > current_seq {
-                return Some(Err(Status::aborted(
-                    "Aborted query, because the remote flight channel is closed.",
-                )));
-            }
-        }
-
-        // resend case, iterate the queue to find the message to resend
-        for (id, res) in self.confirmation_queue.iter() {
-            if *id == current_seq {
+        if let Some((seq, packet)) = &self.last_packet {
+            if seq == &current_seq {
                 self.seq.fetch_add(1, Ordering::SeqCst);
-                return Some(res.clone());
+                return Some(packet.clone());
             }
         }
 
@@ -617,8 +618,19 @@ impl FlightDataAckState {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
+        if self.finish.load(Ordering::SeqCst) {
+            return Poll::Ready(None);
+        }
+
+        // check if seq has been reset, if so, resend last packet
         if let Some(res) = self.check_resend() {
             return Poll::Ready(Some(res));
+        }
+
+        // last packet is not acked, need to wait
+        if self.last_packet.is_some() {
+            self.waker = Some(cx.waker().clone());
+            return Poll::Pending;
         }
         match Pin::new(&mut self.receiver).poll_next(cx) {
             Poll::Pending => Poll::Pending,
@@ -630,6 +642,7 @@ impl FlightDataAckState {
 }
 
 pub struct FlightDataAckStream {
+    notify: Arc<WatchNotify>,
     state: Arc<Mutex<FlightDataAckState>>,
 }
 
@@ -637,48 +650,107 @@ impl FlightDataAckStream {
     pub fn create(
         state: Arc<Mutex<FlightDataAckState>>,
         begin: usize,
+        client_stream: Streaming<FlightData>,
     ) -> Result<FlightDataAckStream> {
-        // reset begin
-        info!("Create FlightDataAckStream hold lock");
+        let notify = Self::streaming_receiver(state.clone(), client_stream);
         let mut state_guard = state.lock();
         state_guard.seq.store(begin, Ordering::SeqCst);
-        state_guard.may_retry = true;
+        if let Some(handle) = state_guard.clean_up_handle.take() {
+            handle.abort();
+        }
         drop(state_guard);
-        info!("Create FlightDataAckStream release lock");
-        Ok(FlightDataAckStream { state })
+        Ok(FlightDataAckStream { notify, state })
+    }
+
+    fn streaming_receiver(
+        state: Arc<Mutex<FlightDataAckState>>,
+        mut streaming: Streaming<FlightData>,
+    ) -> Arc<WatchNotify> {
+        let notify = Arc::new(WatchNotify::new());
+        let fut = {
+            let notify = notify.clone();
+            async move {
+                let mut notified = Box::pin(notify.notified());
+                let mut streaming_next = streaming.next();
+
+                loop {
+                    match futures::future::select(notified, streaming_next).await {
+                        Either::Left((_, _)) | Either::Right((None, _)) => {
+                            break;
+                        }
+                        Either::Right((Some(message), next_notified)) => {
+                            notified = next_notified;
+                            streaming_next = streaming.next();
+                            match message {
+                                Ok(message) => {
+                                    let packet = DataPacket::try_from(message);
+                                    match packet {
+                                        Ok(DataPacket::FlightControl(command)) => match command {
+                                            FlightControlCommand::Ack(_seq) => {
+                                                let mut state_guard = state.lock();
+                                                state_guard.last_packet = None;
+                                                if let Some(waker) = state_guard.waker.take() {
+                                                    waker.wake();
+                                                }
+                                                drop(state_guard);
+                                            }
+                                            FlightControlCommand::Close => {
+                                                state.lock().finish.store(true, Ordering::SeqCst);
+                                                info!("Received Command Close");
+                                                break;
+                                            }
+                                        },
+                                        Ok(_) => {
+                                            unreachable!(
+                                                "logic error: only FlightControl packet is expected"
+                                            )
+                                        }
+                                        Err(_) => {
+                                            warn!("flight data is broken");
+                                            break;
+                                        }
+                                    }
+                                }
+                                Err(_) => {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                drop(state);
+                drop(streaming);
+            }
+        }
+        .in_span(Span::enter_with_local_parent(full_name!()));
+
+        databend_common_base::runtime::spawn(fut);
+
+        notify
     }
 }
 
 impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
-        info!("Drop FlightDataAckStream");
-        let state_should_retry = {
-            info!("Drop stage1 hold lock");
-            let mut state = self.state.lock();
-            if state.may_retry {
-                state.may_retry = false;
-                true
-            } else {
-                state.receiver.close();
-                false
-            }
-        };
-        info!("Drop stage1 release lock");
-        if state_should_retry {
-            let weak = Arc::downgrade(&self.state);
-            GlobalIORuntime::instance().spawn(async move {
-                info!("Drop stage2 begin, wait for 60");
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                if let Some(ss) = weak.upgrade() {
-                    info!("Drop stage2 hold lock");
-                    let ss = ss.lock();
-                    if !ss.may_retry {
-                        ss.receiver.close();
-                    }
-                    info!("Drop stage2 release lock");
-                }
-            });
+        let mut state = self.state.lock();
+        if state.finish.load(Ordering::SeqCst) {
+            self.notify.notify_waiters();
+            state.receiver.close();
+            return;
         }
+        let weak_state = Arc::downgrade(&self.state);
+        let notify = Arc::downgrade(&self.notify);
+        let handle = GlobalIORuntime::instance().spawn(async move {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            if let Some(ss) = weak_state.upgrade() {
+                let ss = ss.lock();
+                ss.receiver.close();
+            }
+            if let Some(notify) = notify.upgrade() {
+                notify.notify_waiters();
+            }
+        });
+        state.clean_up_handle = Some(handle);
     }
 }
 
@@ -686,9 +758,6 @@ impl Stream for FlightDataAckStream {
     type Item = std::result::Result<Arc<FlightData>, Status>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        info!("Poll next hold lock");
-        let res = self.state.lock().poll_next(cx);
-        info!("Poll next release lock");
-        res
+        self.state.lock().poll_next(cx)
     }
 }

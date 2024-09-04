@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 perform_initial_query() {
-    local response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select avg(number) from numbers(1000000000)"}')
+    local response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select avg(number) from numbers(2000000000)"}')
     local stats_uri=$(echo "$response" | jq -r '.stats_uri')
     local final_uri=$(echo "$response" | jq -r '.final_uri')
     echo "$stats_uri|$final_uri"
@@ -28,14 +28,8 @@ IFS='|' read -r stats_uri final_uri <<< $(perform_initial_query)
 
 poll_stats_uri "$stats_uri" &
 POLL_PID=$!
-sleep 1
+sleep 2
 netstat_output=$(netstat -an | grep '9092')
-
-# skip standalone mode
-if [ -z "$netstat_output" ]; then
-    echo "Final state: Succeeded"
-    exit 0
-fi
 
 port=$(echo "$netstat_output" | awk '
     $NF == "ESTABLISHED" {
@@ -51,6 +45,12 @@ port=$(echo "$netstat_output" | awk '
         print port
     }
 ')
+
+# skip standalone mode
+if [ -z "$port" ]; then
+    echo "Final state: Succeeded"
+    exit 0
+fi
 
 # Start tcpkill in the background
 sudo tcpkill -i lo host 127.0.0.1 and port $port > tcpkill_output.txt 2>&1 &

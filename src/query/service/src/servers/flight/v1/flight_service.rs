@@ -97,14 +97,10 @@ impl FlightOperation for DatabendQueryFlightService {
     type DoExchangeStream = FlightStream<Arc<FlightData>>;
 
     #[async_backtrace::framed]
-    async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Err(Status::unimplemented("unimplemented do_exchange"))
-    }
-
-    type DoGetStream = FlightStream<Arc<FlightData>>;
-
-    #[async_backtrace::framed]
-    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
+    async fn do_exchange(
+        &self,
+        request: StreamReq<FlightData>,
+    ) -> Response<Self::DoExchangeStream> {
         let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         let _guard = root.set_local_parent();
         match request.get_metadata("x-type")?.as_str() {
@@ -115,11 +111,13 @@ impl FlightOperation for DatabendQueryFlightService {
                     .get_metadata("x-continue-from")?
                     .parse::<usize>()
                     .unwrap();
+                let client_stream = request.into_inner();
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance().handle_statistics_exchange(
                         query_id,
                         target,
                         continue_from,
+                        client_stream,
                     )?,
                 )))
             }
@@ -134,12 +132,14 @@ impl FlightOperation for DatabendQueryFlightService {
                     .get_metadata("x-continue-from")?
                     .parse::<usize>()
                     .unwrap();
+                let client_stream = request.into_inner();
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance().handle_exchange_fragment(
                         query_id,
                         target,
                         fragment,
                         continue_from,
+                        client_stream,
                     )?,
                 )))
             }
@@ -149,6 +149,13 @@ impl FlightOperation for DatabendQueryFlightService {
                 exchange_type
             ))),
         }
+    }
+
+    type DoGetStream = FlightStream<Arc<FlightData>>;
+
+    #[async_backtrace::framed]
+    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        Err(Status::unimplemented("unimplemented do_exchange"))
     }
     type DoPutStream = FlightStream<Arc<PutResult>>;
 
@@ -195,6 +202,7 @@ impl FlightOperation for DatabendQueryFlightService {
         Ok(RawResponse::new(Box::pin(stream::empty())))
     }
 }
+
 fn build_health_response() -> FlightStream<Arc<FlightData>> {
     Box::pin(stream::iter(vec![Ok(Arc::new(FlightData {
         flight_descriptor: None,
