@@ -996,7 +996,6 @@ impl TableContext for CtxDelegation {
             .get_table_meta_timestamps(table_id, previous_snapshot)
     }
 
-    fn get_session_id(&self) -> String {
     fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
