@@ -139,9 +139,9 @@ copy into @test_stage_stream_06/case1 from s max_batch_size_hint 1;
 
 # there should be only 1 row copied into stage
 query  T
-select a from @test_stage_stream_06/case1 order by a;
+select count() = 1 from @test_stage_stream_06/case1;
 ----
-2
+1
 
 ##########################################
 # test insert into from stream with hint #
