@@ -41,9 +41,11 @@ use crate::Scalar;
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
 
+pub struct AbortError;
+
 pub trait CheckAbort {
     fn is_aborting(&self) -> bool;
-    fn try_check_aborting(&self) -> Result<()>;
+    fn try_check_aborting(&self) -> Result<(), AbortError>;
 }
 
 #[derive(Clone)]

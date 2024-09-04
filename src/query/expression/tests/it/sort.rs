@@ -20,6 +20,7 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::StringType;
 use databend_common_expression::AbortChecker;
+use databend_common_expression::AbortError;
 use databend_common_expression::CheckAbort;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -305,7 +306,7 @@ fn test_blocks_merge_sort() -> Result<()> {
         fn is_aborting(&self) -> bool {
             false
         }
-        fn try_check_aborting(&self) -> Result<()> {
+        fn try_check_aborting(&self) -> Result<(), AbortError> {
             Ok(())
         }
     }

@@ -26,7 +26,9 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::AbortChecker;
+use databend_common_expression::AbortError;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
@@ -79,6 +81,8 @@ use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+
+pub struct ContextError;
 
 #[derive(Debug)]
 pub struct ProcessInfo {
@@ -192,7 +196,7 @@ pub trait TableContext: Send + Sync {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
-    fn check_aborting(&self) -> Result<()>;
+    fn check_aborting(&self) -> Result<(), ContextError>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
@@ -203,13 +207,13 @@ pub trait TableContext: Send + Sync {
                 self.this.as_ref().check_aborting().is_err()
             }
 
-            fn try_check_aborting(&self) -> Result<()> {
-                self.this.check_aborting()
+            fn try_check_aborting(&self) -> Result<(), AbortError> {
+                self.this.check_aborting().with_context(|| "query aborted")
             }
         }
         Arc::new(Checker { this: self })
     }
-    fn get_error(&self) -> Option<ErrorCode>;
+    fn get_error(&self) -> Option<ErrorCode<ContextError>>;
     fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;

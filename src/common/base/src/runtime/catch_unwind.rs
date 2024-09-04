@@ -21,6 +21,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::FutureExt;
 
+pub struct CatchUnwindError;
+
 pub fn drop_guard<F: FnOnce() -> R, R>(f: F) -> R {
     let panicking = std::thread::panicking();
     #[expect(clippy::disallowed_methods)]
@@ -65,7 +67,7 @@ impl<F: Future> CatchUnwindFuture<F> {
 }
 
 impl<F: Future> Future for CatchUnwindFuture<F> {
-    type Output = Result<F::Output>;
+    type Output = Result<F::Output, CatchUnwindError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let inner = &mut self.inner.as_mut();
@@ -73,7 +75,7 @@ impl<F: Future> Future for CatchUnwindFuture<F> {
         match catch_unwind(move || inner.poll_unpin(cx)) {
             Ok(Poll::Pending) => Poll::Pending,
             Ok(Poll::Ready(value)) => Poll::Ready(Ok(value)),
-            Err(cause) => Poll::Ready(Err(cause)),
+            Err(cause) => Poll::Ready(Err(cause.with_context("captured from unwind"))),
         }
     }
 }
