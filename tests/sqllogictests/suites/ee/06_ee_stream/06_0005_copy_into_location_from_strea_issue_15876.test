@@ -37,12 +37,13 @@ statement ok
 create or replace stage test_stage_15876;
 
 statement ok
+remove @test_stage_15876;
+
+statement ok
 copy into @test_stage_15876/case1 from s;
 
-# sqllogic_ee parquet and native both write to the same stage
-# we can not assume the count be exactly 0
 query  T
-select count() > 0 from @test_stage_15876/case1;
+select c from @test_stage_15876/case1;
 ----
 1
 
