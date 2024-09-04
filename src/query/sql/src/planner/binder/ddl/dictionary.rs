@@ -21,7 +21,6 @@ use databend_common_ast::ast::ShowCreateDictionaryStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableDataType;
@@ -203,11 +202,11 @@ impl Binder {
             }
         }
         if primary_keys.len() != 1 {
-            return Err(ErrorCode::WrongPKNumber("Only support one primary key"));
+            return Err(ErrorCode::BadArguments("Only support one primary key"));
         }
         let primary_key = match primary_keys.first() {
             Some(pk) => pk.clone(),
-            None => return Err(ErrorCode::WrongPKNumber("Miss primary key")),
+            None => return Err(ErrorCode::BadArguments("Miss primary key")),
         };
         let pk_id = schema.column_id_of(primary_key.name.as_str())?;
         primary_column_ids.push(pk_id);

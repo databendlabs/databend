@@ -86,33 +86,33 @@ impl DictionaryMeta {
         if self.source.to_lowercase() == *"mysql" {
             let username = match self.options.get("username") {
                 Some(user) => user,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `username`")),
             };
             let password = match self.options.get("password") {
                 Some(psw) => psw,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `password`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `password`")),
             };
             let host = match self.options.get("host") {
                 Some(host) => host,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `host`")),
             };
             let port = match self.options.get("port") {
                 Some(port) => port,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `port`")),
             };
             let db = match self.options.get("db") {
                 Some(db) => db,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `db`")),
             };
             url = format!("mysql://{}:{}@{}:{}/{}", username, password, host, port, db).to_string();
         } else if self.source.to_lowercase() == *"redis" {
             let host = match self.options.get("host") {
                 Some(host) => host,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `host`")),
             };
             let port = match self.options.get("port") {
                 Some(port) => port,
-                None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+                None => return Err(ErrorCode::BadArguments("Miss option `port`")),
             };
             url = format!("tcp://{}:{}", host, port).to_string();
         }
@@ -177,23 +177,23 @@ impl DictionaryMeta {
     fn build_sql_connection_url(&self) -> Result<String> {
         let username = match self.options.get("username") {
             Some(user) => user,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `username`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `username`")),
         };
         let password = match self.options.get("password") {
             Some(psw) => psw,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `password`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `password`")),
         };
         let host = match self.options.get("host") {
             Some(host) => host,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `host`")),
         };
         let port = match self.options.get("port") {
             Some(port) => port,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `port`")),
         };
         let db = match self.options.get("db") {
             Some(db) => db,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `db`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `db`")),
         };
         Ok(format!(
             "mysql://{}:{}@{}:{}/{}",
@@ -204,11 +204,11 @@ impl DictionaryMeta {
     fn build_redis_connection_url(&self) -> Result<String> {
         let host = match self.options.get("host") {
             Some(host) => host,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `host`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `host`")),
         };
         let port = match self.options.get("port") {
             Some(port) => port,
-            None => return Err(ErrorCode::MissingDictionaryOption("Miss option `port`")),
+            None => return Err(ErrorCode::BadArguments("Miss option `port`")),
         };
         Ok(format!("tcp://{}:{}", host, port))
     }
@@ -223,7 +223,7 @@ impl DictionaryMeta {
                 let connection_url = self.build_sql_connection_url()?;
                 let table = match self.options.get("table") {
                     Some(table) => table,
-                    None => return Err(ErrorCode::MissingDictionaryOption("Miss option `table`")),
+                    None => return Err(ErrorCode::BadArguments("Miss option `table`")),
                 };
                 Ok(DictionarySource::Mysql(SqlSource {
                     connection_url,
