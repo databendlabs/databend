@@ -38,7 +38,6 @@ use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_storages_common_table_meta::meta::testing::SegmentInfoV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV4;
-use databend_storages_common_table_meta::meta::testing::TableSnapshotV5;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -430,73 +429,20 @@ pub async fn generate_snapshot_v4(
     )
     .await?;
 
-    let id = Uuid::new_v4();
-    let snapshot = TableSnapshotV4::new(
-        id,
+    let snapshot = TableSnapshotV4::try_new(
         None,
-        &prev.as_ref().and_then(|p| p.timestamp),
-        prev.map(|p| (p.snapshot_id, p.format_version)),
+        prev.map(|p| Arc::new(p.clone())),
         schema.as_ref().clone(),
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
         None,
         None,
-    );
+        Default::default(),
+    )?;
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshotV4::VERSION)?;
     operator
         .write(&new_snapshot_location, snapshot.to_bytes()?)
         .await?;
-    let snapshot = TableSnapshot::from(snapshot);
-    Ok(snapshot)
-}
-
-pub async fn generate_snapshot_v5(
-    fixture: &TestFixture,
-    number_of_segments: usize,
-    blocks_per_segment: usize,
-    prev: Option<&TableSnapshot>,
-    data_retention_time_in_days: i64,
-) -> Result<TableSnapshot> {
-    let schema = TestFixture::default_table_schema();
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let location_gen = fuse_table.meta_location_generator();
-    let operator = fuse_table.get_operator();
-
-    let table_meta_timestamps = TableMetaTimestamps::new(
-        prev.map(|p| Arc::new(p.clone())),
-        data_retention_time_in_days,
-    );
-    let segments = generate_segments(
-        fuse_table,
-        number_of_segments,
-        blocks_per_segment,
-        true,
-        table_meta_timestamps,
-    )
-    .await?;
-
-    let prev = prev.map(|p| Arc::new(p.clone()));
-    let snapshot = TableSnapshotV5::try_new(
-        None,
-        prev.clone(),
-        schema.as_ref().clone(),
-        Statistics::default(),
-        segments.iter().map(|s| s.0.clone()).collect(),
-        None,
-        None,
-        TableMetaTimestamps::new(prev, data_retention_time_in_days),
-    )?;
-    FuseTable::commit_to_meta_server(
-        fixture.new_query_ctx().await?.as_ref(),
-        fuse_table.get_table_info(),
-        location_gen,
-        snapshot.clone(),
-        None,
-        &None,
-        &operator,
-    )
-    .await?;
     Ok(snapshot)
 }

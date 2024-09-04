@@ -43,7 +43,6 @@ static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_V3: SnapshotVersion = SnapshotVersion::V3(PhantomData);
 static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
-static SNAPSHOT_V5: SnapshotVersion = SnapshotVersion::V5(PhantomData);
 
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
@@ -128,9 +127,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPSHOT_V5.suffix().as_str()) {
-            SNAPSHOT_V5.version()
-        } else if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
+        if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
             SNAPSHOT_V4.version()
         } else if location.as_ref().ends_with(SNAPSHOT_V3.suffix().as_str()) {
             SNAPSHOT_V3.version()
@@ -236,15 +233,6 @@ impl SnapshotLocationCreator for SnapshotVersion {
             | SnapshotVersion::V2(_)
             | SnapshotVersion::V3(_)
             | SnapshotVersion::V4(_) => {
-                format!(
-                    "{}/{}/{}{}",
-                    prefix.as_ref(),
-                    FUSE_TBL_SNAPSHOT_PREFIX,
-                    id.simple(),
-                    self.suffix(),
-                )
-            }
-            SnapshotVersion::V5(_) => {
                 // V5_OBJECT_KEY_PREFIX 'g' is larger than all the simple form uuid generated previously
                 format!(
                     "{}/{}/{V5_OBJECT_KEY_PREFIX}{}{}",
@@ -264,7 +252,6 @@ impl SnapshotLocationCreator for SnapshotVersion {
             SnapshotVersion::V2(_) => "_v2.json".to_string(),
             SnapshotVersion::V3(_) => "_v3.bincode".to_string(),
             SnapshotVersion::V4(_) => "_v4.mpk".to_string(),
-            SnapshotVersion::V5(_) => "_v5.mpk".to_string(),
         }
     }
 }

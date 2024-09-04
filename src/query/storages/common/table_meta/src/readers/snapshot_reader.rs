@@ -27,7 +27,6 @@ use crate::meta::Statistics;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotV2;
 use crate::meta::TableSnapshotV3;
-use crate::meta::TableSnapshotV4;
 use crate::readers::VersionedReader;
 
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
@@ -35,8 +34,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: Read + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V5(_) => TableSnapshot::from_read(reader)?,
-            SnapshotVersion::V4(_) => TableSnapshotV4::from_read(reader)?.into(),
+            SnapshotVersion::V4(_) => TableSnapshot::from_read(reader)?,
             SnapshotVersion::V3(_) => TableSnapshotV3::from_reader(reader)?.into(),
             SnapshotVersion::V2(v) => {
                 let mut ts: TableSnapshotV2 = load_json(reader, v)?;

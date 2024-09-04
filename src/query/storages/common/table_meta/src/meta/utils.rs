@@ -34,7 +34,6 @@ use crate::table::OPT_KEY_STORAGE_PREFIX;
 use crate::table::OPT_KEY_TEMP_PREFIX;
 
 pub const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
-
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 

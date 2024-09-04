@@ -24,7 +24,6 @@ mod v1;
 mod v2;
 mod v3;
 mod v4;
-mod v5;
 mod versions;
 pub use compression::Compression;
 // table meta types of current version
@@ -63,5 +62,4 @@ pub mod testing {
     pub use super::v3::SegmentInfo as SegmentInfoV3;
     pub use super::v3::TableSnapshot as TableSnapshotV3;
     pub use super::v4::TableSnapshot as TableSnapshotV4;
-    pub use super::v5::TableSnapshot as TableSnapshotV5;
 }
