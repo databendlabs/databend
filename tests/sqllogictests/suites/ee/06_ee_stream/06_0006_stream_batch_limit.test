@@ -135,7 +135,11 @@ statement ok
 create or replace stage test_stage_stream_06;
 
 statement ok
+remove @test_stage_stream_06;
+
+statement ok
 copy into @test_stage_stream_06/case1 from s max_batch_size_hint 1;
+
 
 # there should be only 1 row copied into stage
 query  T
