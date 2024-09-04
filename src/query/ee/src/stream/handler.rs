@@ -191,6 +191,7 @@ impl StreamHandler for RealStreamHandler {
                     tb_id: table.get_id(),
                     db_id: db.get_db_info().database_id.db_id,
                     engine: engine.to_string(),
+                    session_id: "".to_string(),
                 })
                 .await
         } else if plan.if_exists {

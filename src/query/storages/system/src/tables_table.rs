@@ -391,7 +391,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 let db_name = db.name();
                 let tables = if tables_names.is_empty()
                     || tables_names.len() > 10
-                    || WITH_HISTORY
                     || invalid_tables_ids
                     || invalid_optimize
                 {
@@ -414,15 +413,33 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             continue;
                         }
                     }
+                } else if WITH_HISTORY {
+                    // Only can call get_table
+                    let mut tables = Vec::new();
+                    for table_name in &tables_names {
+                        match ctl.get_table_history(&tenant, db_name, table_name).await {
+                            Ok(t) => tables.extend(t),
+                            Err(err) => {
+                                let msg = format!(
+                                    "Failed to get_table_history tables in database: {}, {}",
+                                    db_name, err
+                                );
+                                // warn no need to pad in ctx
+                                warn!("{}", msg);
+                                continue;
+                            }
+                        }
+                    }
+                    tables
                 } else {
-                    // Only without history can call get_table
+                    // Only can call get_table
                     let mut tables = Vec::new();
                     for table_name in &tables_names {
                         match ctl.get_table(&tenant, db_name, table_name).await {
                             Ok(t) => tables.push(t),
                             Err(err) => {
                                 let msg = format!(
-                                    "Failed to list tables in database: {}, {}",
+                                    "Failed to get table in database: {}, {}",
                                     db_name, err
                                 );
                                 // warn no need to pad in ctx

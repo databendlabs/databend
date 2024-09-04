@@ -54,7 +54,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -229,6 +229,18 @@ impl Catalog for FakedCatalog {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         self.cat.get_table(tenant, db_name, table_name).await
+    }
+
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(Vec::from([self
+            .cat
+            .get_table(tenant, db_name, table_name)
+            .await?]))
     }
 
     async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
@@ -432,15 +444,12 @@ impl Catalog for FakedCatalog {
 
     async fn drop_dictionary(
         &self,
-        _dict_ident: TenantDictionaryIdent,
+        _dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         todo!()
     }
 
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         self.cat.get_dictionary(req).await
     }
 
@@ -977,7 +986,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_session_id(&self) -> String {
+    fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
 

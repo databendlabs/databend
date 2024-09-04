@@ -239,6 +239,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             table_name: table_name(),
             tb_id: t.ident.table_id,
             engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         })
         .await;
 

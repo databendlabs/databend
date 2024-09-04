@@ -29,7 +29,7 @@ use crate::table::OPT_KEY_DATABASE_ID;
 use crate::table::OPT_KEY_STORAGE_PREFIX;
 use crate::table::OPT_KEY_TEMP_PREFIX;
 
-const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
+pub const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
 pub const VACUUM2_OBJECT_KEY_PREFIX: &str = "g";
 
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {

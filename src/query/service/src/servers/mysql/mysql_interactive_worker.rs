@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::convert_byte_size;
@@ -28,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
@@ -71,6 +73,7 @@ pub struct InteractiveWorker {
     version: String,
     salt: [u8; 20],
     client_addr: String,
+    keep_alive_task_started: bool,
 }
 
 #[async_trait::async_trait]
@@ -213,6 +216,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             }
 
             let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
+            if !self.keep_alive_task_started {
+                self.start_keep_alive().await
+            }
 
             let instant = Instant::now();
             let query_result = self
@@ -476,7 +482,36 @@ impl InteractiveWorker {
             salt: scramble,
             version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
+            keep_alive_task_started: false,
         }
+    }
+
+    async fn start_keep_alive(&mut self) {
+        let session = &self.base.session;
+        let tenant = session.get_current_tenant();
+        let session_id = session.get_id();
+        let user_name = session
+            .get_current_user()
+            .expect("mysql handler should be authed when call")
+            .name;
+        self.keep_alive_task_started = true;
+
+        databend_common_base::runtime::spawn(async move {
+            loop {
+                UserApiProvider::instance()
+                    .client_session_api(&tenant)
+                    .upsert_client_session_id(
+                        &session_id,
+                        ClientSession {
+                            user_name: user_name.clone(),
+                        },
+                        Duration::from_secs(3600 + 600),
+                    )
+                    .await
+                    .ok();
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
     }
 }
 

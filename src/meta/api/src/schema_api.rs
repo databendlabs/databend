@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -48,7 +50,6 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetLVTReply;
 use databend_common_meta_app::schema::GetLVTReq;
@@ -77,6 +78,8 @@ use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -88,8 +91,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -98,6 +99,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 
@@ -155,7 +157,11 @@ pub trait SchemaApi: Send + Sync {
         name_ident: &IndexNameIdent,
     ) -> Result<Option<GetIndexReply>, MetaError>;
 
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
+    async fn update_index(
+        &self,
+        id_ident: IndexIdIdent,
+        index_meta: IndexMeta,
+    ) -> Result<Change<IndexMeta>, MetaError>;
 
     async fn list_indexes(
         &self,
@@ -206,8 +212,16 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
 
-    async fn get_table_history(&self, req: ListTableReq)
-    -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    async fn get_table_meta_history(
+        &self,
+        database_name: &str,
+        table_id_history: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
+
+    async fn get_tables_history(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
@@ -323,13 +337,13 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError>;
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaTxnError>;
 
     async fn get_dictionary(
         &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>, KVAppError>;
+        req: DictionaryNameIdent,
+    ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError>;
 
     async fn list_dictionaries(
         &self,

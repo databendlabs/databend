@@ -497,7 +497,10 @@ impl Binder {
                         "Temporary table is only supported for FUSE and MEMORY engine",
                     ));
                 }
-                let _ = options.insert(OPT_KEY_TEMP_PREFIX.to_string(), self.ctx.get_session_id());
+                let _ = options.insert(
+                    OPT_KEY_TEMP_PREFIX.to_string(),
+                    self.ctx.get_temp_table_prefix()?,
+                );
             }
         };
 

@@ -94,7 +94,6 @@ impl AuthMgr {
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
-                session.set_client_session_id(claim.session_id.clone());
                 Ok(Some(claim.session_id))
             }
             Credential::Jwt {

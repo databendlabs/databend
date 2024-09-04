@@ -119,6 +119,18 @@ impl ClientSessionMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
+    pub async fn get_client_session(
+        &self,
+        client_session_id: &str,
+    ) -> Result<Option<ClientSession>> {
+        let ident = self.session_ident(client_session_id);
+        let res = self.kv_api.get_pb(&ident).await?;
+
+        Ok(res.map(|r| r.data))
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
     pub async fn drop_client_session_id(&self, client_session_id: &str) -> Result<()> {
         let key = self.session_ident(client_session_id).to_string_key();
 

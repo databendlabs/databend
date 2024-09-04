@@ -23,7 +23,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -365,6 +365,22 @@ impl Catalog for SessionCatalog {
         self.inner.list_tables(tenant, db_name).await
     }
 
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.temp_tbl_mgr.lock().list_tables()
+    }
+
+    // Get one table identified as dropped by db and table name.
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        self.inner
+            .get_table_history(tenant, db_name, table_name)
+            .await
+    }
+
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
@@ -654,15 +670,12 @@ impl Catalog for SessionCatalog {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         self.inner.drop_dictionary(dict_ident).await
     }
 
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         self.inner.get_dictionary(req).await
     }
 
