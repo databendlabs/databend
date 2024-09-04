@@ -25,6 +25,7 @@ databend-common-storages-fuse = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
+log = { workspace = true }
 
 [build-dependencies]
 

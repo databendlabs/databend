@@ -4629,6 +4629,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "fastrace",
  "futures",
+ "log",
 ]
 
 [[package]]

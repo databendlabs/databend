@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
@@ -142,6 +143,7 @@ impl StreamTable {
         source_tb_name: &str,
         batch_limit: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        let stream_desc = &self.info.desc;
         let source = catalog
             .get_table(tenant, source_db_name, source_tb_name)
             .await
@@ -150,7 +152,7 @@ impl StreamTable {
                     "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
                     source_db_name,
                     source_tb_name,
-                    self.get_table_info().desc,
+                    stream_desc,
                     err.message()
                 ))
             })?;
@@ -163,7 +165,7 @@ impl StreamTable {
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
                 "Base table {} dropped, cannot read from stream {}",
-                source_desc, self.info.desc,
+                source_desc, stream_desc,
             )));
         }
 
@@ -190,6 +192,7 @@ impl StreamTable {
         );
 
         let mut instant = None;
+        let start = Instant::now();
         while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
             if snapshot_with_version.0.timestamp <= base_timsestamp {
                 break;
@@ -205,6 +208,12 @@ impl StreamTable {
                 break;
             }
         }
+        log::info!(
+            "Stream {} traversed the snapshot history of source table {}, cost:{:?}",
+            stream_desc,
+            source_desc,
+            start.elapsed(),
+        );
 
         if let Some((snapshot, format_version)) = instant {
             Ok(fuse_table.load_table_by_snapshot(snapshot.as_ref(), format_version)?)
