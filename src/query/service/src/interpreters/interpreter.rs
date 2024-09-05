@@ -26,6 +26,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
@@ -88,8 +89,10 @@ pub trait Interpreter: Sync + Send {
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        let make_error = || "failed to execute interpreter";
+
         ctx.set_status_info("building pipeline");
-        ctx.check_aborting()?;
+        ctx.check_aborting().with_context(make_error)?;
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()

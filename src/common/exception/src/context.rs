@@ -51,12 +51,20 @@ impl<C> ErrorCode<C> {
 }
 
 pub trait ResultExt<T, C> {
-    fn with_context<C2>(self, ctx: impl ToString) -> std::result::Result<T, ErrorCode<C2>>;
+    fn with_context<C2, S: ToString>(
+        self,
+        ctx: impl FnOnce() -> S,
+    ) -> std::result::Result<T, ErrorCode<C2>>;
 }
 
-impl<T, C> ResultExt<T, C> for std::result::Result<T, ErrorCode<C>> {
-    fn with_context<C2>(self, ctx: impl ToString) -> std::result::Result<T, ErrorCode<C2>> {
-        self.map_err(|e| e.with_context(ctx))
+impl<T, E, C> ResultExt<T, C> for std::result::Result<T, E>
+where E: Into<ErrorCode<C>>
+{
+    fn with_context<C2, S: ToString>(
+        self,
+        ctx: impl FnOnce() -> S,
+    ) -> std::result::Result<T, ErrorCode<C2>> {
+        self.map_err(|e| e.into().with_context(ctx()))
     }
 }
 
@@ -65,7 +73,7 @@ pub fn display_error_stack(stacks: &[ErrorFrame]) -> String {
     for (i, stack) in stacks.iter().enumerate() {
         writeln!(
             &mut buf,
-            "{:<2} {} at {}:{}:{}",
+            "{:<2} {}, at {}:{}:{}",
             i, stack.message, stack.file, stack.line, stack.col,
         )
         .unwrap();

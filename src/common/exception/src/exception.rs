@@ -265,7 +265,7 @@ impl<C> Debug for ErrorCode<C> {
     }
 }
 
-impl Display for ErrorCode {
+impl<C> Display for ErrorCode<C> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -277,7 +277,7 @@ impl Display for ErrorCode {
     }
 }
 
-impl ErrorCode {
+impl<C> ErrorCode<C> {
     /// All std error will be converted to InternalError
     #[track_caller]
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
@@ -290,7 +290,7 @@ impl ErrorCode {
             cause: None,
             backtrace: capture(),
             stacks: vec![],
-            _phantom: PhantomData::<()>,
+            _phantom: PhantomData::<C>,
         }
         .with_context(error.to_string())
     }
@@ -305,7 +305,7 @@ impl ErrorCode {
             cause: None,
             backtrace: capture(),
             stacks: vec![],
-            _phantom: PhantomData::<()>,
+            _phantom: PhantomData::<C>,
         }
         .with_context(error)
     }
@@ -320,7 +320,7 @@ impl ErrorCode {
             cause: None,
             backtrace: None,
             stacks: vec![],
-            _phantom: PhantomData::<()>,
+            _phantom: PhantomData::<C>,
         }
     }
 
@@ -331,7 +331,7 @@ impl ErrorCode {
         detail: String,
         cause: Option<Box<dyn std::error::Error + Sync + Send>>,
         backtrace: Option<ErrorCodeBacktrace>,
-    ) -> ErrorCode {
+    ) -> Self {
         ErrorCode {
             code,
             display_text: display_text.clone(),
@@ -341,7 +341,7 @@ impl ErrorCode {
             backtrace,
             name: name.to_string(),
             stacks: vec![],
-            _phantom: PhantomData::<()>,
+            _phantom: PhantomData::<C>,
         }
         .with_context(display_text)
     }
@@ -393,7 +393,7 @@ where E: Display + Send + Sync + 'static
     }
 }
 
-impl Clone for ErrorCode {
+impl<C> Clone for ErrorCode<C> {
     fn clone(&self) -> Self {
         ErrorCode::create(
             self.code(),
