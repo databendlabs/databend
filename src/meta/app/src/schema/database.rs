@@ -163,7 +163,7 @@ impl DbIdList {
         self.id_list.pop()
     }
 
-    pub fn last(&mut self) -> Option<&u64> {
+    pub fn last(&self) -> Option<&u64> {
         self.id_list.last()
     }
 }
