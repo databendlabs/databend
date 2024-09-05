@@ -291,14 +291,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // get db id list from _fd_db_id_list/db_id
             let dbid_idlist =
                 DatabaseIdHistoryIdent::new(name_key.tenant(), name_key.database_name());
-            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &dbid_idlist).await?;
 
-            let mut db_id_list = if db_id_list_seq == 0 {
-                DbIdList::new()
-            } else {
-                db_id_list_opt.unwrap_or(DbIdList::new())
-            };
+            let seq_db_id_list = self.get_pb(&dbid_idlist).await?;
+            let db_id_list_seq = seq_db_id_list.seq();
+            let mut db_id_list = seq_db_id_list.into_value().unwrap_or_else(DbIdList::new);
 
             // Create db by inserting these record:
             // (tenant, db_name) -> db_id
@@ -413,20 +409,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist =
                 DatabaseIdHistoryIdent::new(name_key.tenant(), name_key.database_name());
-            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &dbid_idlist).await?;
+            let seq_db_id_list = self.get_pb(&dbid_idlist).await?;
 
-            let mut db_id_list = if db_id_list_seq == 0 {
+            let Some(seq_db_id_list) = seq_db_id_list else {
                 return Err(KVAppError::AppError(AppError::UndropDbHasNoHistory(
                     UndropDbHasNoHistory::new(name_key.database_name()),
                 )));
-            } else {
-                db_id_list_opt.ok_or_else(|| {
-                    KVAppError::AppError(AppError::UndropDbHasNoHistory(UndropDbHasNoHistory::new(
-                        name_key.database_name(),
-                    )))
-                })?
             };
+
+            let db_id_list_seq = seq_db_id_list.seq;
+            let db_id_list = seq_db_id_list.data;
 
             // Return error if there is no db id history.
             let db_id = *db_id_list.last().ok_or_else(|| {
@@ -437,14 +429,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get db_meta of the last db id
             let dbid = DatabaseId { db_id };
-            let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
-                get_pb_value(self, &dbid).await?;
+
+            let seq_meta = self.get_pb(&dbid).await?;
+            let db_meta_seq = seq_meta.seq();
+            let mut db_meta = seq_meta.into_value().unwrap();
 
             debug!(db_id = db_id, name_key :? =(name_key); "undrop_database");
 
             {
                 // reset drop on time
-                let mut db_meta = db_meta.unwrap();
                 // undrop a table with no drop time
                 if db_meta.drop_on.is_none() {
                     return Err(KVAppError::AppError(AppError::UndropDbWithNoDropTime(
@@ -534,29 +527,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get db id -> name
             let db_id_key = DatabaseIdToName { db_id: *old_db_id };
-            let (db_name_seq, _): (_, Option<DatabaseNameIdentRaw>) =
-                get_pb_value(self, &db_id_key).await?;
+            let seq_db_name = self.get_pb(&db_id_key).await?;
+            let db_name_seq = seq_db_name.seq();
 
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist =
                 DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
-            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &dbid_idlist).await?;
-            let mut db_id_list: DbIdList;
-            if db_id_list_seq == 0 {
-                // may the database is created before add db_id_list, so we just add the id into the list.
-                db_id_list = DbIdList::new();
-                db_id_list.append(*old_db_id);
-            } else {
-                match db_id_list_opt {
-                    Some(list) => db_id_list = list,
-                    None => {
-                        // may the database is created before add db_id_list, so we just add the id into the list.
-                        db_id_list = DbIdList::new();
-                        db_id_list.append(*old_db_id);
-                    }
-                }
-            };
+
+            let seq_db_id_list = self.get_pb(&dbid_idlist).await?;
+            let db_id_list_seq = seq_db_id_list.seq();
+
+            // may the database is created before add db_id_list, so we just add the id into the list.
+            let mut db_id_list = seq_db_id_list.into_value().unwrap_or_else(|| {
+                let mut l = DbIdList::new();
+                l.append(*old_db_id);
+                l
+            });
 
             if let Some(last_db_id) = db_id_list.last() {
                 if *last_db_id != *old_db_id {
@@ -584,14 +570,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let new_dbid_idlist =
                 DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), &req.new_db_name);
-            let (new_db_id_list_seq, new_db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &new_dbid_idlist).await?;
-            let mut new_db_id_list: DbIdList;
-            if new_db_id_list_seq == 0 {
-                new_db_id_list = DbIdList::new();
-            } else {
-                new_db_id_list = new_db_id_list_opt.unwrap_or(DbIdList::new());
-            };
+
+            let seq_idlist = self.get_pb(&new_dbid_idlist).await?;
+
+            let new_db_id_list_seq = seq_idlist.seq();
+            let mut new_db_id_list = seq_idlist.into_value().unwrap_or_else(DbIdList::new);
 
             // rename database
             // move db id from old db id list to new db id list
@@ -981,8 +964,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
-                get_pb_value(self, &req.name_ident).await?;
+            let seq_virtual_column = self.get_pb(&req.name_ident).await?;
+            let old_virtual_column_opt = seq_virtual_column.into_value();
 
             let mut if_then = vec![];
             let seq = if old_virtual_column_opt.is_some() {
@@ -1016,6 +999,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             } else {
                 0
             };
+
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id(),
                 virtual_columns: req.virtual_columns.clone(),
@@ -1180,11 +1164,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         if let Some(table_id) = req.table_id {
             let name_ident = VirtualColumnIdent::new(&req.tenant, table_id);
-            let (_, virtual_column_opt): (_, Option<VirtualColumnMeta>) =
-                get_pb_value(self, &name_ident).await?;
 
-            if let Some(virtual_column) = virtual_column_opt {
-                return Ok(vec![virtual_column]);
+            let seq_meta = self.get_pb(&name_ident).await?;
+
+            if let Some(seq_meta) = seq_meta {
+                return Ok(vec![seq_meta.data]);
             } else {
                 return Ok(vec![]);
             }
@@ -1649,14 +1633,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 database_id: *new_seq_db_id.data,
                 table_name: req.new_table_name.clone(),
             };
-            let (new_tb_id_list_seq, new_tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &new_dbid_tbname_idlist).await?;
 
-            let mut new_tb_id_list: TableIdList;
-            if new_tb_id_list_seq == 0 {
-                new_tb_id_list = TableIdList::new();
+            let seq_list = self.get_pb(&new_dbid_tbname_idlist).await?;
+
+            let new_tb_id_list_seq = seq_list.seq();
+
+            let mut new_tb_id_list = if let Some(seq_list) = seq_list {
+                seq_list.data
             } else {
-                new_tb_id_list = new_tb_id_list_opt.unwrap_or(TableIdList::new());
+                TableIdList::new()
             };
 
             // get table id name
@@ -1767,18 +1752,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let tbid = TableId { table_id };
 
-        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+        let seq_meta = self.get_pb(&tbid).await?;
 
-        assert_table_exist(
-            tb_meta_seq,
-            tenant_dbname_tbname,
-            format!("get_table meta by: {}", tenant_dbname_tbname),
-        )?;
+        let Some(seq_meta) = seq_meta else {
+            Err(AppError::from(UnknownTable::new(
+                &tenant_dbname_tbname.table_name,
+                format!("get_table: {}", tenant_dbname_tbname),
+            )))?
+        };
 
         debug!(
             ident :% =(&tbid),
             name :% =(tenant_dbname_tbname),
-            table_meta :? =(&tb_meta);
+            table_meta :? =(&seq_meta);
             "get_table"
         );
 
@@ -1787,7 +1773,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let tb_info = TableInfo {
             ident: TableIdent {
                 table_id: tbid.table_id,
-                seq: tb_meta_seq,
+                seq: seq_meta.seq,
             },
             desc: format!(
                 "'{}'.'{}'",
@@ -1795,8 +1781,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 tenant_dbname_tbname.table_name
             ),
             name: tenant_dbname_tbname.table_name.clone(),
-            // Safe unwrap() because: tb_meta_seq > 0
-            meta: tb_meta.unwrap(),
+            meta: seq_meta.data,
             tenant: req.tenant.tenant_name().to_string(),
             db_type,
             catalog_info: Default::default(),
@@ -2026,18 +2011,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let db_id_to_name_key = DatabaseIdToName { db_id };
 
-        let (meta_seq, db_name): (_, Option<DatabaseNameIdentRaw>) =
-            get_pb_value(self, &db_id_to_name_key).await?;
+        let seq_meta = self.get_pb(&db_id_to_name_key).await?;
 
         debug!(ident :% =(&db_id_to_name_key); "get_db_name_by_id");
 
-        if meta_seq == 0 || db_name.is_none() {
+        let Some(seq_meta) = seq_meta else {
             return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
                 UnknownDatabaseId::new(db_id, "get_db_name_by_id"),
             )));
-        }
+        };
 
-        Ok(db_name.unwrap().database_name().to_string())
+        Ok(seq_meta.data.database_name().to_string())
     }
 
     #[logcall::logcall]
@@ -2322,17 +2306,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let table_id = req.table_id;
         let tbid = TableId { table_id };
-        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
 
-        if tb_meta_seq == 0 {
+        let seq_meta = self.get_pb(&tbid).await?;
+
+        let Some(seq_meta) = seq_meta else {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
                 UnknownTableId::new(table_id, ""),
             )));
-        }
+        };
 
         debug!(
             ident :% =(&tbid),
-            table_meta :? =(&tb_meta);
+            table_meta :? =(&seq_meta);
             "get_table_copied_file_info"
         );
 
@@ -2740,29 +2725,29 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
+            let seq_meta = self.get_pb(&tbid).await?;
 
             debug!(ident :% =(&tbid); "set_table_column_mask_policy");
 
-            if tb_meta_seq == 0 || table_meta.is_none() {
+            let Some(seq_meta) = seq_meta else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "set_table_column_mask_policy"),
                 )));
-            }
-            if req_seq.match_seq(tb_meta_seq).is_err() {
+            };
+
+            if req_seq.match_seq(seq_meta.seq).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
                         req.table_id,
                         req.seq,
-                        tb_meta_seq,
+                        seq_meta.seq,
                         "set_table_column_mask_policy",
                     ),
                 )));
             }
 
             // upsert column mask policy
-            let table_meta = table_meta.unwrap();
+            let table_meta = seq_meta.data;
 
             let mut new_table_meta = table_meta.clone();
             if new_table_meta.column_mask_policy.is_none() {
@@ -2790,7 +2775,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
@@ -2936,18 +2921,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
+            let seq_meta = self.get_pb(&tbid).await?;
 
             debug!(ident :% =(&tbid); "drop_table_index");
 
-            if tb_meta_seq == 0 || table_meta.is_none() {
+            let Some(seq_meta) = seq_meta else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "drop_table_index"),
                 )));
-            }
+            };
 
-            let mut table_meta = table_meta.unwrap();
+            let mut table_meta = seq_meta.data;
             // update table indexes
             let indexes = &mut table_meta.indexes;
             if !indexes.contains_key(&req.name) && !req.if_exists {
@@ -2960,7 +2944,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&table_meta)?), // tb_id -> tb_meta
@@ -3335,13 +3319,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
-            if lock_seq == 0 {
-                // The lock has been deleted.
-                break;
-            }
+            let seq_lock = self.get_pb(&key).await?;
 
-            let condition = vec![txn_cond_seq(&key, Eq, lock_seq)];
+            // The lock has been deleted.
+            let Some(seq_lock) = seq_lock else {
+                break;
+            };
+
+            let condition = vec![txn_cond_seq(&key, Eq, seq_lock.seq)];
             let if_then = vec![txn_op_del(&key)];
 
             let txn_req = TxnRequest {
@@ -3615,8 +3600,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id = req.table_id;
 
         let lvt_key = LeastVisibleTimeKey { table_id };
-        let (_lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
-            get_pb_value(self, &lvt_key).await?;
+
+        let seq_lvt = self.get_pb(&lvt_key).await?;
+        let lvt_opt = seq_lvt.into_value();
 
         Ok(GetLVTReply {
             time: lvt_opt.map(|time| time.time),
