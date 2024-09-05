@@ -3689,7 +3689,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             req.tenant.clone(),
             DictionaryIdentity::new(req.db_id, "dummy".to_string()),
         );
-        let dir = DirName::new(dictionary_ident);
+        let dir = DirName::new_with_level(dictionary_ident, 2);
 
         let name_id_values = self.list_id_value(&dir).await?;
         Ok(name_id_values
