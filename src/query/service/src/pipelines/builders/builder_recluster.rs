@@ -35,7 +35,9 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::processors::BlockCompactBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
+use crate::pipelines::processors::TransformBlockConcat;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -150,12 +152,14 @@ impl PipelineBuilder {
                         .remove_order_col_at_last();
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 
-                let output_block_num = task.total_rows.div_ceil(final_block_size);
-                let max_threads = std::cmp::min(
-                    self.ctx.get_settings().get_max_threads()? as usize,
-                    output_block_num,
-                );
+                // Compact after merge sort.
+                self.main_pipeline
+                    .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
+                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
                 self.main_pipeline.try_resize(max_threads)?;
+                self.main_pipeline
+                    .add_block_meta_transformer(|| TransformBlockConcat {});
+
                 self.main_pipeline
                     .add_transform(|transform_input_port, transform_output_port| {
                         let proc = TransformSerializeBlock::try_create(

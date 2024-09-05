@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -28,6 +29,8 @@ use crate::processors::AsyncAccumulatingTransform;
 use crate::processors::AsyncAccumulatingTransformer;
 use crate::processors::AsyncTransform;
 use crate::processors::AsyncTransformer;
+use crate::processors::BlockMetaTransform;
+use crate::processors::BlockMetaTransformer;
 use crate::processors::Transform;
 use crate::processors::Transformer;
 
@@ -92,6 +95,25 @@ pub trait TransformPipelineHelper {
     {
         // Safe to unwrap, since the closure always return Ok(_).
         self.try_add_accumulating_transformer(|| Ok(f())).unwrap()
+    }
+
+    fn try_add_block_meta_transformer<F, B, R>(&mut self, f: F) -> Result<()>
+    where
+        F: Fn() -> Result<R>,
+        B: BlockMetaInfo,
+        R: BlockMetaTransform<B> + 'static,
+    {
+        self.try_add_transform_with_builder(f, BlockMetaTransformer::<B, R>::create)
+    }
+
+    fn add_block_meta_transformer<F, B, R>(&mut self, f: F)
+    where
+        F: Fn() -> R,
+        B: BlockMetaInfo,
+        R: BlockMetaTransform<B> + 'static,
+    {
+        // Safe to unwrap, since the closure always return Ok(_).
+        self.try_add_block_meta_transformer(|| Ok(f())).unwrap()
     }
 
     fn try_add_async_accumulating_transformer<F, R>(
