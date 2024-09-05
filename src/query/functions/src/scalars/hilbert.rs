@@ -60,10 +60,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         "hilbert_index",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<ArrayType<BinaryType>, NumberType<u64>, BinaryType>(
-            |val, len, builder, _| {
+            |val, len, builder, ctx| {
                 let points = val.iter().collect::<Vec<_>>();
-                let slice = hilbert_index(&points, len as usize);
-                builder.put_slice(&slice);
+                let dimension = points.len();
+
+                if std::intrinsics::unlikely(len > 64) {
+                    ctx.set_error(builder.len(), "Width must be less than or equal to 64");
+                } else if std::intrinsics::unlikely(!(2..=5).contains(&dimension)) {
+                    ctx.set_error(builder.len(), "Dimension must between 2 and 5");
+                } else {
+                    let slice = hilbert_index(&points, len as usize);
+                    builder.put_slice(&slice);
+                }
+
                 builder.commit_row();
             },
         ),
