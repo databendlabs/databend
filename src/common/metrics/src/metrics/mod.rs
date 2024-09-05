@@ -14,6 +14,7 @@
 
 pub mod cache;
 pub mod cluster;
+pub mod external_server;
 pub mod http;
 pub mod interpreter;
 pub mod lock;

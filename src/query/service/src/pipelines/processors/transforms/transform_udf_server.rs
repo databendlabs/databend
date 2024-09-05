@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -26,6 +27,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_metrics::external_server::record_request_external_duration;
 use databend_common_pipeline_transforms::processors::AsyncRetry;
 use databend_common_pipeline_transforms::processors::AsyncRetryWrapper;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
@@ -105,6 +107,7 @@ impl TransformUdfServer {
             .to_record_batch_with_dataschema(&data_schema)
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
+        let instant = Instant::now();
         let mut client =
             UDFFlightClient::connect(server_addr, connect_timeout, request_timeout, 65536)
                 .await?
@@ -112,7 +115,11 @@ impl TransformUdfServer {
                 .with_func_name(&func.func_name)?
                 .with_query_id(&ctx.get_id())?;
 
+        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
         let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
+
+        record_request_external_duration(func.func_name.clone(), instant.elapsed());
+
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
         let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
             .map_err(|err| {
