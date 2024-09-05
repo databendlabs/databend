@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::option;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
@@ -24,6 +25,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::DictionaryMeta;
 use itertools::Itertools;
 
@@ -32,6 +34,119 @@ use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
 use crate::plans::ShowCreateDictionaryPlan;
 use crate::Binder;
+
+pub static REQUIRED_MYSQL_OPTION_KEYS: HashSet<&str> =
+    HashSet(["host", "port", "username", "password", "db", "table"]);
+
+fn validate_mysql_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
+    let mut flag = true;
+    for option in REQUIRED_MYSQL_OPTION_KEYS {
+        if !options.contains_key(option) {
+            flag = false
+        }
+    }
+    if REQUIRED_MYSQL_OPTION_KEYS.len() != options.len() {
+        flag = false
+    }
+    if let Some(port) = options.get("port") {
+        if port.parse::<u64>().is_err() {
+            flag = false
+        }
+    }
+    if flag {
+        Ok(())
+    } else {
+        Err(ErrorCode::BadArguments(
+            "Please ensure you have provided correct values for [`host`, `port`, `username`, `password`, `db`, `table`]",
+        ))
+    }
+}
+
+pub static REQUIRED_REDIS_OPTION_KEYS: HashSet<&str> = HashSet(["host", "port"]);
+
+fn validate_redis_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
+    let mut flag = true;
+    for option in REQUIRED_REDIS_OPTION_KEYS {
+        if !options.contains_key(option) {
+            flag = false
+        }
+    }
+
+    if let Some(db_index) = options.get("db_index") {
+        let db_index = db_index.parse::<u64>().unwrap();
+        if db_index > 15 {
+            flag = false
+        }
+    } else {
+        options.insert("db_index".to_string(), 0.to_string());
+    }
+
+    if !options.contains_key("password") {
+        options.insert("password".to_string(), String::new());
+    }
+
+    if let Some(port) = options.get("port") {
+        if port.parse::<u64>().is_err() {
+            flag = false
+        }
+    }
+
+    let allowed_options = HashSet::from([
+        "host".to_string(),
+        "port".to_string(),
+        "password".to_string(),
+        "db_index".to_string(),
+    ]);
+    let mut keys = HashSet::new();
+    for key in options.keys().cloned().collect_vec() {
+        keys.insert(key);
+    }
+    if !keys.is_subset(&allowed_options) {
+        flag = false
+    }
+    if !flag {
+        Err(ErrorCode::BadArguments(
+            "Please ensure you have provided correct values which contains [`host`,`port`] and no other value than [`host`,`port`,`password`, `db_index`]",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_redis_fields(schema: &TableSchema) -> Result<()> {
+    let fields_names: Vec<String> = schema.fields().iter().map(|f| f.name.clone()).collect();
+    if fields_names.len() != 2 {
+        return Err(ErrorCode::BadArguments(
+            "The number of Redis fields must be two",
+        ));
+    }
+    for field in schema.fields() {
+        if field.data_type().remove_nullable() != TableDataType::String {
+            Err(ErrorCode::BadArguments(
+                "The type of Redis field must be string",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_mysql_fields(schema: &TableSchema) -> Result<()> {
+    for field in schema.fields() {
+        if !matches!(
+            field.data_type().remove_nullable(),
+            TableDataType::Boolean
+                | TableDataType::String
+                | TableDataType::Number(_)
+                | TableDataType::Date
+                | TableDataType::Timestamp
+        ) {
+            return Err(ErrorCode::BadArguments(
+                "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`] and must be `NOT NULL`",
+            ));
+        }
+    }
+    Ok(())
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -71,136 +186,36 @@ impl Binder {
             )));
         }
 
+        // Check for options.
         let mut options: BTreeMap<String, String> = source_options
             .iter()
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
-        if source.to_lowercase() == *"mysql" {
-            let required_options = ["host", "port", "username", "password", "db", "table"];
-            for option in required_options {
-                if !options.contains_key(option) {
-                    return Err(ErrorCode::BadArguments(
-                        "The mysql configurations are missing one or more required options. "
-                            .to_owned()
-                            + "Please ensure you have provided values for 'host', 'port', 'username', 'password', 'db' and 'table'.",
-                    ));
-                }
-            }
-            if required_options.len() != options.len() {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Some provided options are not recognized"
-                )));
-            }
-            let port = match options.get("port") {
-                Some(p) => p.to_string(),
-                None => {
-                    return Err(ErrorCode::BadArguments(
-                        "The redis configurations are missing `port`",
-                    ));
-                }
-            };
-            if port.parse::<u64>().is_err() {
-                return Err(ErrorCode::BadArguments(format!(
-                    "The value of `port` must be UInt"
-                )));
-            }
-        } else if source.to_lowercase() == *"redis" {
-            let required_options = ["host", "port"];
-            for option in required_options {
-                if !options.contains_key(option) {
-                    return Err(ErrorCode::BadArguments(
-                        "The redis configuration is missing one or more required options. "
-                            .to_owned()
-                            + "Please ensure you have provided values for 'host' and 'port'",
-                    ));
-                }
-            }
-            if let Some(db_index) = options.get("db_index") {
-                let db_index = db_index.parse::<u64>().unwrap();
-                if db_index > 15 {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "The value of `db_index` must be between [0,15]"
-                    )));
-                }
-            } else {
-                options.insert("db_index".to_string(), 0.to_string());
-            }
-            if !options.contains_key("password") {
-                options.insert("password".to_string(), String::new());
-            }
-            let allowed_options = HashSet::from([
-                "host".to_string(),
-                "port".to_string(),
-                "password".to_string(),
-                "db_index".to_string(),
-            ]);
-            let mut keys = HashSet::new();
-            for key in options.keys().cloned().collect_vec() {
-                keys.insert(key);
-            }
-            if !keys.is_subset(&allowed_options) {
-                return Err(ErrorCode::BadArguments(format!(
-                    "The redis configurations must be in [`host`, `port`, `password`, `db_index`] ",
-                )));
-            }
-        } else {
-            todo!()
-        }
+        match source.to_lowercase().as_str() {
+            "redis" => validate_redis_opt_key(&options)?,
+            "mysql" => validate_mysql_opt_key(&options)?,
+            _ => todo!(),
+        };
 
-        let mut field_comments = BTreeMap::new();
-        let mut primary_column_ids = Vec::new();
-
+        // Check for data source fields.
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
+        match source.to_lowercase().as_str() {
+            "redis" => validate_redis_fields(&schema)?,
+            "mysql" => validate_mysql_fields(&schema)?,
+            _ => todo!(),
+        }
 
-        let mut fields_names: Vec<String> = Vec::new();
-        for table_field in schema.fields() {
-            if table_field.computed_expr.is_some() {
-                return Err(ErrorCode::BadArguments(
-                    "The table field configuration is invalid. ".to_owned()
-                        + "Computed expressions for the table fields should not be set",
-                ));
-            }
-            fields_names.push(table_field.name.clone());
-        }
-        // Check for redis.
-        if source.to_lowercase() == *"redis" {
-            if fields_names.len() != 2 {
-                return Err(ErrorCode::BadArguments(
-                    "The number of Redis fields must be two",
-                ));
-            }
-            for table_field in schema.fields() {
-                if table_field.data_type().remove_nullable() != TableDataType::String {
-                    return Err(ErrorCode::BadArguments(
-                        "The type of Redis field must be string",
-                    ));
-                }
-            }
-        // Check for mysql
-        } else if source.to_lowercase() == *"mysql" {
-            for table_field in schema.fields() {
-                if !matches!(
-                    table_field.data_type().remove_nullable(),
-                    TableDataType::Boolean
-                        | TableDataType::String
-                        | TableDataType::Number(_)
-                        | TableDataType::Date
-                        | TableDataType::Timestamp
-                ) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`] and must be `NOT NULL`",
-                    )));
-                }
-            }
-        } else {
-            todo!()
-        }
+        // Collect field_comments.
+        let mut field_comments = BTreeMap::new();
         for column in columns {
             if column.comment.is_some() {
                 let column_id = schema.column_id_of(column.name.name.as_str())?;
                 field_comments.insert(column_id, column.comment.clone().unwrap_or_default());
             }
         }
+
+        // Collect and check primary column.
+        let mut primary_column_ids = Vec::new();
         if primary_keys.len() != 1 {
             return Err(ErrorCode::BadArguments("Only support one primary key"));
         }
@@ -211,7 +226,9 @@ impl Binder {
         let pk_id = schema.column_id_of(primary_key.name.as_str())?;
         primary_column_ids.push(pk_id);
 
+        // Comment.
         let comment = comment.clone().unwrap_or("".to_string());
+
         let meta = DictionaryMeta {
             source,
             options,
@@ -221,7 +238,6 @@ impl Binder {
             comment,
             ..Default::default()
         };
-
         Ok(Plan::CreateDictionary(Box::new(CreateDictionaryPlan {
             create_option: create_option.clone(),
             tenant,
