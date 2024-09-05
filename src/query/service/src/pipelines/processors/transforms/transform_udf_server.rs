@@ -166,7 +166,14 @@ impl TransformUdfServer {
 }
 
 impl AsyncRetry for TransformUdfServer {
-    fn retry_on(&self, _err: &databend_common_exception::ErrorCode) -> bool {
+    fn retry_on(&self, err: &databend_common_exception::ErrorCode) -> bool {
+        if err.code() == ErrorCode::U_D_F_DATA_ERROR {
+            let message = err.message();
+            // this means the server can't handle the request in 60s
+            if message.contains("unexpected internal error encountered") {
+                return false;
+            }
+        }
         true
     }
 
