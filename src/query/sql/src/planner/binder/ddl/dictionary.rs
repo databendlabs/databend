@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::option;
+use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
@@ -35,12 +36,19 @@ use crate::plans::Plan;
 use crate::plans::ShowCreateDictionaryPlan;
 use crate::Binder;
 
-pub static REQUIRED_MYSQL_OPTION_KEYS: HashSet<&str> =
-    HashSet(["host", "port", "username", "password", "db", "table"]);
+pub static REQUIRED_MYSQL_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("host");
+    r.insert("port");
+    r.insert("username");
+    r.insert("db");
+    r.insert("table");
+    r
+});
 
 fn validate_mysql_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
     let mut flag = true;
-    for option in REQUIRED_MYSQL_OPTION_KEYS {
+    for option in REQUIRED_MYSQL_OPTION_KEYS.clone() {
         if !options.contains_key(option) {
             flag = false
         }
@@ -62,11 +70,16 @@ fn validate_mysql_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
     }
 }
 
-pub static REQUIRED_REDIS_OPTION_KEYS: HashSet<&str> = HashSet(["host", "port"]);
+pub static REQUIRED_REDIS_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("host");
+    r.insert("port");
+    r
+});
 
-fn validate_redis_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
+fn validate_redis_opt_key(options: &mut BTreeMap<String, String>) -> Result<()> {
     let mut flag = true;
-    for option in REQUIRED_REDIS_OPTION_KEYS {
+    for option in REQUIRED_REDIS_OPTION_KEYS.clone() {
         if !options.contains_key(option) {
             flag = false
         }
@@ -104,30 +117,13 @@ fn validate_redis_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
     if !keys.is_subset(&allowed_options) {
         flag = false
     }
-    if !flag {
+    if flag {
+        Ok(())
+    } else {
         Err(ErrorCode::BadArguments(
             "Please ensure you have provided correct values which contains [`host`,`port`] and no other value than [`host`,`port`,`password`, `db_index`]",
         ))
-    } else {
-        Ok(())
     }
-}
-
-fn validate_redis_fields(schema: &TableSchema) -> Result<()> {
-    let fields_names: Vec<String> = schema.fields().iter().map(|f| f.name.clone()).collect();
-    if fields_names.len() != 2 {
-        return Err(ErrorCode::BadArguments(
-            "The number of Redis fields must be two",
-        ));
-    }
-    for field in schema.fields() {
-        if field.data_type().remove_nullable() != TableDataType::String {
-            Err(ErrorCode::BadArguments(
-                "The type of Redis field must be string",
-            ));
-        }
-    }
-    Ok(())
 }
 
 fn validate_mysql_fields(schema: &TableSchema) -> Result<()> {
@@ -142,6 +138,23 @@ fn validate_mysql_fields(schema: &TableSchema) -> Result<()> {
         ) {
             return Err(ErrorCode::BadArguments(
                 "Mysql field types must be in [`boolean`, `string`, `number`, `timestamp`, `date`] and must be `NOT NULL`",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_redis_fields(schema: &TableSchema) -> Result<()> {
+    let fields_names: Vec<String> = schema.fields().iter().map(|f| f.name.clone()).collect();
+    if fields_names.len() != 2 {
+        return Err(ErrorCode::BadArguments(
+            "The number of Redis fields must be two",
+        ));
+    }
+    for field in schema.fields() {
+        if field.data_type().remove_nullable() != TableDataType::String {
+            return Err(ErrorCode::BadArguments(
+                "The type of Redis field must be string",
             ));
         }
     }
@@ -192,8 +205,8 @@ impl Binder {
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
         match source.to_lowercase().as_str() {
-            "redis" => validate_redis_opt_key(&options)?,
-            "mysql" => validate_mysql_opt_key(&options)?,
+            "redis" => validate_redis_opt_key(options.borrow_mut())?,
+            "mysql" => validate_mysql_opt_key(options.borrow_mut())?,
             _ => todo!(),
         };
 
