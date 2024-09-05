@@ -15,7 +15,6 @@
 use async_trait::async_trait;
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
-use databend_common_meta_api::ShareApiTestSuite;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
 use test_harness::test;
@@ -40,7 +39,6 @@ impl kvapi::ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
 #[fastrace::trace]
 async fn test_meta_embedded() -> anyhow::Result<()> {
     SchemaApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
-    ShareApiTestSuite::test_single_node_share(MetaEmbeddedBuilder {}).await?;
     BackgroundApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
 
     Ok(())

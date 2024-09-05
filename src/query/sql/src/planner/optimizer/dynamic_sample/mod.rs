@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod dummy_share_database;
-mod share_database;
+#[allow(clippy::module_inception)]
+mod dynamic_sample;
+mod filter_selectivity_sample;
+mod join_selectivity_sample;
+mod query_sample_executor;
 
-pub use share_database::ShareDatabase;
+pub use dynamic_sample::dynamic_sample;
+pub use query_sample_executor::QuerySampleExecutor;

@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod share_catalog;
+use async_trait::async_trait;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
-pub use share_catalog::ShareCatalog;
-pub use share_catalog::ShareCatalogCreator;
+use crate::executor::PhysicalPlan;
+
+#[async_trait]
+pub trait QuerySampleExecutor: Send + Sync {
+    async fn execute_query(&self, plan: &PhysicalPlan) -> Result<Vec<DataBlock>>;
+}

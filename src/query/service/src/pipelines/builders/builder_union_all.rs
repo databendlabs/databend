@@ -85,7 +85,7 @@ impl PipelineBuilder {
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(2);
 
         build_res.main_pipeline.add_sink(|input_port| {
             Ok(ProcessorPtr::create(UnionReceiveSink::create(

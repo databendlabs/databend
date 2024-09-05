@@ -319,7 +319,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             temporal,
-            consume,
+            with_options,
             pivot,
             unpivot,
             sample,
@@ -339,8 +339,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if consume {
-            RcDoc::text(" WITH CONSUME")
+        .append(if let Some(with_options) = with_options {
+            RcDoc::text(format!(" {with_options}"))
         } else {
             RcDoc::nil()
         })

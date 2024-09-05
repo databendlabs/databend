@@ -177,11 +177,11 @@ impl TableRefVisitor {
             database,
             table,
             temporal,
-            consume,
+            with_options,
             ..
         } = table_ref
         {
-            if temporal.is_some() || *consume {
+            if temporal.is_some() || with_options.is_some() {
                 self.cache_miss = true;
                 return;
             }

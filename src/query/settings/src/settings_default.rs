@@ -848,7 +848,13 @@ impl DefaultSettings {
                     desc: "Seed for random function",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                })
+                }),
+                ("dynamic_sample_time_budget_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time budget for dynamic sample in milliseconds",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
