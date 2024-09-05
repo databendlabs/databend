@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
@@ -63,49 +62,35 @@ pub fn row_fetch_processor(
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     match &fuse_table.storage_format {
-        FuseStorageFormat::Native => {
-            let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
-            for column_node in &block_reader.project_column_nodes {
-                let leaves: Vec<ColumnDescriptor> = column_node
-                    .leaf_indices
-                    .iter()
-                    .map(|i| block_reader.parquet_schema_descriptor.columns()[*i].clone())
-                    .collect::<Vec<_>>();
-                column_leaves.push(leaves);
-            }
-            let column_leaves = Arc::new(column_leaves);
-            Ok(Box::new(move |input, output| {
-                Ok(if block_reader.support_blocking_api() {
-                    TransformRowsFetcher::create(
-                        input,
-                        output,
-                        row_id_col_offset,
-                        NativeRowsFetcher::<true>::create(
-                            fuse_table.clone(),
-                            projection.clone(),
-                            block_reader.clone(),
-                            column_leaves.clone(),
-                            max_threads,
-                        ),
-                        need_wrap_nullable,
-                    )
-                } else {
-                    TransformRowsFetcher::create(
-                        input,
-                        output,
-                        row_id_col_offset,
-                        NativeRowsFetcher::<false>::create(
-                            fuse_table.clone(),
-                            projection.clone(),
-                            block_reader.clone(),
-                            column_leaves.clone(),
-                            max_threads,
-                        ),
-                        need_wrap_nullable,
-                    )
-                })
-            }))
-        }
+        FuseStorageFormat::Native => Ok(Box::new(move |input, output| {
+            Ok(if block_reader.support_blocking_api() {
+                TransformRowsFetcher::create(
+                    input,
+                    output,
+                    row_id_col_offset,
+                    NativeRowsFetcher::<true>::create(
+                        fuse_table.clone(),
+                        projection.clone(),
+                        block_reader.clone(),
+                        max_threads,
+                    ),
+                    need_wrap_nullable,
+                )
+            } else {
+                TransformRowsFetcher::create(
+                    input,
+                    output,
+                    row_id_col_offset,
+                    NativeRowsFetcher::<false>::create(
+                        fuse_table.clone(),
+                        projection.clone(),
+                        block_reader.clone(),
+                        max_threads,
+                    ),
+                    need_wrap_nullable,
+                )
+            })
+        })),
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
             Ok(Box::new(move |input, output| {

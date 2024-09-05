@@ -12,20 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+use async_trait::async_trait;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod lock;
-pub mod merge_into_join;
-pub mod plan;
-pub mod query_kind;
-pub mod runtime_filter_info;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
-pub mod table_with_options;
+use crate::executor::PhysicalPlan;
+
+#[async_trait]
+pub trait QuerySampleExecutor: Send + Sync {
+    async fn execute_query(&self, plan: &PhysicalPlan) -> Result<Vec<DataBlock>>;
+}

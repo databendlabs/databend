@@ -26,7 +26,7 @@ use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct JoinNode {
     pub join_type: JoinType,
     pub leaves: Arc<Vec<IndexType>>,
@@ -39,7 +39,7 @@ pub struct JoinNode {
 }
 
 impl JoinNode {
-    pub fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
+    pub async fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
         if let Some(card) = self.cardinality {
             return Ok(card);
         }
@@ -49,6 +49,7 @@ impl JoinNode {
             self.s_expr = Some(self.s_expr(relations));
             self.s_expr.as_ref().unwrap()
         };
+
         let rel_expr = RelExpr::with_s_expr(s_expr);
         let card = rel_expr.derive_cardinality()?.cardinality;
         self.cardinality = Some(card);

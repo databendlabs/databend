@@ -2670,11 +2670,12 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     });
 
     let source_table = map(
-        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
-        |((catalog, database, table), alias)| MergeSource::Table {
+        rule!(#dot_separated_idents_1_to_3 ~ #with_options? ~ #table_alias?),
+        |((catalog, database, table), with_options, alias)| MergeSource::Table {
             catalog,
             database,
             table,
+            with_options,
             alias,
         },
     );
@@ -3978,7 +3979,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     })(i)
 }
 
-fn option_to_string(i: Input) -> IResult<String> {
+pub fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
 
     rule!(
@@ -4158,7 +4159,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -4178,7 +4179,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,

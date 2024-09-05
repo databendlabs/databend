@@ -26,6 +26,7 @@ use crate::arrow::io::ipc::write::default_ipc_fields;
 use crate::arrow::io::ipc::write::schema_to_bytes;
 use crate::arrow::io::parquet::write::to_parquet_schema;
 use crate::native::ColumnMeta;
+use crate::native::SchemaDescriptor;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
@@ -43,6 +44,7 @@ pub struct NativeWriter<W: Write> {
     pub(crate) options: WriteOptions,
     /// A reference to the schema, used in validating record batches
     pub(crate) schema: Schema,
+    pub(crate) schema_descriptor: SchemaDescriptor,
 
     /// Record blocks that will be written as part of the strawboat footer
     pub metas: Vec<ColumnMeta>,
@@ -55,26 +57,28 @@ pub struct NativeWriter<W: Write> {
 impl<W: Write> NativeWriter<W> {
     /// Creates a new [`NativeWriter`] and writes the header to `writer`
     pub fn try_new(writer: W, schema: &Schema, options: WriteOptions) -> Result<Self> {
-        let mut slf = Self::new(writer, schema.clone(), options);
+        let mut slf = Self::new(writer, schema.clone(), options)?;
         slf.start()?;
 
         Ok(slf)
     }
 
     /// Creates a new [`NativeWriter`].
-    pub fn new(writer: W, schema: Schema, options: WriteOptions) -> Self {
+    pub fn new(writer: W, schema: Schema, options: WriteOptions) -> Result<Self> {
         let num_cols = schema.fields.len();
-        Self {
+        let schema_descriptor = to_parquet_schema(&schema)?;
+        Ok(Self {
             writer: OffsetWriter {
                 w: writer,
                 offset: 0,
             },
             options,
             schema,
+            schema_descriptor,
             metas: Vec::with_capacity(num_cols),
             scratch: Vec::with_capacity(0),
             state: State::None,
-        }
+        })
     }
 
     /// Consumes itself into the inner writer
@@ -113,9 +117,7 @@ impl<W: Write> NativeWriter<W> {
             ));
         }
         assert_eq!(chunk.arrays().len(), self.schema.fields.len());
-
-        let schema_descriptor = to_parquet_schema(&self.schema)?;
-        self.encode_chunk(schema_descriptor, chunk)?;
+        self.encode_chunk(chunk)?;
 
         self.state = State::Written;
         Ok(())

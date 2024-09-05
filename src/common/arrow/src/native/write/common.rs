@@ -24,7 +24,6 @@ use crate::arrow::io::parquet::write::slice_parquet_array;
 use crate::arrow::io::parquet::write::to_leaves;
 use crate::arrow::io::parquet::write::to_nested;
 use crate::arrow::io::parquet::write::to_parquet_leaves;
-use crate::arrow::io::parquet::write::SchemaDescriptor;
 use crate::native::compression::CommonCompression;
 use crate::native::compression::Compression;
 use crate::native::ColumnMeta;
@@ -45,11 +44,7 @@ pub struct WriteOptions {
 
 impl<W: Write> NativeWriter<W> {
     /// Encode and write a [`Chunk`] to the file
-    pub fn encode_chunk(
-        &mut self,
-        schema_descriptor: SchemaDescriptor,
-        chunk: &Chunk<Box<dyn Array>>,
-    ) -> Result<()> {
+    pub fn encode_chunk(&mut self, chunk: &Chunk<Box<dyn Array>>) -> Result<()> {
         let page_size = self
             .options
             .max_page_size
@@ -59,7 +54,7 @@ impl<W: Write> NativeWriter<W> {
         for (array, type_) in chunk
             .arrays()
             .iter()
-            .zip(schema_descriptor.fields().to_vec())
+            .zip(self.schema_descriptor.fields().to_vec())
         {
             let array = array.as_ref();
             let nested = to_nested(array, &type_)?;

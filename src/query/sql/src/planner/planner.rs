@@ -39,6 +39,7 @@ use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::QuerySampleExecutor;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -53,6 +54,7 @@ const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +65,20 @@ pub struct PlanExtras {
 
 impl Planner {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
-        Planner { ctx }
+        Planner {
+            ctx,
+            sample_executor: None,
+        }
+    }
+
+    pub fn new_with_sample_executor(
+        ctx: Arc<dyn TableContext>,
+        sample_executor: Arc<dyn QuerySampleExecutor>,
+    ) -> Self {
+        Planner {
+            ctx,
+            sample_executor: Some(sample_executor),
+        }
     }
 
     #[async_backtrace::framed]
@@ -196,7 +211,8 @@ impl Planner {
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
                     .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
                     .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
-                    .with_enable_dphyp(settings.get_enable_dphyp()?);
+                    .with_enable_dphyp(settings.get_enable_dphyp()?)
+                    .with_sample_executor(self.sample_executor.clone());
 
                 let optimized_plan = optimize(opt_ctx, plan).await?;
                 let result = (optimized_plan, PlanExtras {

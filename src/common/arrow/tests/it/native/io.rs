@@ -466,7 +466,7 @@ fn test_write_read_with_options(chunk: Chunk<Box<dyn Array>>, options: WriteOpti
         .collect();
 
     let schema = Schema::from(fields);
-    let mut writer = NativeWriter::new(&mut bytes, schema.clone(), options);
+    let mut writer = NativeWriter::new(&mut bytes, schema.clone(), options).unwrap();
 
     writer.start().unwrap();
     writer.write(&chunk).unwrap();

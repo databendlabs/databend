@@ -823,6 +823,16 @@ impl TableContext for CtxDelegation {
         }
     }
 
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table(catalog, database, table).await
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,

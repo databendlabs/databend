@@ -52,6 +52,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::ServiceQueryExecutor;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -208,7 +209,10 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
 ///
 /// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
 pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
-    let mut planner = Planner::new(ctx.clone());
+    let mut planner = Planner::new_with_sample_executor(
+        ctx.clone(),
+        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
+    );
     let result = planner.plan_sql(sql).await;
     let short_sql = short_sql(sql.to_string());
     let mut stmt = if let Ok((_, extras)) = &result {

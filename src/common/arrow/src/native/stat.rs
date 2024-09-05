@@ -209,7 +209,7 @@ mod test {
             array.validity().is_some(),
         );
         let schema = Schema::from(vec![field.clone()]);
-        let mut writer = NativeWriter::new(&mut bytes, schema, options);
+        let mut writer = NativeWriter::new(&mut bytes, schema, options).unwrap();
 
         writer.start().unwrap();
         writer.write(&Chunk::new(vec![array])).unwrap();

@@ -27,6 +27,7 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableAlias;
 use crate::ast::TableReference;
+use crate::ast::WithOptions;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeUpdateExpr {
@@ -182,6 +183,7 @@ pub enum MergeSource {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
+        with_options: Option<WithOptions>,
     },
 }
 
@@ -207,6 +209,7 @@ impl MergeSource {
                 catalog,
                 database,
                 table,
+                with_options,
                 alias,
             } => TableReference::Table {
                 span: None,
@@ -215,7 +218,7 @@ impl MergeSource {
                 table: table.clone(),
                 alias: alias.clone(),
                 temporal: None,
-                consume: false,
+                with_options: with_options.clone(),
                 pivot: None,
                 unpivot: None,
                 sample: None,
@@ -249,12 +252,16 @@ impl Display for MergeSource {
                 catalog,
                 database,
                 table,
+                with_options,
                 alias,
             } => {
                 write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
+                }
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }

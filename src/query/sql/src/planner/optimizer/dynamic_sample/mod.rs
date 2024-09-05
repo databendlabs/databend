@@ -12,20 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#[allow(clippy::module_inception)]
+mod dynamic_sample;
+mod filter_selectivity_sample;
+mod join_selectivity_sample;
+mod query_sample_executor;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod lock;
-pub mod merge_into_join;
-pub mod plan;
-pub mod query_kind;
-pub mod runtime_filter_info;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
-pub mod table_with_options;
+pub use dynamic_sample::dynamic_sample;
+pub use query_sample_executor::QuerySampleExecutor;
