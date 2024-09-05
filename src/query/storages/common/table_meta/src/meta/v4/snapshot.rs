@@ -87,6 +87,8 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
+
+    pub least_visible_timestamp: Option<DateTime<Utc>>,
 }
 
 impl TableSnapshot {
@@ -120,6 +122,7 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
+            least_visible_timestamp: None,
         }
     }
 
@@ -234,6 +237,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
+            least_visible_timestamp: None,
         }
     }
 }
@@ -256,6 +260,7 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
+            least_visible_timestamp: None,
         }
     }
 }
