@@ -93,6 +93,7 @@ impl Processor for TransformMergeBlock {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
+            self.receiver.close();
             return Ok(Event::Finished);
         }
 
@@ -120,6 +121,7 @@ impl Processor for TransformMergeBlock {
                 return Ok(Event::Async);
             }
             self.output.finish();
+            self.receiver.close();
             return Ok(Event::Finished);
         }
 

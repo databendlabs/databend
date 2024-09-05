@@ -2374,7 +2374,7 @@ dependencies = [
  "eyre",
  "indenter",
  "once_cell",
- "owo-colors 4.0.0",
+ "owo-colors",
  "tracing-error",
 ]
 
@@ -2384,7 +2384,7 @@ version = "0.2.1"
 source = "git+https://github.com/eyre-rs/eyre.git?rev=e5d92c3#e5d92c3ad2ff0bd4c3071528441c611f201e0d8e"
 dependencies = [
  "once_cell",
- "owo-colors 4.0.0",
+ "owo-colors",
  "tracing-core",
  "tracing-error",
 ]
@@ -3372,7 +3372,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-hashtable",
  "databend-common-io",
- "educe",
+ "educe 0.4.23",
  "enum-as-inner 0.5.1",
  "ethnum",
  "futures",
@@ -3634,6 +3634,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
+ "enumflags2",
  "fastrace",
  "futures",
  "log",
@@ -4143,7 +4144,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-table-meta",
  "derive-visitor",
- "educe",
+ "educe 0.4.23",
  "enum-as-inner 0.5.1",
  "fastrace",
  "globiter",
@@ -4629,6 +4630,8 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
  "fastrace",
+ "futures",
+ "log",
 ]
 
 [[package]]
@@ -6234,10 +6237,22 @@ version = "0.4.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f0042ff8246a363dbe77d2ceedb073339e85a804b9a47636c6e016a9a32c05f"
 dependencies = [
- "enum-ordinalize",
+ "enum-ordinalize 3.1.15",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "educe"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
+dependencies = [
+ "enum-ordinalize 4.3.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
 ]
 
 [[package]]
@@ -6355,6 +6370,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-ordinalize"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea0dcfa4e54eeb516fe454635a95753ddd39acda650ce703031c6973e315dd5"
+dependencies = [
+ "enum-ordinalize-derive",
+]
+
+[[package]]
+name = "enum-ordinalize-derive"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
 name = "enum_dispatch"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6431,6 +6466,12 @@ name = "error-code"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0474425d51df81997e2f90a21591180b38eccf27292d755f3e30750225c175b"
+
+[[package]]
+name = "escape8259"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5692dd7b5a1978a5aeb0ce83b7655c58ca8efdcb79d21036ea249da95afec2c6"
 
 [[package]]
 name = "ethnum"
@@ -9687,11 +9728,12 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.6.1"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d8de370f98a6cb8a4606618e53e802f93b094ddec0f96988eaec2c27e6e9ce7"
+checksum = "cc0bda45ed5b3a2904262c1bb91e526127aa70e7ef3758aba2ef93cf896b9b58"
 dependencies = [
  "clap",
+ "escape8259",
  "termcolor",
  "threadpool",
 ]
@@ -11085,12 +11127,6 @@ checksum = "c3a059efb063b8f425b948e042e6b9bd85edfe60e913630ed727b23e2dfcc558"
 dependencies = [
  "stable_deref_trait",
 ]
-
-[[package]]
-name = "owo-colors"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "owo-colors"
@@ -14136,20 +14172,20 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.19.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "004809e4710d743a13eb2975fb6a1498da76157e19ad059d595d032e6a50e30b"
+checksum = "1106ff933150aa8b8af71ee57631cd3ac2feeccd230d122ad833e7f0cd5e8fe1"
 dependencies = [
  "async-trait",
- "educe",
+ "educe 0.6.0",
  "fs-err",
  "futures",
  "glob",
  "humantime",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "libtest-mimic",
  "md-5",
- "owo-colors 3.5.0",
+ "owo-colors",
  "regex",
  "similar",
  "subst",

@@ -171,7 +171,7 @@ impl FuseTable {
     }
 
     /// Load the table instance by the snapshot
-    fn load_table_by_snapshot(
+    pub fn load_table_by_snapshot(
         &self,
         snapshot: &TableSnapshot,
         format_version: u64,

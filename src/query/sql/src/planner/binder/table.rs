@@ -515,11 +515,11 @@ impl Binder {
 
     pub fn resolve_data_source(
         &self,
-        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        max_batch_size: Option<u64>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
@@ -529,7 +529,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table(catalog_name, database_name, table_name)
+                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {

@@ -12,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use super::Lambda;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
 use crate::ast::Identifier;
+use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
 use crate::Span;
@@ -565,6 +567,19 @@ impl Display for Unpivot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+pub struct WithOptions {
+    pub options: BTreeMap<String, String>,
+}
+
+impl Display for WithOptions {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "WITH (")?;
+        write_comma_separated_string_map(f, &self.options)?;
+        write!(f, ")")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
     pub append_only: bool,
@@ -674,8 +689,7 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        /// whether consume the table
-        consume: bool,
+        with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -751,7 +765,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
-                consume,
+                with_options,
                 pivot,
                 unpivot,
                 sample,
@@ -765,8 +779,8 @@ impl Display for TableReference {
                     write!(f, " {temporal}")?;
                 }
 
-                if *consume {
-                    write!(f, " WITH CONSUME")?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
                 }
 
                 if let Some(alias) = alias {

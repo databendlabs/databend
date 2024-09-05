@@ -18,19 +18,11 @@ use std::time::Instant;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
-use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Field as ArrowField;
-use databend_common_arrow::native::read::batch_read::batch_read_array;
-use databend_common_arrow::native::read::column_iter_to_arrays;
+use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::read::ArrayIter;
-use databend_common_arrow::parquet::metadata::ColumnDescriptor;
-use databend_common_arrow::parquet::metadata::Descriptor;
-use databend_common_arrow::parquet::schema::types::FieldInfo;
-use databend_common_arrow::parquet::schema::types::ParquetType;
-use databend_common_arrow::parquet::schema::types::PhysicalType;
-use databend_common_arrow::parquet::schema::types::PrimitiveType;
-use databend_common_arrow::parquet::schema::Repetition;
+use databend_common_arrow::native::read::NativeColumnsReader;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -176,11 +168,12 @@ impl BlockReader {
     }
 
     fn chunks_to_native_array(
+        &self,
         column_node: &ColumnNode,
         metas: Vec<&ColumnMeta>,
         chunks: Vec<&[u8]>,
-        column_descriptors: Vec<ColumnDescriptor>,
-        field: Field,
+        leaf_ids: Vec<usize>,
+        field: ArrowField,
     ) -> Result<Box<dyn Array>> {
         let is_nested = column_node.is_nested;
         let mut page_metas = Vec::with_capacity(chunks.len());
@@ -192,7 +185,10 @@ impl BlockReader {
             page_metas.push(meta.pages.clone());
         }
 
-        match batch_read_array(readers, column_descriptors, field, is_nested, page_metas) {
+        match self
+            .native_columns_reader
+            .batch_read_array(readers, &leaf_ids, field, is_nested, page_metas)
+        {
             Ok(array) => Ok(array),
             Err(err) => Err(err.into()),
         }
@@ -211,7 +207,7 @@ impl BlockReader {
         let estimated_cap = indices.len();
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
-        let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
+        let mut field_leaf_ids = Vec::with_capacity(estimated_cap);
         let mut field_uncompressed_size = 0;
 
         for (i, leaf_index) in indices.iter().enumerate() {
@@ -220,11 +216,9 @@ impl BlockReader {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
-                            let column_descriptor =
-                                &self.parquet_schema_descriptor.columns()[*leaf_index];
                             field_column_metas.push(column_meta);
                             field_column_data.push(data.as_ref());
-                            field_column_descriptors.push(column_descriptor.clone());
+                            field_leaf_ids.push(*leaf_index);
                             field_uncompressed_size += data.len();
                         }
                         DataItem::ColumnArray(column_array) => {
@@ -250,11 +244,11 @@ impl BlockReader {
         }
 
         if !field_column_metas.is_empty() {
-            let array = Self::chunks_to_native_array(
+            let array = self.chunks_to_native_array(
                 column,
                 field_column_metas,
                 field_column_data,
-                field_column_descriptors,
+                field_leaf_ids,
                 column.field.clone(),
             )?;
             // mark the array
@@ -277,13 +271,18 @@ impl BlockReader {
     }
 
     pub(crate) fn build_array_iter(
+        &self,
         column_node: &ColumnNode,
-        leaves: Vec<ColumnDescriptor>,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ArrayIter<'static>> {
         let field = column_node.field.clone();
         let is_nested = column_node.is_nested;
-        match column_iter_to_arrays(readers, leaves, field, is_nested) {
+        match self.native_columns_reader.column_iter_to_arrays(
+            readers,
+            &column_node.leaf_indices,
+            field,
+            is_nested,
+        ) {
             Ok(array_iter) => Ok(array_iter),
             Err(err) => Err(err.into()),
         }
@@ -293,29 +292,6 @@ impl BlockReader {
         name: String,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ArrayIter<'static>> {
-        // TODO(b41sh): support other data types
-        // The data type of virtual columns are always Nullable Variant,
-        // so we can directly construct `ColumnDescriptor`
-        let primitive_type = PrimitiveType {
-            field_info: FieldInfo {
-                name: name.clone(),
-                repetition: Repetition::Optional,
-                id: None,
-            },
-            logical_type: None,
-            converted_type: None,
-            physical_type: PhysicalType::ByteArray,
-        };
-        let descriptor = Descriptor {
-            primitive_type: primitive_type.clone(),
-            max_def_level: 1,
-            max_rep_level: 0,
-        };
-        let path_in_schema = vec![name.clone()];
-        let base_type = ParquetType::PrimitiveType(primitive_type);
-
-        let is_nested = false;
-        let leaves = vec![ColumnDescriptor::new(descriptor, path_in_schema, base_type)];
         let field = ArrowField::new(
             name,
             ArrowType::Extension(
@@ -325,8 +301,9 @@ impl BlockReader {
             ),
             true,
         );
-
-        match column_iter_to_arrays(readers, leaves, field, is_nested) {
+        let schema = ArrowSchema::from(vec![field.clone()]);
+        let native_column_reader = NativeColumnsReader::new(schema)?;
+        match native_column_reader.column_iter_to_arrays(readers, &[0], field, false) {
             Ok(array_iter) => Ok(array_iter),
             Err(err) => Err(err.into()),
         }
