@@ -170,7 +170,7 @@ impl AsyncRetry for TransformUdfServer {
         if err.code() == ErrorCode::U_D_F_DATA_ERROR {
             let message = err.message();
             // this means the server can't handle the request in 60s
-            if message.contains("unexpected internal error encountered") {
+            if message.contains("h2 protocol error") {
                 return false;
             }
         }
