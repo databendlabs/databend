@@ -242,7 +242,7 @@ pub struct KWayMergePartitionerProcessor<R: Rows> {
 
     task: VecDeque<DataBlock>,
     cur_output: Option<usize>,
-    next: usize,
+    next_output: usize,
 }
 
 impl<R: Rows> KWayMergePartitionerProcessor<R> {
@@ -265,19 +265,19 @@ impl<R: Rows> KWayMergePartitionerProcessor<R> {
             outputs,
             task: VecDeque::new(),
             cur_output: None,
-            next: 0,
+            next_output: 0,
         }
     }
 
     fn find_output(&mut self) -> Option<usize> {
         let n = self.outputs.len();
-        for mut i in self.next..self.next + n {
+        for mut i in self.next_output..self.next_output + n {
             if i >= n {
                 i -= n;
             }
             if self.outputs[i].can_push() {
                 self.cur_output = Some(i);
-                self.next = if i + 1 == n { 0 } else { i + 1 };
+                self.next_output = if i + 1 == n { 0 } else { i + 1 };
                 return self.cur_output;
             }
         }
@@ -361,7 +361,7 @@ where A: SortAlgorithm
     remove_order_col: bool,
 
     buffer: Vec<DataBlock>,
-    info: Option<Info>,
+    task: Option<TaskState>,
     output_data: VecDeque<DataBlock>,
     _a: PhantomData<A>,
 }
@@ -388,13 +388,13 @@ where A: SortAlgorithm
             sort_desc,
             remove_order_col,
             buffer: Vec::new(),
-            info: None,
+            task: None,
             _a: Default::default(),
         }
     }
 
     fn ready(&self) -> bool {
-        self.info.map_or(false, |info| info.done())
+        self.task.map_or(false, |state| state.done())
     }
 
     fn pull(&mut self) -> Result<Event> {
@@ -416,14 +416,14 @@ where A: SortAlgorithm
         let meta = SortTaskMeta::downcast_from(block.take_meta().unwrap()).unwrap();
 
         let rows = block.num_rows();
-        match &mut self.info {
-            Some(info) => {
-                debug_assert_eq!(meta.task, info.task);
-                debug_assert_eq!(meta.total, info.total);
-                assert!(info.remain >= rows);
-                info.remain -= rows;
+        match &mut self.task {
+            Some(task) => {
+                debug_assert_eq!(meta.id, task.id);
+                debug_assert_eq!(meta.total, task.total);
+                assert!(task.remain >= rows);
+                task.remain -= rows;
 
-                if info.done() {
+                if task.done() {
                     self.buffer.push(block);
                     Ok(Event::Sync)
                 } else {
@@ -441,8 +441,8 @@ where A: SortAlgorithm
             }
             None => {
                 assert!(meta.total >= rows);
-                self.info = Some(Info {
-                    task: meta.task,
+                self.task = Some(TaskState {
+                    id: meta.id,
                     total: meta.total,
                     remain: meta.total - rows,
                 });
@@ -510,14 +510,14 @@ where A: SortAlgorithm + Send + 'static
 
     fn process(&mut self) -> Result<()> {
         debug_assert!(self.ready());
-        let info = self.info.take().unwrap();
+        let task = self.task.take().unwrap();
 
         let mut merger = Merger::<A, BlockStream>::create(
             self.schema.clone(),
             self.streams(),
             self.sort_desc.clone(),
-            if info.total > self.batch_rows {
-                info.total / (info.total / self.batch_rows)
+            if task.total > self.batch_rows {
+                task.total / (task.total / self.batch_rows)
             } else {
                 self.batch_rows
             },
@@ -528,13 +528,13 @@ where A: SortAlgorithm + Send + 'static
         while let Some(block) = merger.next_block()? {
             rows += block.num_rows();
             let meta: Option<BlockMetaInfoPtr> = Some(Box::new(SortTaskMeta {
-                task: info.task,
-                total: info.total,
+                id: task.id,
+                total: task.total,
                 input: 0,
             }));
             self.output_data.push_back(block.add_meta(meta)?);
         }
-        debug_assert_eq!(rows, info.total);
+        debug_assert_eq!(rows, task.total);
         debug_assert!(merger.is_finished());
         Ok(())
     }
@@ -547,18 +547,18 @@ pub struct KWayMergeCombinerProcessor {
     cur_input: Option<usize>,
     cur_task: usize,
     buffer: Vec<VecDeque<DataBlock>>,
-    info: Vec<Option<Info>>,
+    state: Vec<Option<TaskState>>,
     limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Info {
-    task: usize,
+struct TaskState {
+    id: usize,
     total: usize,
     remain: usize,
 }
 
-impl Info {
+impl TaskState {
     fn done(&self) -> bool {
         self.remain == 0
     }
@@ -567,14 +567,14 @@ impl Info {
 impl KWayMergeCombinerProcessor {
     pub fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>, limit: Option<usize>) -> Self {
         let buffer = vec![VecDeque::new(); inputs.len()];
-        let info = vec![None; inputs.len()];
+        let state = vec![None; inputs.len()];
         Self {
             inputs,
             output,
             cur_input: None,
             cur_task: 1,
             buffer,
-            info,
+            state,
             limit,
         }
     }
@@ -582,11 +582,11 @@ impl KWayMergeCombinerProcessor {
     fn pull(&mut self, i: usize) -> Result<PullEvent> {
         let input = &self.inputs[i];
         let buffer = &mut self.buffer[i];
-        let info = &mut self.info[i];
+        let cur_state = &mut self.state[i];
 
-        if let Some(info) = info {
-            if info.done() {
-                return if info.task == self.cur_task {
+        if let Some(cur) = cur_state {
+            if cur.done() {
+                return if cur.id == self.cur_task {
                     Ok(PullEvent::Data)
                 } else {
                     Ok(PullEvent::Pending)
@@ -597,45 +597,44 @@ impl KWayMergeCombinerProcessor {
         if input.has_data() {
             let mut block = input.pull_data().unwrap()?;
             input.set_need_data();
-            let meta = SortTaskMeta::downcast_ref_from(block.get_meta().unwrap()).unwrap();
+            let incoming = SortTaskMeta::downcast_ref_from(block.get_meta().unwrap()).unwrap();
 
-            let task = match info {
+            let task_id = match cur_state {
                 None => {
-                    let task = meta.task;
-                    let task_rows = meta.total;
-                    debug_assert!(meta.total > 0);
+                    debug_assert!(incoming.total > 0);
                     debug_assert!(
-                        meta.task >= self.cur_task,
-                        "disorder task. cur_task: {} task: {} task_rows: {task_rows}",
+                        incoming.id >= self.cur_task,
+                        "disorder task. cur_task: {} incoming.id: {} incoming.total: {}",
                         self.cur_task,
-                        meta.task,
+                        incoming.id,
+                        incoming.total
                     );
-                    let remain = task_rows as usize - block.num_rows();
-                    let _ = info.insert(Info {
-                        task,
-                        total: task_rows as usize,
-                        remain,
+                    let SortTaskMeta { id, total, .. } = *incoming;
+                    let _ = cur_state.insert(TaskState {
+                        id,
+                        total,
+                        remain: total - block.num_rows(),
                     });
                     block.pop_columns(2);
                     buffer.push_back(block);
-                    task
+                    id
                 }
-                Some(info) => {
-                    debug_assert_eq!(info.task, meta.task);
-                    debug_assert_eq!(info.total, meta.total);
+                Some(cur) => {
+                    debug_assert_eq!(cur.id, incoming.id);
+                    debug_assert_eq!(cur.total, incoming.total);
 
                     let rows = block.num_rows();
-                    if rows <= info.remain {
+                    if rows <= cur.remain {
                         block.pop_columns(2);
                         buffer.push_back(block);
-                        info.remain -= rows;
-                        info.task
+                        cur.remain -= rows;
+                        cur.id
                     } else {
                         unreachable!()
                     }
                 }
             };
-            return if task == self.cur_task {
+            return if task_id == self.cur_task {
                 Ok(PullEvent::Data)
             } else {
                 Ok(PullEvent::Pending)
@@ -643,7 +642,7 @@ impl KWayMergeCombinerProcessor {
         }
 
         if !buffer.is_empty() {
-            return if info.unwrap().task == self.cur_task {
+            return if cur_state.unwrap().id == self.cur_task {
                 Ok(PullEvent::Data)
             } else {
                 Ok(PullEvent::Pending)
@@ -661,8 +660,8 @@ impl KWayMergeCombinerProcessor {
     fn push(&mut self) -> bool {
         let cur_input = self.cur_input.unwrap();
         let buffer = &mut self.buffer[cur_input];
-        let info = &mut self.info[cur_input];
-        debug_assert_eq!(info.unwrap().task, self.cur_task);
+        let cur_state = &mut self.state[cur_input];
+        debug_assert_eq!(cur_state.unwrap().id, self.cur_task);
         if let Some(block) = buffer.pop_front() {
             let block = match &mut self.limit {
                 None => block,
@@ -680,9 +679,9 @@ impl KWayMergeCombinerProcessor {
             };
             debug_assert!(block.num_rows() > 0);
             self.output.push_data(Ok(block));
-            if buffer.is_empty() && info.unwrap().done() {
+            if buffer.is_empty() && cur_state.unwrap().done() {
                 self.cur_task += 1;
-                info.take();
+                cur_state.take();
                 self.cur_input = None;
             }
             true

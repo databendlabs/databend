@@ -129,7 +129,7 @@ impl PipelineBuilder {
                         add_k_way_merge_sort(
                             &mut self.main_pipeline,
                             plan_schema,
-                            3, // todo
+                            max_threads,
                             block_size,
                             limit,
                             sort_desc,
@@ -331,6 +331,7 @@ impl SortPipelineBuilder {
 
         // Multi-pipelines merge sort
         let enable_loser_tree = self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         if self
             .ctx
             .get_settings()
@@ -339,7 +340,7 @@ impl SortPipelineBuilder {
             add_k_way_merge_sort(
                 pipeline,
                 self.schema.clone(),
-                3,
+                max_threads,
                 self.final_block_size,
                 self.limit,
                 self.sort_desc,

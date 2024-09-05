@@ -38,14 +38,16 @@ where
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
+    pending_streams: VecDeque<usize>,
+
     buffer: Vec<DataBlock>,
     rows: Vec<Option<R>>,
-    pending_streams: VecDeque<usize>,
-    limit: Option<usize>,
-
-    total_rows: usize,
     cur_task: usize,
 
+    limit: Option<usize>,
+    total_rows: usize,
+
+    // settings
     min_task: usize,
     max_task: usize,
     max_iter: usize,
@@ -92,12 +94,12 @@ where
             schema,
             sort_desc,
             unsorted_streams: streams,
+            pending_streams,
             buffer,
             rows,
-            pending_streams,
+            cur_task: 1,
             limit,
             total_rows: 0,
-            cur_task: 1,
 
             min_task,
             max_task,
@@ -165,7 +167,7 @@ where
     fn build_task(&mut self) -> Vec<DataBlock> {
         let partition = self.calc_partition_point();
 
-        let task = self.next_task_id();
+        let id = self.next_task_id();
         self.total_rows += partition.total;
 
         let task: Vec<_> = partition
@@ -175,7 +177,7 @@ where
                 let mut block = self.slice(input, pp);
 
                 block.replace_meta(Box::new(SortTaskMeta {
-                    task,
+                    id,
                     total: partition.total,
                     input,
                 }));
@@ -232,7 +234,7 @@ impl<R: Rows> List for Option<R> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortTaskMeta {
-    pub task: usize,
+    pub id: usize,
     pub total: usize,
     pub input: usize,
 }
@@ -244,6 +246,6 @@ impl BlockMetaInfo for SortTaskMeta {
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
