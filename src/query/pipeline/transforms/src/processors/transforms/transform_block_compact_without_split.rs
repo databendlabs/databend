@@ -65,6 +65,7 @@ impl Compactor for BlockCompactorWithoutSplit {
             .thresholds
             .check_large_enough(accumulated_rows, accumulated_bytes)
         {
+            // blocks < N
             return Ok(vec![]);
         }
 
@@ -81,8 +82,10 @@ impl Compactor for BlockCompactorWithoutSplit {
             .check_for_compact(accumulated_rows, accumulated_bytes)
             && blocks.len() > 1
         {
+            // blocks > 2N
             self.temp_blocks.push(blocks.pop().unwrap());
         } else {
+            // N <= blocks < 2N
             self.temp_blocks = blocks.drain(..).collect();
         }
 
@@ -113,6 +116,7 @@ impl Compactor for BlockCompactorWithoutSplit {
             self.temp_blocks.extend(blocks);
             res.push(DataBlock::concat(&self.temp_blocks)?);
         } else {
+            // blocks > 2N
             if self.temp_blocks.len() > 1 {
                 res.push(DataBlock::concat(&self.temp_blocks)?);
             } else {
