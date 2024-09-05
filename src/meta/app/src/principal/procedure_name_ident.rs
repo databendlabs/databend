@@ -87,15 +87,11 @@ mod tests {
 
     #[test]
     fn test_tenant_procedure_ident_as_kvapi_key() {
-        test_format_parse(
-            "procedure",
-            "",
-            "__fd_procedure/test_tenant/%27procedure%27%40%27%27",
-        );
+        test_format_parse("procedure", "", "__fd_procedure/test_tenant/procedure/");
         test_format_parse(
             "procedure'",
             "int,timestamp,string",
-            "__fd_procedure/test_tenant/%27procedure%2527%27%40%27int%2ctimestamp%2cstring%27",
+            "__fd_procedure/test_tenant/procedure%27/int%2ctimestamp%2cstring",
         );
 
         // With correct encoding the following two pair should not be encoded into the same string.
@@ -103,12 +99,12 @@ mod tests {
         test_format_parse(
             "p1'@'string",
             "string",
-            "__fd_procedure/test_tenant/%27p1%2527%2540%2527string%27%40%27string%27",
+            "__fd_procedure/test_tenant/p1%27%40%27string/string",
         );
         test_format_parse(
             "p2",
             "int'@'string",
-            "__fd_procedure/test_tenant/%27p2%27%40%27int%2527%2540%2527string%27",
+            "__fd_procedure/test_tenant/p2/int%27%40%27string",
         );
     }
 }

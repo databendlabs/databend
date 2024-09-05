@@ -134,7 +134,7 @@ impl ProcedureMgr {
 
         // Get procedure id list by `prefix_list` "<prefix>/<tenant>"
         let ident = ProcedureNameIdent::new(&req.tenant, ProcedureIdentity::new("", ""));
-        let dir = DirName::new(ident);
+        let dir = DirName::new_with_level(ident, 2);
 
         let name_id_metas = self.kv_api.list_id_value(&dir).await?;
 

@@ -94,7 +94,7 @@ impl Display for CreateProcedureReq {
             "{}:{}/{}={:?}",
             typ,
             self.name_ident.tenant_name(),
-            self.name_ident.procedure_name().display(),
+            self.name_ident.procedure_name(),
             self.meta
         )
     }
@@ -118,7 +118,7 @@ impl Display for RenameProcedureReq {
             f,
             "rename_procedure:{}/{}=>{}",
             self.name_ident.tenant_name(),
-            self.name_ident.procedure_name().display(),
+            self.name_ident.procedure_name(),
             self.new_procedure_name
         )
     }
@@ -140,7 +140,7 @@ impl Display for DropProcedureReq {
             "drop_procedure(if_exists={}):{}/{}",
             self.if_exists,
             self.name_ident.tenant_name(),
-            self.name_ident.procedure_name().display(),
+            self.name_ident.procedure_name(),
         )
     }
 }

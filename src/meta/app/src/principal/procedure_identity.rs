@@ -28,47 +28,13 @@ pub struct ProcedureIdentity {
 }
 
 impl ProcedureIdentity {
-    const ESCAPE_CHARS: [u8; 2] = [b'\'', b'@'];
+    const ESCAPE_CHARS: [u8; 1] = [b'\''];
 
     pub fn new(name: impl ToString, args: impl ToString) -> Self {
         Self {
             name: name.to_string(),
             args: args.to_string(),
         }
-    }
-
-    pub fn parse(s: &str) -> Result<Self, KeyError> {
-        let parts = s.splitn(2, '@').collect::<Vec<&str>>();
-        if parts.len() != 2 {
-            return Err(KeyError::WrongNumberOfSegments {
-                expect: 2,
-                got: s.to_string(),
-            });
-        }
-
-        // trim single quotes
-        let name = KeyParser::unescape_specified(parts[0].trim_matches('\''), &Self::ESCAPE_CHARS)?;
-        let args = KeyParser::unescape_specified(parts[1].trim_matches('\''), &Self::ESCAPE_CHARS)?;
-
-        Ok(ProcedureIdentity { name, args })
-    }
-
-    /// Encode the procedure identity into a string for building a meta-service key.
-    pub fn encode(&self) -> String {
-        format!(
-            "'{}'@'{}'",
-            KeyBuilder::escape_specified(&self.name, &Self::ESCAPE_CHARS),
-            KeyBuilder::escape_specified(&self.args, &Self::ESCAPE_CHARS),
-        )
-    }
-
-    /// Display should have a different implementation from encode(), one for human readable and the other for machine readable.
-    pub fn display(&self) -> impl Display {
-        format!(
-            "{}({})",
-            KeyBuilder::escape_specified(&self.name, &Self::ESCAPE_CHARS),
-            KeyBuilder::escape_specified(&self.args, &Self::ESCAPE_CHARS),
-        )
     }
 }
 
@@ -85,13 +51,14 @@ impl Display for ProcedureIdentity {
 
 impl KeyCodec for ProcedureIdentity {
     fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        b.push_str(&self.encode())
+        b.push_str(&self.name).push_str(&self.args)
     }
 
     fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
     where Self: Sized {
-        let s = parser.next_str()?;
-        Self::parse(&s)
+        let name = parser.next_str()?;
+        let args = parser.next_str()?;
+        Ok(Self { name, args })
     }
 }
 

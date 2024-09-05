@@ -84,7 +84,7 @@ impl AsyncSystemTable for ProceduresTable {
             procedure_ids.push(*procedure.ident.procedure_id());
             arguments.push(format!(
                 "{} RETURN ({})",
-                procedure.name_ident.procedure_name().display(),
+                procedure.name_ident.procedure_name(),
                 procedure.meta.return_types.iter().join(",")
             ));
             languages.push(procedure.meta.procedure_language.as_str());
