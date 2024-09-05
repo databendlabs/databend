@@ -995,8 +995,6 @@ mod kvapi_key_impl {
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
-    use crate::schema::LeastVisibleTime;
-    use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -1124,28 +1122,6 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for LeastVisibleTimeKey {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let table_id = b.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_lvt/table_id"
-    impl kvapi::Key for LeastVisibleTimeKey {
-        const PREFIX: &'static str = "__fd_table_lvt";
-
-        type ValueType = LeastVisibleTime;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-    }
-
     impl kvapi::Value for TableId {
         type KeyType = DBIdTableName;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
@@ -1178,13 +1154,6 @@ mod kvapi_key_impl {
 
     impl kvapi::Value for TableCopiedFileInfo {
         type KeyType = TableCopiedFileNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for LeastVisibleTime {
-        type KeyType = LeastVisibleTimeKey;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }

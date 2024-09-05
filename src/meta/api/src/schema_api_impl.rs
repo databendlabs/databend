@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -63,6 +64,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -105,8 +107,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetLVTReply;
-use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -114,7 +114,6 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::LeastVisibleTime;
-use databend_common_meta_app::schema::LeastVisibleTimeKey;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -131,8 +130,6 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::SetLVTReply;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -188,6 +185,7 @@ use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_proto_conv::FromToProto;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
@@ -955,7 +953,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             updated_on: None,
         };
 
-        self.create_name_value_with_create_option(
+        self.insert_name_value_with_create_option(
             req.name_ident.clone(),
             virtual_column_meta,
             req.create_option,
@@ -3029,7 +3027,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // Revision is unique. if it presents, consider it as success.
         // Thus, we could just ignore create result
         let _create_res = self
-            .create_name_value(key, lock_meta, Some(req.ttl))
+            .insert_name_value(key, lock_meta, Some(req.ttl))
             .await?;
 
         Ok(CreateLockRevReply { revision })
@@ -3186,66 +3184,38 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime, KVAppError> {
+        debug!(req :? =(&name_ident, &value); "SchemaApi: {}", func_name!());
 
-        let table_id = req.table_id;
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let lvt_key = LeastVisibleTimeKey { table_id };
-            let (lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
-                get_pb_value(self, &lvt_key).await?;
-            let new_time = match lvt_opt {
-                Some(lvt) => {
-                    if lvt.time >= req.time {
-                        return Ok(SetLVTReply { time: lvt.time });
-                    } else {
-                        req.time
-                    }
+        let transition = self
+            .upsert_name_value_with(name_ident, |t: Option<LeastVisibleTime>| {
+                let curr = t.unwrap_or_default();
+                if curr.time >= value.time {
+                    None
+                } else {
+                    Some(value.clone())
                 }
-                None => req.time,
-            };
+            })
+            .await?;
 
-            let new_lvt = LeastVisibleTime { time: new_time };
-
-            let txn_req = TxnRequest {
-                condition: vec![txn_cond_seq(&lvt_key, Eq, lvt_seq)],
-                if_then: vec![txn_op_put(&lvt_key, serialize_struct(&new_lvt)?)],
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                name :? =(req.table_id),
-                succ = succ;
-                "set_table_lvt"
-            );
-
-            if succ {
-                return Ok(SetLVTReply { time: new_time });
-            }
-        }
+        return Ok(transition.result.into_value().unwrap_or_default());
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+    async fn get<K>(&self, name_ident: &K) -> Result<Option<K::ValueType>, MetaError>
+    where
+        K: kvapi::Key + Sync + 'static,
+        K::ValueType: FromToProto + 'static,
+    {
+        debug!(req :? =(&name_ident); "SchemaApi::get::<{}>()", typ::<K>());
 
-        let table_id = req.table_id;
-
-        let lvt_key = LeastVisibleTimeKey { table_id };
-
-        let seq_lvt = self.get_pb(&lvt_key).await?;
-        let lvt_opt = seq_lvt.into_value();
-
-        Ok(GetLVTReply {
-            time: lvt_opt.map(|time| time.time),
-        })
+        let seq_lvt = self.get_pb(name_ident).await?;
+        Ok(seq_lvt.into_value())
     }
 
     fn name(&self) -> String {
@@ -4552,4 +4522,11 @@ async fn append_update_stream_meta_requests(
             .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
     }
     Ok(())
+}
+
+fn typ<K>() -> &'static str {
+    type_name::<K>()
+        .rsplit("::")
+        .next()
+        .unwrap_or("UnknownType")
 }
