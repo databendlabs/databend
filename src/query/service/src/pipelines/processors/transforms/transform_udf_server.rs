@@ -112,6 +112,7 @@ impl TransformUdfServer {
                 .with_func_name(&func.func_name)?
                 .with_query_id(&ctx.get_id())?;
 
+        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
         let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
         let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
