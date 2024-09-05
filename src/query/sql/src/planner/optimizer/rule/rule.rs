@@ -120,6 +120,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
             RuleID::PushDownFilterSort => write!(f, "PushDownFilterSort"),
             RuleID::PushDownFilterProjectSet => write!(f, "PushDownFilterProjectSet"),
+            RuleID::PushDownLimit => write!(f, "PushDownLimit"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::PushDownLimitEvalScalar => write!(f, "PushDownLimitEvalScalar"),
