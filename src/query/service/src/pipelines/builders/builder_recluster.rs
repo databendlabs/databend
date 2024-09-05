@@ -23,7 +23,10 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::processors::BlockCompactorWithoutSplit;
+use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -150,11 +153,18 @@ impl PipelineBuilder {
                         .remove_order_col_at_last();
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 
-                let output_block_num = task.total_rows.div_ceil(final_block_size);
-                let max_threads = std::cmp::min(
-                    self.ctx.get_settings().get_max_threads()? as usize,
-                    output_block_num,
-                );
+                // Compact after merge sort.
+                self.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
+                        Ok(ProcessorPtr::create(TransformCompact::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            BlockCompactorWithoutSplit::new(block_thresholds),
+                        )?))
+                    },
+                )?;
+
+                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
                 self.main_pipeline.try_resize(max_threads)?;
                 self.main_pipeline
                     .add_transform(|transform_input_port, transform_output_port| {
