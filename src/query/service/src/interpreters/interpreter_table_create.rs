@@ -55,6 +55,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_share::remove_share_table_info;
+use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
@@ -255,6 +257,28 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
         };
 
+        // update share spec if needed
+        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
+            save_share_spec(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &spec_vec,
+            )
+            .await?;
+
+            // remove table info file
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    revoke_table_id,
+                )
+                .await?;
+            }
+        }
+
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await?;
@@ -365,6 +389,28 @@ impl CreateTableInterpreter {
                     )
                     .await?;
                 RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+        }
+
+        // update share spec if needed
+        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
+            save_share_spec(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &spec_vec,
+            )
+            .await?;
+
+            // remove table spec
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    revoke_table_id,
+                )
+                .await?;
             }
         }
 

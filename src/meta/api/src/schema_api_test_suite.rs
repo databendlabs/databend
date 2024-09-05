@@ -126,6 +126,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -141,6 +142,7 @@ use log::debug;
 use log::info;
 
 use crate::deserialize_struct;
+use crate::is_all_db_data_removed;
 use crate::kv_app_error::KVAppError;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
@@ -148,6 +150,7 @@ use crate::testing::get_kv_u64_data;
 use crate::DatamaskApi;
 use crate::SchemaApi;
 use crate::SequenceApi;
+use crate::ShareApi;
 use crate::DEFAULT_MGET_SIZE;
 
 /// Test suite of `SchemaApi`.
@@ -277,12 +280,20 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi + SequenceApi + 'static,
+        MT: ShareApi
+            + kvapi::AsKVApi<Error = MetaError>
+            + SchemaApi
+            + DatamaskApi
+            + SequenceApi
+            + 'static,
     {
         let suite = SchemaApiTestSuite {};
 
         suite.database_and_table_rename(&b.build().await).await?;
         suite.database_create_get_drop(&b.build().await).await?;
+        suite
+            .database_create_from_share_and_drop(&b.build().await)
+            .await?;
         suite
             .database_create_get_drop_in_diff_tenant(&b.build().await)
             .await?;
@@ -766,6 +777,69 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &db_id_name_key).await?;
             assert_eq!(ret_db_name_ident, DatabaseNameIdentRaw::from(&db_name));
             assert_ne!(db_id, orig_db_id);
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn database_create_from_share_and_drop<
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name1 = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name1, func_name!())?;
+        let db1 = "db1";
+        let share = "share";
+        let share_name = ShareNameIdent::new(&tenant, share);
+        let db_name1 = DatabaseNameIdent::new(&tenant, db1);
+
+        let db_id;
+
+        info!("--- create a share and tenant1 create db1 from a share");
+        {
+            let req = CreateDatabaseReq {
+                create_option: CreateOption::Create,
+                name_ident: db_name1.clone(),
+                meta: DatabaseMeta {
+                    from_share: Some(share_name.clone().into()),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            info!("create database res: {:?}", res);
+
+            assert!(res.is_ok());
+            // save the db id
+            db_id = res.unwrap().db_id;
+        };
+
+        // drop database created from share
+        {
+            mt.drop_database(DropDatabaseReq {
+                if_exists: false,
+                name_ident: db_name1.clone(),
+            })
+            .await?;
+
+            // check that DatabaseMeta has been removed
+            let res = is_all_db_data_removed(mt.as_kv_api(), *db_id).await?;
+            assert!(res);
+
+            // db has been removed, so undrop_database MUST return error
+            let res = mt
+                .undrop_database(UndropDatabaseReq {
+                    name_ident: db_name1.clone(),
+                })
+                .await;
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::UNDROP_DB_HAS_NO_HISTORY,
+                ErrorCode::from(res.unwrap_err()).code()
+            );
         }
 
         Ok(())
@@ -5237,7 +5311,12 @@ impl SchemaApiTestSuite {
     #[fastrace::trace]
     async fn concurrent_commit_table_meta<
         B: kvapi::ApiBuilder<MT>,
-        MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi + SequenceApi + 'static,
+        MT: ShareApi
+            + kvapi::AsKVApi<Error = MetaError>
+            + SchemaApi
+            + DatamaskApi
+            + SequenceApi
+            + 'static,
     >(
         &self,
         b: B,

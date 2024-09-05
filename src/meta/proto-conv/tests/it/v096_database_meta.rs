@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use fastrace::func_name;
 use maplit::btreemap;
 
@@ -39,6 +42,10 @@ fn test_decode_v96_database_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
+        shared_by: BTreeSet::new(),
+        from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
+        using_share_endpoint: Some("endpoint".to_string()),
+        from_share_db_id: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

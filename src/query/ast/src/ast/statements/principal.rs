@@ -96,6 +96,7 @@ pub enum CatalogType {
     Default,
     Hive,
     Iceberg,
+    Share,
 }
 
 impl Display for CatalogType {
@@ -104,6 +105,7 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
             CatalogType::Iceberg => write!(f, "ICEBERG"),
+            CatalogType::Share => write!(f, "SHARE"),
         }
     }
 }
@@ -179,6 +181,32 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Write => "Write",
             UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum ShareGrantObjectName {
+    // database name
+    Database(Identifier),
+    // database name, table name
+    Table(Identifier, Identifier),
+    // database name, table name
+    View(Identifier, Identifier),
+}
+
+impl Display for ShareGrantObjectName {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ShareGrantObjectName::Database(db) => {
+                write!(f, "DATABASE {db}")
+            }
+            ShareGrantObjectName::Table(db, table) => {
+                write!(f, "TABLE {db}.{table}")
+            }
+            ShareGrantObjectName::View(db, table) => {
+                write!(f, "VIEW {db}.{table}")
+            }
+        }
     }
 }
 

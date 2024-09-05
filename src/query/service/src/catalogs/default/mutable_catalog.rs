@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
@@ -280,7 +281,10 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply { db_id: res.db_id })
+        Ok(CreateDatabaseReply {
+            db_id: res.db_id,
+            share_specs: None,
+        })
     }
 
     #[async_backtrace::framed]
@@ -581,7 +585,22 @@ impl Catalog for MutableCatalog {
             if req.update_table_metas.len() == 1 {
                 match req.update_table_metas[0].1.db_type.clone() {
                     DatabaseType::NormalDB => {}
+                    DatabaseType::ShareDB(share_params) => {
+                        let share_ident = share_params.share_ident;
+                        let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                        let db = self.get_database(&tenant, share_ident.share_name()).await?;
+                        return db.retryable_update_multi_table_meta(req).await;
+                    }
                 }
+            }
+            if req
+                .update_table_metas
+                .iter()
+                .any(|(_, info)| matches!(info.db_type, DatabaseType::ShareDB(_)))
+            {
+                return Err(ErrorCode::StorageOther(
+                    "update table meta from multi share db, or update table meta from share db and normal db in one request, is not supported",
+                ));
             }
         }
 
@@ -624,6 +643,12 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
+            DatabaseType::ShareDB(share_params) => {
+                let share_ident = share_params.share_ident;
+                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                let db = self.get_database(&tenant, share_ident.share_name()).await?;
+                db.truncate_table(req).await
+            }
         }
     }
 

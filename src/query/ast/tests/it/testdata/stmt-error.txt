@@ -132,7 +132,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -198,7 +198,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -238,7 +238,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -283,10 +283,7 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  | ----- ------    ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `TRUE`
-  | |     |          
-  | |     while parsing <privileges> ON <privileges_level>
-  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
+  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, `TABLE`, or `VIEW`
 
 
 ---------- Input ----------
@@ -817,9 +814,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
-  | |       
-  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
 
 
 ---------- Input ----------
@@ -829,9 +824,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
-  | |       
-  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
 
 
 ---------- Input ----------
@@ -841,9 +834,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
-  | |       
-  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
+  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
 
 
 ---------- Input ----------

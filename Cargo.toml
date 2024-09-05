@@ -32,6 +32,7 @@ members = [
     "src/query/codegen",
     "src/query/config",
     "src/query/catalog",
+    "src/query/sharing",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -62,6 +63,7 @@ members = [
     "src/query/storages/null",
     "src/query/storages/orc",
     "src/query/storages/random",
+    "src/query/storages/share",
     "src/query/storages/stage",
     "src/query/storages/stream",
     "src/query/storages/system",
@@ -149,6 +151,7 @@ databend-common-proto-conv = { path = "src/meta/proto-conv" }
 databend-common-protos = { path = "src/meta/protos" }
 databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
+databend-common-sharing = { path = "src/query/sharing" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
 databend-common-storage = { path = "src/common/storage" }
@@ -164,6 +167,7 @@ databend-common-storages-orc = { path = "src/query/storages/orc" }
 databend-common-storages-parquet = { path = "src/query/storages/parquet" }
 databend-common-storages-random = { path = "src/query/storages/random" }
 databend-common-storages-result-cache = { path = "src/query/storages/result_cache" }
+databend-common-storages-share = { path = "src/query/storages/share" }
 databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }

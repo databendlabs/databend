@@ -251,6 +251,8 @@ impl Binder {
             engine: engine.to_string(),
             engine_options,
             options,
+            from_share: None,
+            using_share_endpoint: None,
             ..Default::default()
         })
     }

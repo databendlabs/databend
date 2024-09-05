@@ -33,6 +33,7 @@ use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::query::*;
+use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::stream::stream_table;
 use crate::parser::token::*;
@@ -43,6 +44,8 @@ use crate::rule;
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     GrantObjectName(GrantObjectName),
+    ShareGrantObjectName(ShareGrantObjectName),
+    ShareName(String),
 }
 
 // (tenant, share name, endpoint name)
@@ -1393,6 +1396,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 principal: Some(principal),
                 show_options: opt_limit,
             },
+            Some(ShowGrantOption::ShareGrantObjectName(object)) => {
+                Statement::ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt { object })
+            }
+            Some(ShowGrantOption::ShareName(share_name)) => {
+                Statement::ShowGrantsOfShare(ShowGrantsOfShareStmt { share_name })
+            }
             None => Statement::ShowGrants {
                 principal: None,
                 show_options: opt_limit,
@@ -1625,6 +1634,163 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }
             Statement::Presign(presign_stmt)
         },
+    );
+
+    // share statements
+    let create_share_endpoint = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+             ~ #ident
+             ~ URL ~ "=" ~ #share_endpoint_uri_location
+             ~ ( CREDENTIAL ~ ^"=" ~ ^#options)?
+             ~ ( ARGS ~ ^"=" ~ ^#options)?
+             ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
+        },
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            endpoint,
+            _,
+            _,
+            url,
+            credential_opt,
+            args_opt,
+            comment_opt,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            let credential_options = if let Some(opt) = credential_opt {
+                opt.2
+                    .iter()
+                    .map(|(k, v)| {
+                        let k = k.to_uppercase();
+                        if k == "TYPE" {
+                            (k, v.to_uppercase())
+                        } else {
+                            (k, v.clone())
+                        }
+                    })
+                    .collect()
+            } else {
+                BTreeMap::new()
+            };
+
+            Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
+                create_option,
+                endpoint,
+                url,
+                credential_options,
+                args: match args_opt {
+                    Some(opt) => opt.2,
+                    None => BTreeMap::new(),
+                },
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            }))
+        },
+    );
+    let show_share_endpoints = map(
+        rule! {
+            SHOW ~ SHARE ~ ENDPOINT
+        },
+        |(_, _, _)| Statement::ShowShareEndpoint(ShowShareEndpointStmt {}),
+    );
+    let drop_share_endpoint = map(
+        rule! {
+            DROP ~ SHARE ~ ENDPOINT ~ ( IF ~ EXISTS)? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, endpoint)| {
+            Statement::DropShareEndpoint(DropShareEndpointStmt {
+                if_exists: opt_if_exists.is_some(),
+                endpoint,
+            })
+        },
+    );
+    let create_share = map(
+        rule! {
+            CREATE ~ SHARE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
+        },
+        |(_, _, opt_if_not_exists, share, comment_opt)| {
+            Statement::CreateShare(CreateShareStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                share,
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            })
+        },
+    );
+    let drop_share = map(
+        rule! {
+            DROP ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, share)| {
+            Statement::DropShare(DropShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                share,
+            })
+        },
+    );
+    let grant_share_object = map(
+        rule! {
+            GRANT ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ TO ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::GrantShareObject(GrantShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+    let revoke_share_object = map(
+        rule! {
+            REVOKE ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ FROM ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::RevokeShareObject(RevokeShareObjectStmt {
+                share,
+                object,
+                privilege,
+            })
+        },
+    );
+    let alter_share_tenants = map(
+        rule! {
+            ALTER
+            ~ SHARE
+            ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+            ~ #alter_add_share_accounts
+            ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
+        },
+        |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
+            Statement::AlterShareTenants(AlterShareTenantsStmt {
+                share,
+                if_exists: opt_if_exists.is_some(),
+                is_add,
+                tenants,
+            })
+        },
+    );
+    let desc_share = map(
+        rule! {
+            (DESC | DESCRIBE) ~ SHARE ~ #ident
+        },
+        |(_, _, share)| Statement::DescShare(DescShareStmt { share }),
+    );
+    let show_shares = map(
+        rule! {
+            SHOW ~ SHARES
+        },
+        |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
     );
 
     let create_file_format = map_res(
@@ -2157,6 +2323,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #create_data_mask_policy: "`CREATE MASKING POLICY [IF NOT EXISTS] mask_name as (val1 val_type1 [, val type]) return type -> case`"
             | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
             | #describe_data_mask_policy: "`DESC MASKING POLICY mask_name`"
+        ),
+        // share
+        rule!(
+            #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
+            | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"
+            | #drop_share_endpoint: "`DROP SHARE ENDPOINT <endpoint_name>`"
+            | #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
+            | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
+            | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
+            | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
+            | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
+            | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
+            | #show_shares: "`SHOW SHARES`"
         ),
         rule!(
             #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
@@ -2842,6 +3021,37 @@ pub fn alter_add_share_accounts(i: Input) -> IResult<bool> {
     alt((value(true, rule! { ADD }), value(false, rule! { REMOVE })))(i)
 }
 
+pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
+    let database = map(
+        rule! {
+            DATABASE ~ #ident
+        },
+        |(_, database)| ShareGrantObjectName::Database(database),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            TABLE ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let view = map(
+        rule! {
+            VIEW ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| ShareGrantObjectName::View(database, table),
+    );
+
+    rule!(
+        #database : "DATABASE <database>"
+        | #table : "TABLE <database>.<table>"
+        | #view : "TABLE <database>.<view>"
+    )(i)
+}
+
 pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
     let database = map(
         rule! {
@@ -2999,9 +3209,17 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
         |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
+    let share_name = map(
+        rule! {
+            OF ~ SHARE ~ #ident
+        },
+        |(_, _, share_name)| ShowGrantOption::ShareName(share_name.to_string()),
+    );
+
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
         | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
+        | #share_name: "OF SHARE <share_name>"
     )(i)
 }
 
@@ -3811,6 +4029,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
+        value(CatalogType::Share, rule! { SHARE }),
     ))(i)
 }
 

@@ -19,6 +19,7 @@ use std::sync::Mutex;
 
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
+use databend_common_meta_api::ShareApiTestSuite;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -32,6 +33,7 @@ async fn test_meta_grpc_client_single() -> anyhow::Result<()> {
     };
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
+    ShareApiTestSuite::test_single_node_share(builder.clone()).await?;
     BackgroundApiTestSuite::test_single_node(builder).await?;
 
     Ok(())

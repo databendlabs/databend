@@ -1,0 +1,27 @@
+listen_address = "127.0.0.1:22322"
+metrics_address = "127.0.0.1:12322"
+
+[log]
+level = "Debug"
+dir = "./.share-endpoint/logs"
+
+[[tenant]]
+name = "provider"
+[tenant.credential]
+params.type = "HMAC"
+params.key = "hello"
+[tenant.storage]
+allow_insecure = true
+params.type = "S3"
+params.endpoint_url = "http://127.0.0.1:9900"
+params.bucket = "provider-bucket"
+params.region = ""
+params.security_token = ""
+params.master_key = ""
+params.root = ""
+params.disable_credential_loader = false
+params.enable_virtual_host_style = false
+params.role_arn = ""
+params.external_id = ""
+params.access_key_id = "minioadmin"
+params.secret_access_key = "minioadmin"

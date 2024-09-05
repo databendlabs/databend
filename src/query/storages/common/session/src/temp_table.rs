@@ -186,7 +186,10 @@ impl TempTblMgr {
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = new_db_name.clone();
                 table.table_name = new_table_name.clone();
-                Ok(Some(RenameTableReply { table_id: 0 }))
+                Ok(Some(RenameTableReply {
+                    table_id: 0,
+                    share_table_info: None,
+                }))
             }
             None => Ok(None),
         }
@@ -278,7 +281,9 @@ impl TempTblMgr {
                 table.meta.options.remove(&k);
             }
         }
-        Ok(UpsertTableOptionReply {})
+        Ok(UpsertTableOptionReply {
+            share_vec_table_info: None,
+        })
     }
 
     pub fn truncate_table(&mut self, id: u64) -> Result<TruncateTableReply> {
@@ -383,7 +388,7 @@ pub async fn drop_table_by_id(
         _ => return Ok(None),
     };
 
-    Ok(Some(DropTableReply {}))
+    Ok(Some(DropTableReply { spec_vec: None }))
 }
 
 pub async fn drop_all_temp_tables(session_id: &str, mgr: TempTblMgrRef) -> Result<()> {

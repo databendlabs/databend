@@ -28,6 +28,7 @@ pub mod data_mask;
 pub mod primitive;
 pub mod principal;
 pub mod schema;
+pub mod share;
 pub mod storage;
 pub mod tenant;
 pub mod tenant_key;

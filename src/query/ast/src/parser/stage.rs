@@ -190,6 +190,21 @@ pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
     )(i)
 }
 
+// parse: (k = v ...)* into a map
+pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+            "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string ~ ","? )* ~ ^")"
+        },
+        |(_, opts, _)| {
+            BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(k, _, v, _)| (k.name.to_lowercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
 pub fn file_location(i: Input) -> IResult<FileLocation> {
     alt((
         string_location,

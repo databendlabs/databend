@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -25,6 +26,11 @@ use databend_common_meta_types::seq_value::SeqV;
 use super::CreateOption;
 use crate::schema::database_id::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::share::share_name_ident::ShareNameIdentRaw;
+use crate::share::ShareCredential;
+use crate::share::ShareCredentialHmac;
+use crate::share::ShareObject;
+use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
@@ -71,6 +77,14 @@ pub struct DatabaseMeta {
 
     // if used in CreateDatabaseReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
+    // shared by share_id
+    pub shared_by: BTreeSet<u64>,
+    // from tenant.share_name
+    pub from_share: Option<ShareNameIdentRaw>,
+    // share endpoint name, create with `create share endpoint` ddl
+    pub using_share_endpoint: Option<String>,
+    // from share db id
+    pub from_share_db_id: Option<ShareDbId>,
 }
 
 impl Default for DatabaseMeta {
@@ -83,6 +97,10 @@ impl Default for DatabaseMeta {
             updated_on: Utc::now(),
             comment: "".to_string(),
             drop_on: None,
+            shared_by: BTreeSet::new(),
+            from_share: None,
+            using_share_endpoint: None,
+            from_share_db_id: None,
         }
     }
 }
@@ -195,6 +213,9 @@ impl Display for CreateDatabaseReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: DatabaseId,
+    // if `share_specs` is not empty, it means that create database with replace option,
+    // and `share_specs` vector save the share spec of original database
+    pub share_specs: Option<Vec<ShareSpec>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -217,7 +238,27 @@ impl Display for RenameDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RenameDatabaseReply {}
+pub enum ReplyShareObject {
+    // (db id)
+    Database(u64),
+    // (db_id, table id)
+    Table(u64, u64),
+}
+
+impl From<ShareObject> for ReplyShareObject {
+    fn from(object: ShareObject) -> Self {
+        match object {
+            ShareObject::Database(_, db_id) => ReplyShareObject::Database(db_id),
+            ShareObject::Table(_, db_id, table_id) => ReplyShareObject::Table(db_id, table_id),
+            ShareObject::View(_, db_id, table_id) => ReplyShareObject::Table(db_id, table_id),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RenameDatabaseReply {
+    pub share_spec: Option<(Vec<ShareSpec>, ReplyShareObject)>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReq {
@@ -240,6 +281,9 @@ impl Display for DropDatabaseReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReply {
     pub db_id: u64,
+    // if `share_specs` is not empty, it means that create database with replace option,
+    // and `share_specs` vector save the share spec of original database
+    pub share_specs: Option<Vec<ShareSpec>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -306,6 +350,25 @@ pub struct ListDatabaseReq {
 impl ListDatabaseReq {
     pub fn tenant(&self) -> &Tenant {
         &self.tenant
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct ShareDBParams {
+    pub share_ident: ShareNameIdentRaw,
+    pub share_endpoint_url: String,
+    pub share_endpoint_credential: ShareCredential,
+}
+
+impl ShareDBParams {
+    pub fn new(share_ident: ShareNameIdentRaw) -> Self {
+        Self {
+            share_ident,
+            share_endpoint_url: "".to_string(),
+            share_endpoint_credential: ShareCredential::HMAC(ShareCredentialHmac {
+                key: "".to_string(),
+            }),
+        }
     }
 }
 

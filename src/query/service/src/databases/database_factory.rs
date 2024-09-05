@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseInfo;
 
 use crate::databases::default::DefaultDatabase;
+use crate::databases::share::ShareDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
@@ -45,6 +46,7 @@ impl DatabaseFactory {
 
         let db = match engine.as_str() {
             DefaultDatabase::NAME => DefaultDatabase::try_create(ctx, db_info.clone())?,
+            ShareDatabase::NAME => ShareDatabase::try_create(ctx, db_info.clone())?,
 
             _ => {
                 let err =
