@@ -107,3 +107,41 @@ pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::base::uuid::Uuid;
+
+    use super::*;
+
+    #[test]
+    fn test_trim_vacuum2_object_prefix() {
+        let uuid = Uuid::now_v7();
+        assert_eq!(
+            trim_vacuum2_object_prefix(&format!("g{}", uuid)),
+            uuid.to_string()
+        );
+        assert_eq!(
+            trim_vacuum2_object_prefix(&uuid.to_string()),
+            uuid.to_string()
+        );
+    }
+
+    #[test]
+    fn test_try_extract_uuid_str_from_path() {
+        let test_cases = vec![
+            (
+                "bucket/root/115/122/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet",
+                "0191114d30fd78b89fae8e5c88327725",
+            ),
+            (
+                "bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet",
+                "0191114d30fd78b89fae8e5c88327725",
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            assert_eq!(try_extract_uuid_str_from_path(input).unwrap(), expected);
+        }
+    }
+}
