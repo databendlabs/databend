@@ -86,13 +86,13 @@ impl Compactor for BlockCompactorWithoutSplit {
             self.temp_blocks.push(blocks.pop().unwrap());
         } else {
             // N <= blocks < 2N
-            self.temp_blocks = blocks.drain(..).collect();
+            self.temp_blocks = std::mem::take(blocks);
         }
 
         if blocks.len() > 1 {
             res.push(DataBlock::concat(blocks)?);
             blocks.clear();
-        } else if !blocks.is_empty() {
+        } else {
             res.append(blocks);
         }
 
