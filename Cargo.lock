@@ -3634,7 +3634,6 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
- "enumflags2",
  "fastrace",
  "futures",
  "log",
