@@ -29,7 +29,6 @@ pub enum CatalogType {
     Default = 1,
     Hive = 2,
     Iceberg = 3,
-    Share = 4,
 }
 
 impl From<databend_common_ast::ast::CatalogType> for CatalogType {
@@ -38,7 +37,6 @@ impl From<databend_common_ast::ast::CatalogType> for CatalogType {
             databend_common_ast::ast::CatalogType::Default => CatalogType::Default,
             databend_common_ast::ast::CatalogType::Hive => CatalogType::Hive,
             databend_common_ast::ast::CatalogType::Iceberg => CatalogType::Iceberg,
-            databend_common_ast::ast::CatalogType::Share => CatalogType::Share,
         }
     }
 }
@@ -54,7 +52,6 @@ pub enum CatalogOption {
     Hive(HiveCatalogOption),
     // Catalog option for Iceberg.
     Iceberg(IcebergCatalogOption),
-    Share(ShareCatalogOption),
 }
 
 impl CatalogOption {
@@ -63,7 +60,6 @@ impl CatalogOption {
             CatalogOption::Default => CatalogType::Default,
             CatalogOption::Hive(_) => CatalogType::Hive,
             CatalogOption::Iceberg(_) => CatalogType::Iceberg,
-            CatalogOption::Share(_) => CatalogType::Share,
         }
     }
 }

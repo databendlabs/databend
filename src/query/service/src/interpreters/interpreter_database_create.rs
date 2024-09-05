@@ -21,8 +21,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateDatabasePlan;
-use databend_common_storages_share::remove_share_db_dir;
-use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -89,26 +87,6 @@ impl Interpreter for CreateDatabaseInterpreter {
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
-
-        // handle share cleanups with the DropDatabaseReply
-        if let Some(share_specs) = reply.share_specs {
-            // since db is dropped, first we need to clean share db dir
-            remove_share_db_dir(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                *reply.db_id,
-                &share_specs,
-            )
-            .await?;
-
-            // then write the new share spec
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &share_specs,
-            )
-            .await?;
         }
 
         Ok(PipelineBuildResult::create())

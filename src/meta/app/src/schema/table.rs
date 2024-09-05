@@ -35,11 +35,7 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
-use super::ReplyShareObject;
-use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
-use crate::share::ShareSpec;
-use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -164,7 +160,6 @@ impl Display for TableIdHistoryIdent {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareDBParams),
 }
 
 impl Display for DatabaseType {
@@ -172,15 +167,6 @@ impl Display for DatabaseType {
         match self {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
-            }
-            DatabaseType::ShareDB(share_params) => {
-                write!(
-                    f,
-                    "share database: {}-{} using {}",
-                    share_params.share_ident.tenant_name(),
-                    share_params.share_ident.name(),
-                    share_params.share_endpoint_url,
-                )
             }
         }
     }
@@ -544,8 +530,8 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // (db id, removed table id, share spec vector)
-    pub spec_vec: Option<(u64, u64, Vec<ShareSpec>)>,
+    // (db id, removed table id)
+    pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -589,10 +575,7 @@ impl Display for DropTableByIdReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct DropTableReply {
-    // db id, share spec vector
-    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
-}
+pub struct DropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitTableMetaReq {
@@ -697,8 +680,6 @@ impl Display for RenameTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReply {
     pub table_id: u64,
-    // vec<share spec>, table id
-    pub share_table_info: Option<(Vec<ShareSpec>, ReplyShareObject)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -802,19 +783,13 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {
-    pub share_vec_table_info: Option<ShareVecTableInfo>,
-}
+pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {
-    pub share_vec_table_info: Option<ShareVecTableInfo>,
-}
+pub struct UpsertTableOptionReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct UpdateTableMetaReply {
-    pub share_vec_table_infos: Option<Vec<ShareVecTableInfo>>,
-}
+pub struct UpdateTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {

@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::TimeZone;
-use chrono::Utc;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
 
@@ -47,26 +44,6 @@ fn test_decode_v78_grant_entry() -> anyhow::Result<()> {
 
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), grant_entry_v78.as_slice(), 78, want())?;
-
-    Ok(())
-}
-
-#[test]
-fn test_decode_v78_share_grant_entry() -> anyhow::Result<()> {
-    let share_grant_entry_v78 = vec![
-        10, 8, 16, 19, 160, 6, 78, 168, 6, 24, 16, 4, 26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
-        56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 78, 168, 6, 24,
-    ];
-
-    let want = || mt::share::ShareGrantEntry {
-        object: mt::share::ShareGrantObject::Table(19),
-        privileges: make_bitflags!(ShareGrantObjectPrivilege::{Select}),
-        grant_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
-        update_on: None,
-    };
-
-    common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), share_grant_entry_v78.as_slice(), 78, want())?;
 
     Ok(())
 }

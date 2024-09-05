@@ -34,7 +34,6 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
-use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
@@ -56,8 +55,6 @@ use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
-use crate::plans::CreateShareEndpointPlan;
-use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableIndexPlan;
@@ -72,7 +69,6 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
-use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -87,8 +83,6 @@ use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropSequencePlan;
-use crate::plans::DropShareEndpointPlan;
-use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -106,7 +100,6 @@ use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
-use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
@@ -127,7 +120,6 @@ use crate::plans::Replace;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
-use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
@@ -138,12 +130,8 @@ use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
-use crate::plans::ShowGrantTenantsOfSharePlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
-use crate::plans::ShowShareEndpointPlan;
-use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
@@ -321,20 +309,6 @@ pub enum Plan {
     SetPriority(Box<SetPriorityPlan>),
     System(Box<SystemPlan>),
 
-    // Share
-    CreateShareEndpoint(Box<CreateShareEndpointPlan>),
-    ShowShareEndpoint(Box<ShowShareEndpointPlan>),
-    DropShareEndpoint(Box<DropShareEndpointPlan>),
-    CreateShare(Box<CreateSharePlan>),
-    DropShare(Box<DropSharePlan>),
-    GrantShareObject(Box<GrantShareObjectPlan>),
-    RevokeShareObject(Box<RevokeShareObjectPlan>),
-    AlterShareTenants(Box<AlterShareTenantsPlan>),
-    DescShare(Box<DescSharePlan>),
-    ShowShares(Box<ShowSharesPlan>),
-    ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
-    ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
-
     // Data mask
     CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
     DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
@@ -480,10 +454,6 @@ impl Plan {
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
-            Plan::ShowShareEndpoint(plan) => plan.schema(),
-            Plan::DescShare(plan) => plan.schema(),
-            Plan::ShowShares(plan) => plan.schema(),
-            Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::CreateDatamaskPolicy(plan) => plan.schema(),
             Plan::DropDatamaskPolicy(plan) => plan.schema(),
             Plan::DescDatamaskPolicy(plan) => plan.schema(),
