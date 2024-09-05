@@ -27,6 +27,7 @@ pub mod kv_app_error;
 pub mod kv_pb_api;
 pub mod meta_txn_error;
 pub mod name_id_value_api;
+pub mod name_value_api;
 pub mod reply;
 mod schema_api;
 mod schema_api_impl;

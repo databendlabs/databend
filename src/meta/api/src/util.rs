@@ -16,12 +16,12 @@ use std::any::type_name;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::app_error::VirtualColumnNotFound;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -32,8 +32,6 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
-use databend_common_meta_app::schema::VirtualColumnIdent;
-use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -292,7 +290,7 @@ pub async fn send_txn(
     debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
     let (succ, responses) = txn_reply_to_api_result(tx_reply)?;
-    debug!("txn success: {}", succ);
+    debug!("txn success: {}: {}", succ, responses.display_n::<20>());
     Ok((succ, responses))
 }
 
@@ -588,37 +586,4 @@ pub async fn list_tables_from_unshare_db(
         DatabaseType::NormalDB,
     )
     .await
-}
-
-/// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnIdent`],
-/// or return [`AppError::VirtualColumnNotFound`] error wrapped in a [`KVAppError`] if not found.
-pub async fn get_virtual_column_by_id_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnIdent,
-    ctx: impl Display + Copy,
-) -> Result<(u64, VirtualColumnMeta), KVAppError> {
-    let (seq, virtual_column_meta): (_, Option<VirtualColumnMeta>) =
-        get_pb_value(kv_api, name_ident).await?;
-    if virtual_column_meta.is_none() {
-        return Err(KVAppError::AppError(AppError::VirtualColumnNotFound(
-            VirtualColumnNotFound::new(
-                name_ident.table_id(),
-                format!(
-                    "get virtual column with table_id: {}",
-                    name_ident.table_id()
-                ),
-            ),
-        )));
-    }
-
-    let virtual_column_meta = virtual_column_meta.unwrap();
-
-    debug!(
-        ident :% =(name_ident.display()),
-        table_meta :? =(&virtual_column_meta);
-        "{}",
-        ctx
-    );
-
-    Ok((seq, virtual_column_meta))
 }

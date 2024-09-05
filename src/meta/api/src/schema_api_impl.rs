@@ -49,7 +49,6 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
-use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
@@ -81,7 +80,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -100,7 +98,6 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -163,7 +160,6 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -212,6 +208,7 @@ use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
+use crate::name_value_api::NameValueApi;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -224,7 +221,6 @@ use crate::util::db_id_has_to_exist;
 use crate::util::deserialize_id_get_response;
 use crate::util::deserialize_struct_get_response;
 use crate::util::get_table_by_id_or_err;
-use crate::util::get_virtual_column_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::txn_delete_exact;
@@ -953,205 +949,69 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply, KVAppError> {
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = func_name!();
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let virtual_column_meta = VirtualColumnMeta {
+            table_id: req.name_ident.table_id(),
+            virtual_columns: req.virtual_columns.clone(),
+            created_on: Utc::now(),
+            updated_on: None,
+        };
 
-            let seq_virtual_column = self.get_pb(&req.name_ident).await?;
-            let old_virtual_column_opt = seq_virtual_column.into_value();
+        self.create_name_value_with_create_option(
+            req.name_ident.clone(),
+            virtual_column_meta,
+            req.create_option,
+        )
+        .await?
+        .map_err(AppError::from)?;
 
-            let mut if_then = vec![];
-            let seq = if old_virtual_column_opt.is_some() {
-                match req.create_option {
-                    CreateOption::Create => {
-                        return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
-                            VirtualColumnAlreadyExists::new(
-                                req.name_ident.table_id(),
-                                format!(
-                                    "create virtual column table_id: {}",
-                                    req.name_ident.table_id(),
-                                ),
-                            ),
-                        )));
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateVirtualColumnReply {});
-                    }
-                    CreateOption::CreateOrReplace => {
-                        construct_drop_virtual_column_txn_operations(
-                            self,
-                            &req.name_ident,
-                            false,
-                            false,
-                            ctx,
-                            &mut if_then,
-                        )
-                        .await?
-                    }
-                }
+        Ok(())
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<(), KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let not_found = || {
+            if req.if_exists {
+                Ok(())
             } else {
-                0
-            };
-
-            let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id(),
-                virtual_columns: req.virtual_columns.clone(),
-                created_on: Utc::now(),
-                updated_on: None,
-            };
-
-            // Create virtual column by inserting this record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
-                if_then.push(txn_op_put(
-                    &req.name_ident,
-                    serialize_struct(&virtual_column_meta)?,
-                ));
-
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    "req.name_ident" :? =(&virtual_column_meta),
-                    succ = succ;
-                    "create_virtual_column"
-                );
-
-                if succ {
-                    break;
-                }
+                Err(AppError::from(req.name_ident.unknown_error(func_name!())))
             }
-        }
+        };
 
-        Ok(CreateVirtualColumnReply {})
+        self.update_existent_name_value(
+            &req.name_ident,
+            |mut meta| {
+                meta.virtual_columns = req.virtual_columns.clone();
+                meta.updated_on = Some(Utc::now());
+                Some(meta)
+            },
+            not_found,
+        )
+        .await??;
+        Ok(())
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply, KVAppError> {
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = func_name!();
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let (seq, old_virtual_column_meta) =
-                match get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
-                    Ok((seq, old_virtual_column_meta)) => (seq, old_virtual_column_meta),
-                    Err(err) => {
-                        if req.if_exists {
-                            return Ok(UpdateVirtualColumnReply {});
-                        } else {
-                            return Err(err);
-                        }
-                    }
-                };
-
-            let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id(),
-                virtual_columns: req.virtual_columns.clone(),
-                created_on: old_virtual_column_meta.created_on,
-                updated_on: Some(Utc::now()),
-            };
-
-            // Update virtual column by inserting this record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
-                let if_then = vec![txn_op_put(
-                    &req.name_ident,
-                    serialize_struct(&virtual_column_meta)?,
-                )];
-
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    "req.name_ident" :? =(&virtual_column_meta),
-                    succ = succ;
-                    "update_virtual_column"
-                );
-
-                if succ {
-                    break;
-                }
+        let not_found = || {
+            if req.if_exists {
+                Ok(())
+            } else {
+                Err(AppError::from(req.name_ident.unknown_error(func_name!())))
             }
-        }
+        };
 
-        Ok(UpdateVirtualColumnReply {})
-    }
+        self.remove_name_value(&req.name_ident, not_found).await??;
 
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let ctx = func_name!();
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let mut if_then = vec![];
-            let seq = construct_drop_virtual_column_txn_operations(
-                self,
-                &req.name_ident,
-                req.if_exists,
-                true,
-                ctx,
-                &mut if_then,
-            )
-            .await?;
-            if seq == 0 {
-                return Ok(DropVirtualColumnReply {});
-            }
-
-            let txn_req = TxnRequest {
-                condition: vec![],
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                "name_ident" :? =(&req.name_ident),
-                succ = succ;
-                "drop_virtual_column"
-            );
-
-            if succ {
-                break;
-            }
-        }
-
-        Ok(DropVirtualColumnReply {})
+        Ok(())
     }
 
     #[logcall::logcall]
@@ -1166,26 +1026,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let name_ident = VirtualColumnIdent::new(&req.tenant, table_id);
 
             let seq_meta = self.get_pb(&name_ident).await?;
+            let x = seq_meta
+                .map(|seq_v| seq_v.data)
+                .into_iter()
+                .collect::<Vec<_>>();
 
-            if let Some(seq_meta) = seq_meta {
-                return Ok(vec![seq_meta.data]);
-            } else {
-                return Ok(vec![]);
-            }
+            return Ok(x);
         }
 
         // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
         let ident = VirtualColumnIdent::new(&req.tenant, 0u64);
-        let prefix_key = ident.tenant_prefix();
+        let dir = DirName::new(ident);
 
-        let list = self.prefix_list_kv(&prefix_key).await?;
-        let mut virtual_column_list = Vec::with_capacity(list.len());
-        for (_, seq) in list.iter() {
-            let virtual_column_meta: VirtualColumnMeta = deserialize_struct(&seq.data)?;
-            virtual_column_list.push(virtual_column_meta);
-        }
+        let strm = self.list_pb_values(&dir).await?;
+        let vs = strm.try_collect::<Vec<_>>().await?;
 
-        Ok(virtual_column_list)
+        Ok(vs)
     }
 
     #[logcall::logcall]
@@ -3734,40 +3590,6 @@ async fn get_table_meta_history(
         }
     }
     Ok(tb_metas)
-}
-
-async fn construct_drop_virtual_column_txn_operations(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnIdent,
-    drop_if_exists: bool,
-    if_delete: bool,
-    ctx: &str,
-    if_then: &mut Vec<TxnOp>,
-) -> Result<u64, KVAppError> {
-    let res = get_virtual_column_by_id_or_err(kv_api, name_ident, ctx).await;
-    let seq = if let Err(err) = res {
-        if drop_if_exists {
-            return Ok(0);
-        } else {
-            return Err(err);
-        }
-    } else {
-        res.unwrap().0
-    };
-
-    // Drop virtual column by deleting this record:
-    // (tenant, table_id) -> virtual_column_meta
-    if if_delete {
-        if_then.push(txn_op_del(name_ident));
-    }
-
-    debug!(
-        "name_ident" :? =(&name_ident),
-        ctx = ctx;
-        "construct_drop_virtual_column_txn_operations"
-    );
-
-    Ok(seq)
 }
 
 async fn construct_drop_table_txn_operations(
