@@ -6461,7 +6461,7 @@ impl SchemaApiTestSuite {
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
 
-            let _res = mt.create_virtual_column(req.clone()).await?;
+            mt.create_virtual_column(req.clone()).await?;
 
             info!("--- create virtual column again");
             let req = CreateVirtualColumnReq {
@@ -6499,7 +6499,7 @@ impl SchemaApiTestSuite {
                 virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
             };
 
-            let _res = mt.update_virtual_column(req).await?;
+            mt.update_virtual_column(req).await?;
         }
 
         {
@@ -6521,7 +6521,7 @@ impl SchemaApiTestSuite {
                 name_ident: name_ident.clone(),
             };
 
-            let _res = mt.drop_virtual_column(req).await?;
+            mt.drop_virtual_column(req).await?;
         }
 
         {
@@ -6552,7 +6552,7 @@ impl SchemaApiTestSuite {
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
 
-            let _res = mt.create_virtual_column(req.clone()).await?;
+            mt.create_virtual_column(req.clone()).await?;
 
             let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
@@ -6569,7 +6569,7 @@ impl SchemaApiTestSuite {
                 virtual_columns: vec!["variant:k2".to_string()],
             };
 
-            let _res = mt.create_virtual_column(req.clone()).await?;
+            mt.create_virtual_column(req.clone()).await?;
 
             let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
