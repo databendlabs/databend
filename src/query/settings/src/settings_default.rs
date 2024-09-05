@@ -683,7 +683,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(48),
                     desc: "Request max retry times to external server",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..=1024)),
+                    range: Some(SettingRange::Numeric(0..=1024)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
