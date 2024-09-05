@@ -32,6 +32,17 @@ BEGIN
 END;
 $$;
 
+statement error 3131
+CREATE PROCEDURE p1(a int, b int) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := 0;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
 
 query T
 call procedure p1();
