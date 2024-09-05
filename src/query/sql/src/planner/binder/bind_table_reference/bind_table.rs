@@ -97,8 +97,6 @@ impl Binder {
             };
         }
 
-        let tenant = self.ctx.get_tenant();
-
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
