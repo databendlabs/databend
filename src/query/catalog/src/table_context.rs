@@ -28,7 +28,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::AbortChecker;
-use databend_common_expression::AbortError;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
@@ -207,7 +206,7 @@ pub trait TableContext: Send + Sync {
                 self.this.as_ref().check_aborting().is_err()
             }
 
-            fn try_check_aborting(&self) -> Result<(), AbortError> {
+            fn try_check_aborting(&self) -> Result<()> {
                 self.this.check_aborting().with_context(|| "query aborted")
             }
         }
