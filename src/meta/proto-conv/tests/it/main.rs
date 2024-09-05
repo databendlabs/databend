@@ -105,3 +105,4 @@ mod v102_user_must_change_password;
 mod v105_dictionary_meta;
 mod v106_query_token;
 mod v107_geography_datatype;
+mod v108_procedure;
