@@ -17,7 +17,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -26,7 +27,6 @@ use super::list_domain::Candidate;
 use super::list_domain::EndDomain;
 use super::list_domain::List;
 use super::list_domain::Partition;
-use super::utils::u32_entry;
 use super::Rows;
 use super::SortedStream;
 
@@ -44,7 +44,7 @@ where
     limit: Option<usize>,
 
     total_rows: usize,
-    cur_task: u32,
+    cur_task: usize,
 
     min_task: usize,
     max_task: usize,
@@ -79,7 +79,7 @@ where
         assert!(min_task > 0);
 
         let max_task =
-            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MIN_TASK_FACTOR", 2.0)) as usize;
+            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MAX_TASK_FACTOR", 2.0)) as usize;
         assert!(max_task > 0);
 
         let max_iter = get_env("K_WAY_MERGE_SORT_MAX_ITER", 20);
@@ -165,32 +165,31 @@ where
     fn build_task(&mut self) -> Vec<DataBlock> {
         let partition = self.calc_partition_point();
 
-        let task_id = self.next_task_id();
+        let task = self.next_task_id();
         self.total_rows += partition.total;
-        let rows = u32_entry(partition.total as u32);
 
         let task: Vec<_> = partition
             .ends
             .iter()
             .map(|&(input, pp)| {
-                let block = self.slice(input, pp);
+                let mut block = self.slice(input, pp);
 
-                let mut columns = Vec::with_capacity(block.num_columns() + 3);
-                columns.extend_from_slice(block.columns());
-                columns.push(task_id.clone());
-                columns.push(rows.clone());
-                columns.push(u32_entry(input as u32));
+                block.replace_meta(Box::new(SortTaskMeta {
+                    task,
+                    total: partition.total,
+                    input,
+                }));
 
-                DataBlock::new(columns, block.num_rows())
+                block
             })
             .collect();
         task
     }
 
-    fn next_task_id(&mut self) -> BlockEntry {
+    fn next_task_id(&mut self) -> usize {
         let id = self.cur_task;
         self.cur_task += 1;
-        u32_entry(id)
+        id
     }
 
     fn slice(&mut self, i: usize, pp: usize) -> DataBlock {
@@ -228,5 +227,23 @@ impl<R: Rows> List for Option<R> {
 
     fn index(&self, i: usize) -> R::Item<'_> {
         self.as_ref().unwrap().row(i)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SortTaskMeta {
+    pub task: usize,
+    pub total: usize,
+    pub input: usize,
+}
+
+#[typetag::serde(name = "sort_task")]
+impl BlockMetaInfo for SortTaskMeta {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SortTaskMeta::downcast_ref_from(info).map_or(false, |info| self == info)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }

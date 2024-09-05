@@ -23,12 +23,12 @@ use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -42,12 +42,12 @@ use match_template::match_template;
 use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
-use super::sort::utils::u32_entry;
 use super::sort::KWaySortPartitioner;
 use super::sort::Merger;
 use super::sort::Rows;
 use super::sort::SimpleRowsAsc;
 use super::sort::SimpleRowsDesc;
+use super::sort::SortTaskMeta;
 use super::sort::SortedStream;
 use super::transform_multi_sort_merge::InputBlockStream;
 
@@ -369,11 +369,6 @@ where A: SortAlgorithm
 impl<A> KWayMergeWorkerProcessor<A>
 where A: SortAlgorithm
 {
-    const INPUT_ID_POS: usize = 1;
-    const TASK_ROWS_POS: usize = 2;
-    const TASK_POS: usize = 3;
-    const SORT_COL_POS: usize = 4;
-
     pub fn new(
         input: Arc<InputPort>,
         stream_size: usize,
@@ -418,14 +413,13 @@ where A: SortAlgorithm
         let mut block = self.input.pull_data().unwrap()?;
         self.input.set_need_data();
 
-        let task = get_u32(&block, Self::TASK_POS);
-        let task_rows = get_u32(&block, Self::TASK_ROWS_POS);
+        let meta = SortTaskMeta::downcast_from(block.take_meta().unwrap()).unwrap();
 
         let rows = block.num_rows();
         match &mut self.info {
             Some(info) => {
-                debug_assert_eq!(task, info.task);
-                debug_assert_eq!(task_rows as usize, info.total);
+                debug_assert_eq!(meta.task, info.task);
+                debug_assert_eq!(meta.total, info.total);
                 assert!(info.remain >= rows);
                 info.remain -= rows;
 
@@ -437,30 +431,20 @@ where A: SortAlgorithm
                     Ok(Event::NeedData)
                 }
             }
-            None if task_rows as usize == rows => {
-                let n = block.num_columns();
-                let task_id = block.get_by_offset(n - Self::TASK_POS).clone();
-                let task_rows = block.get_by_offset(n - Self::TASK_ROWS_POS).clone();
-
+            None if meta.total == rows => {
                 if self.remove_order_col {
-                    block.pop_columns(Self::SORT_COL_POS);
-                } else {
-                    block.pop_columns(Self::TASK_POS);
+                    block.pop_columns(1);
                 }
-
-                block.add_column(task_id);
-                block.add_column(task_rows);
 
                 self.output_data.push_back(block);
                 Ok(Event::NeedConsume)
             }
             None => {
-                let total = task_rows as usize;
-                assert!(total >= rows);
+                assert!(meta.total >= rows);
                 self.info = Some(Info {
-                    task,
-                    total,
-                    remain: total - rows,
+                    task: meta.task,
+                    total: meta.total,
+                    remain: meta.total - rows,
                 });
                 self.buffer.push(block);
                 Ok(Event::NeedData)
@@ -472,22 +456,14 @@ where A: SortAlgorithm
         let mut streams = vec![VecDeque::new(); self.stream_size];
 
         for mut block in self.buffer.drain(..) {
-            let n = block.num_columns();
-            let id = get_u32(&block, Self::INPUT_ID_POS) as usize;
-            let sort_col = block
-                .get_by_offset(n - Self::SORT_COL_POS)
-                .value
-                .as_column()
-                .unwrap()
-                .clone();
+            let meta = SortTaskMeta::downcast_from(block.take_meta().unwrap()).unwrap();
 
+            let sort_col = block.get_last_column().clone();
             if self.remove_order_col {
-                block.pop_columns(Self::SORT_COL_POS);
-            } else {
-                block.pop_columns(Self::TASK_POS);
+                block.pop_columns(1);
             }
 
-            streams[id].push_back((block, sort_col));
+            streams[meta.input].push_back((block, sort_col));
         }
         streams
     }
@@ -535,21 +511,28 @@ where A: SortAlgorithm + Send + 'static
     fn process(&mut self) -> Result<()> {
         debug_assert!(self.ready());
         let info = self.info.take().unwrap();
+
         let mut merger = Merger::<A, BlockStream>::create(
             self.schema.clone(),
             self.streams(),
             self.sort_desc.clone(),
-            self.batch_rows,
+            if info.total > self.batch_rows {
+                info.total / (info.total / self.batch_rows)
+            } else {
+                self.batch_rows
+            },
             None,
         );
-        let task_id = u32_entry(info.task);
-        let task_rows = u32_entry(info.total as u32);
+
         let mut rows = 0;
-        while let Some(mut block) = merger.next_block()? {
-            block.add_column(task_id.clone());
-            block.add_column(task_rows.clone());
+        while let Some(block) = merger.next_block()? {
             rows += block.num_rows();
-            self.output_data.push_back(block);
+            let meta: Option<BlockMetaInfoPtr> = Some(Box::new(SortTaskMeta {
+                task: info.task,
+                total: info.total,
+                input: 0,
+            }));
+            self.output_data.push_back(block.add_meta(meta)?);
         }
         debug_assert_eq!(rows, info.total);
         debug_assert!(merger.is_finished());
@@ -562,7 +545,7 @@ pub struct KWayMergeCombinerProcessor {
     output: Arc<OutputPort>,
 
     cur_input: Option<usize>,
-    cur_task: u32,
+    cur_task: usize,
     buffer: Vec<VecDeque<DataBlock>>,
     info: Vec<Option<Info>>,
     limit: Option<usize>,
@@ -570,7 +553,7 @@ pub struct KWayMergeCombinerProcessor {
 
 #[derive(Debug, Clone, Copy)]
 struct Info {
-    task: u32,
+    task: usize,
     total: usize,
     remain: usize,
 }
@@ -601,9 +584,6 @@ impl KWayMergeCombinerProcessor {
         let buffer = &mut self.buffer[i];
         let info = &mut self.info[i];
 
-        const TASK_POS: usize = 2;
-        const TASK_ROWS_POS: usize = 1;
-
         if let Some(info) = info {
             if info.done() {
                 return if info.task == self.cur_task {
@@ -617,16 +597,18 @@ impl KWayMergeCombinerProcessor {
         if input.has_data() {
             let mut block = input.pull_data().unwrap()?;
             input.set_need_data();
+            let meta = SortTaskMeta::downcast_ref_from(block.get_meta().unwrap()).unwrap();
 
             let task = match info {
                 None => {
-                    let task = get_u32(&block, TASK_POS);
-                    let task_rows = get_u32(&block, TASK_ROWS_POS);
-                    debug_assert!(task_rows > 0);
+                    let task = meta.task;
+                    let task_rows = meta.total;
+                    debug_assert!(meta.total > 0);
                     debug_assert!(
-                        task >= self.cur_task,
-                        "disorder task. cur_task: {} task: {task} task_rows: {task_rows}",
-                        self.cur_task
+                        meta.task >= self.cur_task,
+                        "disorder task. cur_task: {} task: {} task_rows: {task_rows}",
+                        self.cur_task,
+                        meta.task,
                     );
                     let remain = task_rows as usize - block.num_rows();
                     let _ = info.insert(Info {
@@ -639,8 +621,8 @@ impl KWayMergeCombinerProcessor {
                     task
                 }
                 Some(info) => {
-                    debug_assert_eq!(info.task, get_u32(&block, TASK_POS));
-                    debug_assert_eq!(info.total, get_u32(&block, TASK_ROWS_POS) as usize);
+                    debug_assert_eq!(info.task, meta.task);
+                    debug_assert_eq!(info.total, meta.total);
 
                     let rows = block.num_rows();
                     if rows <= info.remain {
@@ -795,18 +777,6 @@ type BlockStream = VecDeque<(DataBlock, Column)>;
 impl SortedStream for BlockStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         Ok((self.pop_front(), false))
-    }
-}
-
-fn get_u32(block: &DataBlock, i: usize) -> u32 {
-    let n = block.num_columns();
-    unwrap_u32(block.get_by_offset(n - i))
-}
-
-fn unwrap_u32(entry: &BlockEntry) -> u32 {
-    match &entry.value {
-        Value::Scalar(scalar) => *scalar.as_number().unwrap().as_u_int32().unwrap(),
-        Value::Column(column) => column.as_number().unwrap().as_u_int32().unwrap()[0],
     }
 }
 

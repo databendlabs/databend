@@ -187,10 +187,16 @@ where T: List
         true
     }
 
-    pub fn is_small_task(&self) -> bool {
-        let sum = self.max_target.as_ref().unwrap().sum;
-        let o = self.expect.overlaps(sum);
-        matches!(o, Overlap::Left)
+    pub fn is_small_task(&mut self) -> bool {
+        loop {
+            let sum = self.do_search_max(Some(3));
+            match self.expect.overlaps(sum) {
+                Overlap::Left => return true,
+                Overlap::Right => return false,
+                Overlap::Cross if sum.done() => return false,
+                Overlap::Cross => (),
+            }
+        }
     }
 
     pub fn calc_partition(mut self, n: usize, max_iter: usize) -> Partition {
