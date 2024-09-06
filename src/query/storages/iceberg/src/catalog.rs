@@ -155,13 +155,25 @@ impl IcebergCatalog {
             ),
         };
 
+        // Trick
+        //
+        // Our parser doesn't allow users to write `s3.region` in options. Instead, users must use
+        // `"s3.region"`, but it's stored as is. We need to remove the quotes here.
+        //
+        // We only do this while building catalog so this won't affect existing catalogs.
         let ctl: Arc<dyn iceberg::Catalog> = match opt {
             IcebergCatalogOption::Hms(hms) => {
                 let cfg = HmsCatalogConfig::builder()
                     .address(hms.address.clone())
                     .thrift_transport(HmsThriftTransport::Buffered)
                     .warehouse(hms.warehouse.clone())
-                    .props(hms.props.clone())
+                    .props(
+                        hms.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
                     .build();
                 let ctl = HmsCatalog::new(cfg).map_err(|err| {
                     ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
@@ -172,7 +184,13 @@ impl IcebergCatalog {
                 let cfg = RestCatalogConfig::builder()
                     .uri(rest.uri.clone())
                     .warehouse(rest.warehouse.clone())
-                    .props(rest.props.clone())
+                    .props(
+                        rest.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
                     .build();
                 let ctl = RestCatalog::new(cfg);
                 Arc::new(ctl)
