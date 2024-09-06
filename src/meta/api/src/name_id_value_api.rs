@@ -127,8 +127,8 @@ where
             txn.condition
                 .extend(vec![txn_cond_eq_seq(name_ident, current_id_seq)]);
 
-            txn.if_then.push(txn_op_put_pb(name_ident, &id)?); // (tenant, name) -> id
-            txn.if_then.push(txn_op_put_pb(&id_ident, value)?); // (id) -> value
+            txn.if_then.push(txn_op_put_pb(name_ident, &id, None)?); // (tenant, name) -> id
+            txn.if_then.push(txn_op_put_pb(&id_ident, value, None)?); // (id) -> value
 
             // Add associated
             let kvs = associated_records(id);
