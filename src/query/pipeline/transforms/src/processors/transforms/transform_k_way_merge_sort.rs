@@ -24,7 +24,6 @@ use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -413,13 +412,13 @@ where A: SortAlgorithm
         let mut block = self.input.pull_data().unwrap()?;
         self.input.set_need_data();
 
-        let meta = SortTaskMeta::downcast_from(block.take_meta().unwrap()).unwrap();
+        let incoming = SortTaskMeta::downcast_ref_from(block.get_meta().unwrap()).unwrap();
 
         let rows = block.num_rows();
         match &mut self.task {
             Some(task) => {
-                debug_assert_eq!(meta.id, task.id);
-                debug_assert_eq!(meta.total, task.total);
+                debug_assert_eq!(incoming.id, task.id);
+                debug_assert_eq!(incoming.total, task.total);
                 assert!(task.remain >= rows);
                 task.remain -= rows;
 
@@ -431,7 +430,7 @@ where A: SortAlgorithm
                     Ok(Event::NeedData)
                 }
             }
-            None if meta.total == rows => {
+            None if incoming.total == rows => {
                 if self.remove_order_col {
                     block.pop_columns(1);
                 }
@@ -440,11 +439,11 @@ where A: SortAlgorithm
                 Ok(Event::NeedConsume)
             }
             None => {
-                assert!(meta.total >= rows);
+                assert!(incoming.total >= rows);
                 self.task = Some(TaskState {
-                    id: meta.id,
-                    total: meta.total,
-                    remain: meta.total - rows,
+                    id: incoming.id,
+                    total: incoming.total,
+                    remain: incoming.total - rows,
                 });
                 self.buffer.push(block);
                 Ok(Event::NeedData)
@@ -527,12 +526,14 @@ where A: SortAlgorithm + Send + 'static
         let mut rows = 0;
         while let Some(block) = merger.next_block()? {
             rows += block.num_rows();
-            let meta: Option<BlockMetaInfoPtr> = Some(Box::new(SortTaskMeta {
+
+            let meta = SortTaskMeta {
                 id: task.id,
                 total: task.total,
                 input: 0,
-            }));
-            self.output_data.push_back(block.add_meta(meta)?);
+            }
+            .as_meta();
+            self.output_data.push_back(block.add_meta(Some(meta))?);
         }
         debug_assert_eq!(rows, task.total);
         debug_assert!(merger.is_finished());
@@ -597,7 +598,7 @@ impl KWayMergeCombinerProcessor {
         if input.has_data() {
             let mut block = input.pull_data().unwrap()?;
             input.set_need_data();
-            let incoming = SortTaskMeta::downcast_ref_from(block.get_meta().unwrap()).unwrap();
+            let incoming = SortTaskMeta::downcast_from(block.take_meta().unwrap()).unwrap();
 
             let task_id = match cur_state {
                 None => {
@@ -609,13 +610,12 @@ impl KWayMergeCombinerProcessor {
                         incoming.id,
                         incoming.total
                     );
-                    let SortTaskMeta { id, total, .. } = *incoming;
+                    let SortTaskMeta { id, total, .. } = incoming;
                     let _ = cur_state.insert(TaskState {
                         id,
                         total,
                         remain: total - block.num_rows(),
                     });
-                    block.pop_columns(2);
                     buffer.push_back(block);
                     id
                 }
@@ -625,7 +625,6 @@ impl KWayMergeCombinerProcessor {
 
                     let rows = block.num_rows();
                     if rows <= cur.remain {
-                        block.pop_columns(2);
                         buffer.push_back(block);
                         cur.remain -= rows;
                         cur.id
