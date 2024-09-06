@@ -225,6 +225,4 @@ Limit
 query T
 explain select c1 from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 0
 ----
-ConstantTableScan
-├── output columns: [count(t1.number) (#2)]
-└── column 0: []
+EmptyResultScan

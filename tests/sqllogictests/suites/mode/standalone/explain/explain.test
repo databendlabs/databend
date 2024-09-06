@@ -1251,19 +1251,7 @@ Sort
     ├── probe keys: [t1.i (#0)]
     ├── filters: []
     ├── estimated rows: 3.00
-    ├── Filter(Build)
-    │   ├── output columns: [t2.k (#2), t2.l (#3)]
-    │   ├── filters: [false]
-    │   ├── estimated rows: 0.00
-    │   └── TableScan
-    │       ├── table: default.default.t2
-    │       ├── output columns: [k (#2), l (#3)]
-    │       ├── read rows: 0
-    │       ├── read size: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [false], limit: NONE]
-    │       └── estimated rows: 2.00
+    ├── EmptyResultScan(Build)
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── output columns: [i (#0), j (#1)]
@@ -1292,13 +1280,7 @@ EvalScalar
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
-        └── Filter
-            ├── filters: [false]
-            └── Scan
-                ├── table: default.t2
-                ├── filters: [false]
-                ├── order by: []
-                └── limit: NONE
+        └── ConstantTableScan(ConstantTableScan { values: [NullableColumn { column: Int32([]), validity: [] }, NullableColumn { column: Int32([]), validity: [] }], num_rows: 0, schema: DataSchema { fields: [DataField { name: "2", default_expr: None, data_type: Nullable(Number(Int32)), computed_expr: None }, DataField { name: "3", default_expr: None, data_type: Nullable(Number(Int32)), computed_expr: None }], metadata: {} }, columns: {2, 3} })
 
 
 statement ok

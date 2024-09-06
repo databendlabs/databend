@@ -89,7 +89,7 @@ impl Rule for RuleEliminateFilter {
             let metadata = self.metadata.read();
             let mut fields = Vec::with_capacity(output_columns.len());
 
-            for col in output_columns.iter() {
+            for col in output_columns.iter().sorted() {
                 fields.push(DataField::new(
                     &col.to_string(),
                     metadata.column(*col).data_type(),
