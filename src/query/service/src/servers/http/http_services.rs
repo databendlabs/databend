@@ -142,7 +142,7 @@ impl HttpHandler {
                 "/discovery_nodes",
                 get(discovery_nodes).with(HTTPSessionMiddleware::create(
                     self.kind,
-                    EndpointKind::StartQuery,
+                    EndpointKind::NoAuth,
                 )),
             );
 
