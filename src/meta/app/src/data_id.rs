@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -57,9 +58,12 @@ impl<R> fmt::Debug for DataId<R>
 where R: TenantResource
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_name = if R::TYPE.is_empty() { "Id" } else { R::TYPE };
+        let type_name = self.type_name();
 
-        f.debug_struct(type_name).field("id", &self.id).finish()
+        f.debug_struct("DataId")
+            .field("type", &type_name)
+            .field("id", &self.id)
+            .finish()
     }
 }
 
@@ -67,9 +71,9 @@ impl<R> fmt::Display for DataId<R>
 where R: TenantResource
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_name = if R::TYPE.is_empty() { "Id" } else { R::TYPE };
+        let type_name = self.type_name();
 
-        write!(f, "{}({})", type_name, self.id)
+        write!(f, "DataId<{}>({})", type_name, self.id)
     }
 }
 
@@ -106,6 +110,17 @@ impl<R> DataId<R> {
     /// Convert to a `TIdent` with the given tenant to form a complete key.
     pub fn into_t_ident(self, tenant: impl ToTenant) -> TIdent<R, Self> {
         TIdent::new_generic(tenant, self)
+    }
+
+    /// If there is a specified type name for this alias, use it.
+    /// Otherwise, use the default name
+    pub fn type_name(&self) -> &'static str
+    where R: TenantResource {
+        if R::TYPE.is_empty() {
+            type_name::<R>().rsplit("::").next().unwrap_or("DataId")
+        } else {
+            R::TYPE
+        }
     }
 }
 
@@ -265,9 +280,15 @@ mod prost_message_impl {
         }
 
         #[test]
+        fn test_debug() {
+            let id = DataId::<Resource>::new(1u64);
+            assert_eq!(format!("{:?}", id), r#"DataId { type: "Foo", id: 1 }"#);
+        }
+
+        #[test]
         fn test_display() {
             let id = DataId::<Resource>::new(1u64);
-            assert_eq!(format!("{}", id), "Foo(1)");
+            assert_eq!(format!("{}", id), "DataId<Foo>(1)");
         }
     }
 }

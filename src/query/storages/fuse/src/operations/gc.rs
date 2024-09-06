@@ -124,7 +124,7 @@ impl FuseTable {
                     "gc: aborted query, because the server is shutting down or the query was killed. table: {}, ident {}",
                     self.table_info.desc, self.table_info.ident,
                 );
-                return Err(err);
+                return Err(err.with_context("failed to read snapshot"));
             }
 
             let results = snapshots_io

@@ -259,20 +259,6 @@ pub enum Statement {
     ShowFileFormats,
     Presign(PresignStmt),
 
-    // share
-    CreateShareEndpoint(CreateShareEndpointStmt),
-    ShowShareEndpoint(ShowShareEndpointStmt),
-    DropShareEndpoint(DropShareEndpointStmt),
-    CreateShare(CreateShareStmt),
-    DropShare(DropShareStmt),
-    GrantShareObject(GrantShareObjectStmt),
-    RevokeShareObject(RevokeShareObjectStmt),
-    AlterShareTenants(AlterShareTenantsStmt),
-    DescShare(DescShareStmt),
-    ShowShares(ShowSharesStmt),
-    ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt),
-    ShowGrantsOfShare(ShowGrantsOfShareStmt),
-
     // data mask
     CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
     DropDatamaskPolicy(DropDatamaskPolicyStmt),
@@ -323,6 +309,13 @@ pub enum Statement {
 
     // Stored procedures
     ExecuteImmediate(ExecuteImmediateStmt),
+    CreateProcedure(CreateProcedureStmt),
+    DropProcedure(DropProcedureStmt),
+    ShowProcedures {
+        show_options: Option<ShowOptions>,
+    },
+    DescProcedure(DescProcedureStmt),
+    CallProcedure(CallProcedureStmt),
 
     // Sequence
     CreateSequence(CreateSequenceStmt),
@@ -743,18 +736,6 @@ impl Display for Statement {
             Statement::ShowFileFormats => write!(f, "SHOW FILE FORMATS")?,
             Statement::Call(stmt) => write!(f, "{stmt}")?,
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateShareEndpoint(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowShareEndpoint(stmt) => write!(f, "{stmt}")?,
-            Statement::DropShareEndpoint(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
-            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
-            Statement::GrantShareObject(stmt) => write!(f, "{stmt}")?,
-            Statement::RevokeShareObject(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterShareTenants(stmt) => write!(f, "{stmt}")?,
-            Statement::DescShare(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
@@ -795,6 +776,15 @@ impl Display for Statement {
             Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
             Statement::ExecuteImmediate(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::DropProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::DescProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowProcedures { show_options } => {
+                write!(f, "SHOW PROCEDURES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
@@ -807,6 +797,7 @@ impl Display for Statement {
                 write!(f, " '{object_id}'")?;
             }
             Statement::System(stmt) => write!(f, "{stmt}")?,
+            Statement::CallProcedure(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

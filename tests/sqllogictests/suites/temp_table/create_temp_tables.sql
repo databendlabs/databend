@@ -28,7 +28,7 @@ create temp table t2(a int,b int) Engine = Fuse
 statement error 1005
 create temp table t2(a INT auto_increment)
 
-statement error 1105
+statement error 1006
 create temp table t3(a int,b int) engine=null
 
 statement ok

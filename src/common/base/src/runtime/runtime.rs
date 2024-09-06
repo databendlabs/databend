@@ -24,6 +24,7 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use futures::future;
 use futures::FutureExt;
 use log::warn;
@@ -250,13 +251,14 @@ impl Runtime {
     }
 
     #[track_caller]
-    pub fn block_on<T, F>(&self, future: F) -> F::Output
-    where F: Future<Output = Result<T>> {
+    pub fn block_on<T, C, F>(&self, future: F) -> F::Output
+    where F: Future<Output = Result<T, C>> {
         let future = CatchUnwindFuture::create(future);
         #[allow(clippy::disallowed_methods)]
         tokio::task::block_in_place(|| {
             self.handle
                 .block_on(location_future(future, std::panic::Location::caller()))
+                .with_context(|| "failed to block on future".to_string())
                 .flatten()
         })
     }

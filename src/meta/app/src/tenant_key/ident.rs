@@ -43,7 +43,8 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let type_name = self.type_name();
 
-        f.debug_struct(type_name)
+        f.debug_struct("TIdent")
+            .field("type", &type_name)
             .field("tenant", &self.tenant)
             .field("name", &self.name)
             .finish()
@@ -60,7 +61,7 @@ where
 
         write!(
             f,
-            "{}({}/{})",
+            "TIdent<{}>({}/{})",
             type_name,
             self.tenant.tenant_name(),
             self.name
@@ -290,13 +291,13 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", ident),
-            r#"Foo { tenant: Tenant { tenant: "test" }, name: "test1" }"#,
+            r#"TIdent { type: "Foo", tenant: Tenant { tenant: "test" }, name: "test1" }"#,
             "debug"
         );
 
         // Test display
 
-        assert_eq!(format!("{}", ident), "Foo(test/test1)", "display");
+        assert_eq!(format!("{}", ident), "TIdent<Foo>(test/test1)", "display");
     }
 
     #[test]

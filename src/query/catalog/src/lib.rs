@@ -19,13 +19,13 @@ pub mod catalog_kind;
 pub mod cluster_info;
 pub mod database;
 pub mod lock;
+pub mod merge_into_join;
 pub mod plan;
 pub mod query_kind;
+pub mod runtime_filter_info;
 pub mod statistics;
+pub mod table;
 pub mod table_args;
 pub mod table_context;
 pub mod table_function;
-
-pub mod merge_into_join;
-pub mod runtime_filter_info;
-pub mod table;
+pub mod table_with_options;

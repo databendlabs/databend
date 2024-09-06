@@ -24,7 +24,6 @@ use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableId;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
@@ -35,7 +34,6 @@ use log::debug;
 
 use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;
-use crate::get_pb_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::send_txn;
@@ -202,22 +200,23 @@ async fn clear_table_column_mask_policy(
     for table_id in seq_id_list.data.id_list.into_iter() {
         let tbid = TableId { table_id };
 
-        let (tb_meta_seq, table_meta_opt): (_, Option<TableMeta>) =
-            get_pb_value(kv_api, &tbid).await?;
+        let seq_meta = kv_api.get_pb(&tbid).await?;
 
-        let Some(mut table_meta) = table_meta_opt else {
+        let Some(seq_meta) = seq_meta else {
             continue;
         };
 
-        if let Some(column_mask_policy) = table_meta.column_mask_policy {
+        let (seq, mut meta) = (seq_meta.seq, seq_meta.data);
+
+        if let Some(column_mask_policy) = meta.column_mask_policy {
             let new_column_mask_policy = column_mask_policy
                 .into_iter()
                 .filter(|(_, name)| name != name_ident.name())
                 .collect();
 
-            table_meta.column_mask_policy = Some(new_column_mask_policy);
+            meta.column_mask_policy = Some(new_column_mask_policy);
 
-            txn_replace_exact(txn, &tbid, tb_meta_seq, &table_meta)?;
+            txn_replace_exact(txn, &tbid, seq, &meta)?;
         }
     }
 

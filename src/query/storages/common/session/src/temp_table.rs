@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::SeqV;
 use databend_common_storage::DataOperator;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -52,6 +53,8 @@ pub struct TempTblMgr {
     name_to_id: HashMap<String, u64>,
     id_to_table: HashMap<u64, TempTable>,
     next_id: u64,
+
+    empty_state_changed: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +71,7 @@ impl TempTblMgr {
             name_to_id: HashMap::new(),
             id_to_table: HashMap::new(),
             next_id: TEMP_TBL_ID_BEGIN,
+            empty_state_changed: false,
         }))
     }
 
@@ -75,6 +79,16 @@ impl TempTblMgr {
         self.next_id += 1;
         if !is_temp_table_id(self.next_id) {
             panic!("Temp table id used up");
+        }
+    }
+
+    pub fn is_empty(&mut self) -> (bool, bool) {
+        let is_empty = self.id_to_table.is_empty();
+        if self.empty_state_changed {
+            self.empty_state_changed = false;
+            (is_empty, true)
+        } else {
+            (is_empty, false)
         }
     }
 
@@ -120,6 +134,9 @@ impl TempTblMgr {
                 true
             }
         };
+        if self.id_to_table.len() == 1 {
+            self.empty_state_changed = true;
+        }
         Ok(CreateTableReply {
             table_id,
             table_id_seq: Some(0),
@@ -144,6 +161,7 @@ impl TempTblMgr {
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = req.name_ident.db_name.clone();
                 table.table_name = req.name_ident.table_name.clone();
+
                 Ok(CommitTableMetaReply {})
             }
             None => Err(ErrorCode::UnknownTable(format!(
@@ -168,10 +186,7 @@ impl TempTblMgr {
                 let table = self.id_to_table.get_mut(&id).unwrap();
                 table.db_name = new_db_name.clone();
                 table.table_name = new_table_name.clone();
-                Ok(Some(RenameTableReply {
-                    table_id: 0,
-                    share_table_info: None,
-                }))
+                Ok(Some(RenameTableReply { table_id: 0 }))
             }
             None => Ok(None),
         }
@@ -263,9 +278,7 @@ impl TempTblMgr {
                 table.meta.options.remove(&k);
             }
         }
-        Ok(UpsertTableOptionReply {
-            share_vec_table_info: None,
-        })
+        Ok(UpsertTableOptionReply {})
     }
 
     pub fn truncate_table(&mut self, id: u64) -> Result<TruncateTableReply> {
@@ -321,6 +334,9 @@ pub async fn drop_table_by_id(
                                 guard, req
                             ))
                         })?;
+                        if guard.name_to_id.is_empty() {
+                            guard.empty_state_changed = true;
+                        }
                         dir
                     }
                     Entry::Vacant(_) => {
@@ -344,13 +360,20 @@ pub async fn drop_table_by_id(
                             guard, req
                         ))
                     })?;
+                    if guard.name_to_id.is_empty() {
+                        guard.empty_state_changed = true;
+                    }
                 }
                 Entry::Vacant(_) => {
                     return Ok(None);
                 }
             }
+            let key = InMemoryDataKey {
+                temp_prefix: Some(req.session_id.clone()),
+                table_id: *tb_id,
+            };
             let mut in_mem_data = IN_MEMORY_DATA.write();
-            in_mem_data.remove(tb_id).ok_or_else(|| {
+            in_mem_data.remove(&key).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "Table not found in memory data {:?}, drop table request: {:?}",
                     in_mem_data, req
@@ -359,10 +382,11 @@ pub async fn drop_table_by_id(
         }
         _ => return Ok(None),
     };
-    Ok(Some(DropTableReply { spec_vec: None }))
+
+    Ok(Some(DropTableReply {}))
 }
 
-pub async fn drop_all_temp_tables(mgr: TempTblMgrRef) -> Result<()> {
+pub async fn drop_all_temp_tables(session_id: &str, mgr: TempTblMgrRef) -> Result<()> {
     let (fuse_dirs, mem_tbl_ids) = {
         let mut guard = mgr.lock();
         let mut fuse_dirs = Vec::new();
@@ -389,7 +413,11 @@ pub async fn drop_all_temp_tables(mgr: TempTblMgrRef) -> Result<()> {
     if !mem_tbl_ids.is_empty() {
         let mut in_mem_data = IN_MEMORY_DATA.write();
         for id in mem_tbl_ids {
-            in_mem_data.remove(&id);
+            let key = InMemoryDataKey {
+                temp_prefix: Some(session_id.to_string()),
+                table_id: id,
+            };
+            in_mem_data.remove(&key);
         }
     }
     Ok(())

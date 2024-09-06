@@ -357,6 +357,7 @@ build_exceptions! {
     StreamAlreadyExists(2732),
     IllegalStream(2733),
     StreamVersionMismatched(2734),
+    WithOptionInvalid(2735),
 
     // dynamic error codes.
     IllegalDynamicTable(2740),
@@ -386,6 +387,13 @@ build_exceptions! {
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
     UnknownDictionaryId(3115),
+    DictionaryAlreadyExists(3113),
+    UnknownDictionary(3114),
+    UnknownDictionaryId(3115),
+     // Procedure
+     UnknownProcedure(3130),
+     ProcedureAlreadyExists(3131),
+     IllegalProcedureFormat(3132),
 }
 
 // Storage errors [3001, 4000].

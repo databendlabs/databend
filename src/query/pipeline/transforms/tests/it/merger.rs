@@ -31,7 +31,7 @@ use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::Merger;
-use databend_common_pipeline_transforms::processors::sort::SimpleRows;
+use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
@@ -72,8 +72,8 @@ impl SortedStream for TestStream {
 }
 
 type TestMerger<A> = Merger<A, TestStream>;
-type TestHeapSort = HeapSort<SimpleRows<Int32Type>>;
-type TestLoserTreeSort = LoserTreeSort<SimpleRows<Int32Type>>;
+type TestHeapSort = HeapSort<SimpleRowsAsc<Int32Type>>;
+type TestLoserTreeSort = LoserTreeSort<SimpleRowsAsc<Int32Type>>;
 
 fn prepare_input_and_result(
     data: Vec<Vec<Vec<i32>>>,
@@ -224,11 +224,11 @@ fn test_basic(limit: Option<usize>) -> Result<()> {
 
 async fn async_test_basic(limit: Option<usize>) -> Result<()> {
     let (input, expected) = basic_test_data(limit);
-    let merger = create_test_merger::<HeapSort<SimpleRows<Int32Type>>>(input, limit);
+    let merger = create_test_merger::<HeapSort<SimpleRowsAsc<Int32Type>>>(input, limit);
     async_test(merger, expected).await?;
 
     let (input, expected) = basic_test_data(limit);
-    let merger = create_test_merger::<LoserTreeSort<SimpleRows<Int32Type>>>(input, limit);
+    let merger = create_test_merger::<LoserTreeSort<SimpleRowsAsc<Int32Type>>>(input, limit);
     async_test(merger, expected).await
 }
 

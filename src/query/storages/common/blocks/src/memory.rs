@@ -23,5 +23,11 @@ use parking_lot::RwLock;
 /// Indexed by table id etc.
 pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
-pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
+pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<InMemoryDataKey>>>> =
     LazyLock::new(|| Arc::new(Default::default()));
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct InMemoryDataKey {
+    pub temp_prefix: Option<String>,
+    pub table_id: u64,
+}

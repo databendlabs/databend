@@ -20,6 +20,7 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
@@ -86,7 +87,11 @@ impl FlightActions {
                     let future = catch_unwind(move || t(request))?;
 
                     let future = CatchUnwindFuture::create(future);
-                    match future.await.flatten() {
+                    match future
+                        .await
+                        .with_context(|| "failed to do filght action")
+                        .flatten()
+                    {
                         Ok(v) => {
                             let mut out = Vec::with_capacity(512);
                             let mut serializer = serde_json::Serializer::new(&mut out);

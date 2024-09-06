@@ -87,9 +87,7 @@ impl FromToProto for mt::CatalogOption {
                 }
                 mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
             }
-            pb::catalog_option::CatalogOption::Share(v) => {
-                mt::CatalogOption::Share(mt::ShareCatalogOption::from_pb(v)?)
-            }
+            pb::catalog_option::CatalogOption::Share(_v) => mt::CatalogOption::Default,
         })
     }
 
@@ -99,9 +97,6 @@ impl FromToProto for mt::CatalogOption {
             mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb()?)),
             mt::CatalogOption::Iceberg(v) => {
                 Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()?))
-            }
-            mt::CatalogOption::Share(v) => {
-                Some(pb::catalog_option::CatalogOption::Share(v.to_pb()?))
             }
         };
 
