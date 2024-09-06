@@ -206,7 +206,7 @@ impl AsyncTransform for TransformUdfServer {
                         };
                         let backoff = ExponentialBuilder::default()
                             .with_min_delay(Duration::from_millis(50))
-                            .with_factor(2)
+                            .with_factor(2.0)
                             .with_max_delay(Duration::from_secs(30))
                             .with_max_times(self.retry_times as usize);
 
