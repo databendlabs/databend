@@ -44,7 +44,6 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::SeqValue;
 
 use crate::databases::Database;
@@ -170,7 +169,6 @@ impl Database for DefaultDatabase {
                     ),
                     name: table_name.to_string(),
                     meta: seqv.data,
-                    tenant: self.db_info.name_ident.tenant_name().to_string(),
                     db_type: DatabaseType::NormalDB,
                     catalog_info: Default::default(),
                 })
