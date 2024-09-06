@@ -386,8 +386,7 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
-    UnknownDictionaryId(3115),
-     // Procedure
+    // Procedure
     UnknownProcedure(3130),
     ProcedureAlreadyExists(3131),
     IllegalProcedureFormat(3132),

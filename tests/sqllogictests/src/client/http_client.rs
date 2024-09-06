@@ -20,6 +20,7 @@ use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
 use reqwest::ClientBuilder;
+use serde::Deserialize;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
 
@@ -29,11 +30,12 @@ use crate::util::HttpSessionConf;
 
 pub struct HttpClient {
     pub client: Client,
+    pub session_token: String,
     pub debug: bool,
     pub session: Option<HttpSessionConf>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 struct QueryResponse {
     session: Option<HttpSessionConf>,
     data: Option<serde_json::Value>,
@@ -58,8 +60,13 @@ fn format_error(value: serde_json::Value) -> String {
     }
 }
 
+#[derive(Deserialize)]
+struct AuthResponse {
+    session_token: String,
+}
+
 impl HttpClient {
-    pub fn create() -> Result<Self> {
+    pub async fn create() -> Result<Self> {
         let mut header = HeaderMap::new();
         header.insert(
             "Content-Type",
@@ -72,8 +79,28 @@ impl HttpClient {
             .http2_keep_alive_timeout(Duration::from_secs(15))
             .pool_max_idle_per_host(0)
             .build()?;
+
+        let url = "http://127.0.0.1:8000/v1/session/login";
+
+        let session_token = client
+            .post(url)
+            .body("{}")
+            .basic_auth("root", Some(""))
+            .send()
+            .await
+            .inspect_err(|e| {
+                println!("fail to send to {}: {:?}", url, e);
+            })?
+            .json::<AuthResponse>()
+            .await
+            .inspect_err(|e| {
+                println!("fail to decode json when call {}: {:?}", url, e);
+            })?
+            .session_token;
+
         Ok(Self {
             client,
+            session_token,
             session: None,
             debug: false,
         })
@@ -143,7 +170,7 @@ impl HttpClient {
             .client
             .post(url)
             .json(&query)
-            .basic_auth("root", Some(""))
+            .bearer_auth(&self.session_token)
             .send()
             .await
             .inspect_err(|e| {
@@ -160,7 +187,7 @@ impl HttpClient {
         Ok(self
             .client
             .get(url)
-            .basic_auth("root", Some(""))
+            .bearer_auth(&self.session_token)
             .send()
             .await
             .inspect_err(|e| {

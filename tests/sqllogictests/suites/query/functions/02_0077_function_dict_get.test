@@ -8,14 +8,14 @@ statement ok
 CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 query TT
-select dict_get(d, 'value', a) from t
+select dict_get(d, 'value', 'a') from t
 ----
 abc
 abc
 abc
 
 query TT
-SELECT dict_get(d, 'value', b)
+SELECT dict_get(d, 'value', 'b')
 ----
 def
 
@@ -26,6 +26,6 @@ statement error 3114
 select dict_get(test, 'value', b)
 
 query TT
-SELECT dict_get(d, 'value', test)
+SELECT dict_get(d, 'value', 'test')
 ----
 (empty)

@@ -5268,6 +5268,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "clap 4.5.15",
+ "databend-common-base",
  "databend-common-exception",
  "env_logger",
  "futures-util",

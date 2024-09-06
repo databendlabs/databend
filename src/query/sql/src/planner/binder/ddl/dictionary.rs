@@ -39,6 +39,7 @@ use crate::Binder;
 pub static REQUIRED_MYSQL_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert("host");
+    r.insert("password");
     r.insert("port");
     r.insert("username");
     r.insert("db");
@@ -50,15 +51,15 @@ fn validate_mysql_opt_key(options: &BTreeMap<String, String>) -> Result<()> {
     let mut flag = true;
     for option in REQUIRED_MYSQL_OPTION_KEYS.clone() {
         if !options.contains_key(option) {
-            flag = false
+            flag = false;
         }
     }
     if REQUIRED_MYSQL_OPTION_KEYS.len() != options.len() {
-        flag = false
+        flag = false;
     }
     if let Some(port) = options.get("port") {
         if port.parse::<u64>().is_err() {
-            flag = false
+            flag = false;
         }
     }
     if flag {

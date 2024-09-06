@@ -10,7 +10,7 @@ DROP DICTIONARY IF EXISTS d3
 statement ok
 DROP DICTIONARY IF EXISTS d4
 
-statement error 3117
+statement error 1006
 CREATE DICTIONARY d(c1 int, c2 Varchar) PRIMARY KEY c1 SOURCE(postgresql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
 statement ok
@@ -22,7 +22,7 @@ CREATE DICTIONARY IF NOT EXISTS d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY 
 statement error 3113
 CREATE DICTIONARY d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
-statement error 3118
+statement error 1006
 CREATE DICTIONARY d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1'))
 
 statement ok
@@ -31,7 +31,7 @@ CREATE DICTIONARY d2(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(
 statement error 3113
 CREATE DICTIONARY d2(a int NOT NULL, b int NOT NULL) PRIMARY KEY b SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
-statement error 3118
+statement error 1006
 create dictionary d3(`a` int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' table='test_table'))
 
 statement ok
@@ -40,7 +40,7 @@ create dictionary d3(`a` int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysq
 statement ok
 create or replace dictionary d3(a int NOT NULL, b Varchar NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table')) comment 'comment'
 
-statement error 3116
+statement error 1006
 create dictionary d4(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' name='dummy' table='test_table'))
 
 statement ok
@@ -49,13 +49,13 @@ create or replace dictionary d4(a Varchar NOT NULL, b int NOT NULL) PRIMARY KEY 
 statement ok
 CREATE or replace DICTIONARY d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
-statement error 3116
+statement error 1006
 create or replace dictionary d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379' db_index='19'))
 
-statement error 3118
+statement error 1006
 create or replace dictionary d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1'))
 
-statement error 3119
+statement error 1006
 create or replace dictionary d5(key int not null, value int not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
 
 query TT
