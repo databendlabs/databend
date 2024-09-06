@@ -21,11 +21,22 @@ use databend_common_base::runtime::metrics::FamilyHistogram;
 use crate::VecLabels;
 
 const METRIC_REQUEST_EXTERNAL_DURATION: &str = "external_request_duration";
+const METRIC_CONNECT_EXTERNAL_DURATION: &str = "external_connect_duration";
 
 static REQUEST_EXTERNAL_DURATION: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| register_histogram_family_in_seconds(METRIC_REQUEST_EXTERNAL_DURATION));
 
+static CONNECT_EXTERNAL_DURATION: LazyLock<FamilyHistogram<VecLabels>> =
+    LazyLock::new(|| register_histogram_family_in_seconds(METRIC_CONNECT_EXTERNAL_DURATION));
+
 const LABEL_FUNCTION_NAME: &str = "function_name";
+
+pub fn record_connect_external_duration(function_name: String, duration: Duration) {
+    let labels = &vec![(LABEL_FUNCTION_NAME, function_name)];
+    CONNECT_EXTERNAL_DURATION
+        .get_or_create(labels)
+        .observe(duration.as_millis_f64());
+}
 
 pub fn record_request_external_duration(function_name: String, duration: Duration) {
     let labels = &vec![(LABEL_FUNCTION_NAME, function_name)];
