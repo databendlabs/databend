@@ -571,6 +571,8 @@ fn test_statement() {
         r#"UNSET (max_threads, sql_dialect);"#,
         r#"UNSET session (max_threads, sql_dialect);"#,
         r#"SET variable a = 3"#,
+        r#"show variables"#,
+        r#"show variables like 'v%'"#,
         r#"SET variable a = select 3"#,
         r#"SET variable a = (select max(number) from numbers(10))"#,
         r#"select $1 FROM '@my_stage/my data/'"#,

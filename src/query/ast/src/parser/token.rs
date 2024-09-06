@@ -1021,6 +1021,8 @@ pub enum TokenKind {
     SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
+    #[token("VARIABLES", ignore(ascii_case))]
+    VARIABLES,
     #[token("STAGES", ignore(ascii_case))]
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]

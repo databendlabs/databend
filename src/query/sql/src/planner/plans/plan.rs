@@ -370,6 +370,7 @@ pub enum Plan {
 #[derive(Clone, Debug)]
 pub enum RewriteKind {
     ShowSettings,
+    ShowVariables,
     ShowMetrics,
     ShowProcessList,
     ShowEngines,
