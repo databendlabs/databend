@@ -79,7 +79,10 @@ impl Rule for RuleEliminateFilter {
                 ScalarExpr::ConstantExpr(ConstantExpr {
                     value: Scalar::Boolean(false),
                     ..
-                }),
+                }) | ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Null,
+                    ..
+                })
             )
         }) {
             let output_columns = eval_scalar

@@ -34,29 +34,13 @@ TableScan
 query T
 explain select * from t1 where a = 1 and a = 2;
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # false
 query T
 explain select * from t1 where a = 1 and a != 1
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # a = 1
 query T
@@ -90,15 +74,7 @@ TableScan
 query T
 explain select * from t1 where a = 1 and a < 1;
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # a = 1
 query T
@@ -146,15 +122,7 @@ TableScan
 query T
 explain select * from t1 where a = 1 and a > 1;
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # a = 1;
 query T
@@ -189,15 +157,7 @@ TableScan
 query T
 explain select * from t1 where a != 1 and a = 1;
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # a = 2
 query T
@@ -357,15 +317,7 @@ TableScan
 query T
 explain select * from t1 where a < 5 and a = 10;
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # a = 2
 query T
@@ -427,15 +379,7 @@ TableScan
 query T
 explain select * from t1 where a < 5 and a > 10;
 ----
-TableScan
-├── table: default.default.t1
-├── output columns: [a (#0), b (#1)]
-├── read rows: 0
-├── read size: 0
-├── partitions total: 0
-├── partitions scanned: 0
-├── push downs: [filters: [false], limit: NONE]
-└── estimated rows: 0.00
+EmptyResultScan
 
 # a < 5 and a > 2
 query T
@@ -610,24 +554,8 @@ HashJoin
 ├── probe keys: []
 ├── filters: []
 ├── estimated rows: 0.00
-├── TableScan(Build)
-│   ├── table: default.default.t2
-│   ├── output columns: [a (#2), b (#3)]
-│   ├── read rows: 0
-│   ├── read size: 0
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   ├── push downs: [filters: [false], limit: NONE]
-│   └── estimated rows: 0.00
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 0.00
+├── EmptyResultScan(Build)
+└── EmptyResultScan(Probe)
 
 # false
 query T
@@ -640,15 +568,7 @@ HashJoin
 ├── probe keys: [t2.a (#2)]
 ├── filters: []
 ├── estimated rows: 0.00
-├── TableScan(Build)
-│   ├── table: default.default.t3
-│   ├── output columns: [a (#4), b (#5)]
-│   ├── read rows: 0
-│   ├── read size: 0
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   ├── push downs: [filters: [false], limit: NONE]
-│   └── estimated rows: 0.00
+├── EmptyResultScan(Build)
 └── HashJoin(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
     ├── join type: LEFT OUTER
@@ -656,24 +576,8 @@ HashJoin
     ├── probe keys: [CAST(t1.a (#0) AS Int32 NULL)]
     ├── filters: []
     ├── estimated rows: 0.00
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── output columns: [a (#2), b (#3)]
-    │   ├── read rows: 0
-    │   ├── read size: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   ├── push downs: [filters: [false], limit: NONE]
-    │   └── estimated rows: 0.00
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [false], limit: NONE]
-        └── estimated rows: 0.00
+    ├── EmptyResultScan(Build)
+    └── EmptyResultScan(Probe)
 
 # t1.a = t2.a, t1.a = t3.a => t2.a = t3.a
 query T

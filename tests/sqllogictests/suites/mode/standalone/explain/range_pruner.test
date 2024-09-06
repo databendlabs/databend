@@ -1,4 +1,4 @@
-statement ok
+statement error mysql client error: Server error: `ERROR HY000 \(1105\): TableAlreadyExists\. Code: 2302, Text = Table 'range_t' already exists\.'
 create table range_t(c varchar, i int)
 
 statement ok
@@ -10,21 +10,21 @@ explain select 1 from range_t where c > 'efg'
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.40
+├── estimated rows: 0.80
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(range_t.c (#0) > 'efg')]
-    ├── estimated rows: 0.40
+    ├── estimated rows: 0.80
     └── TableScan
         ├── table: default.default.range_t
         ├── output columns: [c (#0)]
         ├── read rows: 0
         ├── read size: 0
-        ├── partitions total: 1
+        ├── partitions total: 2
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0>]
+        ├── pruning stats: [segments: <range pruning: 2 to 0>]
         ├── push downs: [filters: [is_true(range_t.c (#0) > 'efg')], limit: NONE]
-        └── estimated rows: 2.00
+        └── estimated rows: 4.00
 
 
 query T
@@ -43,46 +43,22 @@ EvalScalar
         ├── output columns: [i (#1)]
         ├── read rows: 0
         ├── read size: 0
-        ├── partitions total: 1
+        ├── partitions total: 2
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0>]
+        ├── pruning stats: [segments: <range pruning: 2 to 0>]
         ├── push downs: [filters: [is_true(range_t.i (#1) > 20)], limit: NONE]
-        └── estimated rows: 2.00
+        └── estimated rows: 4.00
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 10.00
+EmptyResultScan
 
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar)   < '10' and 1 = 0;
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 10.00
+EmptyResultScan
 
 statement ok
 drop table range_t
