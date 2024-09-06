@@ -271,7 +271,7 @@ pub fn format_partial_tree(
             children.push(probe_child);
 
             Ok(FormatTreeNode::with_children(
-                "HashJoin".to_string(),
+                format!("HashJoin: {}", plan.join_type),
                 children,
             ))
         }
