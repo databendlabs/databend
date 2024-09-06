@@ -96,6 +96,10 @@ pub enum Statement {
         identifiers: Vec<Identifier>,
     },
 
+    ShowVariables {
+        show_options: Option<ShowOptions>,
+    },
+
     SetRole {
         is_default: bool,
         role_name: String,
@@ -427,6 +431,12 @@ impl Display for Statement {
             Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings { show_options } => {
                 write!(f, "SHOW SETTINGS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowVariables { show_options } => {
+                write!(f, "SHOW VARIABLES")?;
                 if let Some(show_options) = show_options {
                     write!(f, " {show_options}")?;
                 }
