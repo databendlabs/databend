@@ -19,6 +19,8 @@ use chrono::DateTime;
 use chrono::Utc;
 
 use crate::schema::catalog::catalog_info::CatalogId;
+use crate::schema::catalog_id_ident;
+use crate::schema::CatalogIdIdent;
 use crate::schema::CatalogNameIdent;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -187,6 +189,18 @@ impl Default for CatalogInfo {
 }
 
 impl CatalogInfo {
+    pub fn new(
+        name_ident: CatalogNameIdent,
+        id: catalog_id_ident::CatalogId,
+        meta: CatalogMeta,
+    ) -> Self {
+        CatalogInfo {
+            id: CatalogIdIdent::new_generic(name_ident.tenant(), id).into(),
+            name_ident: name_ident.into(),
+            meta,
+        }
+    }
+
     /// Get the catalog type via catalog info.
     pub fn catalog_type(&self) -> CatalogType {
         self.meta.catalog_option.catalog_type()
