@@ -17,19 +17,16 @@ use mini_redis::Frame;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 
-#[allow(clippy::disallowed_methods)]
-#[tokio::main]
-async fn main() {
-    // Bind the listener to the address
+// A mock Redis server used as dictionary source to test.
+pub async fn run_redis_source() {
     let listener = TcpListener::bind("0.0.0.0:6379").await.unwrap();
 
     loop {
-        // The second item contains the ip and port of the new connection.
         let (socket, _) = listener.accept().await.unwrap();
 
         // A new task is spawned for each inbound socket.  The socket is
         // moved to the new task and processed there.
-        tokio::spawn(async move {
+        databend_common_base::runtime::spawn(async move {
             process(socket).await;
         });
     }
@@ -41,11 +38,10 @@ async fn process(socket: TcpStream) {
     use mini_redis::Command::Get;
     use mini_redis::Command::{self};
 
-    // A hashmap is used to store data
+    // A mock db is used to store test keys and values.
     let mut db = HashMap::new();
-
     db.insert("a".to_string(), "abc".as_bytes().to_vec());
-    db.insert("a".to_string(), "def".as_bytes().to_vec());
+    db.insert("b".to_string(), "def".as_bytes().to_vec());
 
     // Connection, provided by `mini-redis`, handles parsing frames from
     // the socket
@@ -53,13 +49,10 @@ async fn process(socket: TcpStream) {
 
     // Use `read_frame` to receive a command from the connection.
     while let Some(frame) = connection.read_frame().await.unwrap() {
-        println!("GOT: {:?}", frame);
         let response = match Command::from_frame(frame).unwrap() {
             Get(cmd) => {
+                // handle get command, get value from mock db.
                 if let Some(value) = db.get(cmd.key()) {
-                    // `Frame::Bulk` expects data to be of type `Bytes`. This
-                    // type will be covered later in the tutorial. For now,
-                    // `&Vec<u8>` is converted to `Bytes` using `into()`.
                     Frame::Bulk(value.clone().into())
                 } else {
                     Frame::Null

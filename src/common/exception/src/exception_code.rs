@@ -387,13 +387,10 @@ build_exceptions! {
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
     UnknownDictionaryId(3115),
-    DictionaryAlreadyExists(3113),
-    UnknownDictionary(3114),
-    UnknownDictionaryId(3115),
      // Procedure
-     UnknownProcedure(3130),
-     ProcedureAlreadyExists(3131),
-     IllegalProcedureFormat(3132),
+    UnknownProcedure(3130),
+    ProcedureAlreadyExists(3131),
+    IllegalProcedureFormat(3132),
 }
 
 // Storage errors [3001, 4000].

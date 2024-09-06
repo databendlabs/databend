@@ -5074,14 +5074,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-mock-source"
-version = "0.1.0"
-dependencies = [
- "mini-redis",
- "tokio",
-]
-
-[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
@@ -5279,6 +5271,7 @@ dependencies = [
  "databend-common-exception",
  "env_logger",
  "futures-util",
+ "mini-redis",
  "mysql_async",
  "rand 0.8.5",
  "regex",

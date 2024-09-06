@@ -32,7 +32,7 @@ pub struct MySQLClient {
 
 impl MySQLClient {
     pub async fn create(database: &str) -> Result<Self> {
-        let url = format!("mysql://root:@127.0.0.1:3307/{database}");
+        let url = format!("mysql://root:@127.0.0.1:43307/{database}");
         let pool = Pool::new(url.as_str());
         let conn = pool.get_conn().await?;
         Ok(Self {

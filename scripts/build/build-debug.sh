@@ -16,5 +16,5 @@ if [[ $(uname -a) =~ Darwin ]]; then
 	export JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000
 fi
 
-cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --bin=databend-sqllogictests --bin=databend-sqlsmith --bin=databend-mock-source
+cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --bin=databend-sqllogictests --bin=databend-sqlsmith
 echo "All done..."
