@@ -93,6 +93,14 @@ impl ConstantTableScan {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         Ok(self.columns.clone())
     }
+
+    pub fn name(&self) -> &str {
+        if self.num_rows == 0 {
+            "EmptyResultScan"
+        } else {
+            "ConstantTableScan"
+        }
+    }
 }
 
 impl PartialEq for ConstantTableScan {

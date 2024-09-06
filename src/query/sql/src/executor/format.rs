@@ -840,6 +840,10 @@ fn constant_table_scan_to_format_tree(
     plan: &ConstantTableScan,
     metadata: &Metadata,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.num_rows == 0 {
+        return Ok(FormatTreeNode::new(plan.name().to_string()));
+    }
+
     let mut children = Vec::with_capacity(plan.values.len() + 1);
     children.push(FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -850,7 +854,7 @@ fn constant_table_scan_to_format_tree(
         children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
     }
     Ok(FormatTreeNode::with_children(
-        "ConstantTableScan".to_string(),
+        plan.name().to_string(),
         children,
     ))
 }
