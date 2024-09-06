@@ -117,22 +117,13 @@ EvalScalar
             └── estimated rows: 0.00
 
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): TableAlreadyExists\. Code: 2302, Text = Table 'explain_agg_t1' already exists\.'
-create table explain_agg_t1(a int not null, b int not null);
+statement ok
+create or replace table explain_agg_t1(a int not null, b int not null);
 
 query T
 explain select a from explain_agg_t1 group by a having 1 = 0;
 ----
-AggregateFinal
-├── output columns: [explain_agg_t1.a (#0)]
-├── group by: [a]
-├── aggregate functions: []
-├── estimated rows: 0.00
-└── AggregatePartial
-    ├── group by: [a]
-    ├── aggregate functions: []
-    ├── estimated rows: 0.00
-    └── EmptyResultScan
+EmptyResultScan
 
 query T
 explain select a from explain_agg_t1 group by a having a > 3;

@@ -547,37 +547,13 @@ MergeJoin
 query T
 explain select * from t1, t2 where t1.a = t2.a and t1.a > 5 and t2.a < 1;
 ----
-HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── join type: CROSS
-├── build keys: []
-├── probe keys: []
-├── filters: []
-├── estimated rows: 0.00
-├── EmptyResultScan(Build)
-└── EmptyResultScan(Probe)
+EmptyResultScan
 
 # false
 query T
 explain select * from t1 left join t2 on t1.a = t2.a left join t3 on t2.a = t3.a where t2.b > 0 and t2.b < 0;
 ----
-HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── join type: LEFT OUTER
-├── build keys: [t3.a (#4)]
-├── probe keys: [t2.a (#2)]
-├── filters: []
-├── estimated rows: 0.00
-├── EmptyResultScan(Build)
-└── HashJoin(Probe)
-    ├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-    ├── join type: LEFT OUTER
-    ├── build keys: [t2.a (#2)]
-    ├── probe keys: [CAST(t1.a (#0) AS Int32 NULL)]
-    ├── filters: []
-    ├── estimated rows: 0.00
-    ├── EmptyResultScan(Build)
-    └── EmptyResultScan(Probe)
+EmptyResultScan
 
 # t1.a = t2.a, t1.a = t3.a => t2.a = t3.a
 query T
