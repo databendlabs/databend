@@ -11,6 +11,14 @@ statement ok
 create table t2(a int, b int);
 
 query T
+explain select * from t1 where a = 1 and a = 2;
+----
+ConstantTableScan
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── column 0: []
+└── column 1: []
+
+query T
 explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 1 and b > 2) or (a = 1 and b < 100);
 ----
 Filter
