@@ -267,6 +267,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowSettings { show_options },
     );
+    let show_variables = map(
+        rule! {
+            SHOW ~ VARIABLES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowVariables { show_options },
+    );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = map(
         rule! {
@@ -2170,6 +2176,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
+            | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_engines : "`SHOW ENGINES`"
             | #show_process_list : "`SHOW PROCESSLIST`"

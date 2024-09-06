@@ -49,6 +49,7 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowColumns(_, _, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
+                            | RewriteKind::ShowVariables
                             | RewriteKind::ShowFunctions
                             | RewriteKind::ShowUserFunctions
                             | RewriteKind::ShowTableFunctions

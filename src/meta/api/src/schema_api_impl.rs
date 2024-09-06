@@ -53,6 +53,7 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
@@ -61,7 +62,6 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
-use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -223,9 +223,6 @@ use crate::util::deserialize_struct_get_response;
 use crate::util::get_table_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
-use crate::util::txn_delete_exact;
-use crate::util::txn_op_put_pb;
-use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
@@ -3248,44 +3245,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
         debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res,name_ident :? =(name_ident);"get_catalog");
+        let res = self
+            .create_id_value(name_ident, meta, false, |id| {
+                vec![(
+                    CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
+                    name_ident_raw.clone(),
+                )]
+            })
+            .await?;
 
-            if let Some((seq_id, _seq_meta)) = res {
-                return Ok(Err(seq_id));
-            }
-
-            // Create catalog by inserting these record:
-            // (tenant, catalog_name) -> catalog_id
-            // (catalog_id) -> catalog_meta
-            // (catalog_id) -> (tenant, catalog_name)
-            let id = fetch_id(self, IdGenerator::catalog_id()).await?;
-            let catalog_id = CatalogId::new(id);
-            let id_ident = CatalogIdIdent::new_generic(name_ident.tenant(), catalog_id);
-            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(catalog_id :? = catalog_id, name_ident :? =(name_ident); "new catalog id");
-
-            let mut txn = TxnRequest::default();
-
-            txn_replace_exact(&mut txn, name_ident, 0, &catalog_id)?; /* (tenant, catalog_name) -> catalog_id */
-            txn.if_then.extend([
-                txn_op_put_pb(&id_ident, meta)?, /* (catalog_id) -> catalog_meta */
-                txn_op_put_pb(&id_to_name_ident, &name_ident.to_raw())?, /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-
-            ]);
-
-            let (succ, _) = send_txn(self, txn).await?;
-            debug!(name :? =(name_ident),id :? =(&id_ident),succ = succ;"create_catalog");
-
-            if succ {
-                return Ok(Ok(catalog_id));
-            }
-        }
+        Ok(res)
     }
 
     #[logcall::logcall]
@@ -3301,11 +3272,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .await?
             .ok_or_else(|| AppError::unknown(name_ident, func_name!()))?;
 
-        let catalog = CatalogInfo {
-            id: CatalogIdIdent::new_generic(name_ident.tenant(), seq_id.data).into(),
-            name_ident: name_ident.clone().into(),
-            meta: seq_meta.data,
-        };
+        let catalog = CatalogInfo::new(name_ident.clone(), seq_id.data, seq_meta.data);
 
         Ok(Arc::new(catalog))
     }
@@ -3318,39 +3285,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError> {
         debug!(req :? =(&name_ident); "SchemaApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let removed = self
+            .remove_id_value(name_ident, |id| {
+                vec![CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
+            })
+            .await?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-
-            let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
-            };
-
-            // Delete catalog by deleting these record:
-            // (tenant, catalog_name) -> catalog_id
-            // (catalog_id) -> catalog_meta
-            // (catalog_id) -> (tenant, catalog_name)
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(seq_id :? = seq_id, name_ident :? =(&name_ident); "{}", func_name!());
-
-            let mut txn = TxnRequest::default();
-
-            txn_delete_exact(&mut txn, name_ident, seq_id.seq); // (tenant, catalog_name) -> catalog_id
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq); // (catalog_id) -> catalog_meta
-            txn.if_then.push(txn_op_del(&id_to_name_ident)); /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-
-            let (succ, _) = send_txn(self, txn).await?;
-
-            debug!(name_ident :? =(&name_ident),id :? =(&id_ident),succ = succ; "{}", func_name!());
-
-            if succ {
-                return Ok(Some((seq_id, seq_meta)));
-            }
-        }
+        Ok(removed)
     }
 
     #[logcall::logcall]
@@ -3363,40 +3304,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let tenant = req.tenant;
         let name_key = CatalogNameIdent::new(&tenant, "dummy");
-
         let dir = DirName::new(name_key);
 
-        // Pairs of catalog-name and catalog_id with seq
-        let items = self.list_pb(&dir).await?.try_collect::<Vec<_>>().await?;
+        let name_id_values = self.list_id_value(&dir).await?;
 
-        // Keys for fetching CatalogMeta from kvapi::KVApi
-        let kv_keys = items.iter().map(|x| x.seqv.data.into_t_ident(&tenant));
-        let kv_keys = kv_keys.collect::<Vec<_>>();
-
-        // Batch get all catalog-metas.
-        // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
-        let seq_metas = self.get_pb_values(kv_keys.clone()).await?;
-        let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
-
-        let mut catalog_infos = Vec::with_capacity(kv_keys.len());
-
-        for (i, seq_meta_opt) in seq_metas.into_iter().enumerate() {
-            let item = &items[i];
-
-            if let Some(seq_meta) = seq_meta_opt {
-                let catalog_info = CatalogInfo {
-                    id: CatalogIdIdent::new(&tenant, *item.seqv.data).into(),
-                    name_ident: CatalogNameIdent::new(&tenant, item.key.name()).into(),
-                    meta: seq_meta.data,
-                };
-                catalog_infos.push(Arc::new(catalog_info));
-            } else {
-                debug!(
-                    k :% =(&kv_keys[i]);
-                    "catalog_meta not found, maybe just deleted after listing names and before listing meta"
-                );
-            }
-        }
+        let catalog_infos = name_id_values
+            .map(|(name, id, seq_meta)| Arc::new(CatalogInfo::new(name, id, seq_meta.data)))
+            .collect::<Vec<_>>();
 
         Ok(catalog_infos)
     }

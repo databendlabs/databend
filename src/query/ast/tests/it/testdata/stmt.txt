@@ -16200,6 +16200,40 @@ SetStmt {
 
 
 ---------- Input ----------
+show variables
+---------- Output ---------
+SHOW VARIABLES 
+---------- AST ------------
+ShowVariables {
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show variables like 'v%'
+---------- Output ---------
+SHOW VARIABLES LIKE 'v%'
+---------- AST ------------
+ShowVariables {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "v%",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 SET variable a = select 3
 ---------- Output ---------
 SET VARIABLE a = SELECT 3

@@ -262,12 +262,6 @@ impl Catalog for IcebergCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        if table_info.meta.storage_params.is_none() {
-            return Err(ErrorCode::BadArguments(
-                "table storage params not set, this is not a valid table info for iceberg table",
-            ));
-        }
-
         let table: Arc<dyn Table> = IcebergTable::try_create(table_info.clone())?.into();
 
         Ok(table)

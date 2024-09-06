@@ -50,6 +50,7 @@ pub enum Credential {
         password: Option<Vec<u8>>,
         client_ip: Option<String>,
     },
+    NoNeed,
 }
 
 impl AuthMgr {
@@ -79,6 +80,7 @@ impl AuthMgr {
     ) -> Result<Option<String>> {
         let user_api = UserApiProvider::instance();
         match credential {
+            Credential::NoNeed => Ok(None),
             Credential::DatabendToken {
                 token,
                 set_user,
