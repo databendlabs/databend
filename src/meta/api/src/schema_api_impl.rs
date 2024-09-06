@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -179,11 +180,9 @@ use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
@@ -985,7 +984,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             |mut meta| {
                 meta.virtual_columns = req.virtual_columns.clone();
                 meta.updated_on = Some(Utc::now());
-                Some(meta)
+                Some((meta, None))
             },
             not_found,
         )
@@ -2998,24 +2997,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListLockRevReq,
     ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
-        let lock_key = &req.lock_key;
-        let lock_type = lock_key.lock_type();
+        let dir = req.lock_key.gen_prefix();
+        let strm = self.list_pb(&dir).await?;
 
-        let prefix = lock_key.gen_prefix();
-        let list = self.prefix_list_kv(&prefix).await?;
+        let list = strm
+            .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
+            .try_collect::<Vec<_>>()
+            .await?;
 
-        let mut reply = vec![];
-        for (k, seq) in list.into_iter() {
-            let revision = lock_type.revision_from_str(&k).map_err(|e| {
-                let inv = InvalidReply::new("list_lock_revisions", &e);
-                let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                MetaError::NetworkError(meta_net_err)
-            })?;
-            let lock_meta: LockMeta = deserialize_struct(&seq.data)?;
-
-            reply.push((revision, lock_meta));
-        }
-        Ok(reply)
+        Ok(list)
     }
 
     #[logcall::logcall]
@@ -3027,64 +3017,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let lock_key = &req.lock_key;
-        let lock_type = lock_key.lock_type();
-        let extra_info = lock_key.get_extra_info();
-
-        let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
 
         let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
         let key = lock_key.gen_key(revision);
 
-        let ctx = func_name!();
+        let lock_meta = LockMeta {
+            user: req.user.clone(),
+            node: req.node.clone(),
+            query_id: req.query_id.clone(),
+            created_on: Utc::now(),
+            acquired_on: None,
+            lock_type: lock_key.lock_type(),
+            extra_info: lock_key.get_extra_info(),
+        };
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        // Revision is unique. if it presents, consider it as success.
+        // Thus, we could just ignore create result
+        let _create_res = self
+            .create_name_value(key, lock_meta, Some(req.ttl))
+            .await?;
 
-            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            let lock_meta = LockMeta {
-                user: req.user.clone(),
-                node: req.node.clone(),
-                query_id: req.query_id.clone(),
-                created_on: Utc::now(),
-                acquired_on: None,
-                lock_type: lock_type.clone(),
-                extra_info: extra_info.clone(),
-            };
-
-            let condition = vec![
-                // table is not changed
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                // assumes lock are absent.
-                txn_cond_seq(&key, Eq, 0),
-            ];
-
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.expire_secs * 1000),
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "create_lock_revision"
-            );
-
-            if succ {
-                return Ok(CreateLockRevReply { revision });
-            }
-        }
+        Ok(CreateLockRevReply { revision })
     }
 
     #[logcall::logcall]
@@ -3096,63 +3049,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let lock_key = &req.lock_key;
         let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
+        let key = lock_key.gen_key(req.revision);
 
-        let revision = req.revision;
-        let key = lock_key.gen_key(revision);
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
-            if lock_seq == 0 || lock_meta_opt.is_none() {
-                return Err(KVAppError::AppError(AppError::TableLockExpired(
-                    TableLockExpired::new(table_id, ctx),
-                )));
-            }
-
-            let mut lock_meta = lock_meta_opt.unwrap();
-            // Set `acquire_lock = true` to initialize `acquired_on` when the
-            // first time this lock is acquired. Before the lock is
-            // acquired(becoming the first in lock queue), or after being
-            // acquired, this argument is always `false`.
-            if req.acquire_lock {
-                lock_meta.acquired_on = Some(Utc::now());
-            }
-
-            let condition = vec![
-                // table is not changed
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&key, Eq, lock_seq),
-            ];
-
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.expire_secs * 1000),
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "extend_lock_revision"
-            );
-
-            if succ {
-                return Ok(());
-            }
-        }
+        self.update_existent_name_value(
+            &key,
+            |mut lock_meta| {
+                // Set `acquire_lock = true` to initialize `acquired_on` when the
+                // first time this lock is acquired. Before the lock is
+                // acquired(becoming the first in lock queue), or after being
+                // acquired, this argument is always `false`.
+                if req.acquire_lock {
+                    lock_meta.acquired_on = Some(Utc::now());
+                }
+                Some((lock_meta, Some(req.ttl)))
+            },
+            || {
+                Err(AppError::TableLockExpired(TableLockExpired::new(
+                    table_id, ctx,
+                )))
+            },
+        )
+        .await??;
+        Ok(())
     }
 
     #[logcall::logcall]
@@ -3165,41 +3083,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let revision = req.revision;
         let key = lock_key.gen_key(revision);
 
-        let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let seq_lock = self.get_pb(&key).await?;
-
-            // The lock has been deleted.
-            let Some(seq_lock) = seq_lock else {
-                break;
-            };
-
-            let condition = vec![txn_cond_seq(&key, Eq, seq_lock.seq)];
-            let if_then = vec![txn_op_del(&key)];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "delete_lock_revision"
-            );
-
-            if succ {
-                break;
-            }
-        }
+        self.remove_name_value(&key, || Ok::<(), ()>(()))
+            .await?
+            .unwrap();
 
         Ok(())
     }
@@ -3208,30 +3094,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
-        for prefix in &req.prefixes {
-            let mut stream = self.list_kv(prefix).await?;
-            while let Some(list) = stream.try_next().await? {
-                let k = list.key;
-                let seq = SeqV::from(list.value.unwrap());
-                let meta: LockMeta = deserialize_struct(&seq.data)?;
-                let lock_type = &meta.lock_type;
-                let key = lock_type.key_from_str(&k).map_err(|e| {
-                    let inv = InvalidReply::new("list_locks", &e);
-                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                    MetaError::NetworkError(meta_net_err)
-                })?;
-                let revision = lock_type.revision_from_str(&k).map_err(|e| {
-                    let inv = InvalidReply::new("list_locks", &e);
-                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                    MetaError::NetworkError(meta_net_err)
-                })?;
+        for dir in &req.prefixes {
+            let strm = self.list_pb(dir).await?;
+            let locks = strm
+                .map_ok(|itm| LockInfo {
+                    table_id: itm.key.table_id(),
+                    revision: itm.key.revision(),
+                    meta: itm.seqv.data,
+                })
+                .try_collect::<Vec<_>>()
+                .await?;
 
-                reply.push(LockInfo {
-                    table_id: key.get_table_id(),
-                    revision,
-                    meta,
-                });
-            }
+            reply.extend(locks);
         }
         Ok(reply)
     }
@@ -3912,7 +3786,11 @@ fn build_upsert_table_copied_file_info_conditions(
             // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
         }
-        set_update_expire_operation(&key, &file_info, req.ttl, &mut if_then)?;
+        if_then.push(TxnOp::put_with_ttl(
+            key.to_string_key(),
+            serialize_struct(&file_info)?,
+            req.ttl,
+        ))
     }
     Ok((condition, if_then))
 }
@@ -3921,29 +3799,8 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     TxnOp::put_with_ttl(
         deduplicated_label,
         1_i8.to_le_bytes().to_vec(),
-        Some(86400 * 1000),
+        Some(Duration::from_secs(86400)),
     )
-}
-
-fn set_update_expire_operation(
-    key: &TableCopiedFileNameIdent,
-    file_info: &TableCopiedFileInfo,
-    ttl: Option<std::time::Duration>,
-    then_branch: &mut Vec<TxnOp>,
-) -> Result<(), KVAppError> {
-    match ttl {
-        Some(ttl) => {
-            then_branch.push(TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(file_info)?,
-                Some(ttl.as_millis() as u64),
-            ));
-        }
-        None => {
-            then_branch.push(txn_op_put(key, serialize_struct(file_info)?));
-        }
-    }
-    Ok(())
 }
 
 #[logcall::logcall(input = "")]
