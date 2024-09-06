@@ -989,7 +989,7 @@ pub enum AppError {
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
-    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::Resource>),
+    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::CatalogNameRsc>),
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
@@ -1007,7 +1007,7 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
-    UnknownCatalog(#[from] UnknownError<catalog_name_ident::Resource>),
+    UnknownCatalog(#[from] UnknownError<catalog_name_ident::CatalogNameRsc>),
 
     #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),

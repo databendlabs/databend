@@ -234,6 +234,7 @@ impl<'a> Binder {
             Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
             Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
             Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
+            Statement::ShowVariables { show_options } => self.bind_show_variables(bind_context, show_options).await?,
             Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
             Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
