@@ -134,13 +134,16 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::DictGetFunctionArgument;
+use crate::plans::DictionarySource;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
+use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::SqlSource;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDFCall;
@@ -3916,10 +3919,9 @@ impl<'a> TypeChecker<'a> {
         } else {
             return Err(ErrorCode::UnknownDictionary(format!(
                 "Unknown dictionary {}",
-                dict_name.clone(),
+                dict_name,
             )));
         };
-        let schema = dictionary.clone().schema;
 
         // Get attr_name, attr_type and return_type.
         let box (field_scalar, _field_data_type) = self.resolve(field_arg)?;
@@ -3937,13 +3939,13 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(field_scalar.span()));
         };
-        let attr_field = schema.field_with_name(attr_name)?;
+        let attr_field = dictionary.schema.field_with_name(attr_name)?;
         let attr_type: DataType = (&attr_field.data_type).into();
         let default_value = field_default_value(self.ctx.clone(), attr_field)?;
 
         // Get primary_key_value and check type.
         let primary_column_id = dictionary.primary_column_ids[0];
-        let primary_field = schema.field_of_column_id(primary_column_id)?;
+        let primary_field = dictionary.schema.field_of_column_id(primary_column_id)?;
         let primary_type: DataType = (&primary_field.data_type).into();
 
         let mut args = Vec::with_capacity(1);
@@ -3954,9 +3956,42 @@ impl<'a> TypeChecker<'a> {
         } else {
             args.push(key_scalar);
         }
-        let key_field_name = primary_field.name.as_str();
-        let value_field_name = attr_field.name.as_str();
-        let dict_source = dictionary.build_dictionary_source(key_field_name, value_field_name)?;
+        let dict_source = match dictionary.source.as_str() {
+            "mysql" => {
+                let connection_url = dictionary.build_sql_connection_url()?;
+                let table = dictionary
+                    .options
+                    .get("table")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `table`"))?;
+                DictionarySource::Mysql(SqlSource {
+                    connection_url,
+                    table: table.to_string(),
+                    key_field: primary_field.name.clone(),
+                    value_field: attr_field.name.clone(),
+                })
+            }
+            "redis" => {
+                let connection_url = dictionary.build_redis_connection_url()?;
+                let username = dictionary.options.get("username").cloned();
+                let password = dictionary.options.get("password").cloned();
+                let db_index = dictionary
+                    .options
+                    .get("db_index")
+                    .map(|i| i.parse::<i64>().unwrap());
+                DictionarySource::Redis(RedisSource {
+                    connection_url,
+                    username,
+                    password,
+                    db_index,
+                })
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported source {}",
+                    dictionary.source
+                )));
+            }
+        };
 
         let dict_get_func_arg = DictGetFunctionArgument {
             dict_source,

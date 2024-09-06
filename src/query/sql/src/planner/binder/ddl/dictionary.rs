@@ -190,12 +190,12 @@ impl Binder {
             database_id = db.get_db_info().database_id.db_id;
         }
 
-        let source = self.normalize_object_identifier(source_name);
+        let source = self.normalize_object_identifier(source_name).to_lowercase();
 
-        if source.to_lowercase() != *"mysql" && source.to_lowercase() != *"redis" {
+        if source != *"mysql" && source != *"redis" {
             return Err(ErrorCode::BadArguments(format!(
                 "The specified source '{}' is not currently supported",
-                source.to_lowercase(),
+                source,
             )));
         }
 
@@ -204,7 +204,7 @@ impl Binder {
             .iter()
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
-        match source.to_lowercase().as_str() {
+        match source.as_str() {
             "redis" => validate_redis_opt_key(options.borrow_mut())?,
             "mysql" => validate_mysql_opt_key(options.borrow_mut())?,
             _ => todo!(),
@@ -212,7 +212,7 @@ impl Binder {
 
         // Check for data source fields.
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
-        match source.to_lowercase().as_str() {
+        match source.as_str() {
             "redis" => validate_redis_fields(&schema)?,
             "mysql" => validate_mysql_fields(&schema)?,
             _ => todo!(),

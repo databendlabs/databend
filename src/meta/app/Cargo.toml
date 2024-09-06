@@ -25,7 +25,6 @@ databend-common-io = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
 derive_more = { workspace = true }
-educe = "0.4"
 enumflags2 = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }

@@ -27,7 +27,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::schema::DictionarySource;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -779,11 +778,36 @@ pub enum AsyncFunctionArgument {
     // Used by `nextval` function to call meta's `get_sequence_next_value` api
     // to get incremental values.
     SequenceFunction(String),
-    // The first argument of dict_get function is dictionary name.
-    // The second argument is the list of dictionary fields.
-    // The third argument is value of primary key.
-    // Used by `dict_get` function to access data from source.
+    // The dictionary argument is connection URL of remote source, like Redis, MySQL ...
+    // Used by `dict_get` function to connect source and read data.
     DictGetFunction(DictGetFunctionArgument),
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct RedisSource {
+    // Redis source connection URL, like `tcp://127.0.0.1:6379`
+    pub connection_url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub db_index: Option<i64>,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct SqlSource {
+    // SQL source connection URL, like `mysql://user:password@localhost:3306/db`
+    pub connection_url: String,
+    pub table: String,
+    pub key_field: String,
+    pub value_field: String,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub enum DictionarySource {
+    Mysql(SqlSource),
+    Redis(RedisSource),
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
