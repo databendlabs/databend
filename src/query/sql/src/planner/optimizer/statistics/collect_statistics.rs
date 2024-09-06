@@ -22,7 +22,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
-use log::info;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
