@@ -45,11 +45,11 @@ impl TransformAsyncFunction {
                 match &dict_arg.dict_source {
                     DictionarySource::Redis(redis_source) => {
                         let mut builder = Redis::default().endpoint(&redis_source.connection_url);
-                        if let Some(username) = redis_source.username.clone() {
-                            builder = builder.username(&username);
+                        if let Some(ref username) = redis_source.username {
+                            builder = builder.username(username);
                         }
-                        if let Some(password) = redis_source.password.clone() {
-                            builder = builder.password(&password);
+                        if let Some(ref password) = redis_source.password {
+                            builder = builder.password(password);
                         }
                         if let Some(db_index) = redis_source.db_index {
                             builder = builder.db(db_index);
