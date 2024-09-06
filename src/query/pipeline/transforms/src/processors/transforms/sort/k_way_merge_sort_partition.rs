@@ -78,17 +78,17 @@ where
         }
 
         let min_task =
-            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MIN_TASK_FACTOR", 1.0)) as usize;
+            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MIN_TASK_FACTOR", 2.0)) as usize;
         assert!(min_task > 0);
 
         let max_task =
-            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MAX_TASK_FACTOR", 2.0)) as usize;
+            (batch_rows as f64 * get_env("K_WAY_MERGE_SORT_MAX_TASK_FACTOR", 4.0)) as usize;
         assert!(max_task > 0);
 
         let max_iter = get_env("K_WAY_MERGE_SORT_MAX_ITER", 20);
         assert!(max_iter > 0);
 
-        let search_per_iter = get_env("K_WAY_MERGE_SORT_SEARCH_PER_ITER", 3);
+        let search_per_iter = get_env("K_WAY_MERGE_SORT_SEARCH_PER_ITER", 4);
         assert!(search_per_iter > 0);
 
         Self {

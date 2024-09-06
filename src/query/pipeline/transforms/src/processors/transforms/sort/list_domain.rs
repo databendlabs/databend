@@ -189,7 +189,7 @@ where T: List
 
     pub fn is_small_task(&mut self) -> bool {
         loop {
-            let sum = self.do_search_max(Some(3));
+            let sum = self.do_search_max(Some(8));
             match self.expect.overlaps(sum) {
                 Overlap::Left => return true,
                 Overlap::Right => return false,
