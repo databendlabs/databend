@@ -118,29 +118,12 @@ EvalScalar
 
 
 statement ok
-create table explain_agg_t1(a int not null, b int not null);
+create or replace table explain_agg_t1(a int not null, b int not null);
 
 query T
 explain select a from explain_agg_t1 group by a having 1 = 0;
 ----
-AggregateFinal
-├── output columns: [explain_agg_t1.a (#0)]
-├── group by: [a]
-├── aggregate functions: []
-├── estimated rows: 0.00
-└── AggregatePartial
-    ├── group by: [a]
-    ├── aggregate functions: []
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.explain_agg_t1
-        ├── output columns: [a (#0)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [false], limit: NONE]
-        └── estimated rows: 0.00
+EmptyResultScan
 
 query T
 explain select a from explain_agg_t1 group by a having a > 3;

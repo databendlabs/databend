@@ -79,7 +79,7 @@ impl RuleFactory {
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
-            RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
+            RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new(metadata))),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),

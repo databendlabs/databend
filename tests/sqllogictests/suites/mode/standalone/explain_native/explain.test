@@ -922,15 +922,7 @@ Sort
     ├── probe keys: [t1.i (#0)]
     ├── filters: []
     ├── estimated rows: 3.00
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── output columns: [k (#2), l (#3)]
-    │   ├── read rows: 0
-    │   ├── read size: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   ├── push downs: [filters: [false], limit: NONE]
-    │   └── estimated rows: 0.00
+    ├── EmptyResultScan(Build)
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── output columns: [i (#0), j (#1)]

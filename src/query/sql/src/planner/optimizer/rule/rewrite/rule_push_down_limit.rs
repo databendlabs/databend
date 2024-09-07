@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use itertools::Itertools;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
@@ -67,18 +67,14 @@ impl Rule for RulePushDownLimit {
                 .clone();
             let metadata = self.metadata.read();
             let mut fields = Vec::with_capacity(output_columns.len());
-            for col in output_columns.iter() {
+            for col in output_columns.iter().sorted() {
                 fields.push(DataField::new(
                     &col.to_string(),
                     metadata.column(*col).data_type(),
                 ));
             }
-            let empty_scan = ConstantTableScan {
-                values: vec![Column::Null { len: 0 }; output_columns.len()],
-                num_rows: 0,
-                schema: DataSchemaRefExt::create(fields),
-                columns: output_columns,
-            };
+            let empty_scan =
+                ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
             let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
             state.add_result(result);
         }
