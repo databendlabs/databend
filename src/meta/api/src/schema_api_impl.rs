@@ -1634,7 +1634,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             ),
             name: tenant_dbname_tbname.table_name.clone(),
             meta: seq_meta.data,
-            tenant: req.tenant.tenant_name().to_string(),
             db_type,
             catalog_info: Default::default(),
         };
@@ -1745,10 +1744,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     .into_iter()
                     .map(|(table_id, seqv)| {
                         Arc::new(TableInfo {
-                            ident: TableIdent {
-                                table_id: table_id.table_id,
-                                seq: seqv.seq(),
-                            },
+                            ident: TableIdent::new(table_id.table_id, seqv.seq()),
                             desc: format!(
                                 "'{}'.'{}'",
                                 tenant_dbname.database_name(),
@@ -1756,7 +1752,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                             name: table_id_list_key.table_name.to_string(),
                             meta: seqv.data,
-                            tenant: tenant_dbname.tenant_name().to_string(),
                             db_type: DatabaseType::NormalDB,
                             catalog_info: Default::default(),
                         })
@@ -3852,7 +3847,6 @@ async fn batch_filter_table_info(
             ),
             name: table_name.clone(),
             meta: tb_meta,
-            tenant: db_ident.tenant_name().to_string(),
             db_type: DatabaseType::NormalDB,
             catalog_info: Default::default(),
         };
