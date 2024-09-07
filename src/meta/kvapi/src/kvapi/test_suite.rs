@@ -918,7 +918,11 @@ impl kvapi::TestSuite {
 
         let txn = TxnRequest {
             condition: vec![],
-            if_then: vec![TxnOp::put_with_ttl("k1", b("v1"), Some(2_000))],
+            if_then: vec![TxnOp::put_with_ttl(
+                "k1",
+                b("v1"),
+                Some(Duration::from_millis(2_000)),
+            )],
             else_then: vec![],
         };
 

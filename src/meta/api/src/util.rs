@@ -15,6 +15,7 @@
 use std::any::type_name;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_app::app_error::AppError;
@@ -312,7 +313,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     txn.condition.push(txn_cond_eq_seq(key, seq));
-    txn.if_then.push(txn_op_put_pb(key, value)?);
+    txn.if_then.push(txn_op_put_pb(key, value, None)?);
 
     Ok(())
 }
@@ -331,7 +332,11 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
     }
 }
 
-pub fn txn_op_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
+pub fn txn_op_put_pb<K>(
+    key: &K,
+    value: &K::ValueType,
+    ttl: Option<Duration>,
+) -> Result<TxnOp, InvalidArgument>
 where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
@@ -341,7 +346,7 @@ where
     let mut buf = vec![];
     prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
 
-    Ok(TxnOp::put(key.to_string_key(), buf))
+    Ok(TxnOp::put_with_ttl(key.to_string_key(), buf, ttl))
 }
 
 /// Build a txn operation that puts a record.
