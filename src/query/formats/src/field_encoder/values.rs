@@ -16,6 +16,7 @@ use bstr::ByteSlice;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::date::date_to_string;
@@ -44,7 +45,6 @@ use geozero::ToWkt;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
-use ordered_float::OrderedFloat;
 
 use crate::field_encoder::helpers::write_quoted_string;
 use crate::field_encoder::helpers::PrimitiveWithFormat;

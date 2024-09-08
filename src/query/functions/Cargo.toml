@@ -47,10 +47,6 @@ memchr = { version = "2", default-features = false }
 naive-cityhash = "0.2.0"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
-ordered-float = { workspace = true, features = [
-    "serde",
-    "rand",
-] }
 proj4rs = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }

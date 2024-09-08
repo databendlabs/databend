@@ -61,7 +61,6 @@ log = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 opendal = { workspace = true }
-ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = "2"
 prqlc = "0.11.3"

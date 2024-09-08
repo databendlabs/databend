@@ -54,6 +54,10 @@ tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
 unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
+num-traits = "0.2.19"
+borsh = { workspace = true }
+rand = { workspace = true, features = ["serde1"]}
+micromarshal = "0.5.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = { version = "^0.16" }
@@ -62,6 +66,7 @@ procfs = { version = "^0.16" }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
+serde_test = "1.0"
 
 [build-dependencies]
 databend-common-building = { workspace = true }

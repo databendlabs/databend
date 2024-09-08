@@ -20,6 +20,7 @@ use std::time::Duration;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -57,7 +58,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
 
