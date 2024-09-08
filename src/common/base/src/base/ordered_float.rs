@@ -1879,6 +1879,7 @@ mod impl_serde {
     use core::f64;
 
     use num_traits::float::FloatCore;
+    use serde::de::IntoDeserializer;
 
     use self::serde::de::Error;
     use self::serde::de::Unexpected;
@@ -1901,14 +1902,40 @@ mod impl_serde {
     impl<T: FloatCore + Serialize> Serialize for OrderedFloat<T> {
         #[inline]
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            self.0.serialize(s)
+            if s.is_human_readable() {
+                if self.0.is_infinite() {
+                    if self.0.is_sign_positive() {
+                        s.serialize_str("Infinity")
+                    } else {
+                        s.serialize_str("-Infinity")
+                    }
+                } else if self.0.is_nan() {
+                    s.serialize_str("Nan")
+                } else {
+                    self.0.serialize(s)
+                }
+            } else {
+                self.0.serialize(s)
+            }
         }
     }
 
     impl<'de, T: FloatCore + Deserialize<'de>> Deserialize<'de> for OrderedFloat<T> {
         #[inline]
         fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-            T::deserialize(d).map(OrderedFloat)
+            if d.is_human_readable() {
+                let value = serde_json::Value::deserialize(d)?;
+                match value {
+                    serde_json::Value::String(s) if s == "Infinity" => Ok(Self::infinity()),
+                    serde_json::Value::String(s) if s == "-Infinity" => Ok(Self::neg_infinity()),
+                    serde_json::Value::String(s) if s == "Nan" => Ok(Self::nan()),
+                    _ => T::deserialize(serde_json::Value::into_deserializer(value))
+                        .map(OrderedFloat)
+                        .map_err(Error::custom),
+                }
+            } else {
+                T::deserialize(d).map(OrderedFloat)
+            }
         }
     }
 
@@ -1951,26 +1978,45 @@ mod impl_serde {
 
 mod impl_borsh {
     extern crate borsh;
+
+    use std::io::Read;
+
     use num_traits::float::FloatCore;
 
     use super::NotNan;
     use super::OrderedFloat;
 
-    impl<T> borsh::BorshSerialize for OrderedFloat<T>
-    where T: borsh::BorshSerialize
-    {
+    impl borsh::BorshSerialize for OrderedFloat<f32> {
         #[inline]
         fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-            <T as borsh::BorshSerialize>::serialize(&self.0, writer)
+            writer.write_all(&self.0.to_bits().to_le_bytes())?;
+            Ok(())
         }
     }
 
-    impl<T> borsh::BorshDeserialize for OrderedFloat<T>
-    where T: borsh::BorshDeserialize
-    {
+    impl borsh::BorshSerialize for OrderedFloat<f64> {
         #[inline]
-        fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
-            <T as borsh::BorshDeserialize>::deserialize_reader(reader).map(Self)
+        fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
+            writer.write_all(&self.0.to_bits().to_le_bytes())?;
+            Ok(())
+        }
+    }
+
+    impl borsh::BorshDeserialize for OrderedFloat<f32> {
+        fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+            let mut buf = [0u8; size_of::<OrderedFloat<f32>>()];
+            reader.read_exact(&mut buf)?;
+            let res = OrderedFloat::from(f32::from_bits(u32::from_le_bytes(buf)));
+            Ok(res)
+        }
+    }
+
+    impl borsh::BorshDeserialize for OrderedFloat<f64> {
+        fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+            let mut buf = [0u8; size_of::<OrderedFloat<f64>>()];
+            reader.read_exact(&mut buf)?;
+            let res = OrderedFloat::from(f64::from_bits(u64::from_le_bytes(buf)));
+            Ok(res)
         }
     }
 
