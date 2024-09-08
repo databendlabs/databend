@@ -16,8 +16,8 @@ borsh = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-databend-common-exception = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geos = { workspace = true }

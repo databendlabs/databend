@@ -16,8 +16,8 @@ async-trait = { workspace = true }
 base64 = "0.21.0"
 bstr = "1.0.1"
 chrono-tz = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }

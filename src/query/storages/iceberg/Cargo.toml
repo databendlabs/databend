@@ -30,11 +30,11 @@ iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg",
 iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "v0.3.0-rc.1" }
 iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "v0.3.0-rc.1" }
 match-template = { workspace = true }
+ordered-float = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
-ordered-float = { workspace = true }
 
 [lints]
 workspace = true

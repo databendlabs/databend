@@ -3203,6 +3203,7 @@ dependencies = [
  "replace_with",
  "semver",
  "serde",
+ "serde_json",
  "serde_test",
  "state",
  "tikv-jemalloc-ctl",
