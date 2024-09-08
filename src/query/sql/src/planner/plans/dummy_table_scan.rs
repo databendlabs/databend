@@ -28,7 +28,6 @@ use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::DUMMY_COLUMN_INDEX;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyTableScan;
@@ -50,7 +49,7 @@ impl Operator for DummyTableScan {
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
-            output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
+            output_columns: ColumnSet::new(),
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
             orderings: vec![],

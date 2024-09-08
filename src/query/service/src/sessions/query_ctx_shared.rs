@@ -33,6 +33,7 @@ use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -83,7 +84,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) window_partition_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
-    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
+    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode<ContextError>>>>,
     pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
@@ -192,12 +193,14 @@ impl QueryContextShared {
         }))
     }
 
-    pub fn set_error(&self, err: ErrorCode) {
+    pub fn set_error<C>(&self, err: ErrorCode<C>) {
+        let err = err.with_context("query context error");
+
         let mut guard = self.error.lock();
         *guard = Some(err);
     }
 
-    pub fn get_error(&self) -> Option<ErrorCode> {
+    pub fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         let guard = self.error.lock();
         (*guard).clone()
     }
@@ -232,7 +235,7 @@ impl QueryContextShared {
         *guard = Some(mode);
     }
 
-    pub fn kill(&self, cause: ErrorCode) {
+    pub fn kill<C>(&self, cause: ErrorCode<C>) {
         self.set_error(cause.clone());
 
         if let Some(executor) = self.executor.read().upgrade() {
@@ -256,12 +259,13 @@ impl QueryContextShared {
         self.aborting.clone()
     }
 
-    pub fn check_aborting(&self) -> Result<()> {
+    pub fn check_aborting(&self) -> Result<(), ContextError> {
         if self.aborting.load(Ordering::Acquire) {
             Err(self.get_error().unwrap_or_else(|| {
                 ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 )
+                .with_context("query aborted")
             }))
         } else {
             Ok(())
@@ -558,7 +562,7 @@ impl QueryContextShared {
             }
             Err(err) => {
                 executor.finish(Some(err.clone()));
-                Err(err)
+                Err(err.with_context("failed to set executor"))
             }
         }
     }

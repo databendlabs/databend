@@ -19,12 +19,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::CannotAccessShareTable;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
@@ -35,7 +35,6 @@ use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
-use databend_common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
@@ -51,11 +50,11 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
-use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
@@ -64,7 +63,6 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
-use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -83,7 +81,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -102,7 +99,6 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -135,7 +131,6 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::ReplyShareObject;
 use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -166,19 +161,12 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareId;
-use databend_common_meta_app::share::ShareIdToName;
-use databend_common_meta_app::share::ShareObject;
-use databend_common_meta_app::share::ShareSpec;
-use databend_common_meta_app::share::ShareVecTableInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
@@ -192,11 +180,9 @@ use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
@@ -210,27 +196,21 @@ use log::warn;
 use ConditionResult::Eq;
 
 use crate::assert_table_exist;
-use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
 use crate::fetch_id;
 use crate::get_pb_value;
-use crate::get_share_id_to_name_or_err;
-use crate::get_share_meta_by_id_or_err;
-use crate::get_table_info_by_share;
 use crate::get_u64_value;
-use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
-use crate::remove_db_from_share;
+use crate::name_value_api::NameValueApi;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
-use crate::share_api_impl::rename_share_object;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
@@ -240,13 +220,8 @@ use crate::util::db_id_has_to_exist;
 use crate::util::deserialize_id_get_response;
 use crate::util::deserialize_struct_get_response;
 use crate::util::get_table_by_id_or_err;
-use crate::util::get_virtual_column_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
-use crate::util::remove_table_from_share;
-use crate::util::txn_delete_exact;
-use crate::util::txn_op_put_pb;
-use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
@@ -284,7 +259,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut txn = TxnRequest::default();
 
-            let share_specs = if let Some(ref curr_seq_db_id) = curr_seq_db_id {
+            if let Some(ref curr_seq_db_id) = curr_seq_db_id {
                 match req.create_option {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
@@ -297,30 +272,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     CreateOption::CreateIfNotExists => {
                         return Ok(CreateDatabaseReply {
                             db_id: curr_seq_db_id.data.into_inner(),
-                            share_specs: None,
                         });
                     }
                     CreateOption::CreateOrReplace => {
-                        let (_, share_specs) =
-                            drop_database_meta(self, name_key, false, false, &mut txn).await?;
-                        share_specs
+                        let _ = drop_database_meta(self, name_key, false, false, &mut txn).await?;
                     }
                 }
-            } else {
-                None
             };
 
             // get db id list from _fd_db_id_list/db_id
             let dbid_idlist =
                 DatabaseIdHistoryIdent::new(name_key.tenant(), name_key.database_name());
-            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &dbid_idlist).await?;
 
-            let mut db_id_list = if db_id_list_seq == 0 {
-                DbIdList::new()
-            } else {
-                db_id_list_opt.unwrap_or(DbIdList::new())
-            };
+            let seq_db_id_list = self.get_pb(&dbid_idlist).await?;
+            let db_id_list_seq = seq_db_id_list.seq();
+            let mut db_id_list = seq_db_id_list.into_value().unwrap_or_else(DbIdList::new);
 
             // Create db by inserting these record:
             // (tenant, db_name) -> db_id
@@ -363,10 +329,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply {
-                        db_id: id_key,
-                        share_specs,
-                    });
+                    return Ok(CreateDatabaseReply { db_id: id_key });
                 }
             }
         }
@@ -385,7 +348,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut txn = TxnRequest::default();
 
-            let (db_id, share_specs) =
+            let db_id =
                 drop_database_meta(self, tenant_dbname, req.if_exists, true, &mut txn).await?;
 
             let (succ, _responses) = send_txn(self, txn).await?;
@@ -397,7 +360,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(DropDatabaseReply { db_id, share_specs });
+                return Ok(DropDatabaseReply { db_id });
             }
         }
     }
@@ -438,20 +401,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist =
                 DatabaseIdHistoryIdent::new(name_key.tenant(), name_key.database_name());
-            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &dbid_idlist).await?;
+            let seq_db_id_list = self.get_pb(&dbid_idlist).await?;
 
-            let mut db_id_list = if db_id_list_seq == 0 {
+            let Some(seq_db_id_list) = seq_db_id_list else {
                 return Err(KVAppError::AppError(AppError::UndropDbHasNoHistory(
                     UndropDbHasNoHistory::new(name_key.database_name()),
                 )));
-            } else {
-                db_id_list_opt.ok_or_else(|| {
-                    KVAppError::AppError(AppError::UndropDbHasNoHistory(UndropDbHasNoHistory::new(
-                        name_key.database_name(),
-                    )))
-                })?
             };
+
+            let db_id_list_seq = seq_db_id_list.seq;
+            let db_id_list = seq_db_id_list.data;
 
             // Return error if there is no db id history.
             let db_id = *db_id_list.last().ok_or_else(|| {
@@ -462,14 +421,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get db_meta of the last db id
             let dbid = DatabaseId { db_id };
-            let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
-                get_pb_value(self, &dbid).await?;
+
+            let seq_meta = self.get_pb(&dbid).await?;
+            let db_meta_seq = seq_meta.seq();
+            let mut db_meta = seq_meta.into_value().unwrap();
 
             debug!(db_id = db_id, name_key :? =(name_key); "undrop_database");
 
             {
                 // reset drop on time
-                let mut db_meta = db_meta.unwrap();
                 // undrop a table with no drop time
                 if db_meta.drop_on.is_none() {
                     return Err(KVAppError::AppError(AppError::UndropDbWithNoDropTime(
@@ -526,7 +486,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let Some(old_seq_db_id) = old_seq_db_id else {
                 if req.if_exists {
-                    return Ok(RenameDatabaseReply { share_spec: None });
+                    return Ok(RenameDatabaseReply {});
                 } else {
                     db_has_to_exist(
                         old_seq_db_id.seq(),
@@ -546,8 +506,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 tenant_dbname,
                 "rename_database: src (db)",
             )?;
-            // safe to unwrap
-            let mut db_meta = old_seq_db_meta.unwrap().data;
 
             debug!(
                 old_db_id :? = old_db_id,
@@ -561,29 +519,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get db id -> name
             let db_id_key = DatabaseIdToName { db_id: *old_db_id };
-            let (db_name_seq, _): (_, Option<DatabaseNameIdentRaw>) =
-                get_pb_value(self, &db_id_key).await?;
+            let seq_db_name = self.get_pb(&db_id_key).await?;
+            let db_name_seq = seq_db_name.seq();
 
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist =
                 DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
-            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &dbid_idlist).await?;
-            let mut db_id_list: DbIdList;
-            if db_id_list_seq == 0 {
-                // may the database is created before add db_id_list, so we just add the id into the list.
-                db_id_list = DbIdList::new();
-                db_id_list.append(*old_db_id);
-            } else {
-                match db_id_list_opt {
-                    Some(list) => db_id_list = list,
-                    None => {
-                        // may the database is created before add db_id_list, so we just add the id into the list.
-                        db_id_list = DbIdList::new();
-                        db_id_list.append(*old_db_id);
-                    }
-                }
-            };
+
+            let seq_db_id_list = self.get_pb(&dbid_idlist).await?;
+            let db_id_list_seq = seq_db_id_list.seq();
+
+            // may the database is created before add db_id_list, so we just add the id into the list.
+            let mut db_id_list = seq_db_id_list.into_value().unwrap_or_else(|| {
+                let mut l = DbIdList::new();
+                l.append(*old_db_id);
+                l
+            });
 
             if let Some(last_db_id) = db_id_list.last() {
                 if *last_db_id != *old_db_id {
@@ -611,21 +562,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let new_dbid_idlist =
                 DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), &req.new_db_name);
-            let (new_db_id_list_seq, new_db_id_list_opt): (_, Option<DbIdList>) =
-                get_pb_value(self, &new_dbid_idlist).await?;
-            let mut new_db_id_list: DbIdList;
-            if new_db_id_list_seq == 0 {
-                new_db_id_list = DbIdList::new();
-            } else {
-                new_db_id_list = new_db_id_list_opt.unwrap_or(DbIdList::new());
-            };
+
+            let seq_idlist = self.get_pb(&new_dbid_idlist).await?;
+
+            let new_db_id_list_seq = seq_idlist.seq();
+            let mut new_db_id_list = seq_idlist.into_value().unwrap_or_else(DbIdList::new);
 
             // rename database
             // move db id from old db id list to new db id list
             db_id_list.pop();
             new_db_id_list.append(*old_db_id);
 
-            let mut condition = vec![
+            let condition = vec![
                 // Prevent renaming or deleting in other threads.
                 txn_cond_seq(tenant_dbname, Eq, old_seq_db_id.seq),
                 txn_cond_seq(&db_id_key, Eq, db_name_seq),
@@ -633,7 +581,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                 txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
             ];
-            let mut if_then = vec![
+            let if_then = vec![
                 txn_op_del(tenant_dbname), // del old_db_name
                 // Renaming db should not affect the seq of db_meta. Just modify db name.
                 txn_op_put(&tenant_newdbname, serialize_u64(*old_db_id)?), /* (tenant, new_db_name) -> old_db_id */
@@ -644,64 +592,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     serialize_struct(&DatabaseNameIdentRaw::from(&tenant_newdbname))?,
                 ), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
             ];
-
-            // check if database if shared
-            let share_spec = if !db_meta.shared_by.is_empty() {
-                let object =
-                    ShareObject::Database(tenant_dbname.database_name().to_string(), *old_db_id);
-                let update_on = Utc::now();
-                let mut share_spec_vec = vec![];
-                for share_id in &db_meta.shared_by {
-                    let (share_meta_seq, mut share_meta) = get_share_meta_by_id_or_err(
-                        self,
-                        *share_id,
-                        format!("rename database: {}", tenant_dbname.display()),
-                    )
-                    .await?;
-
-                    let _ = rename_share_object(
-                        self,
-                        &mut share_meta,
-                        object.clone(),
-                        *share_id,
-                        update_on,
-                        &mut condition,
-                        &mut if_then,
-                    )
-                    .await?;
-
-                    // save share meta
-                    let share_id_key = ShareId {
-                        share_id: *share_id,
-                    };
-                    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq));
-                    if_then.push(txn_op_put(&share_id_key, serialize_struct(&share_meta)?));
-
-                    let id_key = ShareIdToName {
-                        share_id: *share_id,
-                    };
-
-                    let (_share_name_seq, share_name) = get_pb_value(self, &id_key).await?;
-
-                    share_spec_vec.push(
-                        convert_share_meta_to_spec(
-                            self,
-                            share_name.unwrap().name(),
-                            *share_id,
-                            share_meta,
-                        )
-                        .await?,
-                    );
-                }
-
-                // clean db meta shared_by
-                db_meta.shared_by.clear();
-                let db_id_key = DatabaseId { db_id: *old_db_id };
-                if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?));
-                Some((share_spec_vec, ReplyShareObject::Database(*old_db_id)))
-            } else {
-                None
-            };
 
             let txn_req = TxnRequest {
                 condition,
@@ -720,7 +610,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(RenameDatabaseReply { share_spec });
+                return Ok(RenameDatabaseReply {});
             }
         }
     }
@@ -1055,204 +945,69 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply, KVAppError> {
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = func_name!();
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let virtual_column_meta = VirtualColumnMeta {
+            table_id: req.name_ident.table_id(),
+            virtual_columns: req.virtual_columns.clone(),
+            created_on: Utc::now(),
+            updated_on: None,
+        };
 
-            let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
-                get_pb_value(self, &req.name_ident).await?;
+        self.create_name_value_with_create_option(
+            req.name_ident.clone(),
+            virtual_column_meta,
+            req.create_option,
+        )
+        .await?
+        .map_err(AppError::from)?;
 
-            let mut if_then = vec![];
-            let seq = if old_virtual_column_opt.is_some() {
-                match req.create_option {
-                    CreateOption::Create => {
-                        return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
-                            VirtualColumnAlreadyExists::new(
-                                req.name_ident.table_id(),
-                                format!(
-                                    "create virtual column table_id: {}",
-                                    req.name_ident.table_id(),
-                                ),
-                            ),
-                        )));
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateVirtualColumnReply {});
-                    }
-                    CreateOption::CreateOrReplace => {
-                        construct_drop_virtual_column_txn_operations(
-                            self,
-                            &req.name_ident,
-                            false,
-                            false,
-                            ctx,
-                            &mut if_then,
-                        )
-                        .await?
-                    }
-                }
+        Ok(())
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<(), KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let not_found = || {
+            if req.if_exists {
+                Ok(())
             } else {
-                0
-            };
-            let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id(),
-                virtual_columns: req.virtual_columns.clone(),
-                created_on: Utc::now(),
-                updated_on: None,
-            };
-
-            // Create virtual column by inserting this record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
-                if_then.push(txn_op_put(
-                    &req.name_ident,
-                    serialize_struct(&virtual_column_meta)?,
-                ));
-
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    "req.name_ident" :? =(&virtual_column_meta),
-                    succ = succ;
-                    "create_virtual_column"
-                );
-
-                if succ {
-                    break;
-                }
+                Err(AppError::from(req.name_ident.unknown_error(func_name!())))
             }
-        }
+        };
 
-        Ok(CreateVirtualColumnReply {})
+        self.update_existent_name_value(
+            &req.name_ident,
+            |mut meta| {
+                meta.virtual_columns = req.virtual_columns.clone();
+                meta.updated_on = Some(Utc::now());
+                Some((meta, None))
+            },
+            not_found,
+        )
+        .await??;
+        Ok(())
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply, KVAppError> {
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let ctx = func_name!();
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let (seq, old_virtual_column_meta) =
-                match get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
-                    Ok((seq, old_virtual_column_meta)) => (seq, old_virtual_column_meta),
-                    Err(err) => {
-                        if req.if_exists {
-                            return Ok(UpdateVirtualColumnReply {});
-                        } else {
-                            return Err(err);
-                        }
-                    }
-                };
-
-            let virtual_column_meta = VirtualColumnMeta {
-                table_id: req.name_ident.table_id(),
-                virtual_columns: req.virtual_columns.clone(),
-                created_on: old_virtual_column_meta.created_on,
-                updated_on: Some(Utc::now()),
-            };
-
-            // Update virtual column by inserting this record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
-                let if_then = vec![txn_op_put(
-                    &req.name_ident,
-                    serialize_struct(&virtual_column_meta)?,
-                )];
-
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    "req.name_ident" :? =(&virtual_column_meta),
-                    succ = succ;
-                    "update_virtual_column"
-                );
-
-                if succ {
-                    break;
-                }
+        let not_found = || {
+            if req.if_exists {
+                Ok(())
+            } else {
+                Err(AppError::from(req.name_ident.unknown_error(func_name!())))
             }
-        }
+        };
 
-        Ok(UpdateVirtualColumnReply {})
-    }
+        self.remove_name_value(&req.name_ident, not_found).await??;
 
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let ctx = func_name!();
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let mut if_then = vec![];
-            let seq = construct_drop_virtual_column_txn_operations(
-                self,
-                &req.name_ident,
-                req.if_exists,
-                true,
-                ctx,
-                &mut if_then,
-            )
-            .await?;
-            if seq == 0 {
-                return Ok(DropVirtualColumnReply {});
-            }
-
-            let txn_req = TxnRequest {
-                condition: vec![],
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                "name_ident" :? =(&req.name_ident),
-                succ = succ;
-                "drop_virtual_column"
-            );
-
-            if succ {
-                break;
-            }
-        }
-
-        Ok(DropVirtualColumnReply {})
+        Ok(())
     }
 
     #[logcall::logcall]
@@ -1265,28 +1020,24 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         if let Some(table_id) = req.table_id {
             let name_ident = VirtualColumnIdent::new(&req.tenant, table_id);
-            let (_, virtual_column_opt): (_, Option<VirtualColumnMeta>) =
-                get_pb_value(self, &name_ident).await?;
 
-            if let Some(virtual_column) = virtual_column_opt {
-                return Ok(vec![virtual_column]);
-            } else {
-                return Ok(vec![]);
-            }
+            let seq_meta = self.get_pb(&name_ident).await?;
+            let x = seq_meta
+                .map(|seq_v| seq_v.data)
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            return Ok(x);
         }
 
         // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
         let ident = VirtualColumnIdent::new(&req.tenant, 0u64);
-        let prefix_key = ident.tenant_prefix();
+        let dir = DirName::new(ident);
 
-        let list = self.prefix_list_kv(&prefix_key).await?;
-        let mut virtual_column_list = Vec::with_capacity(list.len());
-        for (_, seq) in list.iter() {
-            let virtual_column_meta: VirtualColumnMeta = deserialize_struct(&seq.data)?;
-            virtual_column_list.push(virtual_column_meta);
-        }
+        let strm = self.list_pb_values(&dir).await?;
+        let vs = strm.try_collect::<Vec<_>>().await?;
 
-        Ok(virtual_column_list)
+        Ok(vs)
     }
 
     #[logcall::logcall]
@@ -1342,7 +1093,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // fixed
         let key_dbid = seq_db_id.data;
-        let save_db_id = seq_db_id.data;
 
         // fixed
         let key_dbid_tbname = DBIdTableName {
@@ -1431,17 +1181,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })?
             };
 
-            // db_meta will be refreshed on each loop
-            // cannot operate on shared database
-            if let Some(from_share) = db_meta.data.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-                )));
-            }
-
             let mut txn = TxnRequest::default();
 
-            let opt = {
+            let seq_table_id = {
                 let d = data.remove(0);
                 let (k, v) = deserialize_id_get_response::<DBIdTableName>(d)?;
                 assert_eq!(key_dbid_tbname, k);
@@ -1470,9 +1212,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 // need to combine with drop_table_txn operations, just return
                                 // the sequence number associated with the value part of
                                 // the key-value pair (key_dbid_tbname, table_id).
-                                (None, id.seq, *id.data)
+
+                                SeqV::new(id.seq, *id.data)
                             } else {
-                                construct_drop_table_txn_operations(
+                                let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
@@ -1482,12 +1225,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                     false,
                                     &mut txn,
                                 )
-                                .await?
+                                .await?;
+                                SeqV::new(seq, id)
                             }
                         }
                     }
                 } else {
-                    (None, 0, 0)
+                    SeqV::new(0, 0)
                 }
             };
 
@@ -1538,7 +1282,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             {
                 // append new table_id into list
                 tb_id_list.append(table_id);
-                let dbid_tbname_seq = opt.1;
+                let dbid_tbname_seq = seq_table_id.seq;
 
                 txn.condition.extend(vec![
                     // db has not to change, i.e., no new table is created.
@@ -1605,11 +1349,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         table_id_seq,
                         db_id: *seq_db_id.data,
                         new_table: dbid_tbname_seq == 0,
-                        spec_vec: if let Some(spec_vec) = opt.0 {
-                            Some((*save_db_id, opt.2, spec_vec))
-                        } else {
-                            None
-                        },
+                        spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
                     });
@@ -1659,13 +1399,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let (seq_db_id, db_meta) = get_db_or_err(self, &tenant_dbname, "rename_table").await?;
 
-            // cannot operate on shared database
-            if let Some(from_share) = &db_meta.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-                )));
-            }
-
             // Get table by db_id, table_name to assert presence.
 
             let dbid_tbname = DBIdTableName {
@@ -1677,10 +1410,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if req.if_exists {
                 if tb_id_seq == 0 {
                     // TODO: table does not exist, can not return table id.
-                    return Ok(RenameTableReply {
-                        table_id: 0,
-                        share_table_info: None,
-                    });
+                    return Ok(RenameTableReply { table_id: 0 });
                 }
             } else {
                 assert_table_exist(
@@ -1755,14 +1485,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 database_id: *new_seq_db_id.data,
                 table_name: req.new_table_name.clone(),
             };
-            let (new_tb_id_list_seq, new_tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &new_dbid_tbname_idlist).await?;
 
-            let mut new_tb_id_list: TableIdList;
-            if new_tb_id_list_seq == 0 {
-                new_tb_id_list = TableIdList::new();
+            let seq_list = self.get_pb(&new_dbid_tbname_idlist).await?;
+
+            let new_tb_id_list_seq = seq_list.seq();
+
+            let mut new_tb_id_list = if let Some(seq_list) = seq_list {
+                seq_list.data
             } else {
-                new_tb_id_list = new_tb_id_list_opt.unwrap_or(TableIdList::new());
+                TableIdList::new()
             };
 
             // get table id name
@@ -1816,64 +1547,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     );
                 }
 
-                // if the table if shared, remove from share
-                let share_table_info = if !db_meta.shared_by.is_empty() {
-                    let tbid = TableId { table_id };
-
-                    let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                        get_pb_value(self, &tbid).await?;
-                    if let Some(mut table_meta) = table_meta {
-                        if !table_meta.shared_by.is_empty() {
-                            let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
-                            for share_id in &table_meta.shared_by {
-                                let res =
-                                    remove_table_from_share(self, *share_id, table_id, &mut txn)
-                                        .await;
-
-                                match res {
-                                    Ok((share_name, share_meta)) => {
-                                        spec_vec.push(
-                                            convert_share_meta_to_spec(
-                                                self,
-                                                &share_name,
-                                                *share_id,
-                                                share_meta,
-                                            )
-                                            .await?,
-                                        );
-                                    }
-                                    Err(e) => match e {
-                                        // ignore UnknownShareId error
-                                        KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                                            error!(
-                                                "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
-                                                share_id,
-                                                tenant_dbname_tbname.tenant().tenant_name(),
-                                                table_id
-                                            );
-                                        }
-                                        _ => return Err(e),
-                                    },
-                                }
-                            }
-                            // clear table meta shared_by
-                            table_meta.shared_by.clear();
-                            txn.condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
-                            txn.if_then
-                                .push(txn_op_put(&tbid, serialize_struct(&table_meta)?));
-
-                            let share_object = ReplyShareObject::Table(*seq_db_id.data, table_id);
-                            Some((spec_vec, share_object))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
                 let (succ, _responses) = send_txn(self, txn).await?;
 
                 debug!(
@@ -1885,10 +1558,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(RenameTableReply {
-                        table_id,
-                        share_table_info,
-                    });
+                    return Ok(RenameTableReply { table_id });
                 }
             }
         }
@@ -1911,54 +1581,42 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )
         .await;
 
-        let (seq_db_id, db_meta) = match res {
+        let (seq_db_id, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
             }
         };
 
-        let table_id = match db_meta.from_share {
-            Some(ref share_name_ident_raw) => {
-                let share_ident = share_name_ident_raw.clone().to_tident(());
-                error!("get_table {:?} from share {:?}", tenant_dbname, share_ident,);
-                return Err(KVAppError::AppError(AppError::CannotAccessShareTable(
-                    CannotAccessShareTable::new(
-                        &tenant_dbname_tbname.tenant.tenant,
-                        share_ident.name(),
-                        &tenant_dbname_tbname.table_name,
-                    ),
-                )));
-            }
-            None => {
-                // Get table by tenant,db_id, table_name to assert presence.
+        let table_id = {
+            // Get table by tenant,db_id, table_name to assert presence.
 
-                let dbid_tbname = DBIdTableName {
-                    db_id: *seq_db_id.data,
-                    table_name: tenant_dbname_tbname.table_name.clone(),
-                };
+            let dbid_tbname = DBIdTableName {
+                db_id: *seq_db_id.data,
+                table_name: tenant_dbname_tbname.table_name.clone(),
+            };
 
-                let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-                assert_table_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
+            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+            assert_table_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
-                table_id
-            }
+            table_id
         };
 
         let tbid = TableId { table_id };
 
-        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+        let seq_meta = self.get_pb(&tbid).await?;
 
-        assert_table_exist(
-            tb_meta_seq,
-            tenant_dbname_tbname,
-            format!("get_table meta by: {}", tenant_dbname_tbname),
-        )?;
+        let Some(seq_meta) = seq_meta else {
+            Err(AppError::from(UnknownTable::new(
+                &tenant_dbname_tbname.table_name,
+                format!("get_table: {}", tenant_dbname_tbname),
+            )))?
+        };
 
         debug!(
             ident :% =(&tbid),
             name :% =(tenant_dbname_tbname),
-            table_meta :? =(&tb_meta);
+            table_meta :? =(&seq_meta);
             "get_table"
         );
 
@@ -1967,7 +1625,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let tb_info = TableInfo {
             ident: TableIdent {
                 table_id: tbid.table_id,
-                seq: tb_meta_seq,
+                seq: seq_meta.seq,
             },
             desc: format!(
                 "'{}'.'{}'",
@@ -1975,9 +1633,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 tenant_dbname_tbname.table_name
             ),
             name: tenant_dbname_tbname.table_name.clone(),
-            // Safe unwrap() because: tb_meta_seq > 0
-            meta: tb_meta.unwrap(),
-            tenant: req.tenant.tenant_name().to_string(),
+            meta: seq_meta.data,
             db_type,
             catalog_info: Default::default(),
         };
@@ -2088,10 +1744,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     .into_iter()
                     .map(|(table_id, seqv)| {
                         Arc::new(TableInfo {
-                            ident: TableIdent {
-                                table_id: table_id.table_id,
-                                seq: seqv.seq(),
-                            },
+                            ident: TableIdent::new(table_id.table_id, seqv.seq()),
                             desc: format!(
                                 "'{}'.'{}'",
                                 tenant_dbname.database_name(),
@@ -2099,7 +1752,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                             name: table_id_list_key.table_name.to_string(),
                             meta: seqv.data,
-                            tenant: tenant_dbname.tenant_name().to_string(),
                             db_type: DatabaseType::NormalDB,
                             catalog_info: Default::default(),
                         })
@@ -2127,30 +1779,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )
         .await;
 
-        let (seq_db_id, db_meta) = match res {
+        let (seq_db_id, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
             }
         };
 
-        let tb_infos = match &db_meta.from_share {
-            None => list_tables_from_unshare_db(self, *seq_db_id.data, tenant_dbname).await?,
-            Some(share) => {
-                let share_ident = share.clone().to_tident(());
-                error!(
-                    "list_tables {:?} from share {:?}",
-                    tenant_dbname, share_ident,
-                );
-                return Err(KVAppError::AppError(AppError::CannotAccessShareTable(
-                    CannotAccessShareTable::new(
-                        &tenant_dbname.tenant().tenant,
-                        share_ident.share_name(),
-                        tenant_dbname.name(),
-                    ),
-                )));
-            }
-        };
+        let tb_infos = list_tables_from_unshare_db(self, *seq_db_id.data, tenant_dbname).await?;
 
         Ok(tb_infos)
     }
@@ -2222,18 +1858,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let db_id_to_name_key = DatabaseIdToName { db_id };
 
-        let (meta_seq, db_name): (_, Option<DatabaseNameIdentRaw>) =
-            get_pb_value(self, &db_id_to_name_key).await?;
+        let seq_meta = self.get_pb(&db_id_to_name_key).await?;
 
         debug!(ident :% =(&db_id_to_name_key); "get_db_name_by_id");
 
-        if meta_seq == 0 || db_name.is_none() {
+        let Some(seq_meta) = seq_meta else {
             return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
                 UnknownDatabaseId::new(db_id, "get_db_name_by_id"),
             )));
-        }
+        };
 
-        Ok(db_name.unwrap().database_name().to_string())
+        Ok(seq_meta.data.database_name().to_string())
     }
 
     #[logcall::logcall]
@@ -2326,7 +1961,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // seq == 0 means that req.if_exists == true and cannot find table meta,
             // in this case just return directly
             if opt.1 == 0 {
-                return Ok(DropTableReply { spec_vec: None });
+                return Ok(DropTableReply {});
             }
 
             let (succ, _responses) = send_txn(self, txn).await?;
@@ -2338,13 +1973,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 "drop_table_by_id"
             );
             if succ {
-                return Ok(DropTableReply {
-                    spec_vec: if let Some(spec_vec) = opt.0 {
-                        Some((req.db_id, spec_vec))
-                    } else {
-                        None
-                    },
-                });
+                return Ok(DropTableReply {});
             }
         }
     }
@@ -2372,13 +2001,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (db_meta_seq, db_meta) =
                 get_db_by_id_or_err(self, req.db_id, "commit_table_meta").await?;
             let db_id = req.db_id;
-
-            // cannot operate on shared database
-            if let Some(from_share) = db_meta.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-                )));
-            }
 
             // Get table by tenant,db_id, table_name to assert presence.
 
@@ -2531,17 +2153,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let table_id = req.table_id;
         let tbid = TableId { table_id };
-        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
 
-        if tb_meta_seq == 0 {
+        let seq_meta = self.get_pb(&tbid).await?;
+
+        let Some(seq_meta) = seq_meta else {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
                 UnknownTableId::new(table_id, ""),
             )));
-        }
+        };
 
         debug!(
             ident :% =(&tbid),
-            table_meta :? =(&tb_meta);
+            table_meta :? =(&seq_meta);
             "get_table_copied_file_info"
         );
 
@@ -2754,10 +2377,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(UpsertTableOptionReply {
-                    share_vec_table_info: get_share_vec_table_info(self, req.table_id, &table_meta)
-                        .await?,
-                });
+                return Ok(UpsertTableOptionReply {});
             }
         }
     }
@@ -2900,18 +2520,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
         let (succ, responses) = send_txn(self, txn_req).await?;
         if succ {
-            let mut share_vec_table_infos = Vec::with_capacity(new_table_meta_map.len());
-            for (table_id, new_table_meta) in new_table_meta_map.iter() {
-                if let Some(share_vec_table_info) =
-                    get_share_vec_table_info(self, *table_id, new_table_meta).await?
-                {
-                    share_vec_table_infos.push(share_vec_table_info);
-                }
-            }
-
-            return Ok(Ok(UpdateTableMetaReply {
-                share_vec_table_infos: Some(share_vec_table_infos),
-            }));
+            return Ok(Ok(UpdateTableMetaReply {}));
         }
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
@@ -2963,29 +2572,29 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
+            let seq_meta = self.get_pb(&tbid).await?;
 
             debug!(ident :% =(&tbid); "set_table_column_mask_policy");
 
-            if tb_meta_seq == 0 || table_meta.is_none() {
+            let Some(seq_meta) = seq_meta else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "set_table_column_mask_policy"),
                 )));
-            }
-            if req_seq.match_seq(tb_meta_seq).is_err() {
+            };
+
+            if req_seq.match_seq(seq_meta.seq).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
                         req.table_id,
                         req.seq,
-                        tb_meta_seq,
+                        seq_meta.seq,
                         "set_table_column_mask_policy",
                     ),
                 )));
             }
 
             // upsert column mask policy
-            let table_meta = table_meta.unwrap();
+            let table_meta = seq_meta.data;
 
             let mut new_table_meta = table_meta.clone();
             if new_table_meta.column_mask_policy.is_none() {
@@ -3013,7 +2622,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
@@ -3033,14 +2642,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(SetTableColumnMaskPolicyReply {
-                    share_vec_table_info: get_share_vec_table_info(
-                        self,
-                        req.table_id,
-                        &new_table_meta,
-                    )
-                    .await?,
-                });
+                return Ok(SetTableColumnMaskPolicyReply {});
             }
         }
     }
@@ -3166,18 +2768,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
+            let seq_meta = self.get_pb(&tbid).await?;
 
             debug!(ident :% =(&tbid); "drop_table_index");
 
-            if tb_meta_seq == 0 || table_meta.is_none() {
+            let Some(seq_meta) = seq_meta else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "drop_table_index"),
                 )));
-            }
+            };
 
-            let mut table_meta = table_meta.unwrap();
+            let mut table_meta = seq_meta.data;
             // update table indexes
             let indexes = &mut table_meta.indexes;
             if !indexes.contains_key(&req.name) && !req.if_exists {
@@ -3190,7 +2791,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                    txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&table_meta)?), // tb_id -> tb_meta
@@ -3227,11 +2828,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut drop_table_infos = vec![];
             let mut drop_ids = vec![];
             for db_info in db_infos {
-                // ignore db create from share
-                if db_info.meta.from_share.is_some() {
-                    continue;
-                }
-
                 let mut drop_db = false;
                 let filter = match db_info.meta.drop_on {
                     Some(db_drop_on) => {
@@ -3346,14 +2942,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         };
 
-        // ignore db create from share
-        if db_meta.from_share.is_some() {
-            return Ok(ListDroppedTableResp {
-                drop_table_infos: vec![],
-                drop_ids: vec![],
-            });
-        }
-
         let db_info = Arc::new(DatabaseInfo {
             database_id: seq_db_id.data,
             name_ident: req.inner.clone(),
@@ -3404,24 +2992,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListLockRevReq,
     ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
-        let lock_key = &req.lock_key;
-        let lock_type = lock_key.lock_type();
+        let dir = req.lock_key.gen_prefix();
+        let strm = self.list_pb(&dir).await?;
 
-        let prefix = lock_key.gen_prefix();
-        let list = self.prefix_list_kv(&prefix).await?;
+        let list = strm
+            .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
+            .try_collect::<Vec<_>>()
+            .await?;
 
-        let mut reply = vec![];
-        for (k, seq) in list.into_iter() {
-            let revision = lock_type.revision_from_str(&k).map_err(|e| {
-                let inv = InvalidReply::new("list_lock_revisions", &e);
-                let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                MetaError::NetworkError(meta_net_err)
-            })?;
-            let lock_meta: LockMeta = deserialize_struct(&seq.data)?;
-
-            reply.push((revision, lock_meta));
-        }
-        Ok(reply)
+        Ok(list)
     }
 
     #[logcall::logcall]
@@ -3433,64 +3012,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let lock_key = &req.lock_key;
-        let lock_type = lock_key.lock_type();
-        let extra_info = lock_key.get_extra_info();
-
-        let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
 
         let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
         let key = lock_key.gen_key(revision);
 
-        let ctx = func_name!();
+        let lock_meta = LockMeta {
+            user: req.user.clone(),
+            node: req.node.clone(),
+            query_id: req.query_id.clone(),
+            created_on: Utc::now(),
+            acquired_on: None,
+            lock_type: lock_key.lock_type(),
+            extra_info: lock_key.get_extra_info(),
+        };
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        // Revision is unique. if it presents, consider it as success.
+        // Thus, we could just ignore create result
+        let _create_res = self
+            .create_name_value(key, lock_meta, Some(req.ttl))
+            .await?;
 
-            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            let lock_meta = LockMeta {
-                user: req.user.clone(),
-                node: req.node.clone(),
-                query_id: req.query_id.clone(),
-                created_on: Utc::now(),
-                acquired_on: None,
-                lock_type: lock_type.clone(),
-                extra_info: extra_info.clone(),
-            };
-
-            let condition = vec![
-                // table is not changed
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                // assumes lock are absent.
-                txn_cond_seq(&key, Eq, 0),
-            ];
-
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.expire_secs * 1000),
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "create_lock_revision"
-            );
-
-            if succ {
-                return Ok(CreateLockRevReply { revision });
-            }
-        }
+        Ok(CreateLockRevReply { revision })
     }
 
     #[logcall::logcall]
@@ -3502,63 +3044,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let lock_key = &req.lock_key;
         let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
+        let key = lock_key.gen_key(req.revision);
 
-        let revision = req.revision;
-        let key = lock_key.gen_key(revision);
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
-            if lock_seq == 0 || lock_meta_opt.is_none() {
-                return Err(KVAppError::AppError(AppError::TableLockExpired(
-                    TableLockExpired::new(table_id, ctx),
-                )));
-            }
-
-            let mut lock_meta = lock_meta_opt.unwrap();
-            // Set `acquire_lock = true` to initialize `acquired_on` when the
-            // first time this lock is acquired. Before the lock is
-            // acquired(becoming the first in lock queue), or after being
-            // acquired, this argument is always `false`.
-            if req.acquire_lock {
-                lock_meta.acquired_on = Some(Utc::now());
-            }
-
-            let condition = vec![
-                // table is not changed
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&key, Eq, lock_seq),
-            ];
-
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.expire_secs * 1000),
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "extend_lock_revision"
-            );
-
-            if succ {
-                return Ok(());
-            }
-        }
+        self.update_existent_name_value(
+            &key,
+            |mut lock_meta| {
+                // Set `acquire_lock = true` to initialize `acquired_on` when the
+                // first time this lock is acquired. Before the lock is
+                // acquired(becoming the first in lock queue), or after being
+                // acquired, this argument is always `false`.
+                if req.acquire_lock {
+                    lock_meta.acquired_on = Some(Utc::now());
+                }
+                Some((lock_meta, Some(req.ttl)))
+            },
+            || {
+                Err(AppError::TableLockExpired(TableLockExpired::new(
+                    table_id, ctx,
+                )))
+            },
+        )
+        .await??;
+        Ok(())
     }
 
     #[logcall::logcall]
@@ -3571,40 +3078,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let revision = req.revision;
         let key = lock_key.gen_key(revision);
 
-        let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
-            if lock_seq == 0 {
-                // The lock has been deleted.
-                break;
-            }
-
-            let condition = vec![txn_cond_seq(&key, Eq, lock_seq)];
-            let if_then = vec![txn_op_del(&key)];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "delete_lock_revision"
-            );
-
-            if succ {
-                break;
-            }
-        }
+        self.remove_name_value(&key, || Ok::<(), ()>(()))
+            .await?
+            .unwrap();
 
         Ok(())
     }
@@ -3613,30 +3089,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
-        for prefix in &req.prefixes {
-            let mut stream = self.list_kv(prefix).await?;
-            while let Some(list) = stream.try_next().await? {
-                let k = list.key;
-                let seq = SeqV::from(list.value.unwrap());
-                let meta: LockMeta = deserialize_struct(&seq.data)?;
-                let lock_type = &meta.lock_type;
-                let key = lock_type.key_from_str(&k).map_err(|e| {
-                    let inv = InvalidReply::new("list_locks", &e);
-                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                    MetaError::NetworkError(meta_net_err)
-                })?;
-                let revision = lock_type.revision_from_str(&k).map_err(|e| {
-                    let inv = InvalidReply::new("list_locks", &e);
-                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                    MetaError::NetworkError(meta_net_err)
-                })?;
+        for dir in &req.prefixes {
+            let strm = self.list_pb(dir).await?;
+            let locks = strm
+                .map_ok(|itm| LockInfo {
+                    table_id: itm.key.table_id(),
+                    revision: itm.key.revision(),
+                    meta: itm.seqv.data,
+                })
+                .try_collect::<Vec<_>>()
+                .await?;
 
-                reply.push(LockInfo {
-                    table_id: key.get_table_id(),
-                    revision,
-                    meta,
-                });
-            }
+            reply.extend(locks);
         }
         Ok(reply)
     }
@@ -3650,44 +3114,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
         debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res,name_ident :? =(name_ident);"get_catalog");
+        let res = self
+            .create_id_value(name_ident, meta, false, |id| {
+                vec![(
+                    CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
+                    name_ident_raw.clone(),
+                )]
+            })
+            .await?;
 
-            if let Some((seq_id, _seq_meta)) = res {
-                return Ok(Err(seq_id));
-            }
-
-            // Create catalog by inserting these record:
-            // (tenant, catalog_name) -> catalog_id
-            // (catalog_id) -> catalog_meta
-            // (catalog_id) -> (tenant, catalog_name)
-            let id = fetch_id(self, IdGenerator::catalog_id()).await?;
-            let catalog_id = CatalogId::new(id);
-            let id_ident = CatalogIdIdent::new_generic(name_ident.tenant(), catalog_id);
-            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(catalog_id :? = catalog_id, name_ident :? =(name_ident); "new catalog id");
-
-            let mut txn = TxnRequest::default();
-
-            txn_replace_exact(&mut txn, name_ident, 0, &catalog_id)?; /* (tenant, catalog_name) -> catalog_id */
-            txn.if_then.extend([
-                txn_op_put_pb(&id_ident, meta)?, /* (catalog_id) -> catalog_meta */
-                txn_op_put_pb(&id_to_name_ident, &name_ident.to_raw())?, /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-
-            ]);
-
-            let (succ, _) = send_txn(self, txn).await?;
-            debug!(name :? =(name_ident),id :? =(&id_ident),succ = succ;"create_catalog");
-
-            if succ {
-                return Ok(Ok(catalog_id));
-            }
-        }
+        Ok(res)
     }
 
     #[logcall::logcall]
@@ -3703,11 +3141,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .await?
             .ok_or_else(|| AppError::unknown(name_ident, func_name!()))?;
 
-        let catalog = CatalogInfo {
-            id: CatalogIdIdent::new_generic(name_ident.tenant(), seq_id.data).into(),
-            name_ident: name_ident.clone().into(),
-            meta: seq_meta.data,
-        };
+        let catalog = CatalogInfo::new(name_ident.clone(), seq_id.data, seq_meta.data);
 
         Ok(Arc::new(catalog))
     }
@@ -3720,39 +3154,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError> {
         debug!(req :? =(&name_ident); "SchemaApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let removed = self
+            .remove_id_value(name_ident, |id| {
+                vec![CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
+            })
+            .await?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-
-            let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
-            };
-
-            // Delete catalog by deleting these record:
-            // (tenant, catalog_name) -> catalog_id
-            // (catalog_id) -> catalog_meta
-            // (catalog_id) -> (tenant, catalog_name)
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(seq_id :? = seq_id, name_ident :? =(&name_ident); "{}", func_name!());
-
-            let mut txn = TxnRequest::default();
-
-            txn_delete_exact(&mut txn, name_ident, seq_id.seq); // (tenant, catalog_name) -> catalog_id
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq); // (catalog_id) -> catalog_meta
-            txn.if_then.push(txn_op_del(&id_to_name_ident)); /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-
-            let (succ, _) = send_txn(self, txn).await?;
-
-            debug!(name_ident :? =(&name_ident),id :? =(&id_ident),succ = succ; "{}", func_name!());
-
-            if succ {
-                return Ok(Some((seq_id, seq_meta)));
-            }
-        }
+        Ok(removed)
     }
 
     #[logcall::logcall]
@@ -3765,40 +3173,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let tenant = req.tenant;
         let name_key = CatalogNameIdent::new(&tenant, "dummy");
-
         let dir = DirName::new(name_key);
 
-        // Pairs of catalog-name and catalog_id with seq
-        let items = self.list_pb(&dir).await?.try_collect::<Vec<_>>().await?;
+        let name_id_values = self.list_id_value(&dir).await?;
 
-        // Keys for fetching CatalogMeta from kvapi::KVApi
-        let kv_keys = items.iter().map(|x| x.seqv.data.into_t_ident(&tenant));
-        let kv_keys = kv_keys.collect::<Vec<_>>();
-
-        // Batch get all catalog-metas.
-        // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
-        let seq_metas = self.get_pb_values(kv_keys.clone()).await?;
-        let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
-
-        let mut catalog_infos = Vec::with_capacity(kv_keys.len());
-
-        for (i, seq_meta_opt) in seq_metas.into_iter().enumerate() {
-            let item = &items[i];
-
-            if let Some(seq_meta) = seq_meta_opt {
-                let catalog_info = CatalogInfo {
-                    id: CatalogIdIdent::new(&tenant, *item.seqv.data).into(),
-                    name_ident: CatalogNameIdent::new(&tenant, item.key.name()).into(),
-                    meta: seq_meta.data,
-                };
-                catalog_infos.push(Arc::new(catalog_info));
-            } else {
-                debug!(
-                    k :% =(&kv_keys[i]);
-                    "catalog_meta not found, maybe just deleted after listing names and before listing meta"
-                );
-            }
-        }
+        let catalog_infos = name_id_values
+            .map(|(name, id, seq_meta)| Arc::new(CatalogInfo::new(name, id, seq_meta.data)))
+            .collect::<Vec<_>>();
 
         Ok(catalog_infos)
     }
@@ -3858,8 +3239,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id = req.table_id;
 
         let lvt_key = LeastVisibleTimeKey { table_id };
-        let (_lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
-            get_pb_value(self, &lvt_key).await?;
+
+        let seq_lvt = self.get_pb(&lvt_key).await?;
+        let lvt_opt = seq_lvt.into_value();
 
         Ok(GetLVTReply {
             time: lvt_opt.map(|time| time.time),
@@ -3946,7 +3328,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             req.tenant.clone(),
             DictionaryIdentity::new(req.db_id, "dummy".to_string()),
         );
-        let dir = DirName::new(dictionary_ident);
+        let dir = DirName::new_with_level(dictionary_ident, 2);
 
         let name_id_values = self.list_id_value(&dir).await?;
         Ok(name_id_values
@@ -3993,40 +3375,6 @@ async fn get_table_meta_history(
     Ok(tb_metas)
 }
 
-async fn construct_drop_virtual_column_txn_operations(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &VirtualColumnIdent,
-    drop_if_exists: bool,
-    if_delete: bool,
-    ctx: &str,
-    if_then: &mut Vec<TxnOp>,
-) -> Result<u64, KVAppError> {
-    let res = get_virtual_column_by_id_or_err(kv_api, name_ident, ctx).await;
-    let seq = if let Err(err) = res {
-        if drop_if_exists {
-            return Ok(0);
-        } else {
-            return Err(err);
-        }
-    } else {
-        res.unwrap().0
-    };
-
-    // Drop virtual column by deleting this record:
-    // (tenant, table_id) -> virtual_column_meta
-    if if_delete {
-        if_then.push(txn_op_del(name_ident));
-    }
-
-    debug!(
-        "name_ident" :? =(&name_ident),
-        ctx = ctx;
-        "construct_drop_virtual_column_txn_operations"
-    );
-
-    Ok(seq)
-}
-
 async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
@@ -4036,7 +3384,7 @@ async fn construct_drop_table_txn_operations(
     if_exists: bool,
     if_delete: bool,
     txn: &mut TxnRequest,
-) -> Result<(Option<Vec<ShareSpec>>, u64, u64), KVAppError> {
+) -> Result<(u64, u64), KVAppError> {
     let tbid = TableId { table_id };
 
     // Check if table exists.
@@ -4072,7 +3420,7 @@ async fn construct_drop_table_txn_operations(
     let (tb_id_seq, _) = get_u64_value(kv_api, &dbid_tbname).await?;
     if tb_id_seq == 0 {
         return if if_exists {
-            Ok((None, 0, 0))
+            Ok((0, 0))
         } else {
             return Err(KVAppError::AppError(AppError::UnknownTable(
                 UnknownTable::new(tbname, "drop_table_by_id"),
@@ -4081,13 +3429,6 @@ async fn construct_drop_table_txn_operations(
     }
 
     let (db_meta_seq, db_meta) = get_db_by_id_or_err(kv_api, db_id, "drop_table_by_id").await?;
-
-    // cannot operate on shared database
-    if let Some(from_share) = db_meta.from_share {
-        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-            ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-        )));
-    }
 
     debug!(
         ident :% =(&tbid),
@@ -4128,32 +3469,6 @@ async fn construct_drop_table_txn_operations(
         txn.if_then.push(txn_op_del(&dbid_tbname));
     }
 
-    // remove table from share
-    let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
-    for share_id in &db_meta.shared_by {
-        let res = remove_table_from_share(kv_api, *share_id, table_id, txn).await;
-
-        match res {
-            Ok((share_name, share_meta)) => {
-                spec_vec.push(
-                    convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta).await?,
-                );
-            }
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!(
-                        "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
-                        share_id,
-                        tenant.tenant_name(),
-                        table_id
-                    );
-                }
-                _ => return Err(e),
-            },
-        }
-    }
-
     // add TableIdListKey if not exist
     if if_delete {
         // get table id list from _fd_table_id_list/db_id/table_name
@@ -4180,11 +3495,7 @@ async fn construct_drop_table_txn_operations(
             ));
         }
     }
-    if spec_vec.is_empty() {
-        Ok((None, tb_id_seq, table_id))
-    } else {
-        Ok((Some(spec_vec), tb_id_seq, table_id))
-    }
+    Ok((tb_id_seq, table_id))
 }
 
 async fn drop_database_meta(
@@ -4193,7 +3504,7 @@ async fn drop_database_meta(
     if_exists: bool,
     drop_name_key: bool,
     txn: &mut TxnRequest,
-) -> Result<(u64, Option<Vec<ShareSpec>>), KVAppError> {
+) -> Result<u64, KVAppError> {
     let res = get_db_or_err(
         kv_api,
         tenant_dbname,
@@ -4206,7 +3517,7 @@ async fn drop_database_meta(
         Err(e) => {
             if let KVAppError::AppError(AppError::UnknownDatabase(_)) = e {
                 if if_exists {
-                    return Ok((0, None));
+                    return Ok(0);
                 }
             }
 
@@ -4221,128 +3532,58 @@ async fn drop_database_meta(
         txn.if_then.push(txn_op_del(tenant_dbname)); // (tenant, db_name) -> db_id
     }
 
-    // remove db from share
-    let mut share_specs = Vec::with_capacity(db_meta.shared_by.len());
-    for share_id in &db_meta.shared_by {
-        let res =
-            remove_db_from_share(kv_api, *share_id, *seq_db_id.data, tenant_dbname, txn).await;
+    // Delete db by these operations:
+    // del (tenant, db_name) -> db_id
+    // set db_meta.drop_on = now and update (db_id) -> db_meta
 
-        match res {
-            Ok((share_name, share_meta)) => {
-                share_specs.push(
-                    convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta).await?,
-                );
-            }
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!(
-                        "UnknownShareId {} when drop_database {} shared by",
-                        share_id,
-                        tenant_dbname.display()
-                    );
-                }
-                _ => return Err(e),
-            },
+    let db_id_key = seq_db_id.data;
+
+    debug!(
+        seq_db_id :? = seq_db_id,
+        name_key :? =(tenant_dbname);
+        "drop_database"
+    );
+
+    {
+        // drop a table with drop time
+        if db_meta.drop_on.is_some() {
+            return Err(KVAppError::AppError(AppError::DropDbWithDropTime(
+                DropDbWithDropTime::new(tenant_dbname.database_name()),
+            )));
         }
+        // update drop on time
+        db_meta.drop_on = Some(Utc::now());
+
+        txn.condition
+            .push(txn_cond_seq(&db_id_key, Eq, db_meta.seq));
+
+        txn.if_then
+            .push(txn_op_put(&db_id_key, serialize_struct(&*db_meta)?)); // (db_id) -> db_meta
     }
-    db_meta.shared_by.clear();
 
-    let (removed, _from_share) = is_db_need_to_be_remove(
-        kv_api,
-        *seq_db_id.data,
-        // remove db directly if created from share
-        |db_meta| db_meta.from_share.is_some(),
-        txn,
-    )
-    .await?;
+    // add DbIdListKey if not exists
+    let dbid_idlist =
+        DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
+    let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+        get_pb_value(kv_api, &dbid_idlist).await?;
 
-    if removed {
-        // if db create from share then remove it directly and remove db id from share
-        debug!(
-            name :? =(tenant_dbname),
-            id :? =(&seq_db_id );
-            "drop_database from share"
+    if db_id_list_seq == 0 || db_id_list_opt.is_none() {
+        warn!(
+            "drop db:{:?}, seq_db_id:{:?} has no DbIdListKey",
+            tenant_dbname, seq_db_id
         );
 
-        // if remove db, MUST also removed db id from db id list
-        let dbid_idlist =
-            DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
-        let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-            get_pb_value(kv_api, &dbid_idlist).await?;
+        let mut db_id_list = DbIdList::new();
+        db_id_list.append(*seq_db_id.data);
 
-        let mut db_id_list = if db_id_list_seq == 0 {
-            DbIdList::new()
-        } else {
-            db_id_list_opt.unwrap_or(DbIdList::new())
-        };
-        if let Some(last_db_id) = db_id_list.last() {
-            if *last_db_id == *seq_db_id.data {
-                db_id_list.pop();
-                txn.condition
-                    .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
-                txn.if_then
-                    .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
-            }
-        }
-    } else {
-        // Delete db by these operations:
-        // del (tenant, db_name) -> db_id
-        // set db_meta.drop_on = now and update (db_id) -> db_meta
+        txn.condition
+            .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
+        // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+        txn.if_then
+            .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
+    };
 
-        let db_id_key = seq_db_id.data;
-
-        debug!(
-            seq_db_id :? = seq_db_id,
-            name_key :? =(tenant_dbname);
-            "drop_database"
-        );
-
-        {
-            // drop a table with drop time
-            if db_meta.drop_on.is_some() {
-                return Err(KVAppError::AppError(AppError::DropDbWithDropTime(
-                    DropDbWithDropTime::new(tenant_dbname.database_name()),
-                )));
-            }
-            // update drop on time
-            db_meta.drop_on = Some(Utc::now());
-
-            txn.condition
-                .push(txn_cond_seq(&db_id_key, Eq, db_meta.seq));
-
-            txn.if_then
-                .push(txn_op_put(&db_id_key, serialize_struct(&*db_meta)?)); // (db_id) -> db_meta
-        }
-
-        // add DbIdListKey if not exists
-        let dbid_idlist =
-            DatabaseIdHistoryIdent::new(tenant_dbname.tenant(), tenant_dbname.database_name());
-        let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
-            get_pb_value(kv_api, &dbid_idlist).await?;
-
-        if db_id_list_seq == 0 || db_id_list_opt.is_none() {
-            warn!(
-                "drop db:{:?}, seq_db_id:{:?} has no DbIdListKey",
-                tenant_dbname, seq_db_id
-            );
-
-            let mut db_id_list = DbIdList::new();
-            db_id_list.append(*seq_db_id.data);
-
-            txn.condition
-                .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
-            // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
-            txn.if_then
-                .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
-        };
-    }
-
-    if share_specs.is_empty() {
-        Ok((*seq_db_id.data, None))
-    } else {
-        Ok((*seq_db_id.data, Some(share_specs)))
-    }
+    Ok(*seq_db_id.data)
 }
 
 /// remove copied files for a table.
@@ -4509,77 +3750,6 @@ fn table_has_to_not_exist(
     }
 }
 
-async fn get_share_vec_table_info(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    table_id: u64,
-    table_meta: &TableMeta,
-) -> Result<Option<ShareVecTableInfo>, KVAppError> {
-    if table_meta.shared_by.is_empty() {
-        return Ok(None);
-    }
-    let mut share_vec = vec![];
-    let mut share_table_info: Option<TableInfo> = None;
-    let mut db_id: Option<u64> = None;
-    for share_id in &table_meta.shared_by {
-        let res = get_share_id_to_name_or_err(
-            kv_api,
-            *share_id,
-            format!("get_share_vec_table_info: {}", share_id),
-        )
-        .await;
-
-        let (_seq, share_name) = match res {
-            Ok((seq, share_name)) => (seq, share_name),
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("UnknownShareId {} when get_share_vec_table_info", share_id);
-                    continue;
-                }
-                _ => return Err(e),
-            },
-        };
-        let res = get_share_meta_by_id_or_err(
-            kv_api,
-            *share_id,
-            format!("get_share_vec_table_info: {}", share_id),
-        )
-        .await;
-
-        let (_share_meta_seq, share_meta) = match res {
-            Ok((seq, share_meta)) => (seq, share_meta),
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("UnknownShareId {} when get_share_vec_table_info", share_id);
-                    continue;
-                }
-                _ => return Err(e),
-            },
-        };
-        if share_table_info.is_none() {
-            let share_name_key = ShareNameIdent::new(
-                Tenant {
-                    tenant: share_name.tenant_name().to_string(),
-                },
-                share_name.share_name(),
-            );
-            let (share_db_id, share_table_info_vec) =
-                get_table_info_by_share(kv_api, Some(table_id), &share_name_key, &share_meta)
-                    .await?;
-            share_table_info = Some(share_table_info_vec[0].clone());
-            db_id = Some(share_db_id);
-        }
-        share_vec.push(share_name.name().clone());
-    }
-
-    if let Some(share_table_info) = share_table_info {
-        Ok(Some((share_vec, db_id.unwrap(), share_table_info)))
-    } else {
-        Ok(None)
-    }
-}
-
 fn build_upsert_table_copied_file_info_conditions(
     table_id: &TableId,
     req: &UpsertTableCopiedFileReq,
@@ -4611,7 +3781,11 @@ fn build_upsert_table_copied_file_info_conditions(
             // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
         }
-        set_update_expire_operation(&key, &file_info, req.ttl, &mut if_then)?;
+        if_then.push(TxnOp::put_with_ttl(
+            key.to_string_key(),
+            serialize_struct(&file_info)?,
+            req.ttl,
+        ))
     }
     Ok((condition, if_then))
 }
@@ -4620,29 +3794,8 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     TxnOp::put_with_ttl(
         deduplicated_label,
         1_i8.to_le_bytes().to_vec(),
-        Some(86400 * 1000),
+        Some(Duration::from_secs(86400)),
     )
-}
-
-fn set_update_expire_operation(
-    key: &TableCopiedFileNameIdent,
-    file_info: &TableCopiedFileInfo,
-    ttl: Option<std::time::Duration>,
-    then_branch: &mut Vec<TxnOp>,
-) -> Result<(), KVAppError> {
-    match ttl {
-        Some(ttl) => {
-            then_branch.push(TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(file_info)?,
-                Some(ttl.as_millis() as u64),
-            ));
-        }
-        None => {
-            then_branch.push(txn_op_put(key, serialize_struct(file_info)?));
-        }
-    }
-    Ok(())
 }
 
 #[logcall::logcall(input = "")]
@@ -4694,7 +3847,6 @@ async fn batch_filter_table_info(
             ),
             name: table_name.clone(),
             meta: tb_meta,
-            tenant: db_ident.tenant_name().to_string(),
             db_type: DatabaseType::NormalDB,
             catalog_info: Default::default(),
         };
@@ -5264,13 +4416,6 @@ async fn handle_undrop_table(
         // Get db by name to ensure presence
 
         let (db_id, db_meta) = req.refresh_target_db_meta(kv_api).await?;
-
-        // cannot operate on shared database
-        if let Some(from_share) = &db_meta.from_share {
-            return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                ShareHasNoGrantedPrivilege::new(from_share.tenant_name(), from_share.name()),
-            )));
-        }
 
         // Get table by tenant,db_id, table_name to assert presence.
 

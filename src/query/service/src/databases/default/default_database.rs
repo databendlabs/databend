@@ -15,12 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::CannotAccessShareTable;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -48,9 +44,7 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::SeqValue;
-use log::error;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -148,21 +142,6 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn get_table_history(&self, table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        if let Some(ref share_name_ident_raw) = self.db_info.meta.from_share {
-            let share_ident = share_name_ident_raw.clone().to_tident(());
-            error!(
-                "get_table_history {:?} from share {:?}",
-                self.db_info.name_ident, share_ident,
-            );
-            return Err(ErrorCode::from(KVAppError::AppError(
-                AppError::CannotAccessShareTable(CannotAccessShareTable::new(
-                    &self.db_info.name_ident.tenant().tenant,
-                    share_ident.name(),
-                    table_name,
-                )),
-            )));
-        }
-
         let metas = self
             .ctx
             .meta
@@ -190,7 +169,6 @@ impl Database for DefaultDatabase {
                     ),
                     name: table_name.to_string(),
                     meta: seqv.data,
-                    tenant: self.db_info.name_ident.tenant_name().to_string(),
                     db_type: DatabaseType::NormalDB,
                     catalog_info: Default::default(),
                 })

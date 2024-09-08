@@ -419,6 +419,59 @@ impl Join {
             .iter()
             .any(|condition| condition.is_null_equal)
     }
+
+    pub fn derive_join_stats(
+        &self,
+        left_stat_info: Arc<StatInfo>,
+        right_stat_info: Arc<StatInfo>,
+    ) -> Result<Arc<StatInfo>> {
+        let (mut left_cardinality, mut left_statistics) = (
+            left_stat_info.cardinality,
+            left_stat_info.statistics.clone(),
+        );
+        let (mut right_cardinality, mut right_statistics) = (
+            right_stat_info.cardinality,
+            right_stat_info.statistics.clone(),
+        );
+        // Evaluating join cardinality using histograms.
+        // If histogram is None, will evaluate using NDV.
+        let inner_join_cardinality = self.inner_join_cardinality(
+            &mut left_cardinality,
+            &mut right_cardinality,
+            &mut left_statistics,
+            &mut right_statistics,
+        )?;
+        let cardinality = match self.join_type {
+            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
+            JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
+            JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Full => {
+                f64::max(left_cardinality, inner_join_cardinality)
+                    + f64::max(right_cardinality, inner_join_cardinality)
+                    - inner_join_cardinality
+            }
+            JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
+            JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
+            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
+            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
+        };
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            let mut column_stats = HashMap::new();
+            column_stats.extend(left_statistics.column_stats);
+            column_stats.extend(right_statistics.column_stats);
+            column_stats
+        };
+        Ok(Arc::new(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats,
+            },
+        }))
+    }
 }
 
 impl Operator for Join {
@@ -518,52 +571,8 @@ impl Operator for Join {
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        let (mut left_cardinality, mut left_statistics) = (
-            left_stat_info.cardinality,
-            left_stat_info.statistics.clone(),
-        );
-        let (mut right_cardinality, mut right_statistics) = (
-            right_stat_info.cardinality,
-            right_stat_info.statistics.clone(),
-        );
-        // Evaluating join cardinality using histograms.
-        // If histogram is None, will evaluate using NDV.
-        let inner_join_cardinality = self.inner_join_cardinality(
-            &mut left_cardinality,
-            &mut right_cardinality,
-            &mut left_statistics,
-            &mut right_statistics,
-        )?;
-        let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
-            JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
-            JoinType::Full => {
-                f64::max(left_cardinality, inner_join_cardinality)
-                    + f64::max(right_cardinality, inner_join_cardinality)
-                    - inner_join_cardinality
-            }
-            JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
-            JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
-            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
-        };
-        // Derive column statistics
-        let column_stats = if cardinality == 0.0 {
-            HashMap::new()
-        } else {
-            let mut column_stats = HashMap::new();
-            column_stats.extend(left_statistics.column_stats);
-            column_stats.extend(right_statistics.column_stats);
-            column_stats
-        };
-        Ok(Arc::new(StatInfo {
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats,
-            },
-        }))
+        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info)?;
+        Ok(stat_info)
     }
 
     fn compute_required_prop_child(

@@ -21,6 +21,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
@@ -50,6 +51,8 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+
+pub struct ExecutionError;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
@@ -97,7 +100,7 @@ pub enum ExecuteState {
 }
 
 impl ExecuteState {
-    pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
+    pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode<ExecutionError>>) {
         match self {
             Starting(_) => (ExecuteStateKind::Starting, None),
             Running(_) => (ExecuteStateKind::Running, None),
@@ -129,7 +132,7 @@ pub struct ExecuteStopped {
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
-    pub reason: Result<()>,
+    pub reason: Result<(), ExecutionError>,
     pub session_state: ExecutorSessionState,
     pub query_duration_ms: i64,
     pub warnings: Vec<String>,
@@ -253,7 +256,9 @@ impl Executor {
         }
     }
     #[async_backtrace::framed]
-    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>) {
+    pub async fn stop<C>(this: &Arc<RwLock<Executor>>, reason: Result<(), C>) {
+        let reason = reason.with_context(|| "execution stopped");
+
         {
             let guard = this.read().await;
             if let Stopped(s) = &guard.state {
@@ -331,7 +336,9 @@ impl ExecuteState {
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
         format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
-    ) -> Result<()> {
+    ) -> Result<(), ExecutionError> {
+        let make_error = || format!("failed to start query: {sql}");
+
         info!("http query prepare to plan sql");
         if let Some(cid) = session.get_client_session_id() {
             ClientSessionManager::instance().on_query_start(&cid, &session)
@@ -340,7 +347,8 @@ impl ExecuteState {
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
             .await
-            .map_err(|err| err.display_with_sql(&sql))?;
+            .map_err(|err| err.display_with_sql(&sql))
+            .with_context(make_error)?;
 
         let query_queue_manager = QueriesQueueManager::instance();
 
@@ -349,19 +357,24 @@ impl ExecuteState {
             query_queue_manager.length()
         );
 
-        let entry = QueryEntry::create(&ctx, &plan, &extras)?;
-        let queue_guard = query_queue_manager.acquire(entry).await?;
+        let entry = QueryEntry::create(&ctx, &plan, &extras).with_context(make_error)?;
+        let queue_guard = query_queue_manager
+            .acquire(entry)
+            .await
+            .with_context(make_error)?;
         {
             // set_var may change settings
             let mut guard = format_settings.write();
-            *guard = Some(ctx.get_format_settings()?);
+            *guard = Some(ctx.get_format_settings().with_context(make_error)?);
         }
         info!(
             "http query finished acquiring from queue, length: {}",
             query_queue_manager.length()
         );
 
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
+            .await
+            .with_context(make_error)?;
         let has_result_set = plan.has_result_set();
         let schema = if has_result_set {
             // check has_result_set first for safety
@@ -412,13 +425,18 @@ async fn execute(
     ctx: Arc<QueryContext>,
     block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
-) -> Result<()> {
-    let mut data_stream = interpreter.execute(ctx.clone()).await?;
+) -> Result<(), ExecutionError> {
+    let make_error = || format!("failed to execute {}", interpreter.name());
+
+    let mut data_stream = interpreter
+        .execute(ctx.clone())
+        .await
+        .with_context(make_error)?;
     match data_stream.next().await {
         None => {
             let block = DataBlock::empty_with_schema(schema);
             block_sender.send(block, 0).await;
-            Executor::stop(&executor, Ok(())).await;
+            Executor::stop::<()>(&executor, Ok(())).await;
             block_sender.close();
         }
         Some(Err(err)) => {
@@ -435,11 +453,11 @@ async fn execute(
                     }
                     Err(err) => {
                         block_sender.close();
-                        return Err(err);
+                        return Err(err.with_context(make_error()));
                     }
                 };
             }
-            Executor::stop(&executor, Ok(())).await;
+            Executor::stop::<()>(&executor, Ok(())).await;
             block_sender.close();
         }
     }

@@ -19,9 +19,12 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::background::job_ident;
 use crate::data_mask::data_mask_name_ident;
+use crate::principal::procedure_name_ident;
+use crate::principal::ProcedureIdentity;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
+use crate::schema::virtual_column_ident;
 use crate::schema::DictionaryIdentity;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
@@ -864,38 +867,6 @@ impl IndexColumnIdNotFound {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("VirtualColumnAlreadyExists: `{table_id}` while `{context}`")]
-pub struct VirtualColumnAlreadyExists {
-    table_id: u64,
-    context: String,
-}
-
-impl VirtualColumnAlreadyExists {
-    pub fn new(table_id: impl Into<u64>, context: impl Into<String>) -> Self {
-        Self {
-            table_id: table_id.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("VirtualColumnNotFound: `{table_id}` while `{context}`")]
-pub struct VirtualColumnNotFound {
-    table_id: u64,
-    context: String,
-}
-
-impl VirtualColumnNotFound {
-    pub fn new(table_id: impl Into<u64>, context: impl Into<String>) -> Self {
-        Self {
-            table_id: table_id.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("CreateSequenceError: `{name}` while `{context}`")]
 pub struct CreateSequenceError {
     name: String,
@@ -1018,7 +989,7 @@ pub enum AppError {
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
-    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::Resource>),
+    CatalogAlreadyExists(#[from] ExistError<catalog_name_ident::CatalogNameRsc>),
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
@@ -1036,7 +1007,7 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
-    UnknownCatalog(#[from] UnknownError<catalog_name_ident::Resource>),
+    UnknownCatalog(#[from] UnknownError<catalog_name_ident::CatalogNameRsc>),
 
     #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),
@@ -1136,10 +1107,10 @@ pub enum AppError {
     UnmatchMaskPolicyReturnType(#[from] UnmatchMaskPolicyReturnType),
 
     #[error(transparent)]
-    VirtualColumnNotFound(#[from] VirtualColumnNotFound),
+    VirtualColumnNotFound(#[from] UnknownError<virtual_column_ident::Resource, u64>),
 
     #[error(transparent)]
-    VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
+    VirtualColumnAlreadyExists(#[from] ExistError<virtual_column_ident::Resource, u64>),
 
     #[error(transparent)]
     StreamAlreadyExists(#[from] StreamAlreadyExists),
@@ -1170,6 +1141,15 @@ pub enum AppError {
     UnknownDictionary(
         #[from] UnknownError<dictionary_name_ident::DictionaryNameRsc, DictionaryIdentity>,
     ),
+
+    // Procedure
+    #[error(transparent)]
+    ProcedureAlreadyExists(
+        #[from] ExistError<procedure_name_ident::ProcedureName, ProcedureIdentity>,
+    ),
+
+    #[error(transparent)]
+    UnknownProcedure(#[from] UnknownError<procedure_name_ident::ProcedureName, ProcedureIdentity>),
 }
 
 impl AppError {
@@ -1520,21 +1500,6 @@ impl AppErrorMessage for UnmatchMaskPolicyReturnType {
     }
 }
 
-impl AppErrorMessage for VirtualColumnNotFound {
-    fn message(&self) -> String {
-        format!("Virtual Column for table '{}' not found", self.table_id)
-    }
-}
-
-impl AppErrorMessage for VirtualColumnAlreadyExists {
-    fn message(&self) -> String {
-        format!(
-            "Virtual Column for table '{}' already exists",
-            self.table_id
-        )
-    }
-}
-
 impl AppErrorMessage for CreateSequenceError {
     fn message(&self) -> String {
         format!("Create Sequence {} Error", self.name)
@@ -1699,6 +1664,10 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::DictionaryAlreadyExists(err.message())
             }
             AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
+            AppError::UnknownProcedure(err) => ErrorCode::UnknownProcedure(err.message()),
+            AppError::ProcedureAlreadyExists(err) => {
+                ErrorCode::ProcedureAlreadyExists(err.message())
+            }
         }
     }
 }

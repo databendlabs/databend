@@ -308,11 +308,49 @@ def return_all_non_nullable(
     )
 
 
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import time
+executor = ThreadPoolExecutor()
+executor2 = ProcessPoolExecutor()
+
+def cal_multi_thread(row):
+    r = sum(range(3500000 + row))
+    return r
+
+def cal_sleep(row):
+    time.sleep(0.2)
+    return row
+
+@udf(input_types=["INT"], result_type="BIGINT", batch_mode = True)
+def fib_async(x: List[int]) -> List[int]:
+    current_thread = threading.current_thread()
+    print("batchs {} {}".format(len(x), current_thread.name))
+    
+    tasks = [executor2.submit(cal_multi_thread, row) for row in x]
+    result = [future.result() for future in tasks]
+    
+    tasks2 = [executor.submit(lambda row: cal_sleep(row), row) for row in x]
+    result2 = [future.result() for future in tasks]
+    
+    print("batchs done {}".format(len(x)))
+    return result
+
+import threading
+
+@udf(input_types=["INT"], result_type="BIGINT", batch_mode = True)
+def fib(x: List[int]) -> List[int]:
+    current_thread = threading.current_thread()
+    print("batchs {} {}".format(len(x), current_thread.name))
+    result = [sum(range(3500000 + row)) for row in x]
+    print("batchs done {}".format(len(x)))
+    # tasks = [executor.submit(lambda row: cal_sleep(row), row) for row in x]
+    # _column = [future.result() for future in tasks]
+    return result
+
 @udf(input_types=["INT"], result_type="INT")
 def wait(x):
     time.sleep(0.1)
     return x
-
 
 @udf(input_types=["INT"], result_type="INT", io_threads=32)
 def wait_concurrent(x):

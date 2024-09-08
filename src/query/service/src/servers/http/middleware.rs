@@ -75,6 +75,7 @@ pub enum EndpointKind {
     StartQuery,
     PollQuery,
     Clickhouse,
+    NoAuth,
 }
 
 const USER_AGENT: &str = "User-Agent";
@@ -133,6 +134,9 @@ fn get_credential(
     kind: HttpHandlerKind,
     endpoint_kind: EndpointKind,
 ) -> Result<Credential> {
+    if matches!(endpoint_kind, EndpointKind::NoAuth) {
+        return Ok(Credential::NoNeed);
+    }
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
@@ -220,6 +224,9 @@ fn auth_by_header(
                             return Err(ErrorCode::AuthenticateFailure(
                                 "clickhouse handler should not use databend auth",
                             ));
+                        }
+                        EndpointKind::NoAuth => {
+                            unreachable!()
                         }
                     };
                     Ok(Credential::DatabendToken {

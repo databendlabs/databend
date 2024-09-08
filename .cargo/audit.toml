@@ -44,5 +44,7 @@ ignore = [
     # gix-index: Refs and paths with reserved Windows device names access the devices
     "RUSTSEC-2024-0352",
     # gix-ref: Refs and paths with reserved Windows device names access the devices
-    "RUSTSEC-2024-0351"
+    "RUSTSEC-2024-0351",
+    # gix-path: improperly resolves configuration path reported by Git
+    "RUSTSEC-2024-0371",
 ]

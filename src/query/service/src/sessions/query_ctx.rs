@@ -51,6 +51,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -79,6 +80,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -190,26 +192,38 @@ impl QueryContext {
             .shared
             .catalog_manager
             .build_catalog(table_info.catalog_info.clone(), self.session_state())?;
-        match table_args {
-            None => {
+
+        let is_default = catalog.info().catalog_type() == CatalogType::Default;
+        match (table_args, is_default) {
+            (Some(table_args), true) => {
+                let default_catalog = self
+                    .shared
+                    .catalog_manager
+                    .get_default_catalog(self.session_state())?;
+                let table_function =
+                    default_catalog.get_table_function(&table_info.name, table_args)?;
+                Ok(table_function.as_table())
+            }
+            (Some(_), false) => Err(ErrorCode::InvalidArgument(
+                "request table args inside non-default catalog is invalid",
+            )),
+            // Load table first, if not found, try to load table function.
+            (None, true) => {
                 let table = catalog.get_table_by_info(table_info);
                 if table.is_err() {
-                    let table_function = catalog
-                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]));
+                    let Ok(table_function) = catalog
+                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]))
+                    else {
+                        // Returns the table error if the table function failed to load.
+                        return table;
+                    };
 
-                    if table_function.is_err() {
-                        table
-                    } else {
-                        Ok(table_function?.as_table())
-                    }
+                    Ok(table_function.as_table())
                 } else {
                     table
                 }
             }
-
-            Some(table_args) => Ok(catalog
-                .get_table_function(&table_info.name, table_args)?
-                .as_table()),
+            (None, false) => catalog.get_table_by_info(table_info),
         }
     }
 
@@ -642,11 +656,11 @@ impl TableContext for QueryContext {
         self.shared.get_current_catalog()
     }
 
-    fn check_aborting(&self) -> Result<()> {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         self.shared.check_aborting()
     }
 
-    fn get_error(&self) -> Option<ErrorCode> {
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         self.shared.get_error()
     }
 

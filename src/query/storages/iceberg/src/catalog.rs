@@ -44,7 +44,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -56,7 +55,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
@@ -96,7 +94,6 @@ use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -158,13 +155,25 @@ impl IcebergCatalog {
             ),
         };
 
+        // Trick
+        //
+        // Our parser doesn't allow users to write `s3.region` in options. Instead, users must use
+        // `"s3.region"`, but it's stored as is. We need to remove the quotes here.
+        //
+        // We only do this while building catalog so this won't affect existing catalogs.
         let ctl: Arc<dyn iceberg::Catalog> = match opt {
             IcebergCatalogOption::Hms(hms) => {
                 let cfg = HmsCatalogConfig::builder()
                     .address(hms.address.clone())
                     .thrift_transport(HmsThriftTransport::Buffered)
                     .warehouse(hms.warehouse.clone())
-                    .props(hms.props.clone())
+                    .props(
+                        hms.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
                     .build();
                 let ctl = HmsCatalog::new(cfg).map_err(|err| {
                     ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
@@ -175,7 +184,13 @@ impl IcebergCatalog {
                 let cfg = RestCatalogConfig::builder()
                     .uri(rest.uri.clone())
                     .warehouse(rest.warehouse.clone())
-                    .props(rest.props.clone())
+                    .props(
+                        rest.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
                     .build();
                 let ctl = RestCatalog::new(cfg);
                 Arc::new(ctl)
@@ -247,12 +262,6 @@ impl Catalog for IcebergCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        if table_info.meta.storage_params.is_none() {
-            return Err(ErrorCode::BadArguments(
-                "table storage params not set, this is not a valid table info for iceberg table",
-            ));
-        }
-
         let table: Arc<dyn Table> = IcebergTable::try_create(table_info.clone())?.into();
 
         Ok(table)
@@ -485,26 +494,17 @@ impl Catalog for IcebergCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 

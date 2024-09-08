@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -54,7 +53,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -99,7 +97,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -662,26 +659,17 @@ impl Catalog for DatabaseCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.create_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.update_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.drop_virtual_column(req).await
     }
 

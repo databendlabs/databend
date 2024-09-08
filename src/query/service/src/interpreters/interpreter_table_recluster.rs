@@ -82,7 +82,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 error!(
                     "execution of recluster statement aborted. server is shutting down or the query was killed",
                 );
-                return Err(err);
+                return Err(err.with_context("failed to execute"));
             }
 
             let res = self.execute_recluster().await;

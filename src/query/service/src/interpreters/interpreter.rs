@@ -26,6 +26,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
@@ -51,6 +52,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::ServiceQueryExecutor;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -87,8 +89,10 @@ pub trait Interpreter: Sync + Send {
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        let make_error = || "failed to execute interpreter";
+
         ctx.set_status_info("building pipeline");
-        ctx.check_aborting()?;
+        ctx.check_aborting().with_context(make_error)?;
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
@@ -205,7 +209,10 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
 ///
 /// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
 pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
-    let mut planner = Planner::new(ctx.clone());
+    let mut planner = Planner::new_with_sample_executor(
+        ctx.clone(),
+        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
+    );
     let result = planner.plan_sql(sql).await;
     let short_sql = short_sql(sql.to_string());
     let mut stmt = if let Ok((_, extras)) = &result {
