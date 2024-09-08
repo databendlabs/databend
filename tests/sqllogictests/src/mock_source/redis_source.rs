@@ -51,9 +51,11 @@ async fn process(socket: TcpStream) {
     while let Some(frame) = connection.read_frame().await.unwrap() {
         let response = match Command::from_frame(frame).unwrap() {
             Get(cmd) => {
-                // handle get command, get value from mock db.
-                if let Some(value) = db.get(cmd.key()) {
-                    Frame::Bulk(value.clone().into())
+                // Return a value if the first character of the key is ASCII alphanumeric,
+                // otherwise treat it as the key does not exist.
+                if cmd.key().starts_with(|c: char| c.is_ascii_alphanumeric()) {
+                    let value = format!("{}_value", cmd.key());
+                    Frame::Bulk(value.into())
                 } else {
                     Frame::Null
                 }

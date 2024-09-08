@@ -90,7 +90,15 @@ impl TransformAsyncFunction {
                                 unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
                             Value::Scalar(Scalar::String(value))
                         }
-                        Err(_) => Value::Scalar(dict_arg.default_value.clone()),
+                        Err(e) => {
+                            if e.kind() == opendal::ErrorKind::NotFound {
+                                Value::Scalar(dict_arg.default_value.clone())
+                            } else {
+                                return Err(ErrorCode::DictionarySourceError(format!(
+                                    "dictionary source error: {e}"
+                                )));
+                            }
+                        }
                     }
                 } else {
                     Value::Scalar(dict_arg.default_value.clone())
@@ -107,8 +115,14 @@ impl TransformAsyncFunction {
                                     unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
                                 builder.push(ScalarRef::String(value.as_str()));
                             }
-                            Err(_) => {
-                                builder.push(dict_arg.default_value.as_ref());
+                            Err(e) => {
+                                if e.kind() == opendal::ErrorKind::NotFound {
+                                    builder.push(dict_arg.default_value.as_ref());
+                                } else {
+                                    return Err(ErrorCode::DictionarySourceError(format!(
+                                        "dictionary source error: {e}"
+                                    )));
+                                }
                             }
                         };
                     } else {

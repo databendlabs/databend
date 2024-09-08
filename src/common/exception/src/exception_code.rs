@@ -386,6 +386,7 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
+    DictionarySourceError(3115),
     // Procedure
     UnknownProcedure(3130),
     ProcedureAlreadyExists(3131),
