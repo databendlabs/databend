@@ -110,7 +110,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 let meta: BackgroundJobInfo = req.job_info.clone();
 
                 txn_replace_exact(&mut txn, name_key, 0, &id)?; // name -> background_job_id
-                txn.if_then.push(txn_op_put_pb(&id_key, &meta)?); // id -> meta
+                txn.if_then.push(txn_op_put_pb(&id_key, &meta, None)?); // id -> meta
 
                 let (succ, _responses) = send_txn(self, txn).await?;
 

@@ -194,8 +194,6 @@ pub struct TableInfo {
     /// `name`, `id` or `version` is not included in the table structure definition.
     pub meta: TableMeta,
 
-    pub tenant: String,
-
     /// The corresponding catalog info of this table.
     pub catalog_info: Arc<CatalogInfo>,
 

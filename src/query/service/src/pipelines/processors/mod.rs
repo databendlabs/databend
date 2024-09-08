@@ -15,10 +15,12 @@
 pub use databend_common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
+pub use transforms::BlockCompactBuilder;
 pub use transforms::HashJoinBuildState;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::TransformAddStreamColumns;
+pub use transforms::TransformBlockConcat;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCreateSets;
 pub use transforms::TransformLimit;

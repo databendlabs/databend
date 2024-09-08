@@ -108,7 +108,7 @@ impl LockManager {
             ctx.get_current_user()?.name,       // user
             ctx.get_cluster().local_id.clone(), // node
             query_id.clone(),                   // query_id
-            expire_secs,
+            Duration::from_secs(expire_secs),
         );
 
         let catalog = ctx.get_catalog(catalog_name).await?;
@@ -144,8 +144,12 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-                let extend_table_lock_req =
-                    ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
+                let extend_table_lock_req = ExtendLockRevReq::new(
+                    lock_key.clone(),
+                    revision,
+                    Duration::from_secs(expire_secs),
+                    true,
+                );
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
