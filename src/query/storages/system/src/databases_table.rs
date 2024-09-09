@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::UserApiProvider;
+use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -68,47 +69,107 @@ impl AsyncSystemTable for DatabasesTable {
         let user_api = UserApiProvider::instance();
         let mut catalog_names = vec![];
         let mut db_names = vec![];
-        let mut db_id = vec![];
+        let mut db_ids = vec![];
         let mut owners: Vec<Option<String>> = vec![];
 
         let visibility_checker = ctx.get_visibility_checker().await?;
+        let catalog_dbs = visibility_checker.get_visibility_database();
+        if let Some(catalog_dbs) = catalog_dbs {
+            for (catalog, dbs) in catalog_dbs {
+                let mut catalog_db_ids = vec![];
+                let ctl = ctx.get_catalog(catalog).await?;
+                for (db_name, db_id) in dbs {
+                    if let Some(db_name) = db_name {
+                        let db_id = ctl
+                            .get_database(&tenant, db_name)
+                            .await?
+                            .get_db_info()
+                            .database_id
+                            .db_id;
 
-        for (ctl_name, catalog) in catalogs.into_iter() {
-            let databases = catalog.list_databases(&tenant).await?;
-            let final_dbs = databases
-                .into_iter()
-                .filter(|db| {
-                    visibility_checker.check_database_visibility(
-                        &ctl_name,
-                        db.name(),
-                        db.get_db_info().database_id.db_id,
-                    )
-                })
-                .collect::<Vec<_>>();
+                        catalog_names.push(catalog.clone());
+                        db_names.push(db_name.to_string());
+                        db_ids.push(db_id);
+                        owners.push(
+                            user_api
+                                .get_ownership(&tenant, &OwnershipObject::Database {
+                                    catalog_name: catalog.clone(),
+                                    db_id,
+                                })
+                                .await
+                                .ok()
+                                .and_then(|ownership| ownership.map(|o| o.role.clone())),
+                        );
+                    }
+                    if let Some(db_id) = db_id {
+                        catalog_db_ids.push(*db_id);
+                    }
+                }
+                match ctl
+                    .mget_database_names_by_ids(&tenant, &catalog_db_ids)
+                    .await
+                {
+                    Ok(databases) => {
+                        for (i, db) in databases.into_iter().flatten().enumerate() {
+                            catalog_names.push(catalog.clone());
+                            db_names.push(db);
+                            db_ids.push(catalog_db_ids[i]);
+                            owners.push(
+                                user_api
+                                    .get_ownership(&tenant, &OwnershipObject::Database {
+                                        catalog_name: catalog.clone(),
+                                        db_id: catalog_db_ids[i],
+                                    })
+                                    .await
+                                    .ok()
+                                    .and_then(|ownership| ownership.map(|o| o.role.clone())),
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        let msg = format!("Failed to get database: {}, {}", ctl.name(), err);
+                        warn!("{}", msg);
+                    }
+                }
+            }
+        } else {
+            for (ctl_name, catalog) in catalogs.into_iter() {
+                let databases = catalog.list_databases(&tenant).await?;
+                let final_dbs = databases
+                    .into_iter()
+                    .filter(|db| {
+                        visibility_checker.check_database_visibility(
+                            &ctl_name,
+                            db.name(),
+                            db.get_db_info().database_id.db_id,
+                        )
+                    })
+                    .collect::<Vec<_>>();
 
-            for db in final_dbs {
-                catalog_names.push(ctl_name.clone());
-                let db_name = db.name().to_string();
-                db_names.push(db_name);
-                let id = db.get_db_info().database_id.db_id;
-                db_id.push(id);
-                owners.push(
-                    user_api
-                        .get_ownership(&tenant, &OwnershipObject::Database {
-                            catalog_name: ctl_name.to_string(),
-                            db_id: id,
-                        })
-                        .await
-                        .ok()
-                        .and_then(|ownership| ownership.map(|o| o.role.clone())),
-                );
+                for db in final_dbs {
+                    catalog_names.push(ctl_name.clone());
+                    let db_name = db.name().to_string();
+                    db_names.push(db_name);
+                    let id = db.get_db_info().database_id.db_id;
+                    db_ids.push(id);
+                    owners.push(
+                        user_api
+                            .get_ownership(&tenant, &OwnershipObject::Database {
+                                catalog_name: ctl_name.to_string(),
+                                db_id: id,
+                            })
+                            .await
+                            .ok()
+                            .and_then(|ownership| ownership.map(|o| o.role.clone())),
+                    );
+                }
             }
         }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalog_names),
             StringType::from_data(db_names),
-            UInt64Type::from_data(db_id),
+            UInt64Type::from_data(db_ids),
             StringType::from_opt_data(owners),
         ]))
     }

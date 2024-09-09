@@ -277,16 +277,7 @@ pub(crate) async fn dump_tables(
 
     let mut final_dbs: Vec<(String, u64)> = Vec::new();
 
-    if databases.is_empty() {
-        let all_databases = catalog.list_databases(&tenant).await?;
-        for db in all_databases {
-            let db_id = db.get_db_info().database_id.db_id;
-            let db_name = db.name();
-            if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
-                final_dbs.push((db_name.to_string(), db_id));
-            }
-        }
-    } else {
+    if !databases.is_empty() {
         for db in databases {
             let db_id = catalog
                 .get_database(&tenant, &db)
@@ -298,12 +289,62 @@ pub(crate) async fn dump_tables(
                 final_dbs.push((db.to_string(), db_id));
             }
         }
+    } else {
+        let catalog_dbs = visibility_checker.get_visibility_database();
+        if let Some(catalog_dbs) = catalog_dbs {
+            for (catalog_name, dbs) in catalog_dbs {
+                if catalog_name == CATALOG_DEFAULT {
+                    let mut catalog_db_ids = vec![];
+                    for (db_name, db_id) in dbs {
+                        if let Some(db_name) = db_name {
+                            let db_id = catalog
+                                .get_database(&tenant, db_name)
+                                .await?
+                                .get_db_info()
+                                .database_id
+                                .db_id;
+                            final_dbs.push((db_name.to_string(), db_id));
+                        }
+                        if let Some(db_id) = db_id {
+                            catalog_db_ids.push(*db_id);
+                        }
+                    }
+                    match catalog
+                        .mget_database_names_by_ids(&tenant, &catalog_db_ids)
+                        .await
+                    {
+                        Ok(databases) => {
+                            for (i, db) in databases.into_iter().flatten().enumerate() {
+                                final_dbs.push((db.to_string(), catalog_db_ids[i]));
+                            }
+                        }
+                        Err(err) => {
+                            let msg =
+                                format!("Failed to get database: {}, {}", catalog.name(), err);
+                            warn!("{}", msg);
+                        }
+                    }
+                }
+            }
+        } else {
+            let all_databases = catalog.list_databases(&tenant).await?;
+            for db in all_databases {
+                let db_id = db.get_db_info().database_id.db_id;
+                let db_name = db.name();
+                if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
+                    final_dbs.push((db_name.to_string(), db_id));
+                }
+            }
+        }
     }
 
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
     for (database, db_id) in final_dbs {
         let tables = if tables.is_empty() {
-            (catalog.list_tables(&tenant, &database).await).unwrap_or_default()
+            catalog
+                .list_tables(&tenant, &database)
+                .await
+                .unwrap_or_default()
         } else {
             let mut res = Vec::new();
             for table in &tables {
