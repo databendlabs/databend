@@ -42,7 +42,7 @@ impl PipelineBuilder {
             })
         } else {
             self.main_pipeline.try_add_async_transformer(|| {
-                TransformUdfServer::new_retry_wrapper(self.ctx.clone(), udf.udf_funcs.clone())
+                TransformUdfServer::new(self.ctx.clone(), udf.udf_funcs.clone())
             })
         }
     }

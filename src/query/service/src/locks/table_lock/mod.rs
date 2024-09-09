@@ -20,8 +20,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::anyerror::func_name;
 use databend_common_pipeline_core::LockGuard;
 
 use crate::locks::LockManager;
@@ -51,7 +49,7 @@ impl Lock for TableLock {
         ctx: Arc<dyn TableContext>,
         should_retry: bool,
     ) -> Result<Option<Arc<LockGuard>>> {
-        let tenant = Tenant::new_or_err(&self.table_info.tenant, func_name!())?;
+        let tenant = ctx.get_tenant();
         let table_id = self.table_info.ident.table_id;
         let lock_key = LockKey::Table {
             tenant: tenant.clone(),

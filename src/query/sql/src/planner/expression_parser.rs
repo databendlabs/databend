@@ -60,7 +60,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn bind_one_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
+pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
@@ -117,7 +117,7 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
@@ -378,7 +378,7 @@ pub fn parse_cluster_keys(
     table_meta: Arc<dyn Table>,
     cluster_key_str: &str,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
@@ -455,7 +455,7 @@ pub fn parse_hilbert_cluster_key(
     table_meta: Arc<dyn Table>,
     cluster_key_str: &str,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
@@ -609,7 +609,7 @@ pub fn analyze_cluster_keys(
         }
     }
 
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(

@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -53,6 +54,7 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
@@ -61,7 +63,6 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
-use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -179,11 +180,9 @@ use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
@@ -223,9 +222,6 @@ use crate::util::deserialize_struct_get_response;
 use crate::util::get_table_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
-use crate::util::txn_delete_exact;
-use crate::util::txn_op_put_pb;
-use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
@@ -988,7 +984,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             |mut meta| {
                 meta.virtual_columns = req.virtual_columns.clone();
                 meta.updated_on = Some(Utc::now());
-                Some(meta)
+                Some((meta, None))
             },
             not_found,
         )
@@ -1638,7 +1634,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             ),
             name: tenant_dbname_tbname.table_name.clone(),
             meta: seq_meta.data,
-            tenant: req.tenant.tenant_name().to_string(),
             db_type,
             catalog_info: Default::default(),
         };
@@ -1749,10 +1744,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     .into_iter()
                     .map(|(table_id, seqv)| {
                         Arc::new(TableInfo {
-                            ident: TableIdent {
-                                table_id: table_id.table_id,
-                                seq: seqv.seq(),
-                            },
+                            ident: TableIdent::new(table_id.table_id, seqv.seq()),
                             desc: format!(
                                 "'{}'.'{}'",
                                 tenant_dbname.database_name(),
@@ -1760,7 +1752,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                             name: table_id_list_key.table_name.to_string(),
                             meta: seqv.data,
-                            tenant: tenant_dbname.tenant_name().to_string(),
                             db_type: DatabaseType::NormalDB,
                             catalog_info: Default::default(),
                         })
@@ -3001,24 +2992,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListLockRevReq,
     ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
-        let lock_key = &req.lock_key;
-        let lock_type = lock_key.lock_type();
+        let dir = req.lock_key.gen_prefix();
+        let strm = self.list_pb(&dir).await?;
 
-        let prefix = lock_key.gen_prefix();
-        let list = self.prefix_list_kv(&prefix).await?;
+        let list = strm
+            .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
+            .try_collect::<Vec<_>>()
+            .await?;
 
-        let mut reply = vec![];
-        for (k, seq) in list.into_iter() {
-            let revision = lock_type.revision_from_str(&k).map_err(|e| {
-                let inv = InvalidReply::new("list_lock_revisions", &e);
-                let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                MetaError::NetworkError(meta_net_err)
-            })?;
-            let lock_meta: LockMeta = deserialize_struct(&seq.data)?;
-
-            reply.push((revision, lock_meta));
-        }
-        Ok(reply)
+        Ok(list)
     }
 
     #[logcall::logcall]
@@ -3030,64 +3012,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let lock_key = &req.lock_key;
-        let lock_type = lock_key.lock_type();
-        let extra_info = lock_key.get_extra_info();
-
-        let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
 
         let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
         let key = lock_key.gen_key(revision);
 
-        let ctx = func_name!();
+        let lock_meta = LockMeta {
+            user: req.user.clone(),
+            node: req.node.clone(),
+            query_id: req.query_id.clone(),
+            created_on: Utc::now(),
+            acquired_on: None,
+            lock_type: lock_key.lock_type(),
+            extra_info: lock_key.get_extra_info(),
+        };
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        // Revision is unique. if it presents, consider it as success.
+        // Thus, we could just ignore create result
+        let _create_res = self
+            .create_name_value(key, lock_meta, Some(req.ttl))
+            .await?;
 
-            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            let lock_meta = LockMeta {
-                user: req.user.clone(),
-                node: req.node.clone(),
-                query_id: req.query_id.clone(),
-                created_on: Utc::now(),
-                acquired_on: None,
-                lock_type: lock_type.clone(),
-                extra_info: extra_info.clone(),
-            };
-
-            let condition = vec![
-                // table is not changed
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                // assumes lock are absent.
-                txn_cond_seq(&key, Eq, 0),
-            ];
-
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.expire_secs * 1000),
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "create_lock_revision"
-            );
-
-            if succ {
-                return Ok(CreateLockRevReply { revision });
-            }
-        }
+        Ok(CreateLockRevReply { revision })
     }
 
     #[logcall::logcall]
@@ -3099,63 +3044,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let lock_key = &req.lock_key;
         let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
+        let key = lock_key.gen_key(req.revision);
 
-        let revision = req.revision;
-        let key = lock_key.gen_key(revision);
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
-            if lock_seq == 0 || lock_meta_opt.is_none() {
-                return Err(KVAppError::AppError(AppError::TableLockExpired(
-                    TableLockExpired::new(table_id, ctx),
-                )));
-            }
-
-            let mut lock_meta = lock_meta_opt.unwrap();
-            // Set `acquire_lock = true` to initialize `acquired_on` when the
-            // first time this lock is acquired. Before the lock is
-            // acquired(becoming the first in lock queue), or after being
-            // acquired, this argument is always `false`.
-            if req.acquire_lock {
-                lock_meta.acquired_on = Some(Utc::now());
-            }
-
-            let condition = vec![
-                // table is not changed
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&key, Eq, lock_seq),
-            ];
-
-            let if_then = vec![TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(&lock_meta)?,
-                Some(req.expire_secs * 1000),
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "extend_lock_revision"
-            );
-
-            if succ {
-                return Ok(());
-            }
-        }
+        self.update_existent_name_value(
+            &key,
+            |mut lock_meta| {
+                // Set `acquire_lock = true` to initialize `acquired_on` when the
+                // first time this lock is acquired. Before the lock is
+                // acquired(becoming the first in lock queue), or after being
+                // acquired, this argument is always `false`.
+                if req.acquire_lock {
+                    lock_meta.acquired_on = Some(Utc::now());
+                }
+                Some((lock_meta, Some(req.ttl)))
+            },
+            || {
+                Err(AppError::TableLockExpired(TableLockExpired::new(
+                    table_id, ctx,
+                )))
+            },
+        )
+        .await??;
+        Ok(())
     }
 
     #[logcall::logcall]
@@ -3168,41 +3078,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let revision = req.revision;
         let key = lock_key.gen_key(revision);
 
-        let table_id = lock_key.get_table_id();
-        let tbid = TableId { table_id };
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let seq_lock = self.get_pb(&key).await?;
-
-            // The lock has been deleted.
-            let Some(seq_lock) = seq_lock else {
-                break;
-            };
-
-            let condition = vec![txn_cond_seq(&key, Eq, seq_lock.seq)];
-            let if_then = vec![txn_op_del(&key)];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident :% =(&tbid),
-                succ = succ;
-                "delete_lock_revision"
-            );
-
-            if succ {
-                break;
-            }
-        }
+        self.remove_name_value(&key, || Ok::<(), ()>(()))
+            .await?
+            .unwrap();
 
         Ok(())
     }
@@ -3211,30 +3089,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
-        for prefix in &req.prefixes {
-            let mut stream = self.list_kv(prefix).await?;
-            while let Some(list) = stream.try_next().await? {
-                let k = list.key;
-                let seq = SeqV::from(list.value.unwrap());
-                let meta: LockMeta = deserialize_struct(&seq.data)?;
-                let lock_type = &meta.lock_type;
-                let key = lock_type.key_from_str(&k).map_err(|e| {
-                    let inv = InvalidReply::new("list_locks", &e);
-                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                    MetaError::NetworkError(meta_net_err)
-                })?;
-                let revision = lock_type.revision_from_str(&k).map_err(|e| {
-                    let inv = InvalidReply::new("list_locks", &e);
-                    let meta_net_err = MetaNetworkError::InvalidReply(inv);
-                    MetaError::NetworkError(meta_net_err)
-                })?;
+        for dir in &req.prefixes {
+            let strm = self.list_pb(dir).await?;
+            let locks = strm
+                .map_ok(|itm| LockInfo {
+                    table_id: itm.key.table_id(),
+                    revision: itm.key.revision(),
+                    meta: itm.seqv.data,
+                })
+                .try_collect::<Vec<_>>()
+                .await?;
 
-                reply.push(LockInfo {
-                    table_id: key.get_table_id(),
-                    revision,
-                    meta,
-                });
-            }
+            reply.extend(locks);
         }
         Ok(reply)
     }
@@ -3248,44 +3114,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
         debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res,name_ident :? =(name_ident);"get_catalog");
+        let res = self
+            .create_id_value(name_ident, meta, false, |id| {
+                vec![(
+                    CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
+                    name_ident_raw.clone(),
+                )]
+            })
+            .await?;
 
-            if let Some((seq_id, _seq_meta)) = res {
-                return Ok(Err(seq_id));
-            }
-
-            // Create catalog by inserting these record:
-            // (tenant, catalog_name) -> catalog_id
-            // (catalog_id) -> catalog_meta
-            // (catalog_id) -> (tenant, catalog_name)
-            let id = fetch_id(self, IdGenerator::catalog_id()).await?;
-            let catalog_id = CatalogId::new(id);
-            let id_ident = CatalogIdIdent::new_generic(name_ident.tenant(), catalog_id);
-            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(catalog_id :? = catalog_id, name_ident :? =(name_ident); "new catalog id");
-
-            let mut txn = TxnRequest::default();
-
-            txn_replace_exact(&mut txn, name_ident, 0, &catalog_id)?; /* (tenant, catalog_name) -> catalog_id */
-            txn.if_then.extend([
-                txn_op_put_pb(&id_ident, meta)?, /* (catalog_id) -> catalog_meta */
-                txn_op_put_pb(&id_to_name_ident, &name_ident.to_raw())?, /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-
-            ]);
-
-            let (succ, _) = send_txn(self, txn).await?;
-            debug!(name :? =(name_ident),id :? =(&id_ident),succ = succ;"create_catalog");
-
-            if succ {
-                return Ok(Ok(catalog_id));
-            }
-        }
+        Ok(res)
     }
 
     #[logcall::logcall]
@@ -3301,11 +3141,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .await?
             .ok_or_else(|| AppError::unknown(name_ident, func_name!()))?;
 
-        let catalog = CatalogInfo {
-            id: CatalogIdIdent::new_generic(name_ident.tenant(), seq_id.data).into(),
-            name_ident: name_ident.clone().into(),
-            meta: seq_meta.data,
-        };
+        let catalog = CatalogInfo::new(name_ident.clone(), seq_id.data, seq_meta.data);
 
         Ok(Arc::new(catalog))
     }
@@ -3318,39 +3154,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError> {
         debug!(req :? =(&name_ident); "SchemaApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let removed = self
+            .remove_id_value(name_ident, |id| {
+                vec![CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
+            })
+            .await?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-
-            let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
-            };
-
-            // Delete catalog by deleting these record:
-            // (tenant, catalog_name) -> catalog_id
-            // (catalog_id) -> catalog_meta
-            // (catalog_id) -> (tenant, catalog_name)
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-            let id_to_name_ident = CatalogIdToNameIdent::new_from(id_ident.clone());
-
-            debug!(seq_id :? = seq_id, name_ident :? =(&name_ident); "{}", func_name!());
-
-            let mut txn = TxnRequest::default();
-
-            txn_delete_exact(&mut txn, name_ident, seq_id.seq); // (tenant, catalog_name) -> catalog_id
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq); // (catalog_id) -> catalog_meta
-            txn.if_then.push(txn_op_del(&id_to_name_ident)); /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
-
-            let (succ, _) = send_txn(self, txn).await?;
-
-            debug!(name_ident :? =(&name_ident),id :? =(&id_ident),succ = succ; "{}", func_name!());
-
-            if succ {
-                return Ok(Some((seq_id, seq_meta)));
-            }
-        }
+        Ok(removed)
     }
 
     #[logcall::logcall]
@@ -3363,40 +3173,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let tenant = req.tenant;
         let name_key = CatalogNameIdent::new(&tenant, "dummy");
-
         let dir = DirName::new(name_key);
 
-        // Pairs of catalog-name and catalog_id with seq
-        let items = self.list_pb(&dir).await?.try_collect::<Vec<_>>().await?;
+        let name_id_values = self.list_id_value(&dir).await?;
 
-        // Keys for fetching CatalogMeta from kvapi::KVApi
-        let kv_keys = items.iter().map(|x| x.seqv.data.into_t_ident(&tenant));
-        let kv_keys = kv_keys.collect::<Vec<_>>();
-
-        // Batch get all catalog-metas.
-        // - A catalog-meta may be already deleted. It is Ok. Just ignore it.
-        let seq_metas = self.get_pb_values(kv_keys.clone()).await?;
-        let seq_metas = seq_metas.try_collect::<Vec<_>>().await?;
-
-        let mut catalog_infos = Vec::with_capacity(kv_keys.len());
-
-        for (i, seq_meta_opt) in seq_metas.into_iter().enumerate() {
-            let item = &items[i];
-
-            if let Some(seq_meta) = seq_meta_opt {
-                let catalog_info = CatalogInfo {
-                    id: CatalogIdIdent::new(&tenant, *item.seqv.data).into(),
-                    name_ident: CatalogNameIdent::new(&tenant, item.key.name()).into(),
-                    meta: seq_meta.data,
-                };
-                catalog_infos.push(Arc::new(catalog_info));
-            } else {
-                debug!(
-                    k :% =(&kv_keys[i]);
-                    "catalog_meta not found, maybe just deleted after listing names and before listing meta"
-                );
-            }
-        }
+        let catalog_infos = name_id_values
+            .map(|(name, id, seq_meta)| Arc::new(CatalogInfo::new(name, id, seq_meta.data)))
+            .collect::<Vec<_>>();
 
         Ok(catalog_infos)
     }
@@ -3998,7 +3781,11 @@ fn build_upsert_table_copied_file_info_conditions(
             // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
         }
-        set_update_expire_operation(&key, &file_info, req.ttl, &mut if_then)?;
+        if_then.push(TxnOp::put_with_ttl(
+            key.to_string_key(),
+            serialize_struct(&file_info)?,
+            req.ttl,
+        ))
     }
     Ok((condition, if_then))
 }
@@ -4007,29 +3794,8 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     TxnOp::put_with_ttl(
         deduplicated_label,
         1_i8.to_le_bytes().to_vec(),
-        Some(86400 * 1000),
+        Some(Duration::from_secs(86400)),
     )
-}
-
-fn set_update_expire_operation(
-    key: &TableCopiedFileNameIdent,
-    file_info: &TableCopiedFileInfo,
-    ttl: Option<std::time::Duration>,
-    then_branch: &mut Vec<TxnOp>,
-) -> Result<(), KVAppError> {
-    match ttl {
-        Some(ttl) => {
-            then_branch.push(TxnOp::put_with_ttl(
-                key.to_string_key(),
-                serialize_struct(file_info)?,
-                Some(ttl.as_millis() as u64),
-            ));
-        }
-        None => {
-            then_branch.push(txn_op_put(key, serialize_struct(file_info)?));
-        }
-    }
-    Ok(())
 }
 
 #[logcall::logcall(input = "")]
@@ -4081,7 +3847,6 @@ async fn batch_filter_table_info(
             ),
             name: table_name.clone(),
             meta: tb_meta,
-            tenant: db_ident.tenant_name().to_string(),
             db_type: DatabaseType::NormalDB,
             catalog_info: Default::default(),
         };

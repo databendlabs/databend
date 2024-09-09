@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::time::Duration;
 
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -34,7 +35,8 @@ use crate::kv_pb_api::UpsertPB;
 use crate::meta_txn_error::MetaTxnError;
 use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
-use crate::util::txn_replace_exact;
+use crate::txn_cond_eq_seq;
+use crate::util::txn_op_put_pb;
 
 /// NameValueApi provide generic meta-service access pattern implementations for `name -> value` mapping.
 ///
@@ -49,6 +51,30 @@ where
     N: fmt::Debug + Clone + Send + Sync + 'static,
 {
     /// Create a `name -> value` mapping.
+    async fn create_name_value(
+        &self,
+        name_ident: TIdent<R, N>,
+        value: R::ValueType,
+        ttl: Option<Duration>,
+    ) -> Result<Result<(), ExistError<R, N>>, MetaTxnError> {
+        debug!(name_ident :? =name_ident; "NameValueApi: {}", func_name!());
+
+        let upsert = UpsertPB::insert(name_ident.clone(), value);
+        let upsert = if let Some(ttl) = ttl {
+            upsert.with_ttl(ttl)
+        } else {
+            upsert
+        };
+
+        let transition = self.upsert_pb(&upsert).await?;
+
+        if !transition.is_changed() {
+            return Ok(Err(name_ident.exist_error(func_name!())));
+        }
+        Ok(Ok(()))
+    }
+
+    /// Create a `name -> value` mapping, with `CreateOption` support
     async fn create_name_value_with_create_option(
         &self,
         name_ident: TIdent<R, N>,
@@ -73,7 +99,10 @@ where
 
     /// Update an existent `name -> value` mapping.
     ///
-    /// The `update` function is called with the previous value and should output the updated to write back.
+    /// The `update` function is called with the previous value
+    /// and should output the updated to write back,
+    /// with an optional time-to-last value.
+    ///
     /// `not_found` is called when the name does not exist.
     /// And this function decide to:
     /// - cancel update by returning `Ok(())`
@@ -81,7 +110,7 @@ where
     async fn update_existent_name_value<E>(
         &self,
         name_ident: &TIdent<R, N>,
-        update: impl Fn(R::ValueType) -> Option<R::ValueType> + Send,
+        update: impl Fn(R::ValueType) -> Option<(R::ValueType, Option<Duration>)> + Send,
         not_found: impl Fn() -> Result<(), E> + Send,
     ) -> Result<Result<(), E>, MetaTxnError> {
         debug!(name_ident :? =name_ident; "NameValueApi: {}", func_name!());
@@ -100,12 +129,13 @@ where
                 None => return Ok(not_found()),
             };
 
-            let Some(updated) = updated else {
+            let Some((updated, ttl)) = updated else {
                 // update is cancelled
                 return Ok(Ok(()));
             };
 
-            txn_replace_exact(&mut txn, name_ident, seq, &updated)?;
+            txn.condition.push(txn_cond_eq_seq(name_ident, seq));
+            txn.if_then.push(txn_op_put_pb(name_ident, &updated, ttl)?);
 
             let (succ, _responses) = send_txn(self, txn).await?;
 

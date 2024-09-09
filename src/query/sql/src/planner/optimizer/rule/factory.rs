@@ -34,6 +34,7 @@ use crate::optimizer::rule::rewrite::RulePushDownFilterProjectSet;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
 use crate::optimizer::rule::rewrite::RulePushDownFilterSort;
 use crate::optimizer::rule::rewrite::RulePushDownFilterUnion;
+use crate::optimizer::rule::rewrite::RulePushDownLimit;
 use crate::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::optimizer::rule::rewrite::RulePushDownLimitSort;
@@ -63,6 +64,7 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
+            RuleID::PushDownLimit => Ok(Box::new(RulePushDownLimit::new(metadata))),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
@@ -77,7 +79,7 @@ impl RuleFactory {
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
-            RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
+            RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new(metadata))),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),

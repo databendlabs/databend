@@ -15,6 +15,7 @@
 use std::any::type_name;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_app::app_error::AppError;
@@ -32,7 +33,6 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -312,7 +312,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     txn.condition.push(txn_cond_eq_seq(key, seq));
-    txn.if_then.push(txn_op_put_pb(key, value)?);
+    txn.if_then.push(txn_op_put_pb(key, value, None)?);
 
     Ok(())
 }
@@ -331,7 +331,11 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
     }
 }
 
-pub fn txn_op_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
+pub fn txn_op_put_pb<K>(
+    key: &K,
+    value: &K::ValueType,
+    ttl: Option<Duration>,
+) -> Result<TxnOp, InvalidArgument>
 where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
@@ -341,7 +345,7 @@ where
     let mut buf = vec![];
     prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
 
-    Ok(TxnOp::put(key.to_string_key(), buf))
+    Ok(TxnOp::put_with_ttl(key.to_string_key(), buf, ttl))
 }
 
 /// Build a txn operation that puts a record.
@@ -547,7 +551,6 @@ pub async fn get_tableinfos_by_ids(
                 desc: format!("'{}'.'{}'", tenant_dbname.database_name(), tbl_names[i]),
                 meta: tbl_meta,
                 name: tbl_names[i].clone(),
-                tenant: tenant_dbname.tenant_name().to_string(),
                 db_type: db_type.clone(),
                 catalog_info: Default::default(),
             };

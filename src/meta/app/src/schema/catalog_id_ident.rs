@@ -17,12 +17,12 @@ use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type CatalogId = DataId<Resource>;
+pub type CatalogId = DataId<CatalogIdRsc>;
 
-pub type CatalogIdIdent = TIdent<Resource, CatalogId>;
-pub type CatalogIdIdentRaw = TIdentRaw<Resource, CatalogId>;
+pub type CatalogIdIdent = TIdent<CatalogIdRsc, CatalogId>;
+pub type CatalogIdIdentRaw = TIdentRaw<CatalogIdRsc, CatalogId>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::CatalogIdRsc;
 
 impl CatalogIdIdent {
     pub fn new(tenant: impl ToTenant, catalog_id: u64) -> Self {
@@ -48,8 +48,8 @@ mod kvapi_impl {
     use crate::schema::CatalogMeta;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct CatalogIdRsc;
+    impl TenantResource for CatalogIdRsc {
         const PREFIX: &'static str = "__fd_catalog_by_id";
         const TYPE: &'static str = "CatalogIdIdent";
         const HAS_TENANT: bool = false;

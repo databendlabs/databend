@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
+use backon::ExponentialBuilder;
+use backon::Retryable;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
@@ -27,11 +30,9 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_metrics::external_server::record_connect_external_duration;
 use databend_common_metrics::external_server::record_request_external_duration;
-use databend_common_pipeline_transforms::processors::AsyncRetry;
-use databend_common_pipeline_transforms::processors::AsyncRetryWrapper;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::RetryStrategy;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 
 use crate::sessions::QueryContext;
@@ -46,10 +47,7 @@ pub struct TransformUdfServer {
 }
 
 impl TransformUdfServer {
-    pub fn new_retry_wrapper(
-        ctx: Arc<QueryContext>,
-        funcs: Vec<UdfFunctionDesc>,
-    ) -> Result<AsyncRetryWrapper<Self>> {
+    pub fn new(ctx: Arc<QueryContext>, funcs: Vec<UdfFunctionDesc>) -> Result<Self> {
         let settings = ctx.get_settings();
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
@@ -59,13 +57,12 @@ impl TransformUdfServer {
         let s = Self {
             ctx,
             funcs,
-
             connect_timeout,
             request_timeout,
             request_bacth_rows,
             retry_times,
         };
-        Ok(AsyncRetryWrapper::create(s))
+        Ok(s)
     }
 
     // data_block is spilt into multiple blocks, each block is processed by transform_inner
@@ -115,10 +112,16 @@ impl TransformUdfServer {
                 .with_func_name(&func.func_name)?
                 .with_query_id(&ctx.get_id())?;
 
-        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
-        let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
+        let connect_duration = instant.elapsed();
+        record_connect_external_duration(func.func_name.clone(), connect_duration);
 
-        record_request_external_duration(func.func_name.clone(), instant.elapsed());
+        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
+        let result_batch = client
+            .do_exchange(&func.func_name, input_batch.clone())
+            .await?;
+
+        let request_duration = instant.elapsed() - connect_duration;
+        record_request_external_duration(func.func_name.clone(), request_duration);
 
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
         let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
@@ -165,21 +168,15 @@ impl TransformUdfServer {
     }
 }
 
-impl AsyncRetry for TransformUdfServer {
-    fn retry_on(&self, _err: &databend_common_exception::ErrorCode) -> bool {
-        true
-    }
-
-    fn retry_strategy(&self) -> RetryStrategy {
-        RetryStrategy {
-            retry_times: self.retry_times as usize,
-            retry_sleep_duration: Some(tokio::time::Duration::from_millis(500)),
+fn retry_on(err: &databend_common_exception::ErrorCode) -> bool {
+    if err.code() == ErrorCode::U_D_F_DATA_ERROR {
+        let message = err.message();
+        // this means the server can't handle the request in 60s
+        if message.contains("h2 protocol error") {
+            return false;
         }
     }
-
-    fn retry_hook(&self) {
-        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRetryCount, 1);
-    }
+    true
 }
 
 #[async_trait::async_trait]
@@ -191,23 +188,42 @@ impl AsyncTransform for TransformUdfServer {
         for func in self.funcs.iter() {
             let rows = data_block.num_rows();
             let batch_rows = self.request_bacth_rows as usize;
+
             let tasks: Vec<_> = (0..rows)
                 .step_by(batch_rows)
                 .map(|start| {
-                    let mini_batch = data_block.slice(start..start + batch_rows.min(rows - start));
-                    let ctx = self.ctx.clone();
-                    let connect_timeout = self.connect_timeout;
-                    let request_timeout = self.request_timeout;
-                    let func = func.clone();
-
                     databend_common_base::runtime::spawn({
-                        Self::transform_inner(
-                            ctx,
-                            connect_timeout,
-                            request_timeout,
-                            func,
-                            mini_batch,
-                        )
+                        let mini_batch =
+                            data_block.slice(start..start + batch_rows.min(rows - start));
+                        let ctx = self.ctx.clone();
+                        let connect_timeout = self.connect_timeout;
+                        let request_timeout = self.request_timeout;
+                        let func = func.clone();
+
+                        let f = {
+                            move || {
+                                Self::transform_inner(
+                                    ctx.clone(),
+                                    connect_timeout,
+                                    request_timeout,
+                                    func.clone(),
+                                    mini_batch.clone(),
+                                )
+                            }
+                        };
+                        let backoff = ExponentialBuilder::default()
+                            .with_min_delay(Duration::from_millis(50))
+                            .with_factor(2.0)
+                            .with_max_delay(Duration::from_secs(30))
+                            .with_max_times(self.retry_times as usize);
+
+                        f.retry(&backoff).when(retry_on).notify(|err, dur| {
+                            Profile::record_usize_profile(
+                                ProfileStatisticsName::ExternalServerRetryCount,
+                                1,
+                            );
+                            log::warn!("Retry udf error: {:?} after {:?}", err.message(), dur);
+                        })
                     })
                 })
                 .collect();
