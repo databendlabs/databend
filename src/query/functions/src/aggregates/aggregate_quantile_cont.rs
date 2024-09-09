@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
@@ -33,7 +34,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use ethnum::i256;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 
 use super::AggregateUnaryFunction;
 use super::FunctionData;

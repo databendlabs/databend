@@ -3232,6 +3232,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-trait",
+ "borsh",
  "bytesize",
  "chrono",
  "ctrlc",
@@ -3243,6 +3244,8 @@ dependencies = [
  "libc",
  "log",
  "logcall",
+ "micromarshal 0.5.0",
+ "num-traits",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.3",
@@ -3256,6 +3259,8 @@ dependencies = [
  "replace_with",
  "semver",
  "serde",
+ "serde_json",
+ "serde_test",
  "state",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
@@ -3458,7 +3463,6 @@ dependencies = [
  "micromarshal 0.5.0",
  "num-bigint",
  "num-traits",
- "ordered-float 4.2.2",
  "pretty_assertions",
  "rand 0.8.5",
  "recursive",
@@ -3485,6 +3489,7 @@ dependencies = [
  "bstr",
  "chrono-tz 0.8.6",
  "databend-common-arrow",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
@@ -3501,7 +3506,6 @@ dependencies = [
  "micromarshal 0.7.0",
  "num",
  "num-traits",
- "ordered-float 4.2.2",
  "pretty_assertions",
  "roaring",
  "serde_json",
@@ -3556,7 +3560,6 @@ dependencies = [
  "naive-cityhash",
  "num-traits",
  "once_cell",
- "ordered-float 4.2.2",
  "proj4rs",
  "rand 0.8.5",
  "regex",
@@ -3599,7 +3602,6 @@ dependencies = [
  "databend-common-arrow",
  "databend-common-base",
  "ethnum",
- "ordered-float 4.2.2",
  "rand 0.8.5",
 ]
 
@@ -3630,6 +3632,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz 0.8.6",
+ "databend-common-base",
  "databend-common-exception",
  "ethnum",
  "geo",
@@ -3637,7 +3640,6 @@ dependencies = [
  "geozero 0.13.0",
  "lexical-core",
  "micromarshal 0.5.0",
- "ordered-float 4.2.2",
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
@@ -4195,7 +4197,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "opendal",
- "ordered-float 4.2.2",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prqlc",
@@ -4231,7 +4232,6 @@ dependencies = [
  "futures",
  "log",
  "opendal",
- "ordered-float 4.2.2",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4262,7 +4262,6 @@ dependencies = [
  "maplit",
  "match-template",
  "object_store_opendal",
- "ordered-float 4.2.2",
  "parquet",
  "serde",
  "serde_json",
@@ -4389,7 +4388,6 @@ dependencies = [
  "hive_metastore",
  "log",
  "opendal",
- "ordered-float 4.2.2",
  "recursive",
  "serde",
  "typetag",
@@ -4423,6 +4421,7 @@ dependencies = [
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
+ "ordered-float 4.2.2",
  "parquet",
  "serde",
  "tokio",
@@ -11172,7 +11171,6 @@ version = "4.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a91171844676f8c7990ce64959210cd2eaef32c2612c50f9fae9f8aaa6065a6"
 dependencies = [
- "borsh",
  "num-traits",
  "rand 0.8.5",
  "serde",
@@ -13820,6 +13818,15 @@ checksum = "babfccff5773ff80657f0ecf553c7c516bdc2eb16389c0918b36b73e7015276e"
 dependencies = [
  "serde",
  "stacker",
+]
+
+[[package]]
+name = "serde_test"
+version = "1.0.177"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f901ee573cab6b3060453d2d5f0bae4e6d628c23c0a962ff9b5f1d7c8d4f1ed"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

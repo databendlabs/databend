@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::OrderedFloat;
 use ethnum::i256;
-use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
 use crate::types::geometry::GeometryType;

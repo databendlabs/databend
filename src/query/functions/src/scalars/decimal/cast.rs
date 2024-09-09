@@ -15,6 +15,7 @@
 use std::ops::Mul;
 use std::sync::Arc;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -39,7 +40,6 @@ use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use ethnum::i256;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
