@@ -4023,10 +4023,12 @@ impl SchemaApiTestSuite {
             drop_ids_1.push(DroppedId::Db(
                 *res.db_id,
                 db_name.database_name().to_string(),
+                Arc::new(vec![]),
             ));
             drop_ids_2.push(DroppedId::Db(
                 *res.db_id,
                 db_name.database_name().to_string(),
+                Arc::new(vec![]),
             ));
 
             let req = CreateTableReq {
@@ -4063,7 +4065,7 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_database(create_db_req.clone()).await?;
             let db_id = res.db_id;
-            drop_ids_2.push(DroppedId::Db(*db_id, "db2".to_string()));
+            drop_ids_2.push(DroppedId::Db(*db_id, "db2".to_string(), Arc::new(vec![])));
 
             info!("--- create and drop db2.tb1");
             {
@@ -4262,13 +4264,13 @@ impl SchemaApiTestSuite {
                         left_table_id.cmp(right_table_id)
                     }
                 }
-                (DroppedId::Db(left_db_id, _), DroppedId::Db(right_db_id, _)) => {
+                (DroppedId::Db(left_db_id, _, _), DroppedId::Db(right_db_id, _, _)) => {
                     left_db_id.cmp(right_db_id)
                 }
-                (DroppedId::Db(left_db_id, _), DroppedId::Table(right_db_id, _, _)) => {
+                (DroppedId::Db(left_db_id, _, _), DroppedId::Table(right_db_id, _, _)) => {
                     left_db_id.cmp(right_db_id)
                 }
-                (DroppedId::Table(left_db_id, _, _), DroppedId::Db(right_db_id, _)) => {
+                (DroppedId::Table(left_db_id, _, _), DroppedId::Db(right_db_id, _, _)) => {
                     left_db_id.cmp(right_db_id)
                 }
             }

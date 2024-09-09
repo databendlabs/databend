@@ -41,7 +41,7 @@ pub async fn do_vacuum_drop_table(
         let result =
             vacuum_drop_single_table(&table_info, operator, dry_run_limit, &mut list_files).await;
         if result.is_err() {
-            let db_name = table_info.desc.split('.').next().unwrap();
+            let db_name = table_info.database_name()?;
             let table_id = table_info.ident.table_id;
             failed_dbs.insert(db_name.to_string());
             failed_tables.insert(table_id);

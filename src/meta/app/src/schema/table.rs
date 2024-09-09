@@ -25,6 +25,7 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
@@ -199,6 +200,20 @@ pub struct TableInfo {
 
     // table belong to which type of database.
     pub db_type: DatabaseType,
+}
+
+impl TableInfo {
+    pub fn database_name(&self) -> Result<&str> {
+        if self.engine() != "FUSE" {
+            return Err(ErrorCode::Internal(format!(
+                "Invalid engine: {}",
+                self.engine()
+            )));
+        }
+        let database_name = self.desc.split('.').next().unwrap();
+        let database_name = &database_name[1..database_name.len() - 1];
+        Ok(database_name)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -907,8 +922,8 @@ pub struct ListDroppedTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    // db id, db name
-    Db(u64, String),
+    // db id, db name, (table id, table name)s
+    Db(u64, String, Arc<Vec<(u64, String)>>),
     // db id, table id, table name
     Table(u64, u64, String),
 }

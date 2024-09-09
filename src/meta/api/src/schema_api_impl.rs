@@ -2884,6 +2884,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         drop_ids.push(DroppedId::Db(
                             db_info.database_id.db_id,
                             db_info.name_ident.database_name().to_string(),
+                            Arc::new(vec![]),
                         ));
                     }
                     if num == left_num {
@@ -2893,27 +2894,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         });
                     }
                 } else {
-                    table_infos.iter().for_each(|(table_info, db_id)| {
-                        if !drop_db {
+                    if drop_db {
+                        drop_ids.push(DroppedId::Db(
+                            db_info.database_id.db_id,
+                            db_info.name_ident.database_name().to_string(),
+                            Arc::new(
+                                table_infos
+                                    .iter()
+                                    .map(|(table_info, _)| {
+                                        (table_info.ident.table_id, table_info.name.clone())
+                                    })
+                                    .collect(),
+                            ),
+                        ));
+                    } else {
+                        table_infos.iter().for_each(|(table_info, db_id)| {
                             drop_ids.push(DroppedId::Table(
                                 *db_id,
                                 table_info.ident.table_id,
                                 table_info.name.clone(),
                             ))
-                        }
-                    });
-                    drop_table_infos.extend(
-                        table_infos
-                            .into_iter()
-                            .map(|(table_info, _)| table_info)
-                            .collect::<Vec<_>>(),
-                    );
-                    if drop_db {
-                        drop_ids.push(DroppedId::Db(
-                            db_info.database_id.db_id,
-                            db_info.name_ident.database_name().to_string(),
-                        ));
+                        });
                     }
+                    drop_table_infos
+                        .extend(table_infos.into_iter().map(|(table_info, _)| table_info));
                 }
             }
 
@@ -2974,7 +2978,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError> {
         for drop_id in req.drop_ids {
             match drop_id {
-                DroppedId::Db(db_id, db_name) => {
+                DroppedId::Db(db_id, db_name, _) => {
                     gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?
                 }
                 DroppedId::Table(db_id, table_id, table_name) => {
