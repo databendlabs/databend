@@ -26,7 +26,9 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_storage::build_operator;
 use opendal::services::Redis;
+use opendal::services::Mysql;
 use opendal::Operator;
+use sqlx_mysql::MySqlPoolOptions;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
@@ -57,8 +59,23 @@ impl TransformAsyncFunction {
                         let op = build_operator(builder)?;
                         operators.insert(i, Arc::new(op));
                     }
-                    DictionarySource::Mysql(_) => {
-                        return Err(ErrorCode::Unimplemented("Mysql source is unsupported"));
+                    DictionarySource::Mysql(sql_source) => {
+                        let mut builder = Mysql::default()
+                            .connection_string(&sql_source.connection_url)
+                            .key_field(&sql_source.key_field)
+                            .value_field(&sql_source.value_field)
+                            .table(&sql_source.table);
+                        let op = build_operator(builder)?;
+                        operators.insert(i, Arc::new(op));
+                        // Why not the same with Redis builder?
+                        // let pool = MySqlPoolOptions::new()
+                        //     .max_connections(5)
+                        //     .connect(&sql_source.connection_url).await?;
+                        // let sql = format!("select {} from table {} where {} = xxx;", sql_source.table, sql_source.table, sql_source.key_field);
+                        // let row: (&str,) = sqlx::query_as(&sql)
+                        //     .fetch_one(&pool).await?;
+                        // let res = row.0;//"abc"?
+                        // return Err(ErrorCode::Unimplemented("Mysql source is unsupported"));
                     }
                 }
             }

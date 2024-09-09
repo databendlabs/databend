@@ -21,6 +21,7 @@ databend-common-exception = { workspace = true }
 env_logger = "0.10.0"
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
+opensrv-mysql = "0.7.0"
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }

@@ -14,3 +14,5 @@
 
 mod redis_source;
 pub use redis_source::run_redis_source;
+
+mod mysql_source;

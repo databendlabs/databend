@@ -163,6 +163,8 @@ serde_stacker = { workspace = true }
 serde_urlencoded = "0.7.1"
 sha2 = { workspace = true }
 socket2 = "0.5.3"
+sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls" ] }
+sqlx-mysql = { version = "=0.8.2" }
 strength_reduce = "0.2.4"
 sysinfo = "0.30"
 tempfile = "3.4.0"
