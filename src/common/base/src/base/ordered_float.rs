@@ -1897,6 +1897,8 @@ mod impl_serde {
     #[cfg(test)]
     use self::serde_test::assert_tokens;
     #[cfg(test)]
+    use self::serde_test::Configure;
+    #[cfg(test)]
     use self::serde_test::Token;
 
     impl<T: FloatCore + Serialize> Serialize for OrderedFloat<T> {
@@ -1958,7 +1960,33 @@ mod impl_serde {
     #[test]
     fn test_ordered_float() {
         let float = OrderedFloat(1.0f64);
-        assert_tokens(&float, &[Token::F64(1.0)]);
+        assert_tokens(&float.readable(), &[Token::F64(1.0)]);
+    }
+
+    #[test]
+    fn test_ordered_float_with_nan() {
+        let float = OrderedFloat(f64::nan());
+        assert_tokens(&float.readable(), &[Token::Str("Nan")]);
+    }
+
+    #[test]
+    fn test_ordered_float_with_inf() {
+        let float = OrderedFloat(f64::infinity());
+        assert_tokens(&float.readable(), &[Token::Str("Infinity")]);
+        let float = OrderedFloat(f64::neg_infinity());
+        assert_tokens(&float.readable(), &[Token::Str("-Infinity")]);
+    }
+
+    #[test]
+    fn test_non_readable_ordered_float() {
+        let float = OrderedFloat(1.0f64);
+        assert_tokens(&float.compact(), &[Token::F64(1.0)]);
+
+        let float = OrderedFloat(f64::infinity());
+        assert_tokens(&float.compact(), &[Token::F64(f64::infinity())]);
+
+        let float = OrderedFloat(f64::neg_infinity());
+        assert_tokens(&float.compact(), &[Token::F64(f64::neg_infinity())]);
     }
 
     #[test]
