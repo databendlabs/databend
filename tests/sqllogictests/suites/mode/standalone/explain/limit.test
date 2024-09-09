@@ -70,7 +70,7 @@ Limit
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: 8]
+                ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 10.00
 
 query T

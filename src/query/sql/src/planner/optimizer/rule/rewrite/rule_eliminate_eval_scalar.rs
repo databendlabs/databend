@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::extract::Matcher;
@@ -50,11 +52,31 @@ impl Rule for RuleEliminateEvalScalar {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
 
-        // Eliminate empty EvalScalar
-        if eval_scalar.items.is_empty() {
+        // Eliminate duplicated item in eval scalar
+        let mut unique_items = HashSet::new();
+        let mut items_to_keep = Vec::new();
+
+        for item in eval_scalar.items.iter() {
+            if unique_items.insert(item.scalar.clone()) {
+                items_to_keep.push(item.clone());
+            }
+        }
+
+        if items_to_keep.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
             return Ok(());
         }
+
+        // Create a new EvalScalar with unique items
+        let new_eval_scalar = EvalScalar {
+            items: items_to_keep,
+        };
+
+        state.add_result(SExpr::create_unary(
+            Arc::new(new_eval_scalar.into()),
+            Arc::new(s_expr.child(0)?.clone()),
+        ));
+
         Ok(())
     }
 
