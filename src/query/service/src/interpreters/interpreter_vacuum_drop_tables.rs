@@ -159,7 +159,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let files_opt = handler
+        let (files_opt, failed_dbs, failed_tables) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
                 tables,
@@ -172,6 +172,13 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .await?;
         // gc meta data only when not dry run
         if self.plan.option.dry_run.is_none() {
+            let drop_ids = drop_ids
+                .into_iter()
+                .filter(|id| match id {
+                    DroppedId::Db(_, db_name) => !failed_dbs.contains(db_name),
+                    DroppedId::Table(_, table_id, _) => !failed_tables.contains(table_id),
+                })
+                .collect();
             self.gc_drop_tables(catalog, drop_ids).await?;
         }
 
