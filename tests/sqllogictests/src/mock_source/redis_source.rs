@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mini_redis::Connection;
-use mini_redis::Frame;
+use std::collections::VecDeque;
+
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 
-// A mock Redis server used as dictionary source to test.
 pub async fn run_redis_source() {
+    // Bind the listener to the address
     let listener = TcpListener::bind("0.0.0.0:6379").await.unwrap();
 
     loop {
         let (socket, _) = listener.accept().await.unwrap();
 
-        // A new task is spawned for each inbound socket.  The socket is
+        // A new task is spawned for each inbound socket. The socket is
         // moved to the new task and processed there.
         databend_common_base::runtime::spawn(async move {
             process(socket).await;
@@ -32,38 +32,93 @@ pub async fn run_redis_source() {
     }
 }
 
-async fn process(socket: TcpStream) {
-    use std::collections::HashMap;
+async fn process(stream: TcpStream) {
+    let mut buf = Vec::with_capacity(4096);
+    loop {
+        buf.clear();
+        // Wait for the socket to be readable
+        stream.readable().await.unwrap();
 
-    use mini_redis::Command::Get;
-    use mini_redis::Command::{self};
-
-    // A mock db is used to store test keys and values.
-    let mut db = HashMap::new();
-    db.insert("a".to_string(), "abc".as_bytes().to_vec());
-    db.insert("b".to_string(), "def".as_bytes().to_vec());
-
-    // Connection, provided by `mini-redis`, handles parsing frames from
-    // the socket
-    let mut connection = Connection::new(socket);
-
-    // Use `read_frame` to receive a command from the connection.
-    while let Some(frame) = connection.read_frame().await.unwrap() {
-        let response = match Command::from_frame(frame).unwrap() {
-            Get(cmd) => {
-                // Return a value if the first character of the key is ASCII alphanumeric,
-                // otherwise treat it as the key does not exist.
-                if cmd.key().starts_with(|c: char| c.is_ascii_alphanumeric()) {
-                    let value = format!("{}_value", cmd.key());
-                    Frame::Bulk(value.into())
-                } else {
-                    Frame::Null
+        let mut ret_values = VecDeque::new();
+        match stream.try_read_buf(&mut buf) {
+            Ok(0) => break,
+            Ok(_) => {
+                let request = String::from_utf8(buf.clone()).unwrap();
+                let cmds = parse_resp(request);
+                for cmd in cmds {
+                    if let Command::Get(key) = cmd {
+                        // Return a value if the first character of the key is ASCII alphanumeric,
+                        // otherwise treat it as the key does not exist.
+                        let ret_value = if key.starts_with(|c: char| c.is_ascii_alphanumeric()) {
+                            let v = format!("{}_value", key);
+                            format!("${}\r\n{}\r\n", v.len(), v)
+                        } else {
+                            "$-1\r\n".to_string()
+                        };
+                        ret_values.push_back(ret_value);
+                    } else {
+                        let ret_value = "+OK\r\n".to_string();
+                        ret_values.push_back(ret_value);
+                    }
                 }
             }
-            _ => Frame::Simple("Ok".to_string()),
-        };
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                continue;
+            }
+            Err(_) => {
+                let ret_value = "+OK\r\n".to_string();
+                ret_values.push_back(ret_value);
+            }
+        }
 
-        // Write the response to the client
-        connection.write_frame(&response).await.unwrap();
+        while let Some(ret_value) = ret_values.pop_front() {
+            // Wait for the socket to be writable
+            stream.writable().await.unwrap();
+
+            match stream.try_write(ret_value.as_bytes()) {
+                Ok(_) => {}
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
     }
+}
+
+// Redis command, only support get, other commands are ignored.
+enum Command {
+    Get(String),
+    Invalid,
+    Other,
+}
+
+// parse RESP(REdis Serialization Protocol)
+// for example: "*2\r\n$3\r\nGET\r\n$2\r\nabc\r\n"
+fn parse_resp(request: String) -> Vec<Command> {
+    // split by \r\n
+    let mut lines = request.split("\r\n").collect::<Vec<_>>();
+    let mut cmds = Vec::new();
+    while !lines.is_empty() {
+        if lines[0].is_empty() {
+            break;
+        }
+        let len: usize = lines[0][1..].parse().unwrap();
+        let n = 2 * len + 1;
+        if lines.len() < n {
+            cmds.push(Command::Invalid);
+            return cmds;
+        }
+        // only parse GET command and ingore other commands
+        if lines[2] == "GET" {
+            let cmd = Command::Get(lines[4].to_string());
+            cmds.push(cmd);
+        } else {
+            cmds.push(Command::Other);
+        }
+        lines.drain(0..n);
+    }
+    cmds
 }
