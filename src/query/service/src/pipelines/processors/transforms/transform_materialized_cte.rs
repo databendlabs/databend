@@ -62,9 +62,10 @@ impl MaterializedCteState {
             if let Some(blocks) = blocks {
                 let blocks = (*blocks).read();
                 let ctes = self.ctx.get_materialized_ctes();
-                for (idx, cte) in ctes.write().iter() {
+                for entry in ctes.iter() {
+                    let idx = entry.key();
                     if idx.0 == cte_idx && idx.1 != 1 {
-                        let mut cte = cte.write();
+                        let mut cte = entry.value().write();
                         *cte = (*blocks).clone();
                     }
                 }

@@ -18,6 +18,7 @@ async-backtrace = { workspace = true }
 base64 = "0.21"
 chrono = { workspace = true }
 cidr = { version = "0.2.2" }
+dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }

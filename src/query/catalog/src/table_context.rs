@@ -79,7 +79,7 @@ use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
-pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+pub type MaterializedCtesBlocks = Arc<DashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>;
 
 pub struct ContextError;
 

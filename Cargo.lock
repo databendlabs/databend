@@ -4700,6 +4700,7 @@ dependencies = [
  "base64 0.21.7",
  "chrono",
  "cidr",
+ "dashmap",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use dashmap::DashMap;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::timeout;
 use databend_common_base::base::GlobalInstance;
@@ -43,27 +43,26 @@ use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::UnlockApi;
 use databend_common_users::UserApiProvider;
 use futures_util::StreamExt;
-use parking_lot::RwLock;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
 
 pub struct LockManager {
-    active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
+    active_locks: Arc<DashMap<u64, Arc<LockHolder>>>,
     tx: mpsc::UnboundedSender<u64>,
 }
 
 impl LockManager {
     pub fn init() -> Result<()> {
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let active_locks = Arc::new(RwLock::new(HashMap::new()));
+        let active_locks = Arc::new(DashMap::new());
         let lock_manager = Self { active_locks, tx };
         GlobalIORuntime::instance().spawn({
             let active_locks = lock_manager.active_locks.clone();
             async move {
                 while let Some(revision) = rx.recv().await {
                     metrics_inc_shutdown_lock_holder_nums();
-                    if let Some(lock) = active_locks.write().remove(&revision) {
+                    if let Some((_, lock)) = active_locks.remove(&revision) {
                         lock.shutdown();
                     }
                 }
@@ -206,8 +205,7 @@ impl LockManager {
     }
 
     fn insert_lock(&self, revision: u64, lock_holder: Arc<LockHolder>) {
-        let mut active_locks = self.active_locks.write();
-        let prev = active_locks.insert(revision, lock_holder);
+        let prev = self.active_locks.insert(revision, lock_holder);
         assert!(prev.is_none());
 
         // metrics.

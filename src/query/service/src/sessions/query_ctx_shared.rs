@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -22,6 +21,7 @@ use std::sync::Weak;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
@@ -95,7 +95,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
-    pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    pub(in crate::sessions) tables_refs: Arc<DashMap<DatabaseAndTable, Arc<dyn Table>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -127,9 +127,9 @@ pub struct QueryContextShared {
     /// Key is (cte index, used_count), value contains cte's materialized blocks
     pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 
-    pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+    pub(in crate::sessions) query_profiles: Arc<DashMap<Option<u32>, PlanProfile>>,
 
-    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+    pub(in crate::sessions) runtime_filters: Arc<DashMap<IndexType, RuntimeFilterInfo>>,
 
     pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
@@ -162,7 +162,7 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
-            tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            tables_refs: Arc::new(DashMap::new()),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
@@ -185,7 +185,7 @@ impl QueryContextShared {
             group_by_spill_progress: Arc::new(Progress::create()),
             window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
-            query_profiles: Arc::new(RwLock::new(HashMap::new())),
+            query_profiles: Arc::new(DashMap::new()),
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
@@ -290,8 +290,10 @@ impl QueryContextShared {
 
     /// Get all tables that already attached in this query.
     pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
-        let tables = self.tables_refs.lock();
-        tables.values().cloned().collect()
+        self.tables_refs
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     pub fn get_data_metrics(&self) -> StorageMetrics {
@@ -310,10 +312,8 @@ impl QueryContextShared {
     }
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
-        let mut tables_refs = self.tables_refs.lock();
         let table_meta_key = (catalog.to_string(), database.to_string(), name.to_string());
-
-        if let Entry::Vacant(v) = tables_refs.entry(table_meta_key) {
+        if let Entry::Vacant(v) = self.tables_refs.entry(table_meta_key) {
             v.insert(table);
         };
     }
@@ -330,7 +330,7 @@ impl QueryContextShared {
 
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
-        let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
+        let already_in_cache = { self.tables_refs.contains_key(&table_meta_key) };
         let res = match already_in_cache {
             false => {
                 self.get_table_to_cache(catalog, database, table, max_batch_size)
@@ -338,7 +338,6 @@ impl QueryContextShared {
             }
             true => self
                 .tables_refs
-                .lock()
                 .get(&table_meta_key)
                 .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone(),
@@ -374,9 +373,7 @@ impl QueryContextShared {
             .cache_stream_source_table(catalog, cache_table, max_batch_size)
             .await?;
 
-        let mut tables_refs = self.tables_refs.lock();
-
-        match tables_refs.entry(table_meta_key) {
+        match self.tables_refs.entry(table_meta_key) {
             Entry::Occupied(v) => Ok(v.get().clone()),
             Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
         }
@@ -402,7 +399,7 @@ impl QueryContextShared {
             source_database_name.to_string(),
             source_table_name.to_string(),
         );
-        let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
+        let already_in_cache = { self.tables_refs.contains_key(&meta_key) };
         let source_table = match already_in_cache {
             false => {
                 let stream_desc = &stream.get_table_info().desc;
@@ -428,13 +425,13 @@ impl QueryContextShared {
                         }
                     };
 
-                let mut tables_refs = self.tables_refs.lock();
-                tables_refs.entry(meta_key).or_insert(source_table.clone());
+                self.tables_refs
+                    .entry(meta_key)
+                    .or_insert(source_table.clone());
                 source_table
             }
             true => self
                 .tables_refs
-                .lock()
                 .get(&meta_key)
                 .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone(),
@@ -452,14 +449,12 @@ impl QueryContextShared {
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let mut tables_refs = self.tables_refs.lock();
-        tables_refs.remove(&table_meta_key);
+        self.tables_refs.remove(&table_meta_key);
         Ok(())
     }
 
     pub fn clear_tables_cache(&self) {
-        let mut tables_refs = self.tables_refs.lock();
-        tables_refs.clear();
+        self.tables_refs.clear();
     }
 
     /// Init runtime when first get
@@ -606,21 +601,20 @@ impl QueryContextShared {
             self.add_query_profiles(&executor.fetch_profiling(false));
         }
 
-        self.query_profiles.read().values().cloned().collect()
+        self.query_profiles
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
-        let mut merged_profiles = self.query_profiles.write();
-
         for query_profile in profiles.values() {
-            match merged_profiles.entry(query_profile.id) {
-                Entry::Vacant(v) => {
-                    v.insert(query_profile.clone());
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().merge(query_profile);
-                }
-            };
+            self.query_profiles
+                .entry(query_profile.id)
+                .and_modify(|existing_profile| {
+                    existing_profile.merge(query_profile);
+                })
+                .or_insert_with(|| query_profile.clone());
         }
     }
 }

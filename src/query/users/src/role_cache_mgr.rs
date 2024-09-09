@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::GlobalInstance;
@@ -25,7 +26,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::tenant::Tenant;
 use log::warn;
-use parking_lot::RwLock;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
@@ -37,7 +37,7 @@ struct CachedRoles {
 
 pub struct RoleCacheManager {
     user_manager: Arc<UserApiProvider>,
-    cache: Arc<RwLock<HashMap<Tenant, CachedRoles>>>,
+    cache: Arc<DashMap<Tenant, CachedRoles>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
@@ -55,7 +55,7 @@ impl RoleCacheManager {
         let mut role_cache_manager = Self {
             user_manager,
             polling_join_handle: None,
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(DashMap::new()),
             polling_interval: Duration::new(15, 0),
         };
 
@@ -73,11 +73,8 @@ impl RoleCacheManager {
         let user_manager = self.user_manager.clone();
         self.polling_join_handle = Some(databend_common_base::runtime::spawn(async move {
             loop {
-                let tenants = {
-                    let cached = cache.read();
-                    cached.keys().cloned().collect::<Vec<_>>()
-                };
-                for tenant in tenants {
+                for entry in cache.iter() {
+                    let tenant = entry.key().clone();
                     match load_roles_data(&user_manager, &tenant).await {
                         Err(err) => {
                             warn!(
@@ -87,8 +84,7 @@ impl RoleCacheManager {
                             )
                         }
                         Ok(data) => {
-                            let mut cached = cache.write();
-                            cached.insert(tenant, data);
+                            cache.insert(tenant, data);
                         }
                     }
                 }
@@ -98,14 +94,12 @@ impl RoleCacheManager {
     }
 
     pub fn invalidate_cache(&self, tenant: &Tenant) {
-        let mut cached = self.cache.write();
-        cached.remove(tenant);
+        self.cache.remove(tenant);
     }
 
     #[async_backtrace::framed]
     pub async fn find_role(&self, tenant: &Tenant, role: &str) -> Result<Option<RoleInfo>> {
-        let cached = self.cache.read();
-        let cached_roles = match cached.get(tenant) {
+        let cached_roles = match self.cache.get(tenant) {
             None => return Ok(None),
             Some(cached_roles) => cached_roles,
         };
@@ -133,19 +127,17 @@ impl RoleCacheManager {
         roles: &[String],
     ) -> Result<Vec<RoleInfo>> {
         self.maybe_reload(tenant).await?;
-        let cached = self.cache.read();
-        let cached_roles = match cached.get(tenant) {
-            None => return Ok(vec![]),
-            Some(cached_roles) => cached_roles,
-        };
-        Ok(find_all_related_roles(&cached_roles.roles, roles))
+
+        match self.cache.get(tenant) {
+            None => Ok(vec![]),
+            Some(cached_roles) => Ok(find_all_related_roles(&cached_roles.roles, roles)),
+        }
     }
 
     #[async_backtrace::framed]
     pub async fn force_reload(&self, tenant: &Tenant) -> Result<()> {
         let data = load_roles_data(&self.user_manager, tenant).await?;
-        let mut cached = self.cache.write();
-        cached.insert(tenant.clone(), data);
+        self.cache.insert(tenant.clone(), data);
         Ok(())
     }
 
@@ -154,8 +146,7 @@ impl RoleCacheManager {
     #[async_backtrace::framed]
     async fn maybe_reload(&self, tenant: &Tenant) -> Result<()> {
         let need_reload = {
-            let cached = self.cache.read();
-            match cached.get(tenant) {
+            match self.cache.get(tenant) {
                 None => true,
                 Some(cached_roles) => {
                     // force reload the data when:

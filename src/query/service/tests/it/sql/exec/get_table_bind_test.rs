@@ -453,7 +453,7 @@ impl Catalog for FakedCatalog {
 struct CtxDelegation {
     ctx: Arc<QueryContext>,
     cat: FakedCatalog,
-    cache: Mutex<HashMap<MetaType, Arc<dyn Table>>>,
+    cache: DashMap<MetaType, Arc<dyn Table>>,
     table_from_cache: AtomicUsize,
     table_without_cache: AtomicUsize,
 }
@@ -463,7 +463,7 @@ impl CtxDelegation {
         Self {
             ctx,
             cat: faked_cat,
-            cache: Mutex::new(HashMap::new()),
+            cache: DashMap::new(),
             table_from_cache: AtomicUsize::new(0),
             table_without_cache: AtomicUsize::new(0),
         }
@@ -787,13 +787,12 @@ impl TableContext for CtxDelegation {
         let db = database.to_string();
         let tbl = table.to_string();
         let table_meta_key = (tenant.tenant_name().to_string(), db, tbl);
-        let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
+        let already_in_cache = { self.cache.contains_key(&table_meta_key) };
         if already_in_cache {
             self.table_from_cache
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(self
                 .cache
-                .lock()
                 .get(&table_meta_key)
                 .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone())
@@ -805,8 +804,7 @@ impl TableContext for CtxDelegation {
                 .get_table(&self.ctx.get_tenant(), database, table)
                 .await?;
             let tbl2 = tbl.clone();
-            let mut guard = self.cache.lock();
-            guard.insert(table_meta_key, tbl);
+            self.cache.insert(table_meta_key, tbl);
             Ok(tbl2)
         }
     }

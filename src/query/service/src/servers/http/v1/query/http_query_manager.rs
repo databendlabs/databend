@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -82,7 +81,7 @@ pub struct HttpQueryManager {
     pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
     pub(crate) removed_queries: Arc<parking_lot::Mutex<LimitedQueue<String>>>,
     #[allow(clippy::type_complexity)]
-    pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
+    pub(crate) txn_managers: Arc<DashMap<String, (TxnManagerRef, JoinHandle<()>)>>,
 }
 
 impl HttpQueryManager {
@@ -96,7 +95,7 @@ impl HttpQueryManager {
             },
             queries: Arc::new(DashMap::new()),
             removed_queries: Arc::new(Mutex::new(LimitedQueue::new(1000))),
-            txn_managers: Arc::new(Mutex::new(HashMap::new())),
+            txn_managers: Arc::new(DashMap::new()),
         }));
 
         Ok(())
@@ -202,7 +201,6 @@ impl HttpQueryManager {
         txn_mgr: TxnManagerRef,
         timeout_secs: u64,
     ) {
-        let mut txn_managers = self.txn_managers.lock();
         let deleter = {
             let self_clone = self.clone();
             let last_query_id_clone = last_query_id.clone();
@@ -217,13 +215,12 @@ impl HttpQueryManager {
                 }
             })
         };
-        txn_managers.insert(last_query_id, (txn_mgr, deleter));
+        self.txn_managers.insert(last_query_id, (txn_mgr, deleter));
     }
 
     #[async_backtrace::framed]
     pub(crate) fn get_txn(self: &Arc<Self>, last_query_id: &str) -> Option<TxnManagerRef> {
-        let mut txn_managers = self.txn_managers.lock();
-        if let Some((txn_mgr, task_handle)) = txn_managers.remove(last_query_id) {
+        if let Some((_, (txn_mgr, task_handle))) = self.txn_managers.remove(last_query_id) {
             task_handle.abort();
             Some(txn_mgr)
         } else {
