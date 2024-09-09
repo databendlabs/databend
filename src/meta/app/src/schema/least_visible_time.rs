@@ -15,35 +15,13 @@
 use chrono::DateTime;
 use chrono::Utc;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct LeastVisibleTime {
     pub time: DateTime<Utc>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SetLVTReq {
-    pub table_id: u64,
-    pub time: DateTime<Utc>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct SetLVTReply {
-    pub time: DateTime<Utc>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GetLVTReq {
-    pub table_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GetLVTReply {
-    // return the current LeastVisibleTime
-    // None if unset before
-    pub time: Option<DateTime<Utc>>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct LeastVisibleTimeKey {
-    pub table_id: u64,
+impl LeastVisibleTime {
+    pub fn new(time: DateTime<Utc>) -> Self {
+        Self { time }
+    }
 }

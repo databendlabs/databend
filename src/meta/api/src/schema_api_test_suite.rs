@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -78,7 +79,6 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
@@ -89,6 +89,7 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -101,7 +102,6 @@ use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -1498,43 +1498,35 @@ impl SchemaApiTestSuite {
 
         info!("--- test lvt");
         {
-            let time = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
-            let req = SetLVTReq { table_id, time };
-            let get_req = GetLVTReq { table_id };
+            let time_small = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
+            let time_big = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
+            let time_bigger = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
 
-            let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert!(res.time.is_none());
+            let lvt_small = LeastVisibleTime::new(time_small);
+            let lvt_big = LeastVisibleTime::new(time_big);
+            let lvt_bigger = LeastVisibleTime::new(time_bigger);
 
-            let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
-            let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(
-                res.time.unwrap(),
-                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
-            );
+            let lvt_name_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
+
+            let res = mt.get(&lvt_name_ident).await?;
+            assert!(res.is_none());
+
+            let res = mt.set_table_lvt(&lvt_name_ident, &lvt_big).await?;
+            assert_eq!(res.time, time_big);
+            let res = mt.get(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().time, time_big);
 
             // test lvt never fall back
-            let time = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
-            let req = SetLVTReq { table_id, time };
 
-            let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
-            let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(
-                res.time.unwrap(),
-                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
-            );
+            let res = mt.set_table_lvt(&lvt_name_ident, &lvt_small).await?;
+            assert_eq!(res.time, time_big);
+            let res = mt.get(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().time, time_big);
 
-            let time = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
-            let req = SetLVTReq { table_id, time };
-
-            let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1025, 0).unwrap());
-            let res = mt.get_table_lvt(get_req).await?;
-            assert_eq!(
-                res.time.unwrap(),
-                DateTime::<Utc>::from_timestamp(1025, 0).unwrap()
-            );
+            let res = mt.set_table_lvt(&lvt_name_ident, &lvt_bigger).await?;
+            assert_eq!(res.time, time_bigger);
+            let res = mt.get(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().time, time_bigger);
         }
 
         Ok(())
