@@ -24,6 +24,7 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use futures::future;
 use futures::FutureExt;
 use log::warn;
@@ -250,13 +251,14 @@ impl Runtime {
     }
 
     #[track_caller]
-    pub fn block_on<T, F>(&self, future: F) -> F::Output
-    where F: Future<Output = Result<T>> {
+    pub fn block_on<T, C, F>(&self, future: F) -> F::Output
+    where F: Future<Output = Result<T, C>> {
         let future = CatchUnwindFuture::create(future);
         #[allow(clippy::disallowed_methods)]
         tokio::task::block_in_place(|| {
             self.handle
                 .block_on(location_future(future, std::panic::Location::caller()))
+                .with_context(|| "failed to block on future".to_string())
                 .flatten()
         })
     }
@@ -458,7 +460,7 @@ where
 }
 
 #[track_caller]
-pub fn try_spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
+pub fn try_spawn_blocking<F, R>(f: F) -> std::result::Result<tokio::task::JoinHandle<R>, F>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
@@ -480,7 +482,7 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 #[track_caller]
-pub fn try_block_on<F: Future>(future: F) -> Result<F::Output, F> {
+pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(future),
         #[expect(clippy::disallowed_methods)]

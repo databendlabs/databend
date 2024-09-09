@@ -27,7 +27,6 @@ mod password_policy;
 mod procedure;
 mod role;
 mod sequence;
-mod share;
 mod stage;
 mod stream;
 mod table;

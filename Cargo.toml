@@ -32,7 +32,6 @@ members = [
     "src/query/codegen",
     "src/query/config",
     "src/query/catalog",
-    "src/query/sharing",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -63,7 +62,6 @@ members = [
     "src/query/storages/null",
     "src/query/storages/orc",
     "src/query/storages/random",
-    "src/query/storages/share",
     "src/query/storages/stage",
     "src/query/storages/stream",
     "src/query/storages/system",
@@ -151,7 +149,6 @@ databend-common-proto-conv = { path = "src/meta/proto-conv" }
 databend-common-protos = { path = "src/meta/protos" }
 databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
-databend-common-sharing = { path = "src/query/sharing" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
 databend-common-storage = { path = "src/common/storage" }
@@ -167,7 +164,6 @@ databend-common-storages-orc = { path = "src/query/storages/orc" }
 databend-common-storages-parquet = { path = "src/query/storages/parquet" }
 databend-common-storages-random = { path = "src/query/storages/random" }
 databend-common-storages-result-cache = { path = "src/query/storages/result_cache" }
-databend-common-storages-share = { path = "src/query/storages/share" }
 databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
@@ -273,6 +269,7 @@ opendal = { version = "0.49.0", features = [
     "services-moka",
     "services-webhdfs",
     "services-huggingface",
+    "services-redis",
 ] }
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
     "serde",
@@ -322,7 +319,7 @@ tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-
 tonic-build = { version = "0.11" }
 tonic-reflection = { version = "0.11.0" }
 typetag = "0.2.3"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+uuid = { version = "1.10.0", features = ["serde", "v4", "v7"] }
 walkdir = "2.3.2"
 xorfilter-rs = "0.5"
 
@@ -350,6 +347,7 @@ async_fn_in_trait = "allow"
 [workspace.lints.clippy]
 useless_format = "allow"
 mutable_key_type = "allow"
+result_large_err = "allow"
 
 [profile.release]
 debug = 1

@@ -35,11 +35,7 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
-use super::ReplyShareObject;
-use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
-use crate::share::ShareSpec;
-use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -164,7 +160,6 @@ impl Display for TableIdHistoryIdent {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareDBParams),
 }
 
 impl Display for DatabaseType {
@@ -172,15 +167,6 @@ impl Display for DatabaseType {
         match self {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
-            }
-            DatabaseType::ShareDB(share_params) => {
-                write!(
-                    f,
-                    "share database: {}-{} using {}",
-                    share_params.share_ident.tenant_name(),
-                    share_params.share_ident.name(),
-                    share_params.share_endpoint_url,
-                )
             }
         }
     }
@@ -207,8 +193,6 @@ pub struct TableInfo {
     /// It is about what a table actually is.
     /// `name`, `id` or `version` is not included in the table structure definition.
     pub meta: TableMeta,
-
-    pub tenant: String,
 
     /// The corresponding catalog info of this table.
     pub catalog_info: Arc<CatalogInfo>,
@@ -544,8 +528,8 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // (db id, removed table id, share spec vector)
-    pub spec_vec: Option<(u64, u64, Vec<ShareSpec>)>,
+    // (db id, removed table id)
+    pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -567,6 +551,8 @@ pub struct DropTableByIdReq {
     pub db_id: MetaId,
 
     pub engine: String,
+
+    pub session_id: String,
 }
 
 impl DropTableByIdReq {
@@ -587,10 +573,7 @@ impl Display for DropTableByIdReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct DropTableReply {
-    // db id, share spec vector
-    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
-}
+pub struct DropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitTableMetaReq {
@@ -695,8 +678,6 @@ impl Display for RenameTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReply {
     pub table_id: u64,
-    // vec<share spec>, table id
-    pub share_table_info: Option<(Vec<ShareSpec>, ReplyShareObject)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -800,19 +781,13 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {
-    pub share_vec_table_info: Option<ShareVecTableInfo>,
-}
+pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {
-    pub share_vec_table_info: Option<ShareVecTableInfo>,
-}
+pub struct UpsertTableOptionReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct UpdateTableMetaReply {
-    pub share_vec_table_infos: Option<Vec<ShareVecTableInfo>>,
-}
+pub struct UpdateTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
@@ -1020,8 +995,6 @@ mod kvapi_key_impl {
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
-    use crate::schema::LeastVisibleTime;
-    use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -1149,28 +1122,6 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for LeastVisibleTimeKey {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let table_id = b.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_lvt/table_id"
-    impl kvapi::Key for LeastVisibleTimeKey {
-        const PREFIX: &'static str = "__fd_table_lvt";
-
-        type ValueType = LeastVisibleTime;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-    }
-
     impl kvapi::Value for TableId {
         type KeyType = DBIdTableName;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
@@ -1203,13 +1154,6 @@ mod kvapi_key_impl {
 
     impl kvapi::Value for TableCopiedFileInfo {
         type KeyType = TableCopiedFileNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for LeastVisibleTime {
-        type KeyType = LeastVisibleTimeKey;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }

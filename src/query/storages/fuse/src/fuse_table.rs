@@ -57,9 +57,9 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_sharing::create_share_table_operator;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
+use databend_common_sql::parse_hilbert_cluster_key;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -75,16 +75,17 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -142,7 +143,6 @@ impl FuseTable {
     pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
         // check if table is AttachedReadOnly in a lighter way
         let need_refresh_schema = match table_info.db_type {
-            DatabaseType::ShareDB(_) => false,
             DatabaseType::NormalDB => {
                 table_info.meta.storage_params.is_some()
                     && Self::is_table_attached(&table_info.meta.options)
@@ -174,11 +174,6 @@ impl FuseTable {
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_params) => {
-                let operator =
-                    create_share_table_operator(&share_params, table_info.ident.table_id)?;
-                (operator, FuseTableType::SharedReadOnly)
-            }
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
@@ -367,20 +362,6 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn snapshot_loc(&self) -> Result<Option<String>> {
         match self.table_info.db_type {
-            DatabaseType::ShareDB(_) => {
-                let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-                match self.operator.read(url).await {
-                    Ok(data) => {
-                        let bs = data.to_vec();
-                        let s = str::from_utf8(&bs)?;
-                        Ok(Some(s.to_string()))
-                    }
-                    Err(e) => {
-                        error!("read share snapshot location error: {:?}", e);
-                        Ok(None)
-                    }
-                }
-            }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
@@ -453,12 +434,18 @@ impl FuseTable {
         let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
             return vec![];
         };
-        let cluster_keys =
-            parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
-        cluster_keys
-            .into_iter()
-            .map(|v| v.data_type().clone())
-            .collect()
+        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        match cluster_type {
+            ClusterType::Hilbert => vec![DataType::Binary],
+            ClusterType::Linear => {
+                let cluster_keys =
+                    parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+                cluster_keys
+                    .into_iter()
+                    .map(|v| v.data_type().clone())
+                    .collect()
+            }
+        }
     }
 
     pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
@@ -510,7 +497,13 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_cluster_keys(ctx, table_meta.clone(), order).unwrap();
+            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            let cluster_keys = match cluster_type {
+                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
+                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
+            }
+            .unwrap();
+
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {
@@ -555,15 +548,25 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
+        cluster_type: String,
     ) -> Result<()> {
         // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str()
             && *old_cluster_key_str == cluster_key_str
         {
-            return Ok(());
+            let old_cluster_type = self
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
+                .to_string()
+                .to_lowercase();
+            if cluster_type == old_cluster_type {
+                return Ok(());
+            }
         }
         let mut new_table_meta = self.get_table_info().meta.clone();
+        new_table_meta
+            .options
+            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type);
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
@@ -942,7 +945,7 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        _consume: bool,
+        _with_options: &str,
     ) -> Result<String> {
         let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {

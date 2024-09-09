@@ -41,7 +41,6 @@ databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
-databend-common-sharing = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
 databend-common-storages-view = { workspace = true }
@@ -73,6 +72,7 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
+tokio = "1.39.2"
 url = "2.3.1"
 
 [lints]

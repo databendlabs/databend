@@ -28,6 +28,7 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -59,7 +60,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn bind_one_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
+pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
@@ -116,7 +117,7 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
@@ -377,7 +378,7 @@ pub fn parse_cluster_keys(
     table_meta: Arc<dyn Table>,
     cluster_key_str: &str,
 ) -> Result<Vec<Expr>> {
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
@@ -449,6 +450,150 @@ pub fn parse_cluster_keys(
     Ok(exprs)
 }
 
+pub fn parse_hilbert_cluster_key(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    cluster_key_str: &str,
+) -> Result<Vec<Expr>> {
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let tokens = tokenize_sql(cluster_key_str)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    } else {
+        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+    }
+
+    let expr_len = ast_exprs.len();
+    if !(2..=5).contains(&expr_len) {
+        return Err(ErrorCode::InvalidClusterKeys(
+            "Hilbert clustering requires the dimension to be between 2 and 5",
+        ));
+    }
+
+    let mut max_size = 0;
+    let mut byte_sizes = Vec::with_capacity(expr_len);
+    let mut exprs = Vec::with_capacity(expr_len);
+    for ast in ast_exprs {
+        let (scalar, _) = *type_checker.resolve(&ast)?;
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        let byte_size = hilbert_byte_size(expr.data_type())?;
+        max_size = max_size.max(byte_size);
+        byte_sizes.push(byte_size);
+        exprs.push(expr);
+    }
+
+    let max_size = max_size.min(8);
+    let common_cast = match max_size {
+        1 => "to_int8",
+        2 => "to_int16",
+        4 => "to_int32",
+        8 => "to_int64",
+        _ => unreachable!(),
+    };
+    let max_val = Expr::Constant {
+        span: None,
+        scalar: Scalar::Binary(vec![0xFF; max_size]),
+        data_type: DataType::Binary,
+    };
+
+    for (expr, byte_size) in exprs.iter_mut().zip(byte_sizes.into_iter()) {
+        let inner_type = expr.data_type().remove_nullable();
+        let cast_str = match inner_type {
+            DataType::Date | DataType::Timestamp | DataType::Boolean => Some(common_cast),
+            DataType::Decimal(_) => Some("to_float64"),
+            DataType::Number(t) if max_size > byte_size => {
+                if matches!(t, NumberDataType::Float32) {
+                    Some("to_float64")
+                } else {
+                    Some(common_cast)
+                }
+            }
+            _ => None,
+        };
+        *expr = if let Some(cast) = cast_str {
+            check_function(None, cast, &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?
+        } else {
+            expr.clone()
+        };
+        *expr = check_function(
+            None,
+            "hilbert_key",
+            &[],
+            &[expr.clone()],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let data_type = expr.data_type();
+        let is_nullable = data_type.is_nullable();
+        if is_nullable {
+            let is_not_null_expr = check_function(
+                None,
+                "is_not_null",
+                &[],
+                &[expr.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            let assume_not_null_expr = check_function(
+                None,
+                "assume_not_null",
+                &[],
+                &[expr.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            *expr = check_function(
+                None,
+                "if",
+                &[],
+                &[is_not_null_expr, assume_not_null_expr, max_val.clone()],
+                &BUILTIN_FUNCTIONS,
+            )?;
+        }
+    }
+
+    let array = check_function(None, "array", &[], &exprs, &BUILTIN_FUNCTIONS)?;
+    let result = check_function(
+        None,
+        "hilbert_index",
+        &[],
+        &[array, Expr::Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::UInt64(max_size as u64)),
+            data_type: DataType::Number(NumberDataType::UInt64),
+        }],
+        &BUILTIN_FUNCTIONS,
+    )?;
+    Ok(vec![result])
+}
+
+fn hilbert_byte_size(data_type: &DataType) -> Result<usize> {
+    match data_type {
+        DataType::Nullable(inner) => hilbert_byte_size(inner),
+        DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::Decimal(_) => {
+            Ok(data_type.numeric_byte_size().unwrap())
+        }
+        DataType::Boolean => Ok(1),
+        DataType::String => Ok(24),
+        _ => Err(ErrorCode::Internal("unsupported data type for hilbert")),
+    }
+}
+
 pub fn analyze_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
@@ -464,7 +609,7 @@ pub fn analyze_cluster_keys(
         }
     }
 
-    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(

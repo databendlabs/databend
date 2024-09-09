@@ -30,6 +30,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
@@ -46,6 +47,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use super::execute_state::ExecutionError;
 use super::HttpQueryContext;
 use super::RemoveReason;
 use crate::servers::http::error::QueryError;
@@ -227,7 +229,7 @@ impl HttpSessionStateInternal {
 fn serialize_as_json_string<S>(
     value: &Option<HttpSessionStateInternal>,
     serializer: S,
-) -> Result<S::Ok, S::Error>
+) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -243,7 +245,7 @@ where
 
 fn deserialize_from_json_string<'de, D>(
     deserializer: D,
-) -> Result<Option<HttpSessionStateInternal>, D::Error>
+) -> std::result::Result<Option<HttpSessionStateInternal>, D::Error>
 where D: Deserializer<'de> {
     let json_string: Option<String> = Option::deserialize(deserializer)?;
     match json_string {
@@ -307,7 +309,7 @@ pub struct ResponseState {
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
-    pub error: Option<ErrorCode>,
+    pub error: Option<ErrorCode<ExecutionError>>,
     pub warnings: Vec<String>,
 }
 
@@ -533,6 +535,7 @@ impl HttpQuery {
                     format_settings_clone,
                 ))
                 .await
+                .with_context(|| "failed to start query")
                 .flatten()
                 {
                     let state = ExecuteStopped {

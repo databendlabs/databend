@@ -25,7 +25,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -54,7 +53,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -99,7 +97,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -402,6 +399,31 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .get_table_history(tenant, db_name, table_name)
+            .await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    self.mutable_catalog
+                        .get_table_history(tenant, db_name, table_name)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
@@ -414,6 +436,10 @@ impl Catalog for DatabaseCatalog {
                 }
             }
         }
+    }
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.mutable_catalog.list_temporary_tables()
     }
 
     #[async_backtrace::framed]
@@ -633,26 +659,17 @@ impl Catalog for DatabaseCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.create_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.update_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.drop_virtual_column(req).await
     }
 
@@ -747,13 +764,23 @@ impl Catalog for DatabaseCatalog {
         })
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
-        self.mutable_catalog.get_stream_source_table(_stream_desc)
+    fn get_stream_source_table(
+        &self,
+        stream_desc: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
+        self.mutable_catalog
+            .get_stream_source_table(stream_desc, max_batch_size)
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        stream: TableInfo,
+        source: TableInfo,
+        max_batch_size: Option<u64>,
+    ) {
         self.mutable_catalog
-            .cache_stream_source_table(_stream, _source)
+            .cache_stream_source_table(stream, source, max_batch_size)
     }
 
     /// Dictionary
@@ -770,16 +797,13 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
         self.mutable_catalog.drop_dictionary(dict_ident).await
     }
 
     #[async_backtrace::framed]
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         self.mutable_catalog.get_dictionary(req).await
     }
 

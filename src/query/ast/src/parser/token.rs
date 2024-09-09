@@ -656,6 +656,8 @@ pub enum TokenKind {
     HAVING,
     #[token("HIGH", ignore(ascii_case))]
     HIGH,
+    #[token("HILBERT", ignore(ascii_case))]
+    HILBERT,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
     #[token("HIVE", ignore(ascii_case))]
@@ -706,6 +708,10 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("PROCEDURE", ignore(ascii_case))]
+    PROCEDURE,
+    #[token("PROCEDURES", ignore(ascii_case))]
+    PROCEDURES,
     #[token("IMMEDIATE", ignore(ascii_case))]
     IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
@@ -728,6 +734,8 @@ pub enum TokenKind {
     KILL,
     #[token("LATERAL", ignore(ascii_case))]
     LATERAL,
+    #[token("LINEAR", ignore(ascii_case))]
+    LINEAR,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]
@@ -1013,6 +1021,8 @@ pub enum TokenKind {
     SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
+    #[token("VARIABLES", ignore(ascii_case))]
+    VARIABLES,
     #[token("STAGES", ignore(ascii_case))]
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]
@@ -1319,6 +1329,8 @@ pub enum TokenKind {
     PRIMARY,
     #[token("SOURCE", ignore(ascii_case))]
     SOURCE,
+    #[token("SQL", ignore(ascii_case))]
+    SQL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1569,6 +1581,7 @@ impl TokenKind {
             | TokenKind::AND
             | TokenKind::ANY
             | TokenKind::FUNCTION
+            | TokenKind::PROCEDURE
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC

@@ -124,7 +124,7 @@ impl ExecutorWorkerContext {
     pub unsafe fn execute_task(
         &mut self,
         executor: Option<&Arc<QueriesPipelineExecutor>>,
-    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> {
+    ) -> std::result::Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
                 "Execute none task.",

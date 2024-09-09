@@ -35,7 +35,8 @@ pub struct QueryError {
 }
 
 impl QueryError {
-    pub(crate) fn from_error_code(e: ErrorCode) -> Self {
+    pub(crate) fn from_error_code<C>(e: ErrorCode<C>) -> Self {
+        // TODO(andylokandy): display error stack
         QueryError {
             code: e.code(),
             message: e.display_text(),

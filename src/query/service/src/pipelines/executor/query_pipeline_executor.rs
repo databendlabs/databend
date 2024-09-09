@@ -208,7 +208,9 @@ impl QueryPipelineExecutor {
         on_finished_chain.apply(info)
     }
 
-    pub fn finish(&self, cause: Option<ErrorCode>) {
+    pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
+        let cause = cause.map(|err| err.with_context("pipeline executor finished"));
+
         let mut finished_error = self.finished_error.lock();
         if let Some(cause) = cause {
             // We only save the cause of the first error.
@@ -475,7 +477,7 @@ impl QueryPipelineExecutor {
 impl Drop for QueryPipelineExecutor {
     fn drop(&mut self) {
         drop_guard(move || {
-            self.finish(None);
+            self.finish::<()>(None);
 
             let cause = match self.finished_error.lock().as_ref() {
                 Some(cause) => cause.clone(),

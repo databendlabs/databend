@@ -56,7 +56,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
 
         table
-            .alter_table_cluster_keys(self.ctx.clone(), cluster_key_str)
+            .alter_table_cluster_keys(self.ctx.clone(), cluster_key_str, plan.cluster_type.clone())
             .await?;
 
         Ok(PipelineBuildResult::create())

@@ -44,8 +44,8 @@ echo "update t set i=f2(f1(2)) where i=f2(f1(1));" | $TEST_USER_CONNECT
 echo "SELECT i,	nth_value(i, f2(f1(2))) OVER (PARTITION BY i) fv FROM t" | $TEST_USER_CONNECT
 echo "delete from t where f2(f1(1));" | $TEST_USER_CONNECT
 echo "select f2(f1(1)) union all select 2 order by \`f2(f1(1))\`" | $TEST_USER_CONNECT
-echo "select 22, t.i as ti from t join (select f2(f1(1)), i from t) as t1 on false;" | $TEST_USER_CONNECT
-echo "select f2(f1(1)), t.i as ti from t join (select 22, i from t) as t1 on false;" | $TEST_USER_CONNECT
+echo "select 22, t.i as ti from t join (select f2(f1(1)), i from t) as t1 on 1 = 1 ignore_result;" | $TEST_USER_CONNECT
+echo "select f2(f1(1)), t.i as ti from t join (select 22, i from t) as t1 on 1 = 1 ignore_result;" | $TEST_USER_CONNECT
 echo "select 22, t.i as ti from t join (select 22, i from t) as t1 on f2(f1(false));" | $TEST_USER_CONNECT
 echo "set enable_experimental_merge_into = 1; merge into t as t3 using (select * from t2) as t2 on t3.i = t2.i  when matched then update set t3.i=f2(f1(13));" | $TEST_USER_CONNECT
 echo "set enable_experimental_merge_into = 1; merge into t as t3 using (select * from t2) as t2 on t3.i = t2.i  when not matched  then insert (i) values(f2(f1(100)));" | $TEST_USER_CONNECT
@@ -76,8 +76,8 @@ echo "update t set i=f2(f1(2)) where i=f2(f1(1));" | $TEST_USER_CONNECT
 echo "SELECT i,	nth_value(i, f2(f1(2))) OVER (PARTITION BY i) fv FROM t" | $TEST_USER_CONNECT
 echo "delete from t where f2(f1(1));" | $TEST_USER_CONNECT
 echo "select f2(f1(1)) union all select 2 order by \`f2(f1(1))\`" | $TEST_USER_CONNECT
-echo "select 22, t.i as ti from t join (select f2(f1(1)), i from t) as t1 on false;" | $TEST_USER_CONNECT
-echo "select f2(f1(1)), t.i as ti from t join (select 22, i from t) as t1 on false;" | $TEST_USER_CONNECT
+echo "select 22, t.i as ti from t join (select f2(f1(1)), i from t) as t1 on 1 = 1 ignore_result;" | $TEST_USER_CONNECT
+echo "select f2(f1(1)), t.i as ti from t join (select 22, i from t) as t1 on 1 = 1 ignore_result;" | $TEST_USER_CONNECT
 echo "select 22, t.i as ti from t join (select 22, i from t) as t1 on f2(f1(false));" | $TEST_USER_CONNECT
 echo "set enable_experimental_merge_into = 1; merge into t as t3 using (select * from t2) as t2 on t3.i = t2.i  when matched then update set t3.i=f2(f1(13));" | $TEST_USER_CONNECT
 echo "set enable_experimental_merge_into = 1; merge into t as t3 using (select * from t2) as t2 on t3.i = t2.i  when not matched  then insert (i) values(f2(f1(100)));" | $TEST_USER_CONNECT
@@ -106,8 +106,8 @@ echo "update t set i=f2(f1(2)) where i=f2(f1(1));" | $TEST_USER_CONNECT
 echo "SELECT i,	nth_value(i, f2(f1(2))) OVER (PARTITION BY i) fv FROM t" | $TEST_USER_CONNECT
 echo "delete from t where f2(f1(1));" | $TEST_USER_CONNECT
 echo "select f2(f1(1)) union all select 2 order by \`f2(f1(1))\`" | $TEST_USER_CONNECT
-echo "select 22, t.i as ti from t join (select f2(f1(1)), i from t) as t1 on false;" | $TEST_USER_CONNECT
-echo "select f2(f1(1)), t.i as ti from t join (select 22, i from t) as t1 on false;" | $TEST_USER_CONNECT
+echo "select 22, t.i as ti from t join (select f2(f1(1)), i from t) as t1 on 1 = 1 ignore_result;" | $TEST_USER_CONNECT
+echo "select f2(f1(1)), t.i as ti from t join (select 22, i from t) as t1 on 1 = 1 ignore_result;" | $TEST_USER_CONNECT
 echo "select 22, t.i as ti from t join (select 22, i from t) as t1 on f2(f1(false));" | $TEST_USER_CONNECT
 echo "set enable_experimental_merge_into = 1; merge into t as t3 using (select * from t2) as t2 on t3.i = t2.i  when matched then update set t3.i=f2(f1(13));" | $TEST_USER_CONNECT
 echo "set enable_experimental_merge_into = 1; merge into t as t3 using (select * from t2) as t2 on t3.i = t2.i  when not matched  then insert (i) values(f2(f1(100)));" | $TEST_USER_CONNECT

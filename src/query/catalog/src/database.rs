@@ -95,6 +95,15 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    // Get one table history by db and table name.
+    #[async_backtrace::framed]
+    async fn get_table_history(&self, _table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement get_table in {} Database",
+            self.name()
+        )))
+    }
+
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(

@@ -15,17 +15,14 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::KeyError;
 
 use crate::schema::TableLockIdent;
 use crate::tenant::Tenant;
-use crate::KeyWithTenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
@@ -44,29 +41,6 @@ pub struct LockMeta {
 )]
 pub enum LockType {
     TABLE = 0,
-}
-
-impl LockType {
-    pub fn revision_from_str(&self, s: &str) -> Result<u64, KeyError> {
-        match self {
-            LockType::TABLE => {
-                let key = TableLockIdent::from_str_key(s)?;
-                Ok(key.revision())
-            }
-        }
-    }
-
-    pub fn key_from_str(&self, s: &str) -> Result<LockKey, KeyError> {
-        match self {
-            LockType::TABLE => {
-                let key = TableLockIdent::from_str_key(s)?;
-                Ok(LockKey::Table {
-                    tenant: key.tenant().clone(),
-                    table_id: key.table_id(),
-                })
-            }
-        }
-    }
 }
 
 impl Display for LockType {
@@ -108,11 +82,10 @@ impl LockKey {
         }
     }
 
-    pub fn gen_prefix(&self) -> String {
+    pub fn gen_prefix(&self) -> DirName<TableLockIdent> {
         match self {
             LockKey::Table { tenant, table_id } => {
-                let ident = DirName::new(TableLockIdent::new(tenant.clone(), *table_id, 0));
-                ident.dir_name_with_slash()
+                DirName::new(TableLockIdent::new(tenant.clone(), *table_id, 0))
             }
         }
     }
@@ -133,13 +106,13 @@ pub struct LockInfo {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListLocksReq {
-    pub prefixes: Vec<String>,
+    pub prefixes: Vec<DirName<TableLockIdent>>,
 }
 
 impl ListLocksReq {
     pub fn create(tenant: &Tenant) -> Self {
         let lock = TableLockIdent::new(tenant, 0, 0);
-        let prefix = DirName::new_with_level(lock, 2).dir_name_with_slash();
+        let prefix = DirName::new_with_level(lock, 2);
         Self {
             prefixes: vec![prefix],
         }
@@ -149,7 +122,7 @@ impl ListLocksReq {
         let mut prefixes = Vec::new();
         for table_id in table_ids {
             let lock = TableLockIdent::new(tenant, table_id, 0);
-            let prefix = DirName::new(lock).dir_name_with_slash();
+            let prefix = DirName::new(lock);
             prefixes.push(prefix);
         }
         Self { prefixes }
@@ -170,7 +143,7 @@ impl ListLockRevReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReq {
     pub lock_key: LockKey,
-    pub expire_secs: u64,
+    pub ttl: Duration,
     pub user: String,
     pub node: String,
     pub query_id: String,
@@ -182,14 +155,14 @@ impl CreateLockRevReq {
         user: String,
         node: String,
         query_id: String,
-        expire_secs: u64,
+        expire_secs: Duration,
     ) -> Self {
         Self {
             lock_key,
             user,
             node,
             query_id,
-            expire_secs,
+            ttl: expire_secs,
         }
     }
 }
@@ -202,17 +175,17 @@ pub struct CreateLockRevReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtendLockRevReq {
     pub lock_key: LockKey,
-    pub expire_secs: u64,
+    pub ttl: Duration,
     pub revision: u64,
     pub acquire_lock: bool,
 }
 
 impl ExtendLockRevReq {
-    pub fn new(lock_key: LockKey, revision: u64, expire_secs: u64, acquire_lock: bool) -> Self {
+    pub fn new(lock_key: LockKey, revision: u64, ttl: Duration, acquire_lock: bool) -> Self {
         Self {
             lock_key,
             revision,
-            expire_secs,
+            ttl,
             acquire_lock,
         }
     }

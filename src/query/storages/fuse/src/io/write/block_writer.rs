@@ -94,7 +94,7 @@ pub fn serialize_block(
                     default_compress_ratio,
                     forbidden_compressions: vec![],
                 },
-            );
+            )?;
 
             let batch = ArrowChunk::try_from(block)?;
 

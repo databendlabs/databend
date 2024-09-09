@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -33,7 +36,6 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
@@ -43,20 +45,17 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetLVTReply;
-use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -73,10 +72,10 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::SetLVTReply;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -88,20 +87,21 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
+use databend_common_proto_conv::FromToProto;
 
 use crate::kv_app_error::KVAppError;
+use crate::meta_txn_error::MetaTxnError;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
@@ -147,14 +147,18 @@ pub trait SchemaApi: Send + Sync {
     async fn drop_index(
         &self,
         name_ident: &IndexNameIdent,
-    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, KVAppError>;
+    ) -> Result<Option<(SeqV<IndexId>, SeqV<IndexMeta>)>, MetaTxnError>;
 
     async fn get_index(
         &self,
         name_ident: &IndexNameIdent,
     ) -> Result<Option<GetIndexReply>, MetaError>;
 
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
+    async fn update_index(
+        &self,
+        id_ident: IndexIdIdent,
+        index_meta: IndexMeta,
+    ) -> Result<Change<IndexMeta>, MetaError>;
 
     async fn list_indexes(
         &self,
@@ -163,20 +167,11 @@ pub trait SchemaApi: Send + Sync {
 
     // virtual column
 
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply, KVAppError>;
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<(), KVAppError>;
 
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply, KVAppError>;
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<(), KVAppError>;
 
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply, KVAppError>;
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<(), KVAppError>;
 
     async fn list_virtual_columns(
         &self,
@@ -205,8 +200,16 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
 
-    async fn get_table_history(&self, req: ListTableReq)
-    -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    async fn get_table_meta_history(
+        &self,
+        database_name: &str,
+        table_id_history: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
+
+    async fn get_tables_history(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
@@ -304,8 +307,23 @@ pub trait SchemaApi: Send + Sync {
     -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
 
     // least visible time
-    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError>;
-    async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError>;
+
+    /// Updates the table's least visible time (LVT) only if the new value is greater than the existing one.
+    ///
+    /// This function returns the updated LVT if changed, or the existing LVT if no update was necessary.
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime, KVAppError>;
+
+    #[deprecated(note = "use get::<K>() instead")]
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
+        Ok(self.get(name_ident).await?)
+    }
 
     fn name(&self) -> String;
 
@@ -322,16 +340,24 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError>;
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaTxnError>;
 
     async fn get_dictionary(
         &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>, KVAppError>;
+        req: DictionaryNameIdent,
+    ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError>;
 
     async fn list_dictionaries(
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
+
+    /// Generic get() implementation for any kvapi::Key.
+    ///
+    /// This method just return an `Option` of the value without seq number.
+    async fn get<K>(&self, name_ident: &K) -> Result<Option<K::ValueType>, MetaError>
+    where
+        K: kvapi::Key + Sync + 'static,
+        K::ValueType: FromToProto + 'static;
 }

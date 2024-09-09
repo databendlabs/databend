@@ -783,6 +783,43 @@ pub enum AsyncFunctionArgument {
     // Used by `nextval` function to call meta's `get_sequence_next_value` api
     // to get incremental values.
     SequenceFunction(String),
+    // The dictionary argument is connection URL of remote source, like Redis, MySQL ...
+    // Used by `dict_get` function to connect source and read data.
+    DictGetFunction(DictGetFunctionArgument),
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct RedisSource {
+    // Redis source connection URL, like `tcp://127.0.0.1:6379`
+    pub connection_url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub db_index: Option<i64>,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct SqlSource {
+    // SQL source connection URL, like `mysql://user:password@localhost:3306/db`
+    pub connection_url: String,
+    pub table: String,
+    pub key_field: String,
+    pub value_field: String,
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub enum DictionarySource {
+    Mysql(SqlSource),
+    Redis(RedisSource),
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct DictGetFunctionArgument {
+    pub dict_source: DictionarySource,
+    pub default_value: Scalar,
 }
 
 // Asynchronous functions are functions that need to call remote interfaces.
@@ -809,6 +846,9 @@ impl AsyncFunctionCall {
                 // Call meta's api to generate an incremental value.
                 let reply = catalog.get_sequence_next_value(req).await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
+            }
+            AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
+                Err(ErrorCode::Internal("Cannot generate dict_get function"))
             }
         }
     }

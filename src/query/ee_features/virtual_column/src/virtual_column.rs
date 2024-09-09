@@ -18,12 +18,9 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_storages_fuse::FuseTable;
@@ -35,19 +32,19 @@ pub trait VirtualColumnHandler: Sync + Send {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply>;
+    ) -> Result<()>;
 
     async fn do_update_virtual_column(
         &self,
         catalog: Arc<dyn Catalog>,
         req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply>;
+    ) -> Result<()>;
 
     async fn do_drop_virtual_column(
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply>;
+    ) -> Result<()>;
 
     async fn do_list_virtual_columns(
         &self,
@@ -78,7 +75,7 @@ impl VirtualColumnHandlerWrapper {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    ) -> Result<()> {
         self.handler.do_create_virtual_column(catalog, req).await
     }
 
@@ -87,7 +84,7 @@ impl VirtualColumnHandlerWrapper {
         &self,
         catalog: Arc<dyn Catalog>,
         req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    ) -> Result<()> {
         self.handler.do_update_virtual_column(catalog, req).await
     }
 
@@ -96,7 +93,7 @@ impl VirtualColumnHandlerWrapper {
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    ) -> Result<()> {
         self.handler.do_drop_virtual_column(catalog, req).await
     }
 

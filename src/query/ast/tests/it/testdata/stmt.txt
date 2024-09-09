@@ -627,7 +627,7 @@ Replace(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -738,7 +738,7 @@ Explain {
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -877,7 +877,7 @@ Explain {
                                     },
                                     alias: None,
                                     temporal: None,
-                                    consume: false,
+                                    with_options: None,
                                     pivot: None,
                                     unpivot: None,
                                     sample: None,
@@ -989,7 +989,7 @@ Explain {
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -1066,7 +1066,7 @@ Explain {
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -1282,7 +1282,7 @@ CreateIndex(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -1477,7 +1477,7 @@ CreateIndex(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -1651,7 +1651,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1702,7 +1702,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1753,7 +1753,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1801,7 +1801,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1884,7 +1884,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -1967,7 +1967,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: Some(
             Query {
@@ -2012,7 +2012,7 @@ CreateTable(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -2129,7 +2129,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2206,7 +2206,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2359,7 +2359,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2489,7 +2489,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2594,7 +2594,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2654,7 +2654,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2698,7 +2698,7 @@ CreateTable(
             Memory,
         ),
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2770,7 +2770,7 @@ CreateTable(
                 },
             },
         ),
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2844,7 +2844,7 @@ CreateTable(
                 },
             },
         ),
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -2994,24 +2994,6 @@ CreateCatalog(
         catalog_options: {
             "thrift_protocol": "binary",
             "url": "<hive-meta-store>",
-        },
-    },
-)
-
-
----------- Input ----------
-create catalog ctl type=share connection=(name='provider.test_share' endpoint='endpoint_name');
----------- Output ---------
-CREATE CATALOG ctl TYPE=SHARE CONNECTION = ( endpoint = 'endpoint_name', name = 'provider.test_share' )
----------- AST ------------
-CreateCatalog(
-    CreateCatalogStmt {
-        if_not_exists: false,
-        catalog_name: "ctl",
-        catalog_type: Share,
-        catalog_options: {
-            "endpoint": "endpoint_name",
-            "name": "provider.test_share",
         },
     },
 )
@@ -3179,7 +3161,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {
             "bloom_index_columns": "a,b,c",
             "compression": "zstd",
@@ -3322,7 +3304,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4731,7 +4713,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4811,7 +4793,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4872,7 +4854,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4931,7 +4913,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: None,
         table_type: Normal,
@@ -4960,7 +4942,7 @@ CreateTable(
         source: None,
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {},
         as_query: Some(
             Query {
@@ -5005,7 +4987,7 @@ CreateTable(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -5357,7 +5339,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5582,7 +5564,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5653,7 +5635,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5731,7 +5713,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5800,7 +5782,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5821,7 +5803,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5842,7 +5824,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5911,7 +5893,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5932,7 +5914,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -5953,7 +5935,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -6140,7 +6122,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6161,7 +6143,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6302,7 +6284,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6323,7 +6305,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6464,7 +6446,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6485,7 +6467,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6626,7 +6608,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6647,7 +6629,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6788,7 +6770,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6809,7 +6791,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6950,7 +6932,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -6971,7 +6953,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7112,7 +7094,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7133,7 +7115,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7274,7 +7256,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7295,7 +7277,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7436,7 +7418,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7457,7 +7439,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7598,7 +7580,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7619,7 +7601,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7760,7 +7742,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7781,7 +7763,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7870,7 +7852,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7891,7 +7873,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -7980,7 +7962,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -8001,7 +7983,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -8090,7 +8072,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -8111,7 +8093,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -8200,7 +8182,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -8221,7 +8203,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -8292,7 +8274,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -8402,7 +8384,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
-                                                consume: false,
+                                                with_options: None,
                                                 pivot: None,
                                                 unpivot: None,
                                                 sample: None,
@@ -8485,7 +8467,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -8595,7 +8577,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
-                                                consume: false,
+                                                with_options: None,
                                                 pivot: None,
                                                 unpivot: None,
                                                 sample: None,
@@ -8678,7 +8660,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -8788,7 +8770,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
-                                                consume: false,
+                                                with_options: None,
                                                 pivot: None,
                                                 unpivot: None,
                                                 sample: None,
@@ -8871,7 +8853,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -8979,7 +8961,7 @@ Query(
                                                 },
                                                 alias: None,
                                                 temporal: None,
-                                                consume: false,
+                                                with_options: None,
                                                 pivot: None,
                                                 unpivot: None,
                                                 sample: None,
@@ -9514,7 +9496,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -9603,7 +9585,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -9881,7 +9863,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: Some(
@@ -9957,7 +9939,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: Some(
@@ -10033,7 +10015,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: Some(
@@ -10109,7 +10091,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: Some(
@@ -10592,7 +10574,7 @@ Insert(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -11422,7 +11404,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t CLUSTER BY (c1)
+ALTER TABLE t  CLUSTER BY LINEAR(c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -11443,33 +11425,36 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
         },
         action: AlterTableClusterKey {
-            cluster_by: [
-                ColumnRef {
-                    span: Some(
-                        25..27,
-                    ),
-                    column: ColumnRef {
-                        database: None,
-                        table: None,
-                        column: Name(
-                            Identifier {
-                                span: Some(
-                                    25..27,
-                                ),
-                                name: "c1",
-                                quote: None,
-                                ident_type: None,
-                            },
+            cluster_by: ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            25..27,
                         ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        25..27,
+                                    ),
+                                    name: "c1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
                     },
-                },
-            ],
+                ],
+            },
         },
     },
 )
@@ -11499,7 +11484,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11535,7 +11520,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11569,7 +11554,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11643,7 +11628,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11694,7 +11679,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11745,7 +11730,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11809,7 +11794,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11878,7 +11863,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11929,7 +11914,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -11972,7 +11957,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12015,7 +12000,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12061,7 +12046,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12106,7 +12091,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12182,7 +12167,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12264,7 +12249,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12316,7 +12301,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12368,7 +12353,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12413,7 +12398,7 @@ AlterTable(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -12766,7 +12751,7 @@ CreateTable(
         ),
         engine: None,
         uri_location: None,
-        cluster_by: [],
+        cluster_by: None,
         table_options: {
             "comment": "table comment",
         },
@@ -13563,6 +13548,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -13616,6 +13602,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -13692,6 +13679,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -13768,6 +13756,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -13848,6 +13837,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -13928,6 +13918,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -13996,6 +13987,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14051,6 +14043,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14105,6 +14098,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14170,6 +14164,7 @@ CopyIntoLocation(
                     quote: None,
                     ident_type: None,
                 },
+                with_options: None,
             },
         ),
         dst: Uri(
@@ -14229,6 +14224,7 @@ CopyIntoLocation(
                     quote: None,
                     ident_type: None,
                 },
+                with_options: None,
             },
         ),
         dst: Stage(
@@ -14272,6 +14268,7 @@ CopyIntoLocation(
                     quote: None,
                     ident_type: None,
                 },
+                with_options: None,
             },
         ),
         dst: Stage(
@@ -14348,6 +14345,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14414,6 +14412,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14480,6 +14479,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14546,6 +14546,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14622,6 +14623,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -14701,6 +14703,7 @@ CopyIntoTable(
                 quote: None,
                 ident_type: None,
             },
+            with_options: None,
         },
         dst_columns: None,
         hints: None,
@@ -15392,240 +15395,6 @@ Presign(
 
 
 ---------- Input ----------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
----------- Output ---------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' CREDENTIAL=(KEY = 'hello', TYPE = 'HMAC') ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
----------- AST ------------
-CreateShareEndpoint(
-    CreateShareEndpointStmt {
-        create_option: CreateIfNotExists,
-        endpoint: Identifier {
-            span: Some(
-                36..37,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        url: UriLocation {
-            protocol: "http",
-            name: "127.0.0.1",
-            path: "/",
-            part_prefix: "",
-            connection: Connection {
-                visited_keys: {},
-                conns: {},
-            },
-        },
-        credential_options: {
-            "KEY": "hello",
-            "TYPE": "HMAC",
-        },
-        args: {
-            "jwks_key_file": "https://eks.public/keys",
-            "ssl_cert": "cert.pem",
-        },
-        comment: Some(
-            "share endpoint comment",
-        ),
-    },
-)
-
-
----------- Input ----------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
----------- Output ---------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' CREDENTIAL=(KEY = 'hello', TYPE = 'HMAC') ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
----------- AST ------------
-CreateShareEndpoint(
-    CreateShareEndpointStmt {
-        create_option: CreateOrReplace,
-        endpoint: Identifier {
-            span: Some(
-                33..34,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        url: UriLocation {
-            protocol: "http",
-            name: "127.0.0.1",
-            path: "/",
-            part_prefix: "",
-            connection: Connection {
-                visited_keys: {},
-                conns: {},
-            },
-        },
-        credential_options: {
-            "KEY": "hello",
-            "TYPE": "HMAC",
-        },
-        args: {
-            "jwks_key_file": "https://eks.public/keys",
-            "ssl_cert": "cert.pem",
-        },
-        comment: Some(
-            "share endpoint comment",
-        ),
-    },
-)
-
-
----------- Input ----------
-CREATE SHARE t COMMENT='share comment';
----------- Output ---------
-CREATE SHARE t COMMENT = 'share comment'
----------- AST ------------
-CreateShare(
-    CreateShareStmt {
-        if_not_exists: false,
-        share: Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        comment: Some(
-            "share comment",
-        ),
-    },
-)
-
-
----------- Input ----------
-CREATE SHARE IF NOT EXISTS t;
----------- Output ---------
-CREATE SHARE IF NOT EXISTS t
----------- AST ------------
-CreateShare(
-    CreateShareStmt {
-        if_not_exists: true,
-        share: Identifier {
-            span: Some(
-                27..28,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        comment: None,
-    },
-)
-
-
----------- Input ----------
-DROP SHARE a;
----------- Output ---------
-DROP SHARE a
----------- AST ------------
-DropShare(
-    DropShareStmt {
-        if_exists: false,
-        share: Identifier {
-            span: Some(
-                11..12,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-    },
-)
-
-
----------- Input ----------
-DROP SHARE IF EXISTS a;
----------- Output ---------
-DROP SHARE IF EXISTS a
----------- AST ------------
-DropShare(
-    DropShareStmt {
-        if_exists: true,
-        share: Identifier {
-            span: Some(
-                21..22,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-    },
-)
-
-
----------- Input ----------
-GRANT USAGE ON DATABASE db1 TO SHARE a;
----------- Output ---------
-GRANT USAGE ON DATABASE db1 TO SHARE a
----------- AST ------------
-GrantShareObject(
-    GrantShareObjectStmt {
-        share: Identifier {
-            span: Some(
-                37..38,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        object: Database(
-            Identifier {
-                span: Some(
-                    24..27,
-                ),
-                name: "db1",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        privilege: Usage,
-    },
-)
-
-
----------- Input ----------
-GRANT SELECT ON TABLE db1.tb1 TO SHARE a;
----------- Output ---------
-GRANT SELECT ON TABLE db1.tb1 TO SHARE a
----------- AST ------------
-GrantShareObject(
-    GrantShareObjectStmt {
-        share: Identifier {
-            span: Some(
-                39..40,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        object: Table(
-            Identifier {
-                span: Some(
-                    22..25,
-                ),
-                name: "db1",
-                quote: None,
-                ident_type: None,
-            },
-            Identifier {
-                span: Some(
-                    26..29,
-                ),
-                name: "tb1",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        privilege: Select,
-    },
-)
-
-
----------- Input ----------
 GRANT all ON stage s1 TO a;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON  STAGE s1 TO USER 'a'@'%'
@@ -15823,239 +15592,6 @@ Revoke(
 
 
 ---------- Input ----------
-REVOKE USAGE ON DATABASE db1 FROM SHARE a;
----------- Output ---------
-REVOKE USAGE ON DATABASE db1 FROM SHARE a
----------- AST ------------
-RevokeShareObject(
-    RevokeShareObjectStmt {
-        share: Identifier {
-            span: Some(
-                40..41,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        object: Database(
-            Identifier {
-                span: Some(
-                    25..28,
-                ),
-                name: "db1",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        privilege: Usage,
-    },
-)
-
-
----------- Input ----------
-REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a;
----------- Output ---------
-REVOKE SELECT ON TABLE db1.tb1 FROM SHARE a
----------- AST ------------
-RevokeShareObject(
-    RevokeShareObjectStmt {
-        share: Identifier {
-            span: Some(
-                42..43,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        object: Table(
-            Identifier {
-                span: Some(
-                    23..26,
-                ),
-                name: "db1",
-                quote: None,
-                ident_type: None,
-            },
-            Identifier {
-                span: Some(
-                    27..30,
-                ),
-                name: "tb1",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        privilege: Select,
-    },
-)
-
-
----------- Input ----------
-ALTER SHARE a ADD TENANTS = b,c;
----------- Output ---------
-ALTER SHARE a ADD TENANTS = b,c
----------- AST ------------
-AlterShareTenants(
-    AlterShareTenantsStmt {
-        share: Identifier {
-            span: Some(
-                12..13,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        if_exists: false,
-        tenants: [
-            Identifier {
-                span: Some(
-                    28..29,
-                ),
-                name: "b",
-                quote: None,
-                ident_type: None,
-            },
-            Identifier {
-                span: Some(
-                    30..31,
-                ),
-                name: "c",
-                quote: None,
-                ident_type: None,
-            },
-        ],
-        is_add: true,
-    },
-)
-
-
----------- Input ----------
-ALTER SHARE IF EXISTS a ADD TENANTS = b,c;
----------- Output ---------
-ALTER SHARE IF EXISTS a ADD TENANTS = b,c
----------- AST ------------
-AlterShareTenants(
-    AlterShareTenantsStmt {
-        share: Identifier {
-            span: Some(
-                22..23,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        if_exists: true,
-        tenants: [
-            Identifier {
-                span: Some(
-                    38..39,
-                ),
-                name: "b",
-                quote: None,
-                ident_type: None,
-            },
-            Identifier {
-                span: Some(
-                    40..41,
-                ),
-                name: "c",
-                quote: None,
-                ident_type: None,
-            },
-        ],
-        is_add: true,
-    },
-)
-
-
----------- Input ----------
-ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c;
----------- Output ---------
-ALTER SHARE IF EXISTS a REMOVE TENANTS = b,c
----------- AST ------------
-AlterShareTenants(
-    AlterShareTenantsStmt {
-        share: Identifier {
-            span: Some(
-                22..23,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
-        },
-        if_exists: true,
-        tenants: [
-            Identifier {
-                span: Some(
-                    41..42,
-                ),
-                name: "b",
-                quote: None,
-                ident_type: None,
-            },
-            Identifier {
-                span: Some(
-                    43..44,
-                ),
-                name: "c",
-                quote: None,
-                ident_type: None,
-            },
-        ],
-        is_add: false,
-    },
-)
-
-
----------- Input ----------
-DESC SHARE b;
----------- Output ---------
-DESC SHARE b
----------- AST ------------
-DescShare(
-    DescShareStmt {
-        share: Identifier {
-            span: Some(
-                11..12,
-            ),
-            name: "b",
-            quote: None,
-            ident_type: None,
-        },
-    },
-)
-
-
----------- Input ----------
-DESCRIBE SHARE b;
----------- Output ---------
-DESC SHARE b
----------- AST ------------
-DescShare(
-    DescShareStmt {
-        share: Identifier {
-            span: Some(
-                15..16,
-            ),
-            name: "b",
-            quote: None,
-            ident_type: None,
-        },
-    },
-)
-
-
----------- Input ----------
-SHOW SHARES;
----------- Output ---------
-SHOW SHARES
----------- AST ------------
-ShowShares(
-    ShowSharesStmt,
-)
-
-
----------- Input ----------
 SHOW GRANTS ON TABLE db1.tb1;
 ---------- Output ---------
 SHOW GRANTS ON TABLE db1.tb1 
@@ -16099,18 +15635,6 @@ ShowObjectPrivileges(
 
 
 ---------- Input ----------
-SHOW GRANTS OF SHARE t;
----------- Output ---------
-SHOW GRANTS OF SHARE t
----------- AST ------------
-ShowGrantsOfShare(
-    ShowGrantsOfShareStmt {
-        share_name: "t",
-    },
-)
-
-
----------- Input ----------
 UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
 ---------- Output ---------
 UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
@@ -16143,7 +15667,7 @@ Update(
             },
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -16676,6 +16200,40 @@ SetStmt {
 
 
 ---------- Input ----------
+show variables
+---------- Output ---------
+SHOW VARIABLES 
+---------- AST ------------
+ShowVariables {
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show variables like 'v%'
+---------- Output ---------
+SHOW VARIABLES LIKE 'v%'
+---------- AST ------------
+ShowVariables {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "v%",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 SET variable a = select 3
 ---------- Output ---------
 SET VARIABLE a = SELECT 3
@@ -17186,7 +16744,7 @@ Query(
                                 },
                                 alias: None,
                                 temporal: None,
-                                consume: false,
+                                with_options: None,
                                 pivot: None,
                                 unpivot: None,
                                 sample: None,
@@ -17432,7 +16990,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -17590,7 +17148,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -17746,7 +17304,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -17921,7 +17479,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -18076,7 +17634,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -18207,7 +17765,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -19048,7 +18606,7 @@ CreateDynamicTable(
                 },
             },
         ),
-        cluster_by: [],
+        cluster_by: None,
         target_lag: IntervalSecs(
             10,
         ),
@@ -19104,7 +18662,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -19194,7 +18752,7 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [],
+        cluster_by: None,
         target_lag: IntervalSecs(
             600,
         ),
@@ -19250,7 +18808,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -19282,7 +18840,7 @@ CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
 AS
     SELECT c, d FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
+CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -19340,27 +18898,32 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [
-            ColumnRef {
-                span: Some(
-                    68..69,
-                ),
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    column: Name(
-                        Identifier {
-                            span: Some(
-                                68..69,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            68..69,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        68..69,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
                             ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
                         },
-                    ),
-                },
+                    },
+                ],
             },
-        ],
+        ),
         target_lag: IntervalSecs(
             36000,
         ),
@@ -19449,7 +19012,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -19478,7 +19041,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -19527,27 +19090,32 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [
-            ColumnRef {
-                span: Some(
-                    89..90,
-                ),
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    column: Name(
-                        Identifier {
-                            span: Some(
-                                89..90,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            89..90,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        89..90,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
                             ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
                         },
-                    ),
-                },
+                    },
+                ],
             },
-        ],
+        ),
         target_lag: IntervalSecs(
             864000,
         ),
@@ -19654,7 +19222,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -19708,7 +19276,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM db.t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -19757,27 +19325,32 @@ CreateDynamicTable(
                 None,
             ),
         ),
-        cluster_by: [
-            ColumnRef {
-                span: Some(
-                    89..90,
-                ),
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    column: Name(
-                        Identifier {
-                            span: Some(
-                                89..90,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            89..90,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        89..90,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
                             ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
                         },
-                    ),
-                },
+                    },
+                ],
             },
-        ],
+        ),
         target_lag: Downstream,
         warehouse_opts: WarehouseOptions {
             warehouse: None,
@@ -19891,7 +19464,7 @@ CreateDynamicTable(
                             },
                             alias: None,
                             temporal: None,
-                            consume: false,
+                            with_options: None,
                             pivot: None,
                             unpivot: None,
                             sample: None,
@@ -20930,6 +20503,7 @@ CreatePipe(
                     quote: None,
                     ident_type: None,
                 },
+                with_options: None,
             },
             dst_columns: None,
             hints: None,
@@ -20994,6 +20568,7 @@ CreatePipe(
                     quote: None,
                     ident_type: None,
                 },
+                with_options: None,
             },
             dst_columns: None,
             hints: None,
@@ -21530,7 +21105,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -21653,7 +21228,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -21778,7 +21353,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -21903,7 +21478,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -22028,7 +21603,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -22146,7 +21721,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -23068,7 +22643,7 @@ Query(
                                                                 },
                                                                 alias: None,
                                                                 temporal: None,
-                                                                consume: false,
+                                                                with_options: None,
                                                                 pivot: None,
                                                                 unpivot: None,
                                                                 sample: None,
@@ -23297,7 +22872,7 @@ Query(
                         },
                         alias: None,
                         temporal: None,
-                        consume: false,
+                        with_options: None,
                         pivot: None,
                         unpivot: None,
                         sample: None,
@@ -23415,6 +22990,260 @@ CreateDictionary(
         comment: Some(
             "This is a comment",
         ),
+    },
+)
+
+
+---------- Input ----------
+describe PROCEDURE p1()
+---------- Output ---------
+DESCRIBE PROCEDURE p1() 
+---------- AST ------------
+DescProcedure(
+    DescProcedureStmt {
+        name: "p1",
+        args: [],
+    },
+)
+
+
+---------- Input ----------
+describe PROCEDURE p1(string, timestamp)
+---------- Output ---------
+DESCRIBE PROCEDURE p1(STRING, TIMESTAMP) 
+---------- AST ------------
+DescProcedure(
+    DescProcedureStmt {
+        name: "p1",
+        args: [
+            String,
+            Timestamp,
+        ],
+    },
+)
+
+
+---------- Input ----------
+drop PROCEDURE p1()
+---------- Output ---------
+DROP PROCEDURE p1()
+---------- AST ------------
+DropProcedure(
+    DropProcedureStmt {
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+drop PROCEDURE p1(int, string)
+---------- Output ---------
+DROP PROCEDURE p1(Int32,STRING)
+---------- AST ------------
+DropProcedure(
+    DropProcedureStmt {
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "Int32,STRING",
+        },
+    },
+)
+
+
+---------- Input ----------
+call PROCEDURE p1()
+---------- Output ---------
+CALL PROCEDURE p1()
+---------- AST ------------
+CallProcedure(
+    CallProcedureStmt {
+        name: "p1",
+        args: [],
+    },
+)
+
+
+---------- Input ----------
+show PROCEDURES like 'p1%'
+---------- Output ---------
+SHOW PROCEDURES LIKE 'p1%'
+---------- AST ------------
+ShowProcedures {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "p1%",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: Create,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+        language: SQL,
+        args: None,
+        return_type: [
+            ProcedureType {
+                name: None,
+                data_type: NotNull(
+                    String,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+create PROCEDURE p1(a int, b string) returns string not null language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: Create,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "Int32,STRING",
+        },
+        language: SQL,
+        args: Some(
+            [
+                ProcedureType {
+                    name: Some(
+                        "a",
+                    ),
+                    data_type: Int32,
+                },
+                ProcedureType {
+                    name: Some(
+                        "b",
+                    ),
+                    data_type: String,
+                },
+            ],
+        ),
+        return_type: [
+            ProcedureType {
+                name: None,
+                data_type: NotNull(
+                    String,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+create PROCEDURE p1() returns table(a string not null, b int null) language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: Create,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+        language: SQL,
+        args: None,
+        return_type: [
+            ProcedureType {
+                name: Some(
+                    "a",
+                ),
+                data_type: NotNull(
+                    String,
+                ),
+            },
+            ProcedureType {
+                name: Some(
+                    "b",
+                ),
+                data_type: Nullable(
+                    Int32,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
     },
 )
 

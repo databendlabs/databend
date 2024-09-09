@@ -156,8 +156,9 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key: String,
+        cluster_type: String,
     ) -> Result<()> {
-        let (_, _) = (ctx, cluster_key);
+        let (_, _, _) = (ctx, cluster_key, cluster_type);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Altering table cluster keys is not supported for the '{}' engine.",
@@ -331,9 +332,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
+        with_options: &str,
     ) -> Result<String> {
-        let (_, _, _, _) = (ctx, database_name, table_name, consume);
+        let (_, _, _, _) = (ctx, database_name, table_name, with_options);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",

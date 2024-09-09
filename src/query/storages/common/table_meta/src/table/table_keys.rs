@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::sync::LazyLock;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
@@ -48,6 +50,10 @@ pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 // the following are used in for random engine
 pub const OPT_KEY_RANDOM_SEED: &str = "seed";
 
+pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
+pub const LINEAR_CLUSTER_TYPE: &str = "linear";
+pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
+
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specified this option keys in DDL
 /// - Should not be shown in `show create table` statement
@@ -75,4 +81,33 @@ pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
 
 pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ClusterType {
+    Linear,
+    Hilbert,
+}
+
+impl Display for ClusterType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            ClusterType::Linear => LINEAR_CLUSTER_TYPE.to_string(),
+            ClusterType::Hilbert => HILBERT_CLUSTER_TYPE.to_string(),
+        })
+    }
+}
+
+impl std::str::FromStr for ClusterType {
+    type Err = databend_common_exception::ErrorCode;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "linear" => Ok(ClusterType::Linear),
+            "hilbert" => Ok(ClusterType::Hilbert),
+            _ => Err(databend_common_exception::ErrorCode::Internal(format!(
+                "invalid cluster type: {}",
+                s
+            ))),
+        }
+    }
 }

@@ -349,7 +349,7 @@ impl DataExchangeManager {
         &self,
         id: String,
         target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -367,7 +367,7 @@ impl DataExchangeManager {
         query: String,
         target: String,
         fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -575,7 +575,7 @@ impl QueryCoordinator {
     pub fn add_statistics_exchange(
         &mut self,
         target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         match self
             .statistics_exchanges
@@ -607,7 +607,7 @@ impl QueryCoordinator {
         &mut self,
         target: String,
         fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         self.fragment_exchanges.insert(
             (target, fragment, FLIGHT_SENDER),

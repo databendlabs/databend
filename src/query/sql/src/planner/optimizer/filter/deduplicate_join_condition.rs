@@ -95,9 +95,16 @@ impl DeduplicateJoinConditionOptimizer {
 
     pub fn deduplicate_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
+        let mut children_changed = false;
         for child in s_expr.children() {
-            let child = self.deduplicate(child)?;
-            children.push(Arc::new(child));
+            let optimized_child = self.deduplicate(child)?;
+            if !optimized_child.eq(child) {
+                children_changed = true;
+            }
+            children.push(Arc::new(optimized_child));
+        }
+        if !children_changed {
+            return Ok(s_expr.clone());
         }
         Ok(s_expr.replace_children(children))
     }

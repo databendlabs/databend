@@ -33,7 +33,7 @@ use crate::sessions::TableContext;
 
 pub struct InterpreterQueryLog;
 
-fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, String, String) {
+fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i32, String, String) {
     match err {
         None => (log_type, 0, "".to_string(), "".to_string()),
         Some(e) => {
@@ -221,10 +221,10 @@ impl InterpreterQueryLog {
         })
     }
 
-    pub fn log_finish(
+    pub fn log_finish<C>(
         ctx: &QueryContext,
         now: SystemTime,
-        err: Option<ErrorCode>,
+        err: Option<ErrorCode<C>>,
         has_profiles: bool,
     ) -> Result<()> {
         ctx.set_finish_time(now);

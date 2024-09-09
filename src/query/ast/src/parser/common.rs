@@ -32,6 +32,7 @@ use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
+use crate::parser::query::with_options;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
@@ -228,13 +229,17 @@ pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
 }
 
 pub fn table_ref(i: Input) -> IResult<TableRef> {
-    map(dot_separated_idents_1_to_3, |(catalog, database, table)| {
-        TableRef {
+    map(
+        rule! {
+           #dot_separated_idents_1_to_3 ~ #with_options?
+        },
+        |((catalog, database, table), with_options)| TableRef {
             catalog,
             database,
             table,
-        }
-    })(i)
+            with_options,
+        },
+    )(i)
 }
 
 pub fn set_type(i: Input) -> IResult<SetType> {

@@ -25,6 +25,7 @@ use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
+use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
@@ -48,6 +49,7 @@ use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
+use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -183,6 +185,14 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "fuse_vacuum_temporary_table".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumTemporaryTable>::create),
+            ),
+        );
+
+        creators.insert(
             "stream_status".to_string(),
             (next_id(), Arc::new(StreamStatusTable::create)),
         );
@@ -272,6 +282,11 @@ impl TableFunctionFactory {
         creators.insert(
             "task_history".to_string(),
             (next_id(), Arc::new(TaskHistoryTable::create)),
+        );
+
+        creators.insert(
+            "show_variables".to_string(),
+            (next_id(), Arc::new(ShowVariables::create)),
         );
 
         TableFunctionFactory {

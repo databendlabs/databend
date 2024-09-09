@@ -41,7 +41,8 @@ fn write_data(dest: &mut Vec<u8>) -> Vec<ColumnMeta> {
         default_compression: CommonCompression::Lz4,
         max_page_size: Some(WRITE_PAGE),
         ..Default::default()
-    });
+    })
+    .unwrap();
 
     writer.start().unwrap();
     writer.write(&chunk).unwrap();

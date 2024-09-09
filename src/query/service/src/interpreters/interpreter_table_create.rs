@@ -55,8 +55,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
-use databend_common_storages_share::remove_share_table_info;
-use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
@@ -66,6 +64,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -256,28 +255,6 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
         };
 
-        // update share spec if needed
-        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &spec_vec,
-            )
-            .await?;
-
-            // remove table info file
-            for share_spec in spec_vec {
-                remove_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_spec.name,
-                    db_id,
-                    revoke_table_id,
-                )
-                .await?;
-            }
-        }
-
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await?;
@@ -391,28 +368,6 @@ impl CreateTableInterpreter {
             }
         }
 
-        // update share spec if needed
-        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &spec_vec,
-            )
-            .await?;
-
-            // remove table spec
-            for share_spec in spec_vec {
-                remove_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_spec.name,
-                    db_id,
-                    revoke_table_id,
-                )
-                .await?;
-            }
-        }
-
         Ok(PipelineBuildResult::create())
     }
 
@@ -520,6 +475,7 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
 
     r.insert(OPT_KEY_ENGINE);
 

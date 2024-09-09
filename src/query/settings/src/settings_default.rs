@@ -541,6 +541,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_procedure", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
@@ -674,10 +680,10 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("external_server_request_retry_times", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(48),
+                    value: UserSettingValue::UInt64(8),
                     desc: "Request max retry times to external server",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..=1024)),
+                    range: Some(SettingRange::Numeric(0..=256)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -848,7 +854,13 @@ impl DefaultSettings {
                     desc: "Seed for random function",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                })
+                }),
+                ("dynamic_sample_time_budget_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time budget for dynamic sample in milliseconds",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -975,7 +987,7 @@ impl DefaultSettings {
     /// If the value is not a valid u64, it will be parsed as f64.
     /// Used for:
     /// set max_memory_usage = 1024*1024*1024*1.5;
-    fn parse_to_u64(v: &str) -> Result<u64, ErrorCode> {
+    fn parse_to_u64(v: &str) -> Result<u64> {
         match v.parse::<u64>() {
             Ok(val) => Ok(val),
             Err(_) => {

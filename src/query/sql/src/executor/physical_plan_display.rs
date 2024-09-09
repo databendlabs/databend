@@ -179,7 +179,7 @@ impl Display for ConstantTableScan {
             })
             .collect::<Vec<String>>();
 
-        write!(f, "ConstantTableScan: {}", columns.join(", "))
+        write!(f, "{}: {}", self.name(), columns.join(", "))
     }
 }
 

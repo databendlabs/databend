@@ -20,13 +20,15 @@ use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -44,7 +46,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -59,7 +60,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -106,12 +106,12 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::seq_value::SeqV;
@@ -277,10 +277,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply {
-            db_id: res.db_id,
-            share_specs: None,
-        })
+        Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
     #[async_backtrace::framed]
@@ -295,7 +292,9 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        let dropped = self.ctx.meta.drop_index(&req.name_ident).await?;
+        let res = self.ctx.meta.drop_index(&req.name_ident).await;
+        let dropped = res.map_err(KVAppError::from)?;
+
         if dropped.is_none() {
             if req.if_exists {
                 // Alright
@@ -315,7 +314,23 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        Ok(self.ctx.meta.update_index(req).await?)
+        let tenant = &req.tenant;
+        let index_id = IndexId::new(req.index_id);
+        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
+
+        let change = self.ctx.meta.update_index(id_ident, req.index_meta).await?;
+
+        if !change.is_changed() {
+            Err(
+                KVAppError::AppError(AppError::UnknownIndex(UnknownError::new(
+                    index_id.to_string(),
+                    func_name!(),
+                )))
+                .into(),
+            )
+        } else {
+            Ok(UpdateIndexReply {})
+        }
     }
 
     #[async_backtrace::framed]
@@ -347,26 +362,17 @@ impl Catalog for MutableCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()> {
         Ok(self.ctx.meta.create_virtual_column(req).await?)
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()> {
         Ok(self.ctx.meta.update_virtual_column(req).await?)
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()> {
         Ok(self.ctx.meta.drop_virtual_column(req).await?)
     }
 
@@ -440,6 +446,17 @@ impl Catalog for MutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table(table_name).await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.get_table_history(table_name).await
     }
 
     #[async_backtrace::framed]
@@ -552,22 +569,7 @@ impl Catalog for MutableCatalog {
             if req.update_table_metas.len() == 1 {
                 match req.update_table_metas[0].1.db_type.clone() {
                     DatabaseType::NormalDB => {}
-                    DatabaseType::ShareDB(share_params) => {
-                        let share_ident = share_params.share_ident;
-                        let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
-                        let db = self.get_database(&tenant, share_ident.share_name()).await?;
-                        return db.retryable_update_multi_table_meta(req).await;
-                    }
                 }
-            }
-            if req
-                .update_table_metas
-                .iter()
-                .any(|(_, info)| matches!(info.db_type, DatabaseType::ShareDB(_)))
-            {
-                return Err(ErrorCode::StorageOther(
-                    "update table meta from multi share db, or update table meta from share db and normal db in one request, is not supported",
-                ));
             }
         }
 
@@ -610,12 +612,6 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
-            DatabaseType::ShareDB(share_params) => {
-                let share_ident = share_params.share_ident;
-                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
-                let db = self.get_database(&tenant, share_ident.share_name()).await?;
-                db.truncate_table(req).await
-            }
         }
     }
 
@@ -691,19 +687,21 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dict_ident: DictionaryNameIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>> {
-        let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await?;
+        let reply = self.ctx.meta.drop_dictionary(dict_ident.clone()).await;
+        let reply = reply.map_err(KVAppError::from)?;
         Ok(reply)
     }
 
     #[async_backtrace::framed]
-    async fn get_dictionary(
-        &self,
-        req: TenantDictionaryIdent,
-    ) -> Result<Option<GetDictionaryReply>> {
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
         let reply = self.ctx.meta.get_dictionary(req.clone()).await?;
-        Ok(reply)
+        Ok(reply.map(|(seq_id, seq_meta)| GetDictionaryReply {
+            dictionary_id: *seq_id.data,
+            dictionary_meta: seq_meta.data,
+            dictionary_meta_seq: seq_meta.seq,
+        }))
     }
 
     #[async_backtrace::framed]

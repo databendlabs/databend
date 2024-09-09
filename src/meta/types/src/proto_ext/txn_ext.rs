@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use crate::protobuf as pb;
 use crate::seq_value::SeqV;
 use crate::TxnRequest;
@@ -70,14 +72,14 @@ impl pb::TxnOp {
     /// Create a txn operation that puts a record with ttl.
     ///
     /// `ttl` is relative expire time while `expire_at` is absolute expire time.
-    pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl_ms: Option<u64>) -> pb::TxnOp {
+    pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl: Option<Duration>) -> pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
                 key: key.to_string(),
                 value,
                 prev_value: true,
                 expire_at: None,
-                ttl_ms,
+                ttl_ms: ttl.map(|d| d.as_millis() as u64),
             })),
         }
     }
