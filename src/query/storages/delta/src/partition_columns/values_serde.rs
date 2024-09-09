@@ -14,6 +14,7 @@
 
 // TODO: support other data types
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -22,7 +23,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use deltalake::kernel::Add;
-use ordered_float::OrderedFloat;
 
 pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
     if value.is_empty() {

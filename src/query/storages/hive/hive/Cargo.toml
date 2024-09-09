@@ -38,7 +38,6 @@ futures = { workspace = true }
 hive_metastore = "0.1.0"
 log = { workspace = true }
 opendal = { workspace = true }
-ordered-float = { workspace = true }
 recursive = "0.1.1"
 serde = { workspace = true }
 typetag = { workspace = true }

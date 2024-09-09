@@ -14,13 +14,13 @@
 
 use std::fmt::Debug;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
-use ordered_float::OrderedFloat;
 use volo_thrift::MaybeException;
 
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
