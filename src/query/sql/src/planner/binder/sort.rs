@@ -186,12 +186,9 @@ impl Binder {
         from_context: &BindContext,
         order_by: OrderItems,
         select_list: &SelectList<'_>,
-        scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
-        let mut scalars = vec![];
-
         for order in order_by.items {
             if from_context.in_grouping {
                 let mut group_checker = GroupingChecker::new(from_context);
@@ -206,23 +203,6 @@ impl Binder {
                 }
             }
 
-            if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
-                let need_eval = !matches!(entry.get().scalar, ScalarExpr::BoundColumnRef(_));
-                if need_eval {
-                    // Remove the entry to avoid bind again in later process (bind_projection).
-                    let (index, item) = entry.remove_entry();
-                    let mut scalar = item.scalar;
-                    if from_context.in_grouping {
-                        let mut group_checker = GroupingChecker::new(from_context);
-                        group_checker.visit(&mut scalar)?;
-                    } else if !from_context.windows.window_functions.is_empty() {
-                        let mut window_checker = WindowChecker::new(from_context);
-                        window_checker.visit(&mut scalar)?;
-                    }
-                    scalars.push(ScalarItem { scalar, index });
-                }
-            }
-
             let order_by_item = SortItem {
                 index: order.index,
                 asc: order.asc,
@@ -232,13 +212,6 @@ impl Binder {
             order_by_items.push(order_by_item);
         }
 
-        let mut new_expr = if !scalars.is_empty() {
-            let eval_scalar = EvalScalar { items: scalars };
-            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child))
-        } else {
-            child
-        };
-
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
@@ -246,7 +219,7 @@ impl Binder {
             pre_projection: None,
             window_partition: vec![],
         };
-        new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
+        let new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child));
         Ok(new_expr)
     }
 

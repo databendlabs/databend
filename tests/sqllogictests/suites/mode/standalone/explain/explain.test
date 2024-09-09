@@ -1521,12 +1521,12 @@ Filter
     ├── filters: []
     ├── estimated rows: 0.00
     ├── Sort(Build)
-    │   ├── output columns: [t1.a (#3), t1.c (#5), count(a) (#7)]
+    │   ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
     │   ├── sort keys: [count(a) ASC NULLS LAST]
     │   ├── estimated rows: 0.00
     │   └── EvalScalar
-    │       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7), count(a) (#7)]
-    │       ├── expressions: [count(a) (#6), count(a) (#6)]
+    │       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+    │       ├── expressions: [count(a) (#6)]
     │       ├── estimated rows: 0.00
     │       └── AggregateFinal
     │           ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
@@ -1575,12 +1575,12 @@ Filter
     ├── filters: []
     ├── estimated rows: 0.00
     ├── Sort(Build)
-    │   ├── output columns: [t1.a (#3), t1.c (#5), COUNT(*) (#7)]
+    │   ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
     │   ├── sort keys: [COUNT(*) ASC NULLS LAST]
     │   ├── estimated rows: 0.00
     │   └── EvalScalar
-    │       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7), COUNT(*) (#7)]
-    │       ├── expressions: [COUNT(*) (#6), COUNT(*) (#6)]
+    │       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+    │       ├── expressions: [COUNT(*) (#6)]
     │       ├── estimated rows: 0.00
     │       └── AggregateFinal
     │           ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
