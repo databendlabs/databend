@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -25,6 +26,7 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_storages_fuse::TableContext;
+use opendal::Operator;
 
 use crate::sessions::QueryContext;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
@@ -32,14 +34,21 @@ use crate::sql::plans::AsyncFunctionArgument;
 
 pub struct TransformAsyncFunction {
     ctx: Arc<QueryContext>,
+    // key is the index of async_func_desc
+    pub(crate) operators: BTreeMap<usize, Arc<Operator>>,
     async_func_descs: Vec<AsyncFunctionDesc>,
 }
 
 impl TransformAsyncFunction {
-    pub fn new(ctx: Arc<QueryContext>, async_func_descs: Vec<AsyncFunctionDesc>) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        async_func_descs: Vec<AsyncFunctionDesc>,
+        operators: BTreeMap<usize, Arc<Operator>>,
+    ) -> Self {
         Self {
             ctx,
             async_func_descs,
+            operators,
         }
     }
 
@@ -80,7 +89,7 @@ impl AsyncTransform for TransformAsyncFunction {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        for async_func_desc in &self.async_func_descs {
+        for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
                     self.transform_sequence(
@@ -90,9 +99,18 @@ impl AsyncTransform for TransformAsyncFunction {
                     )
                     .await?;
                 }
+                AsyncFunctionArgument::DictGetFunction(dict_arg) => {
+                    self.transform_dict_get(
+                        i,
+                        &mut data_block,
+                        dict_arg,
+                        &async_func_desc.arg_indices,
+                        &async_func_desc.data_type,
+                    )
+                    .await?;
+                }
             }
         }
-
         Ok(data_block)
     }
 }

@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use super::dictionary_name_ident::DictionaryNameIdent;
@@ -74,6 +76,47 @@ impl Default for DictionaryMeta {
             comment: "".to_string(),
             field_comments: BTreeMap::new(),
         }
+    }
+}
+
+impl DictionaryMeta {
+    pub fn build_sql_connection_url(&self) -> Result<String> {
+        let username = self
+            .options
+            .get("username")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `username`"))?;
+        let password = self
+            .options
+            .get("password")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `password`"))?;
+        let host = self
+            .options
+            .get("host")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
+        let port = self
+            .options
+            .get("port")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
+        let db = self
+            .options
+            .get("db")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `db`"))?;
+        Ok(format!(
+            "mysql://{}:{}@{}:{}/{}",
+            username, password, host, port, db
+        ))
+    }
+
+    pub fn build_redis_connection_url(&self) -> Result<String> {
+        let host = self
+            .options
+            .get("host")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
+        let port = self
+            .options
+            .get("port")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
+        Ok(format!("tcp://{}:{}", host, port))
     }
 }
 
