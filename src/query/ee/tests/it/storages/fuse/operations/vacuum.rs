@@ -334,7 +334,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
         let tables = vec![table];
         let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
 
