@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::cmp::min;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -30,6 +29,7 @@ use std::time::UNIX_EPOCH;
 
 use chrono::Utc;
 use chrono_tz::Tz;
+use dashmap::mapref::entry::Entry;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
@@ -1130,13 +1130,11 @@ impl TableContext for QueryContext {
     }
 
     fn clear_runtime_filter(&self) {
-        let mut runtime_filters = self.shared.runtime_filters.write();
-        runtime_filters.clear();
+        self.shared.runtime_filters.clear();
     }
 
     fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
-        let mut runtime_filters = self.shared.runtime_filters.write();
-        match runtime_filters.entry(filters.0) {
+        match self.shared.runtime_filters.entry(filters.0) {
             Entry::Vacant(v) => {
                 v.insert(filters.1);
             }
@@ -1164,31 +1162,28 @@ impl TableContext for QueryContext {
     }
 
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
+        match self.shared.runtime_filters.get(&id) {
             Some(v) => (v.get_bloom()).clone(),
             None => vec![],
         }
     }
 
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
+        match self.shared.runtime_filters.get(&id) {
             Some(v) => (v.get_inlist()).clone(),
             None => vec![],
         }
     }
 
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
+        match self.shared.runtime_filters.get(&id) {
             Some(v) => (v.get_min_max()).clone(),
             None => vec![],
         }
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
-        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
+        if let Some(runtime_filter) = self.shared.runtime_filters.get(&id) {
             return !runtime_filter.get_bloom().is_empty();
         }
         false
@@ -1371,11 +1366,7 @@ impl TableContext for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if tbl.engine() != "FUSE" || tbl.is_read_only() {
-            return Ok(None);
-        }
-
-        if tbl.is_temp() {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
         }
 

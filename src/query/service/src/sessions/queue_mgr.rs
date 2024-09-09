@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::future::Future;
 use std::hash::Hash;
@@ -27,6 +26,7 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 
+use dashmap::DashMap;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
@@ -43,7 +43,6 @@ use databend_common_metrics::session::set_session_queued_queries;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use log::info;
-use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use tokio::sync::AcquireError;
 use tokio::sync::OwnedSemaphorePermit;
@@ -77,7 +76,7 @@ pub(crate) struct Inner<Data: QueueData> {
 
 pub struct QueueManager<Data: QueueData> {
     semaphore: Arc<Semaphore>,
-    queue: Mutex<HashMap<Data::Key, Inner<Data>>>,
+    queue: DashMap<Data::Key, Inner<Data>>,
 }
 
 impl<Data: QueueData> QueueManager<Data> {
@@ -97,34 +96,32 @@ impl<Data: QueueData> QueueManager<Data> {
         }
 
         Arc::new(QueueManager {
-            queue: Mutex::new(HashMap::new()),
+            queue: DashMap::new(),
             semaphore: Arc::new(Semaphore::new(permits)),
         })
     }
 
     /// The length of the queue.
     pub fn length(&self) -> usize {
-        let queue = self.queue.lock();
-        queue.values().len()
+        self.queue.len()
     }
 
     pub fn list(&self) -> Vec<Arc<Data>> {
-        let queue = self.queue.lock();
-        queue.values().map(|x| x.data.clone()).collect::<Vec<_>>()
+        self.queue
+            .iter()
+            .map(|entry| entry.value().data.clone())
+            .collect()
     }
 
     pub fn remove(&self, key: Data::Key) -> bool {
-        let mut queue = self.queue.lock();
-        if let Some(inner) = queue.remove(&key) {
-            let queue_len = queue.len();
-            drop(queue);
-            set_session_queued_queries(queue_len);
+        if let Some((_, inner)) = self.queue.remove(&key) {
+            set_session_queued_queries(self.queue.len());
             inner.data.exit_wait_pending(inner.instant.elapsed());
             inner.is_abort.store(true, Ordering::SeqCst);
             inner.waker.wake();
             true
         } else {
-            set_session_queued_queries(queue.len());
+            set_session_queued_queries(self.queue.len());
             false
         }
     }
@@ -172,9 +169,8 @@ impl<Data: QueueData> QueueManager<Data> {
 
         let key = inner.data.get_key();
         let queue_len = {
-            let mut queue = self.queue.lock();
-            queue.insert(key.clone(), inner);
-            queue.len()
+            self.queue.insert(key.clone(), inner);
+            self.queue.len()
         };
 
         set_session_queued_queries(queue_len);
@@ -182,15 +178,10 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
-        let mut queue = self.queue.lock();
-        let inner = queue.remove(key);
-        let queue_len = queue.len();
-
-        drop(queue);
-        set_session_queued_queries(queue_len);
-        match inner {
+        match self.queue.remove(key) {
             None => None,
-            Some(inner) => {
+            Some((_, inner)) => {
+                set_session_queued_queries(self.queue.len());
                 inner.data.exit_wait_pending(inner.instant.elapsed());
                 Some(inner.data)
             }

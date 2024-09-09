@@ -14,13 +14,13 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::ops::DerefMut;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
 
+use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
@@ -45,11 +45,11 @@ use crate::sessions::SessionType;
 
 pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
-    pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
+    pub(in crate::sessions) active_sessions: Arc<DashMap<String, Weak<Session>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
-    pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
+    pub(crate) mysql_conn_map: Arc<DashMap<Option<u32>, String>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
@@ -66,8 +66,8 @@ impl SessionManager {
             max_sessions,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le()),
             status: Arc::new(RwLock::new(SessionManagerStatus::default())),
-            mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
-            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
+            mysql_conn_map: Arc::new(DashMap::with_capacity(max_sessions)),
+            active_sessions: Arc::new(DashMap::with_capacity(max_sessions)),
         })
     }
 
@@ -78,13 +78,11 @@ impl SessionManager {
     #[async_backtrace::framed]
     pub async fn create_session(&self, typ: SessionType) -> Result<Session> {
         if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-            let sessions = self.active_sessions.read();
-            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+            self.validate_max_active_sessions(self.active_sessions.len(), "active sessions")?;
         }
 
         if matches!(typ, SessionType::MySQL) {
-            let mysql_conn_map = self.mysql_conn_map.read();
-            self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
+            self.validate_max_active_sessions(self.mysql_conn_map.len(), "mysql conns")?;
         }
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
@@ -106,11 +104,11 @@ impl SessionManager {
     }
 
     pub fn try_add_session(&self, session: Arc<Session>, typ: SessionType) -> Result<()> {
-        let mut sessions = self.active_sessions.write();
         if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
-            sessions.insert(session.get_id(), Arc::downgrade(&session));
-            set_session_active_connections(sessions.len());
+            self.validate_max_active_sessions(self.active_sessions.len(), "active sessions")?;
+            self.active_sessions
+                .insert(session.get_id(), Arc::downgrade(&session));
+            set_session_active_connections(self.active_sessions.len());
         }
         incr_session_connect_numbers();
         Ok(())
@@ -168,23 +166,24 @@ impl SessionManager {
         self.try_add_session(session.clone(), typ.clone())?;
 
         if let SessionType::MySQL = typ {
-            let mut mysql_conn_map = self.mysql_conn_map.write();
-            self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
+            self.validate_max_active_sessions(self.mysql_conn_map.len(), "mysql conns")?;
 
-            mysql_conn_map.insert(mysql_conn_id, id);
+            self.mysql_conn_map.insert(mysql_conn_id, id);
         }
 
         Ok(session)
     }
 
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
-        let sessions = self.active_sessions.read();
-        sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
+        self.active_sessions
+            .get(id)
+            .and_then(|weak_ptr| weak_ptr.upgrade())
     }
 
     pub fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {
-        let sessions = self.mysql_conn_map.read();
-        sessions.get(mysql_conn_id).cloned()
+        self.mysql_conn_map
+            .get(mysql_conn_id)
+            .map(|v| v.value().clone())
     }
 
     pub fn destroy_session(&self, session_id: &String) {
@@ -194,22 +193,17 @@ impl SessionManager {
         {
             // Make sure this write lock has been released before dropping.
             // Because dropping session could re-enter `destroy_session`.
-            let weak_session = { self.active_sessions.write().remove(session_id) };
+            let weak_session = { self.active_sessions.remove(session_id) };
             drop(weak_session);
         }
 
         // also need remove mysql_conn_map
         {
-            let mut mysql_conns_map = self.mysql_conn_map.write();
-            for (k, v) in mysql_conns_map.deref_mut().clone() {
-                if &v == session_id {
-                    mysql_conns_map.remove(&k);
-                }
-            }
+            self.mysql_conn_map.retain(|_, v| v != session_id);
         }
 
         {
-            let sessions_count = { self.active_sessions.read().len() };
+            let sessions_count = { self.active_sessions.len() };
 
             incr_session_close_numbers();
             set_session_active_connections(sessions_count);
@@ -254,12 +248,11 @@ impl SessionManager {
 
             // During the destroy session, we need to get active_sessions write locks,
             // so we can only get active_sessions snapshots.
-            let active_sessions = active_sessions.read().values().cloned().collect::<Vec<_>>();
-            for weak_ptr in &active_sessions {
-                if let Some(active_session) = weak_ptr.upgrade() {
+            active_sessions.iter().for_each(|entry| {
+                if let Some(active_session) = entry.value().upgrade() {
                     active_session.force_kill_session();
                 }
-            }
+            });
         }
     }
 
@@ -270,13 +263,12 @@ impl SessionManager {
             .collect::<Vec<_>>()
     }
 
-    fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Weak<Session>>>>) -> bool {
+    fn destroy_idle_sessions(sessions: &Arc<DashMap<String, Weak<Session>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot::/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
-        let mut active_sessions_read_guard = sessions.write();
 
         // First try to kill the idle session
-        active_sessions_read_guard.retain(|_id, weak_ptr| -> bool {
+        sessions.retain(|_id, weak_ptr| -> bool {
             weak_ptr.upgrade().is_some_and(|session| {
                 session.kill();
                 true
@@ -284,7 +276,7 @@ impl SessionManager {
         });
 
         // active_sessions_read_guard.values().for_each(Session::kill);
-        let active_sessions = active_sessions_read_guard.len();
+        let active_sessions = sessions.len();
 
         match active_sessions {
             0 => true,
@@ -392,8 +384,9 @@ impl SessionManager {
         // to dead lock.
         //
         // Although online expression can also do this, to make this clearer, we wrap it in a block
-
-        let active_sessions_guard = self.active_sessions.read();
-        active_sessions_guard.values().cloned().collect::<Vec<_>>()
+        self.active_sessions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 }
