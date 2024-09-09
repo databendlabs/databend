@@ -41,6 +41,8 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -154,8 +156,9 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key: String,
+        cluster_type: String,
     ) -> Result<()> {
-        let (_, _) = (ctx, cluster_key);
+        let (_, _, _) = (ctx, cluster_key, cluster_type);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Altering table cluster keys is not supported for the '{}' engine.",
@@ -296,6 +299,18 @@ pub trait Table: Sync + Send {
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
+    /// - Returns `Some(_)`
+    ///    if table has accurate columns ranges information,
+    /// - Otherwise returns `None`.
+    #[async_backtrace::framed]
+    async fn accurate_columns_ranges(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _column_ids: &[ColumnId],
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
+        Ok(None)
+    }
+
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
@@ -317,9 +332,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
+        with_options: &str,
     ) -> Result<String> {
-        let (_, _, _, _) = (ctx, database_name, table_name, consume);
+        let (_, _, _, _) = (ctx, database_name, table_name, with_options);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -411,6 +426,24 @@ pub trait Table: Sync + Send {
     }
 
     fn is_read_only(&self) -> bool {
+        false
+    }
+
+    fn is_temp(&self) -> bool {
+        let is_temp = self
+            .get_table_info()
+            .options()
+            .contains_key(OPT_KEY_TEMP_PREFIX);
+        let is_id_temp = is_temp_table_id(self.get_id());
+        assert_eq!(is_temp, is_id_temp);
+        is_temp
+    }
+
+    fn is_stream(&self) -> bool {
+        self.engine() == "STREAM"
+    }
+
+    fn use_own_sample_block(&self) -> bool {
         false
     }
 }
@@ -607,4 +640,16 @@ impl CompactionLimits {
             block_limit: v,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Bound {
+    pub value: Scalar,
+    pub may_be_truncated: bool,
+}
+
+#[derive(Debug)]
+pub struct ColumnRange {
+    pub min: Bound,
+    pub max: Bound,
 }

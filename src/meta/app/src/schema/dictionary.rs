@@ -22,7 +22,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
 
-use super::tenant_dictionary_ident::TenantDictionaryIdent;
+use super::dictionary_name_ident::DictionaryNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
@@ -79,7 +79,7 @@ impl Default for DictionaryMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDictionaryReq {
-    pub dictionary_ident: TenantDictionaryIdent,
+    pub dictionary_ident: DictionaryNameIdent,
     pub dictionary_meta: DictionaryMeta,
 }
 
@@ -94,23 +94,6 @@ pub struct GetDictionaryReply {
     pub dictionary_meta: DictionaryMeta,
     /// Any change to a dictionary causes the seq to increment
     pub dictionary_meta_seq: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct DictionaryId {
-    pub dictionary_id: u64,
-}
-
-impl DictionaryId {
-    pub fn new(dictionary_id: u64) -> DictionaryId {
-        DictionaryId { dictionary_id }
-    }
-}
-
-impl Display for DictionaryId {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DictionaryId{{{}}}", self.dictionary_id)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,49 +122,10 @@ impl ListDictionaryReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReq {
     pub dictionary_meta: DictionaryMeta,
-    pub dictionary_ident: TenantDictionaryIdent,
+    pub dictionary_ident: DictionaryNameIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReply {
     pub dictionary_id: u64,
-}
-
-mod kvapi_key_impl {
-
-    use databend_common_meta_kvapi::kvapi;
-
-    use super::DictionaryId;
-    use super::DictionaryMeta;
-
-    impl kvapi::KeyCodec for DictionaryId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.dictionary_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-        where Self: Sized {
-            let dict_id = parser.next_u64()?;
-            Ok(Self {
-                dictionary_id: dict_id,
-            })
-        }
-    }
-
-    /// "<prefix>/<dictionary_id>"
-    impl kvapi::Key for DictionaryId {
-        const PREFIX: &'static str = "__fd_dictionary_by_id";
-
-        type ValueType = DictionaryMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
-
-    impl kvapi::Value for DictionaryMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
 }

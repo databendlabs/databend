@@ -259,7 +259,7 @@ impl PipelinePullingExecutor {
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     if !self.executor.is_finished() {
-                        self.executor.finish(None);
+                        self.executor.finish::<()>(None);
                     }
 
                     self.state.wait_finish();

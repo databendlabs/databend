@@ -38,6 +38,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -50,6 +51,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
@@ -78,6 +80,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -103,11 +106,13 @@ use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
+use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -150,6 +155,9 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
+    // Each table will create a new QueryContext
+    // So partition_queue could be independent in each table context
+    // see `builder_join.rs` for more details
     pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
         QueryContext::create_from_shared(other.shared.clone())
     }
@@ -183,27 +191,39 @@ impl QueryContext {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.txn_mgr())?;
-        match table_args {
-            None => {
+            .build_catalog(table_info.catalog_info.clone(), self.session_state())?;
+
+        let is_default = catalog.info().catalog_type() == CatalogType::Default;
+        match (table_args, is_default) {
+            (Some(table_args), true) => {
+                let default_catalog = self
+                    .shared
+                    .catalog_manager
+                    .get_default_catalog(self.session_state())?;
+                let table_function =
+                    default_catalog.get_table_function(&table_info.name, table_args)?;
+                Ok(table_function.as_table())
+            }
+            (Some(_), false) => Err(ErrorCode::InvalidArgument(
+                "request table args inside non-default catalog is invalid",
+            )),
+            // Load table first, if not found, try to load table function.
+            (None, true) => {
                 let table = catalog.get_table_by_info(table_info);
                 if table.is_err() {
-                    let table_function = catalog
-                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]));
+                    let Ok(table_function) = catalog
+                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]))
+                    else {
+                        // Returns the table error if the table function failed to load.
+                        return table;
+                    };
 
-                    if table_function.is_err() {
-                        table
-                    } else {
-                        Ok(table_function?.as_table())
-                    }
+                    Ok(table_function.as_table())
                 } else {
                     table
                 }
             }
-
-            Some(table_args) => Ok(catalog
-                .get_table_function(&table_info.name, table_args)?
-                .as_table()),
+            (None, false) => catalog.get_table_by_info(table_info),
         }
     }
 
@@ -329,6 +349,38 @@ impl QueryContext {
 
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_from_shared(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        let table = self
+            .shared
+            .get_table(catalog, database, table, max_batch_size)
+            .await?;
+        // the better place to do this is in the QueryContextShared::get_table() method,
+        // but there is no way to access dyn TableContext.
+        let table: Arc<dyn Table> = match table.engine() {
+            "ICEBERG" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                IcebergTable::try_create(info.to_owned())?.into()
+            }
+            "DELTA" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                DeltaTable::try_create(info.to_owned())?.into()
+            }
+            _ => table,
+        };
+        Ok(table)
     }
 }
 
@@ -585,7 +637,7 @@ impl TableContext for QueryContext {
             .get_catalog(
                 self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
-                self.txn_mgr(),
+                self.session_state(),
             )
             .await
     }
@@ -593,7 +645,7 @@ impl TableContext for QueryContext {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_default_catalog(self.txn_mgr())
+            .get_default_catalog(self.session_state())
     }
 
     fn get_id(&self) -> String {
@@ -604,11 +656,11 @@ impl TableContext for QueryContext {
         self.shared.get_current_catalog()
     }
 
-    fn check_aborting(&self) -> Result<()> {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         self.shared.check_aborting()
     }
 
-    fn get_error(&self) -> Option<ErrorCode> {
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         self.shared.get_error()
     }
 
@@ -690,12 +742,6 @@ impl TableContext for QueryContext {
 
     fn get_function_context(&self) -> Result<FunctionContext> {
         let settings = self.get_settings();
-        let external_server_connect_timeout_secs =
-            settings.get_external_server_connect_timeout_secs()?;
-        let external_server_request_timeout_secs =
-            settings.get_external_server_request_timeout_secs()?;
-        let external_server_request_batch_rows =
-            settings.get_external_server_request_batch_rows()?;
 
         let tz = settings.get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
@@ -708,6 +754,7 @@ impl TableContext for QueryContext {
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
+        let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
             tz,
@@ -722,13 +769,11 @@ impl TableContext for QueryContext {
             openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
             openai_api_completion_model: query_config.openai_api_completion_model.clone(),
 
-            external_server_connect_timeout_secs,
-            external_server_request_timeout_secs,
-            external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
             enable_dst_hour_fix,
             enable_strict_datetime_parser,
+            random_function_seed,
         })
     }
 
@@ -876,24 +921,34 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        let table = self.shared.get_table(catalog, database, table).await?;
-        // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
-        // but there is no way to access dyn TableContext.
-        let table: Arc<dyn Table> = match table.engine() {
-            "ICEBERG" => {
-                let sp = get_storage_params_from_options(self, table.options()).await?;
-                let mut info = table.get_table_info().to_owned();
-                info.meta.storage_params = Some(sp);
-                IcebergTable::try_create(info.to_owned())?.into()
+        self.get_table_from_shared(catalog, database, table, None)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        let table = self
+            .get_table_from_shared(catalog, database, table, max_batch_size)
+            .await?;
+        if table.is_stream() {
+            let stream = StreamTable::try_from_table(table.as_ref())?;
+            let actual_batch_limit = stream.max_batch_size();
+            if actual_batch_limit != max_batch_size {
+                return Err(ErrorCode::StorageUnsupported(
+                    "Within the same transaction, the batch size for a stream must remain consistent",
+                ));
             }
-            "DELTA" => {
-                let sp = get_storage_params_from_options(self, table.options()).await?;
-                let mut info = table.get_table_info().to_owned();
-                info.meta.storage_params = Some(sp);
-                DeltaTable::try_create(info.to_owned())?.into()
-            }
-            _ => table,
-        };
+        } else if max_batch_size.is_some() {
+            return Err(ErrorCode::StorageUnsupported(
+                "MAX_BATCH_SIZE only support in STREAM",
+            ));
+        }
         Ok(table)
     }
 
@@ -1143,6 +1198,10 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.txn_mgr()
     }
 
+    fn session_state(&self) -> SessionState {
+        self.shared.session.session_ctx.session_state()
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1169,6 +1228,10 @@ impl TableContext for QueryContext {
 
     fn get_variable(&self, key: &str) -> Option<Scalar> {
         self.shared.session.session_ctx.get_variable(key)
+    }
+
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.shared.session.session_ctx.get_all_variables()
     }
 
     #[async_backtrace::framed]
@@ -1308,17 +1371,40 @@ impl TableContext for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if tbl.engine() != "FUSE" {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() {
+            return Ok(None);
+        }
+
+        if tbl.is_temp() {
             return Ok(None);
         }
 
         // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
-            LockTableOption::NoLock => Ok(None),
+        let lock_guard = match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self.clone(), false).await?,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self.clone(), true).await?,
+            LockTableOption::NoLock => None,
+        };
+        if lock_guard.is_some() {
+            self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
         }
+        Ok(lock_guard)
+    }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        self.shared.session.get_temp_table_prefix()
+    }
+
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {
+        catalog_name == CATALOG_DEFAULT
+            && self
+                .shared
+                .session
+                .session_ctx
+                .temp_tbl_mgr()
+                .lock()
+                .is_temp_table(database_name, table_name)
     }
 }
 

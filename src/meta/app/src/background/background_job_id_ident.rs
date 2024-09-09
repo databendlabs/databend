@@ -12,22 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::data_id::DataId;
+use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type BackgroundJobIdIdent = TIdent<Resource, u64>;
-pub type BackgroundJobIdIdentRaw = TIdentRaw<Resource, u64>;
+pub type BackgroundJobId = DataId<Resource>;
+
+pub type BackgroundJobIdIdent = TIdent<Resource, BackgroundJobId>;
+pub type BackgroundJobIdIdentRaw = TIdentRaw<Resource, BackgroundJobId>;
 
 pub use kvapi_impl::Resource;
 
 impl BackgroundJobIdIdent {
-    pub fn job_id(&self) -> u64 {
+    pub fn new(tenant: impl ToTenant, job_id: u64) -> Self {
+        Self::new_generic(tenant, BackgroundJobId::new(job_id))
+    }
+
+    pub fn job_id(&self) -> BackgroundJobId {
         *self.name()
     }
 }
 
 impl BackgroundJobIdIdentRaw {
-    pub fn job_id(&self) -> u64 {
+    pub fn job_id(&self) -> BackgroundJobId {
         *self.name()
     }
 }
@@ -36,6 +44,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::background::BackgroundJobIdIdent;
     use crate::background::BackgroundJobInfo;
     use crate::tenant_key::resource::TenantResource;
 
@@ -48,7 +57,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for BackgroundJobInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = BackgroundJobIdIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

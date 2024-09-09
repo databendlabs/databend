@@ -32,3 +32,6 @@ pub const DEFAULT_BLOCK_INDEX_BUFFER_SIZE: usize = 300 * 1024;
 pub const DEFAULT_BLOCK_MAX_ROWS: usize = 1000 * 1000;
 // The min number of a block by default.
 pub const DEFAULT_BLOCK_MIN_ROWS: usize = 800 * 1000;
+
+// The min values of table option data_retention_period_in_hours
+pub const DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS: u64 = 1;

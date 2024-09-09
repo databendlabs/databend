@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use educe::Educe;
 use log::info;
 
+use super::aggregate::RuleStatsAggregateOptimizer;
 use super::distributed::BroadcastToShuffleOptimizer;
 use super::format::display_memo;
 use super::Memo;
@@ -40,6 +41,7 @@ use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
+use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -65,6 +67,8 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+    #[educe(Debug(ignore))]
+    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 impl OptimizerContext {
@@ -76,6 +80,7 @@ impl OptimizerContext {
             enable_distributed_optimization: false,
             enable_join_reorder: true,
             enable_dphyp: true,
+            sample_executor: None,
         }
     }
 
@@ -91,6 +96,14 @@ impl OptimizerContext {
 
     pub fn with_enable_dphyp(mut self, enable: bool) -> Self {
         self.enable_dphyp = enable;
+        self
+    }
+
+    pub fn with_sample_executor(
+        mut self,
+        sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    ) -> Self {
+        self.sample_executor = sample_executor;
         self
     }
 }
@@ -117,10 +130,19 @@ impl<'a> RecursiveOptimizer<'a> {
     #[recursive::recursive]
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
+        let mut children_changed = false;
         for expr in s_expr.children() {
-            optimized_children.push(Arc::new(self.run(expr)?));
+            let optimized_child = self.run(expr)?;
+            if !optimized_child.eq(expr) {
+                children_changed = true;
+            }
+            optimized_children.push(Arc::new(optimized_child));
         }
-        let optimized_expr = s_expr.replace_children(optimized_children);
+        let mut optimized_expr = s_expr.clone();
+        if children_changed {
+            optimized_expr = s_expr.replace_children(optimized_children);
+        }
+
         let result = self.apply_transform_rules(&optimized_expr, self.rules)?;
 
         Ok(result)
@@ -312,6 +334,10 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         )?;
     }
 
+    s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
+
     // Collect statistics for each leaf node in SExpr.
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
         .run(&s_expr)
@@ -329,8 +355,13 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) =
-            DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
+        let (dp_res, optimized) = DPhpy::new(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            opt_ctx.sample_executor.clone(),
+        )
+        .optimize(&s_expr)
+        .await?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;
@@ -402,6 +433,10 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
         )?;
     }
 
+    s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
+
     // Collect statistics for each leaf node in SExpr.
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
         .run(&s_expr)
@@ -413,8 +448,13 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) =
-            DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
+        let (dp_res, optimized) = DPhpy::new(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            opt_ctx.sample_executor.clone(),
+        )
+        .optimize(&s_expr)
+        .await?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;

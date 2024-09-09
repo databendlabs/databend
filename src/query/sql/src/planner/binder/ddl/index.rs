@@ -260,6 +260,13 @@ impl Binder {
             )));
         }
 
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating index not allowed",
+                table.name()
+            )));
+        }
+
         let table_id = table.get_id();
         Self::rewrite_query_with_database(&mut original_query, table_entry.database());
         Self::rewrite_query_with_database(&mut query, table_entry.database());
@@ -435,6 +442,12 @@ impl Binder {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create inverted index",
                 table.engine()
+            )));
+        }
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating inverted index not allowed",
+                table.name()
             )));
         }
         let table_schema = table.schema();

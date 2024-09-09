@@ -144,7 +144,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |ctx| {
-            let mut rng = rand::rngs::SmallRng::from_entropy();
+            let mut rng = if ctx.func_ctx.random_function_seed {
+                rand::rngs::SmallRng::seed_from_u64(1)
+            } else {
+                rand::rngs::SmallRng::from_entropy()
+            };
             let rand_nums = (0..ctx.num_rows)
                 .map(|_| rng.gen::<F64>())
                 .collect::<Vec<_>>();

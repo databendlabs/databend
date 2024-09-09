@@ -43,6 +43,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
@@ -68,23 +69,6 @@ pub fn make_final_uri(query_id: &str) -> String {
 
 pub fn make_kill_uri(query_id: &str) -> String {
     format!("/v1/query/{}/kill", query_id)
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct QueryError {
-    pub code: u16,
-    pub message: String,
-    pub detail: String,
-}
-
-impl QueryError {
-    pub(crate) fn from_error_code(e: ErrorCode) -> Self {
-        QueryError {
-            code: e.code(),
-            message: e.display_text(),
-            detail: e.detail(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -239,10 +223,11 @@ async fn query_final_handler(
         match http_query_manager
             .remove_query(
                 &query_id,
+                &ctx.client_session_id,
                 RemoveReason::Finished,
                 ErrorCode::ClosedQuery("closed by client"),
             )
-            .await
+            .await?
         {
             Some(query) => {
                 let mut response = query.get_response_state_only().await;
@@ -277,10 +262,11 @@ async fn query_cancel_handler(
         match http_query_manager
             .remove_query(
                 &query_id,
+                &ctx.client_session_id,
                 RemoveReason::Canceled,
                 ErrorCode::AbortedQuery("canceled by client"),
             )
-            .await
+            .await?
         {
             Some(_) => Ok(StatusCode::OK),
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -302,6 +288,7 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
@@ -329,6 +316,7 @@ async fn query_page_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
@@ -357,8 +345,9 @@ pub(crate) async fn query_handler(
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        let agent = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
-        info!("http query new request{}: {:}", agent, mask_connection_info(&format!("{:?}", req)));
+        let agent_info = ctx.user_agent.as_ref().map(|s|(format!("(from {s})"))).unwrap_or("".to_string());
+        let client_session_id_info = ctx.client_session_id.as_ref().map(|s|(format!("(client_session_id={s})"))).unwrap_or("".to_string());
+        info!("http query new request{}{}: {}", agent_info, client_session_id_info, mask_connection_info(&format!("{:?}", req)));
         let http_query_manager = HttpQueryManager::instance();
         let sql = req.sql.clone();
 

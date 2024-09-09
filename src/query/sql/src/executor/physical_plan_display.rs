@@ -179,7 +179,7 @@ impl Display for ConstantTableScan {
             })
             .collect::<Vec<String>>();
 
-        write!(f, "ConstantTableScan: {}", columns.join(", "))
+        write!(f, "{}: {}", self.name(), columns.join(", "))
     }
 }
 
@@ -579,6 +579,11 @@ impl Display for Udf {
 
 impl Display for AsyncFunction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "AsyncFunction: {}", self.display_name)
+        let scalars = self
+            .async_func_descs
+            .iter()
+            .map(|func| func.display_name.clone())
+            .collect::<Vec<String>>();
+        write!(f, "Async functions: {}", scalars.join(", "))
     }
 }

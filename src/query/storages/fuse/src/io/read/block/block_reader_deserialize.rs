@@ -20,7 +20,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_storages_common_cache_manager::SizedColumnArray;
+use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;

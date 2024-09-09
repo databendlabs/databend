@@ -29,10 +29,7 @@ pub trait FromData<D> {
 
     fn from_data_with_validity(d: Vec<D>, valids: Vec<bool>) -> Column {
         let column = Self::from_data(d);
-        Column::Nullable(Box::new(NullableColumn {
-            column,
-            validity: valids.into(),
-        }))
+        Column::Nullable(Box::new(NullableColumn::new(column, valids.into())))
     }
 
     fn from_opt_data(_: Vec<Option<D>>) -> Column;
@@ -73,6 +70,7 @@ impl_from_data! { TimestampType }
 impl_from_data! { VariantType }
 impl_from_data! { BitmapType }
 impl_from_data! { GeometryType }
+impl_from_data! { GeographyType }
 
 impl<'a> FromData<&'a [u8]> for BinaryType {
     fn from_data(d: Vec<&'a [u8]>) -> Column {
@@ -139,9 +137,6 @@ impl<Num: Decimal> DecimalType<Num> {
             }
         }
         let col = Self::from_data_with_size(data, size);
-        Column::Nullable(Box::new(NullableColumn {
-            column: col,
-            validity: validity.into(),
-        }))
+        NullableColumn::new_column(col, validity.into())
     }
 }

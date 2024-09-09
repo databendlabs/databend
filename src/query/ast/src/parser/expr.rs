@@ -104,7 +104,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     ExprElement::MapAccess {
                         accessor: MapAccessor::Colon { key },
                     } => {
-                        if !key.is_quoted() && !key.is_hole {
+                        if !key.is_quoted() && !key.is_hole() {
                             *elem = ExprElement::Hole {
                                 name: key.to_string(),
                             };
@@ -182,7 +182,7 @@ pub enum ExprElement {
     UnaryOp {
         op: UnaryOperator,
     },
-    VariableAccess(Identifier),
+    VariableAccess(String),
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
@@ -650,7 +650,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     name: Identifier::from_name(transform_span(elem.span.tokens), "getvariable"),
                     args: vec![Expr::Literal {
                         span: transform_span(elem.span.tokens),
-                        value: Literal::String(name.to_string()),
+                        value: Literal::String(name),
                     }],
                     params: vec![],
                     window: None,
@@ -1621,6 +1621,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
+    let ty_geography = value(TypeName::Geography, rule! { GEOGRAPHY });
     map_res(
         alt((
             rule! {
@@ -1650,6 +1651,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_geometry
+            | #ty_geography
             | #ty_nullable
             ) ~ #nullable? : "type name" },
         )),

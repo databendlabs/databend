@@ -23,10 +23,10 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_app::tenant::TenantQuotaIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use fastrace::func_name;
@@ -70,6 +70,9 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
                         Quota::new_limit(func_name!(), 0)
                     };
 
+                    // Now WRITE_PB control quota upgrade json to pb.
+                    // And in set_quota default is write with json.
+                    // So we directly use false, until in set_quota write date with PB
                     let u = check_and_upgrade_to_pb(
                         &mut quota,
                         &self.key(),

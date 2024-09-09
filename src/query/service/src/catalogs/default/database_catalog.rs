@@ -25,40 +25,39 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
-use databend_common_meta_app::schema::GcDroppedTableResp;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -68,6 +67,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -91,11 +91,12 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -104,13 +105,14 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_session::SessionState;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
+use crate::catalogs::default::SessionCatalog;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
-
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)
@@ -120,7 +122,7 @@ pub struct DatabaseCatalog {
     /// the upper layer, read only
     immutable_catalog: Arc<ImmutableCatalog>,
     /// bottom layer, writing goes here
-    mutable_catalog: Arc<MutableCatalog>,
+    mutable_catalog: Arc<SessionCatalog>,
     /// table function engine factories
     table_function_factory: Arc<TableFunctionFactory>,
 }
@@ -136,10 +138,11 @@ impl DatabaseCatalog {
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
+        let session_catalog = SessionCatalog::create(mutable_catalog, SessionState::default());
         let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog {
             immutable_catalog: Arc::new(immutable_catalog),
-            mutable_catalog: Arc::new(mutable_catalog),
+            mutable_catalog: Arc::new(session_catalog),
             table_function_factory: Arc::new(table_function_factory),
         };
         Ok(res)
@@ -162,9 +165,9 @@ impl Catalog for DatabaseCatalog {
 
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         let mut me = self.as_ref().clone();
-        let mut mutable_catalog = me.mutable_catalog.as_ref().clone();
-        mutable_catalog.disable_table_info_refresh();
-        me.mutable_catalog = Arc::new(mutable_catalog);
+        let mut session_catalog = me.mutable_catalog.as_ref().clone();
+        session_catalog.disable_table_info_refresh();
+        me.mutable_catalog = Arc::new(session_catalog);
         Ok(Arc::new(me))
     }
 
@@ -346,7 +349,7 @@ impl Catalog for DatabaseCatalog {
             .list_databases(tenant)
             .await?
             .iter()
-            .map(|sys_db| sys_db.get_db_info().ident.db_id)
+            .map(|sys_db| sys_db.get_db_info().database_id.db_id)
             .collect();
 
         let mut_db_ids: Vec<MetaId> = db_ids
@@ -396,6 +399,31 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .get_table_history(tenant, db_name, table_name)
+            .await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    self.mutable_catalog
+                        .get_table_history(tenant, db_name, table_name)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
@@ -408,6 +436,10 @@ impl Catalog for DatabaseCatalog {
                 }
             }
         }
+    }
+
+    fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.mutable_catalog.list_temporary_tables()
     }
 
     #[async_backtrace::framed]
@@ -524,12 +556,12 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<()> {
         self.mutable_catalog.create_table_index(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<()> {
         self.mutable_catalog.drop_table_index(req).await
     }
 
@@ -592,7 +624,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
         self.mutable_catalog.drop_index(req).await
     }
 
@@ -627,26 +659,17 @@ impl Catalog for DatabaseCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.create_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.update_virtual_column(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()> {
         self.mutable_catalog.drop_virtual_column(req).await
     }
 
@@ -711,7 +734,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.get_drop_table_infos(req).await
     }
 
-    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<()> {
         self.mutable_catalog.gc_drop_tables(req).await
     }
 
@@ -731,5 +754,64 @@ impl Catalog for DatabaseCatalog {
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
         self.mutable_catalog.drop_sequence(req).await
+    }
+
+    fn set_session_state(&self, state: SessionState) -> Arc<dyn Catalog> {
+        Arc::new(DatabaseCatalog {
+            mutable_catalog: Arc::new(SessionCatalog::create(self.mutable_catalog.inner(), state)),
+            immutable_catalog: self.immutable_catalog.clone(),
+            table_function_factory: self.table_function_factory.clone(),
+        })
+    }
+
+    fn get_stream_source_table(
+        &self,
+        stream_desc: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
+        self.mutable_catalog
+            .get_stream_source_table(stream_desc, max_batch_size)
+    }
+
+    fn cache_stream_source_table(
+        &self,
+        stream: TableInfo,
+        source: TableInfo,
+        max_batch_size: Option<u64>,
+    ) {
+        self.mutable_catalog
+            .cache_stream_source_table(stream, source, max_batch_size)
+    }
+
+    /// Dictionary
+    #[async_backtrace::framed]
+    async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        self.mutable_catalog.create_dictionary(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        self.mutable_catalog.update_dictionary(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_dictionary(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        self.mutable_catalog.drop_dictionary(dict_ident).await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
+        self.mutable_catalog.get_dictionary(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
+        self.mutable_catalog.list_dictionaries(req).await
     }
 }

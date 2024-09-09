@@ -280,7 +280,7 @@ pub(crate) async fn dump_tables(
     if databases.is_empty() {
         let all_databases = catalog.list_databases(&tenant).await?;
         for db in all_databases {
-            let db_id = db.get_db_info().ident.db_id;
+            let db_id = db.get_db_info().database_id.db_id;
             let db_name = db.name();
             if visibility_checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
                 final_dbs.push((db_name.to_string(), db_id));
@@ -292,7 +292,7 @@ pub(crate) async fn dump_tables(
                 .get_database(&tenant, &db)
                 .await?
                 .get_db_info()
-                .ident
+                .database_id
                 .db_id;
             if visibility_checker.check_database_visibility(CATALOG_DEFAULT, &db, db_id) {
                 final_dbs.push((db.to_string(), db_id));

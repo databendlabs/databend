@@ -21,6 +21,7 @@ use derive_visitor::DriveMut;
 use ethnum::i256;
 
 use crate::ast::quote::QuotedIdent;
+use crate::ast::WithOptions;
 use crate::Span;
 
 // Identifier of table name or column name.
@@ -29,7 +30,16 @@ pub struct Identifier {
     pub span: Span,
     pub name: String,
     pub quote: Option<char>,
-    pub is_hole: bool,
+    #[drive(skip)]
+    pub ident_type: IdentifierType,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum IdentifierType {
+    #[default]
+    None,
+    Hole,
+    Variable,
 }
 
 impl Identifier {
@@ -37,12 +47,20 @@ impl Identifier {
         self.quote.is_some()
     }
 
+    pub fn is_hole(&self) -> bool {
+        self.ident_type == IdentifierType::Hole
+    }
+
+    pub fn is_variable(&self) -> bool {
+        self.ident_type == IdentifierType::Variable
+    }
+
     pub fn from_name(span: Span, name: impl Into<String>) -> Self {
         Self {
             span,
             name: name.into(),
             quote: None,
-            is_hole: false,
+            ident_type: IdentifierType::None,
         }
     }
 
@@ -51,15 +69,17 @@ impl Identifier {
             span,
             name: name.into(),
             quote,
-            is_hole: false,
+            ident_type: IdentifierType::None,
         }
     }
 }
 
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.is_hole {
+        if self.is_hole() {
             write!(f, "IDENTIFIER(:{})", self.name)
+        } else if self.is_variable() {
+            write!(f, "IDENTIFIER(${})", self.name)
         } else if let Some(quote) = self.quote {
             write!(f, "{}", QuotedIdent(&self.name, quote))
         } else {
@@ -139,6 +159,7 @@ pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub with_options: Option<WithOptions>,
 }
 
 impl Display for TableRef {
@@ -151,27 +172,10 @@ impl Display for TableRef {
             write!(f, "{}.", database)?;
         }
         write!(f, "{}", self.table)?;
-        Ok(())
-    }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub struct DictionaryRef {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub dictionary_name: Identifier,
-}
-
-impl Display for DictionaryRef {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
-        if let Some(catalog) = &self.catalog {
-            write!(f, "{}.", catalog)?;
+        if let Some(with_options) = &self.with_options {
+            write!(f, " {with_options}")?;
         }
-        if let Some(database) = &self.database {
-            write!(f, "{}.", database)?;
-        }
-        write!(f, "{}", self.dictionary_name)?;
         Ok(())
     }
 }

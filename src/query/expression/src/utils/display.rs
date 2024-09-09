@@ -169,12 +169,16 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let ewkb = Ewkb(s.to_vec());
+                let ewkb = Ewkb(s);
                 let geos = ewkb.to_geos().unwrap();
                 let geom = geos
                     .to_ewkt(geos.srid())
                     .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "{geom:?}")
+            }
+            ScalarRef::Geography(v) => {
+                let ewkt = v.to_ewkt().unwrap_or_else(|e| format!("Invalid data: {e}"));
+                write!(f, "{ewkt:?}")
             }
         }
     }
@@ -200,6 +204,7 @@ impl Debug for Column {
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
             Column::Geometry(col) => write!(f, "{col:?}"),
+            Column::Geography(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -258,7 +263,15 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let ewkb = Ewkb(s.to_vec());
+                let ewkb = Ewkb(s);
+                let geos = ewkb.to_geos().unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
+                write!(f, "'{geom}'")
+            }
+            ScalarRef::Geography(v) => {
+                let ewkb = Ewkb(v.0);
                 let geos = ewkb.to_geos().unwrap();
                 let geom = geos
                     .to_ewkt(geos.srid())
@@ -530,6 +543,7 @@ impl Display for DataType {
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Geometry => write!(f, "Geometry"),
+            DataType::Geography => write!(f, "Geography"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -578,6 +592,7 @@ impl Display for TableDataType {
             }
             TableDataType::Variant => write!(f, "Variant"),
             TableDataType::Geometry => write!(f, "Geometry"),
+            TableDataType::Geography => write!(f, "Geography"),
         }
     }
 }
@@ -758,7 +773,30 @@ impl<Index: ColumnIndex> Expr<Index> {
         #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
-                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
+                Expr::Constant { scalar, .. } => match scalar {
+                    s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
+                        "'nan'::Float32".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_nan() => {
+                        "'nan'::Float64".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_infinite() => {
+                        if *f != f32::NEG_INFINITY {
+                            "'inf'::Float32".to_string()
+                        } else {
+                            "'-inf'::Float32".to_string()
+                        }
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_infinite() => {
+                        if *f != f64::NEG_INFINITY {
+                            "'inf'::Float64".to_string()
+                        } else {
+                            "'-inf'::Float64".to_string()
+                        }
+                    }
+                    other => other.as_ref().to_string(),
+                },
                 Expr::ColumnRef { display_name, .. } => display_name.clone(),
                 Expr::Cast {
                     is_try,

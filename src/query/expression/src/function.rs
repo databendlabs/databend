@@ -109,14 +109,11 @@ pub struct FunctionContext {
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
 
-    pub external_server_connect_timeout_secs: u64,
-    pub external_server_request_timeout_secs: u64,
-    pub external_server_request_batch_rows: u64,
-
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
     pub enable_dst_hour_fix: bool,
     pub enable_strict_datetime_parser: bool,
+    pub random_function_seed: bool,
 }
 
 impl Default for FunctionContext {
@@ -132,13 +129,12 @@ impl Default for FunctionContext {
             openai_api_version: "".to_string(),
             openai_api_embedding_model: "".to_string(),
             openai_api_completion_model: "".to_string(),
-            external_server_connect_timeout_secs: 0,
-            external_server_request_timeout_secs: 0,
-            external_server_request_batch_rows: 0,
+
             geometry_output_format: Default::default(),
             parse_datetime_ignore_remainder: false,
             enable_dst_hour_fix: false,
             enable_strict_datetime_parser: true,
+            random_function_seed: false,
         }
     }
 }
@@ -286,21 +282,16 @@ impl Function {
                 match output {
                     Value::Scalar(_) => Value::Scalar(Scalar::Null),
                     Value::Column(column) => {
-                        Value::Column(Column::Nullable(Box::new(NullableColumn {
-                            column,
-                            validity: validity.into(),
-                        })))
+                        Value::Column(NullableColumn::new_column(column, validity.into()))
                     }
                 }
             } else {
                 match output {
                     Value::Scalar(scalar) => Value::Scalar(scalar),
-                    Value::Column(column) => {
-                        Value::Column(Column::Nullable(Box::new(NullableColumn {
-                            column,
-                            validity: Bitmap::new_constant(true, num_rows),
-                        })))
-                    }
+                    Value::Column(column) => Value::Column(NullableColumn::new_column(
+                        column,
+                        Bitmap::new_constant(true, num_rows),
+                    )),
                 }
             }
         });
@@ -413,6 +404,7 @@ impl FunctionRegistry {
         candidates
     }
 
+    // note that if additional_cast_rules is not empty, default cast rules will not be used.
     pub fn get_auto_cast_rules(&self, func_name: &str) -> &[(DataType, DataType)] {
         self.additional_cast_rules
             .get(func_name)
@@ -464,6 +456,7 @@ impl FunctionRegistry {
         self.default_cast_rules.extend(default_cast_rules);
     }
 
+    // Note that, if additional_cast_rules is not empty, the default cast rules will not be used
     pub fn register_additional_cast_rules(
         &mut self,
         fn_name: &str,
@@ -709,15 +702,10 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                             &nullable_column.validity,
                             &validity,
                         );
-                        Column::Nullable(Box::new(NullableColumn {
-                            column: nullable_column.column,
-                            validity,
-                        }))
+
+                        NullableColumn::new_column(nullable_column.column, validity)
                     }
-                    _ => Column::Nullable(Box::new(NullableColumn {
-                        column,
-                        validity: bitmap.into(),
-                    })),
+                    _ => NullableColumn::new_column(column, bitmap.into()),
                 };
                 Value::Column(result)
             }
@@ -735,18 +723,17 @@ pub fn error_to_null<I1: ArgType, O: ArgType>(
         if let Some((validity, _)) = ctx.errors.take() {
             match output {
                 Value::Scalar(_) => Value::Scalar(None),
-                Value::Column(column) => Value::Column(NullableColumn {
-                    column,
-                    validity: validity.into(),
-                }),
+                Value::Column(column) => {
+                    Value::Column(NullableColumn::new(column, validity.into()))
+                }
             }
         } else {
             match output {
                 Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn {
+                Value::Column(column) => Value::Column(NullableColumn::new(
                     column,
-                    validity: Bitmap::new_constant(true, ctx.num_rows),
-                }),
+                    Bitmap::new_constant(true, ctx.num_rows),
+                )),
             }
         }
     }

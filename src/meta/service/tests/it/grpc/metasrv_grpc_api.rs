@@ -20,7 +20,7 @@ use databend_common_base::base::Stoppable;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 use log::debug;
 use log::info;
 use pretty_assertions::assert_eq;

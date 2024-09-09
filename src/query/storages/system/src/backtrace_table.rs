@@ -44,7 +44,7 @@ impl SyncSystemTable for BacktraceTable {
     const NAME: &'static str = "system.backtrace";
 
     // Allow distributed query.
-    const IS_LOCAL: bool = false;
+    const DATA_IN_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

@@ -30,14 +30,8 @@ use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::CommonRows;
-use super::sort::DateConverter;
-use super::sort::DateRows;
 use super::sort::Rows;
 use super::sort::SortedStream;
-use super::sort::StringConverter;
-use super::sort::StringRows;
-use super::sort::TimestampConverter;
-use super::sort::TimestampRows;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
@@ -209,17 +203,6 @@ impl SortedStream for BlockStream {
         Ok((self.take(), false))
     }
 }
-
-pub(super) type MergeSortDateImpl = TransformSortMerge<DateRows>;
-pub(super) type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
-
-pub(super) type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
-pub(super) type MergeSortTimestamp =
-    TransformSortMergeBase<MergeSortTimestampImpl, TimestampRows, TimestampConverter>;
-
-pub(super) type MergeSortStringImpl = TransformSortMerge<StringRows>;
-pub(super) type MergeSortString =
-    TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
 
 pub(super) type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
 pub(super) type MergeSortCommon =

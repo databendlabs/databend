@@ -258,7 +258,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             return Err(ErrorCode::TokioError("Cannot join tokio job"));
                         }
                         Ok(read_data) => {
-                            let read_data: Result<VecDeque<Vec<u8>>, opendal::Error> =
+                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
                                 read_data.into_iter().try_collect();
 
                             self.deserializing_meta = Some((block_meta, read_data?));

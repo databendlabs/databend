@@ -20,6 +20,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::func_name;
 use chrono::DateTime;
@@ -34,11 +35,7 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
-use super::ReplyShareObject;
-use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
-use crate::share::ShareSpec;
-use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -71,7 +68,7 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TableNameIdent {
     pub tenant: Tenant,
     pub db_name: String,
@@ -163,7 +160,6 @@ impl Display for TableIdHistoryIdent {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareDBParams),
 }
 
 impl Display for DatabaseType {
@@ -172,21 +168,15 @@ impl Display for DatabaseType {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
             }
-            DatabaseType::ShareDB(share_params) => {
-                write!(
-                    f,
-                    "share database: {}-{} using {}",
-                    share_params.share_ident.tenant_name(),
-                    share_params.share_ident.name(),
-                    share_params.share_endpoint_url,
-                )
-            }
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
+    /// For a temp table,
+    /// `ident.seq` is always 0.
+    /// `id.table_id` is set as value of `TempTblId`.
     pub ident: TableIdent,
 
     /// For a table it is `db_name.table_name`.
@@ -203,8 +193,6 @@ pub struct TableInfo {
     /// It is about what a table actually is.
     /// `name`, `id` or `version` is not included in the table structure definition.
     pub meta: TableMeta,
-
-    pub tenant: String,
 
     /// The corresponding catalog info of this table.
     pub catalog_info: Arc<CatalogInfo>,
@@ -540,8 +528,8 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // (db id, removed table id, share spec vector)
-    pub spec_vec: Option<(u64, u64, Vec<ShareSpec>)>,
+    // (db id, removed table id)
+    pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -561,6 +549,10 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
+
+    pub engine: String,
+
+    pub session_id: String,
 }
 
 impl DropTableByIdReq {
@@ -580,11 +572,8 @@ impl Display for DropTableByIdReq {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReply {
-    // db id, share spec vector
-    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
-}
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct DropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitTableMetaReq {
@@ -689,8 +678,6 @@ impl Display for RenameTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReply {
     pub table_id: u64,
-    // vec<share spec>, table id
-    pub share_table_info: Option<(Vec<ShareSpec>, ReplyShareObject)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -719,12 +706,31 @@ pub struct UpdateTableMetaReq {
     pub new_table_meta: TableMeta,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateTempTableReq {
+    pub table_id: u64,
+    pub desc: String,
+    pub new_table_meta: TableMeta,
+    pub copied_files: BTreeMap<String, TableCopiedFileInfo>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
+    pub update_temp_tables: Vec<UpdateTempTableReq>,
+}
+
+impl UpdateMultiTableMetaReq {
+    pub fn is_empty(&self) -> bool {
+        self.update_table_metas.is_empty()
+            && self.copied_files.is_empty()
+            && self.update_stream_metas.is_empty()
+            && self.deduplicated_labels.is_empty()
+            && self.update_temp_tables.is_empty()
+    }
 }
 
 /// The result of updating multiple table meta
@@ -775,23 +781,18 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {
-    pub share_vec_table_info: Option<ShareVecTableInfo>,
-}
+pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {
-    pub share_vec_table_info: Option<ShareVecTableInfo>,
-}
+pub struct UpsertTableOptionReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct UpdateTableMetaReply {
-    pub share_vec_table_infos: Option<Vec<ShareVecTableInfo>>,
-}
+pub struct UpdateTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
     pub create_option: CreateOption,
+    pub tenant: Tenant,
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
@@ -801,34 +802,19 @@ pub struct CreateTableIndexReq {
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self.create_option {
-            CreateOption::Create => {
-                write!(
-                    f,
-                    "create_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-            CreateOption::CreateIfNotExists => {
-                write!(
-                    f,
-                    "create_table_index_if_not_exists: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-            CreateOption::CreateOrReplace => {
-                write!(
-                    f,
-                    "create_or_replace_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
-                    self.name, self.column_ids, self.sync_creation, self.options,
-                )
-            }
-        }
+        let typ = match self.create_option {
+            CreateOption::Create => "create_table_index",
+            CreateOption::CreateIfNotExists => "create_table_index_if_not_exists",
+            CreateOption::CreateOrReplace => "create_or_replace_table_index",
+        };
+
+        write!(
+            f,
+            "{}: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+            typ, self.name, self.column_ids, self.sync_creation, self.options,
+        )
     }
 }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexReq {
@@ -846,9 +832,6 @@ impl Display for DropTableIndexReq {
         )
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
@@ -942,9 +925,6 @@ pub struct GcDroppedTableReq {
     pub drop_ids: Vec<DroppedId>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GcDroppedTableResp {}
-
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {
     pub table_id: u64,
@@ -983,7 +963,8 @@ pub struct GetTableCopiedFileReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
-    pub expire_at: Option<u64>,
+    /// If not None, specifies the time-to-live for the keys.
+    pub ttl: Option<Duration>,
     pub fail_if_duplicated: bool,
 }
 
@@ -1166,25 +1147,29 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DBIdTableName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
         }
     }
 
     impl kvapi::Value for DBIdTableName {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdToName;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableId;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for TableIdList {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableIdHistoryIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             self.id_list
                 .iter()
                 .map(|id| TableId::new(*id).to_string_key())
@@ -1192,13 +1177,15 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Value for TableCopiedFileInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TableCopiedFileNameIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
     impl kvapi::Value for LeastVisibleTime {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = LeastVisibleTimeKey;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

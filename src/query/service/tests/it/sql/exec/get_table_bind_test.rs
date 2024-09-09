@@ -34,6 +34,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -54,37 +55,37 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -94,6 +95,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -115,16 +117,17 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::PlanProfile;
@@ -140,9 +143,10 @@ use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -225,6 +229,18 @@ impl Catalog for FakedCatalog {
         self.cat.get_table(tenant, db_name, table_name).await
     }
 
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(Vec::from([self
+            .cat
+            .get_table(tenant, db_name, table_name)
+            .await?]))
+    }
+
     async fn list_tables(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
@@ -274,12 +290,12 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -306,7 +322,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -339,26 +355,17 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -414,6 +421,32 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         self.cat.get_table_meta_by_id(table_id).await
+    }
+
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        todo!()
+    }
+
+    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        todo!()
+    }
+
+    async fn drop_dictionary(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        todo!()
+    }
+
+    async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
+        self.cat.get_dictionary(req).await
+    }
+
+    async fn list_dictionaries(
+        &self,
+        _req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
+        todo!()
     }
 }
 
@@ -616,11 +649,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn check_aborting(&self) -> Result<()> {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         todo!()
     }
 
-    fn get_error(&self) -> Option<ErrorCode> {
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         todo!()
     }
 
@@ -778,6 +811,16 @@ impl TableContext for CtxDelegation {
         }
     }
 
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table(catalog, database, table).await
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
@@ -840,6 +883,10 @@ impl TableContext for CtxDelegation {
     fn unset_variable(&self, _key: &str) {}
     fn get_variable(&self, _key: &str) -> Option<Scalar> {
         None
+    }
+
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
     }
 
     fn get_license_key(&self) -> String {
@@ -937,6 +984,18 @@ impl TableContext for CtxDelegation {
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
     }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        todo!()
+    }
+
+    fn session_state(&self) -> SessionState {
+        todo!()
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -968,10 +1027,12 @@ async fn test_get_same_table_once() -> Result<()> {
             .load(std::sync::atomic::Ordering::SeqCst),
         1
     );
-    assert_eq!(
+
+    // plan cache need get table
+    assert!(
         ctx.table_from_cache
-            .load(std::sync::atomic::Ordering::SeqCst),
-        2
+            .load(std::sync::atomic::Ordering::SeqCst)
+            >= 2
     );
 
     Ok(())

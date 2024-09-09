@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -35,6 +36,7 @@ pub type CommonRows = BinaryColumn;
 
 impl Rows for BinaryColumn {
     type Item<'a> = &'a [u8];
+    type Type = BinaryType;
 
     fn len(&self) -> usize {
         self.len()
@@ -50,10 +52,6 @@ impl Rows for BinaryColumn {
 
     fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
         col.as_binary().cloned()
-    }
-
-    fn data_type() -> DataType {
-        DataType::Binary
     }
 }
 
@@ -107,10 +105,10 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                                 builder.commit_row();
                             }
                             if data_type.is_nullable() {
-                                Column::Nullable(Box::new(NullableColumn {
-                                    column: Column::Variant(builder.build()),
-                                    validity: validity.unwrap().clone(),
-                                }))
+                                NullableColumn::new_column(
+                                    Column::Variant(builder.build()),
+                                    validity.unwrap().clone(),
+                                )
                             } else {
                                 Column::Variant(builder.build())
                             }

@@ -24,6 +24,9 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::CreateDictionaryPlan;
+use super::DropDictionaryPlan;
+use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -31,7 +34,6 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
-use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
@@ -51,10 +53,9 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
+use crate::plans::CreateProcedurePlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
-use crate::plans::CreateShareEndpointPlan;
-use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableIndexPlan;
@@ -69,7 +70,6 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
-use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -82,10 +82,9 @@ use crate::plans::DropIndexPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
+use crate::plans::DropProcedurePlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropSequencePlan;
-use crate::plans::DropShareEndpointPlan;
-use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -103,7 +102,6 @@ use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
-use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
@@ -124,7 +122,6 @@ use crate::plans::Replace;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
-use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
@@ -135,12 +132,8 @@ use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
-use crate::plans::ShowGrantTenantsOfSharePlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
-use crate::plans::ShowShareEndpointPlan;
-use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
@@ -318,20 +311,6 @@ pub enum Plan {
     SetPriority(Box<SetPriorityPlan>),
     System(Box<SystemPlan>),
 
-    // Share
-    CreateShareEndpoint(Box<CreateShareEndpointPlan>),
-    ShowShareEndpoint(Box<ShowShareEndpointPlan>),
-    DropShareEndpoint(Box<DropShareEndpointPlan>),
-    CreateShare(Box<CreateSharePlan>),
-    DropShare(Box<DropSharePlan>),
-    GrantShareObject(Box<GrantShareObjectPlan>),
-    RevokeShareObject(Box<RevokeShareObjectPlan>),
-    AlterShareTenants(Box<AlterShareTenantsPlan>),
-    DescShare(Box<DescSharePlan>),
-    ShowShares(Box<ShowSharesPlan>),
-    ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
-    ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
-
     // Data mask
     CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
     DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
@@ -373,15 +352,25 @@ pub enum Plan {
 
     // Stored procedures
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
+    // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
+    DropProcedure(Box<DropProcedurePlan>),
+    CreateProcedure(Box<CreateProcedurePlan>),
+    // RenameProcedure(Box<RenameProcedurePlan>),
 
     // sequence
     CreateSequence(Box<CreateSequencePlan>),
     DropSequence(Box<DropSequencePlan>),
+
+    // Dictionary
+    CreateDictionary(Box<CreateDictionaryPlan>),
+    DropDictionary(Box<DropDictionaryPlan>),
+    ShowCreateDictionary(Box<ShowCreateDictionaryPlan>),
 }
 
 #[derive(Clone, Debug)]
 pub enum RewriteKind {
     ShowSettings,
+    ShowVariables,
     ShowMetrics,
     ShowProcessList,
     ShowEngines,
@@ -411,6 +400,7 @@ pub enum RewriteKind {
     ShowGrants,
 
     Call,
+    ShowProcedures,
 }
 
 impl Plan {
@@ -460,6 +450,7 @@ impl Plan {
             Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
+            Plan::ShowCreateDictionary(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
@@ -471,10 +462,6 @@ impl Plan {
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
-            Plan::ShowShareEndpoint(plan) => plan.schema(),
-            Plan::DescShare(plan) => plan.schema(),
-            Plan::ShowShares(plan) => plan.schema(),
-            Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::CreateDatamaskPolicy(plan) => plan.schema(),
             Plan::DropDatamaskPolicy(plan) => plan.schema(),
             Plan::DescDatamaskPolicy(plan) => plan.schema(),

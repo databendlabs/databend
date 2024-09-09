@@ -16,14 +16,9 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cache;
-mod meter;
+mod mem_sized;
 
 pub use cache::lru::LruCache;
 pub use cache::Cache;
 pub use hashbrown::hash_map::DefaultHashBuilder;
-pub use meter::bytes_meter::BytesMeter;
-pub use meter::count_meter::Count;
-pub use meter::count_meter::CountableMeter;
-pub use meter::count_meter::CountableMeterWithMeasure;
-pub use meter::file_meter::FileSize;
-pub use meter::Meter;
+pub use mem_sized::MemSized;

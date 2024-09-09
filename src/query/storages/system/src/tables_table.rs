@@ -123,7 +123,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let catalogs = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(&tenant, ctx.session_state())
             .await?
             .into_iter()
             .map(|cat| cat.disable_table_info_refresh())
@@ -197,6 +197,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     TableDataType::Nullable(Box::new(TableDataType::String)),
                 ),
                 TableField::new("comment", TableDataType::String),
+                TableField::new("table_type", TableDataType::String),
             ])
         } else {
             TableSchemaRefExt::create(vec![
@@ -375,7 +376,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     visibility_checker.check_database_visibility(
                         ctl_name,
                         db.name(),
-                        db.get_db_info().ident.db_id,
+                        db.get_db_info().database_id.db_id,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -386,11 +387,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 HashMap::new()
             };
             for db in final_dbs {
-                let db_id = db.get_db_info().ident.db_id;
+                let db_id = db.get_db_info().database_id.db_id;
                 let db_name = db.name();
                 let tables = if tables_names.is_empty()
                     || tables_names.len() > 10
-                    || WITH_HISTORY
                     || invalid_tables_ids
                     || invalid_optimize
                 {
@@ -413,15 +413,33 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             continue;
                         }
                     }
+                } else if WITH_HISTORY {
+                    // Only can call get_table
+                    let mut tables = Vec::new();
+                    for table_name in &tables_names {
+                        match ctl.get_table_history(&tenant, db_name, table_name).await {
+                            Ok(t) => tables.extend(t),
+                            Err(err) => {
+                                let msg = format!(
+                                    "Failed to get_table_history tables in database: {}, {}",
+                                    db_name, err
+                                );
+                                // warn no need to pad in ctx
+                                warn!("{}", msg);
+                                continue;
+                            }
+                        }
+                    }
+                    tables
                 } else {
-                    // Only without history can call get_table
+                    // Only can call get_table
                     let mut tables = Vec::new();
                     for table_name in &tables_names {
                         match ctl.get_table(&tenant, db_name, table_name).await {
                             Ok(t) => tables.push(t),
                             Err(err) => {
                                 let msg = format!(
-                                    "Failed to list tables in database: {}, {}",
+                                    "Failed to get table in database: {}, {}",
                                     db_name, err
                                 );
                                 // warn no need to pad in ctx
@@ -443,7 +461,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         table.name(),
                         db_id,
                         table_id,
-                    ) && table.engine() != "STREAM"
+                    ) && !table.is_stream()
                     {
                         if !WITHOUT_VIEW && table.get_table_info().engine() == "VIEW" {
                             catalogs.push(ctl_name.as_str());
@@ -462,7 +480,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                         .map(|role| role.to_string()),
                                 );
                             }
-                        } else if WITHOUT_VIEW && table.get_table_info().engine() != "VIEW" {
+                        } else if WITHOUT_VIEW {
+                            // system.tables store view name but not store view query
+                            // decrease information_schema.tables union.
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
@@ -534,6 +554,16 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let engines: Vec<String> = database_tables
             .iter()
             .map(|v| v.engine().to_string())
+            .collect();
+        let tables_type: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if v.engine().to_uppercase() == "VIEW" {
+                    "VIEW".to_string()
+                } else {
+                    "BASE TABLE".to_string()
+                }
+            })
             .collect();
         let engines_full: Vec<String> = engines.clone();
         let created_on: Vec<i64> = database_tables
@@ -628,6 +658,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 UInt64Type::from_opt_data(number_of_blocks),
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
+                StringType::from_data(tables_type),
             ]))
         } else {
             Ok(DataBlock::new_from_columns(vec![

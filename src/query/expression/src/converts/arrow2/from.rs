@@ -29,6 +29,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
@@ -781,6 +782,21 @@ impl Column {
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                     Column::Geometry(BinaryColumn::new(arrow_col.values().clone(), offsets))
                 }
+                (DataType::Geography, ArrowDataType::LargeBinary) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryArray<i64>>()
+                        .expect(
+                            "fail to read `Geography` from arrow: array should be `BinaryArray<i64>`",
+                        );
+                    let offsets = arrow_col.offsets().clone().into_inner();
+                    let offsets =
+                        unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                    Column::Geography(GeographyColumn(BinaryColumn::new(
+                        arrow_col.values().clone(),
+                        offsets,
+                    )))
+                }
                 (data_type, ArrowDataType::Extension(_, arrow_type, _)) => {
                     from_arrow_with_arrow_type(arrow_col, arrow_type, data_type)?
                 }
@@ -790,7 +806,7 @@ impl Column {
                         .validity()
                         .cloned()
                         .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
-                    Column::Nullable(Box::new(NullableColumn { column, validity }))
+                    NullableColumn::new_column(column, validity)
                 }
                 (ty, arrow_ty) => {
                     return Err(ErrorCode::Unimplemented(format!(

@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::io::parquet::read as pread;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_storage::parquet_rs::read_metadata_sync;
+use databend_common_storage::read_metadata_async;
 use log::debug;
 
 use super::AggIndexReader;
@@ -32,20 +33,12 @@ impl AggIndexReader {
     ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
         let op = self.reader.operator.blocking();
         match op.stat(loc) {
-            Ok(meta) => {
-                let mut reader = op
-                    .reader(loc)
-                    .ok()?
-                    .into_std_read(0..meta.content_length())
-                    .ok()?;
-                let metadata = pread::read_metadata(&mut reader)
-                    .inspect_err(|e| {
-                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                    })
-                    .ok()?;
-                debug_assert_eq!(metadata.row_groups.len(), 1);
-                let row_group = &metadata.row_groups[0];
+            Ok(_meta) => {
+                let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
+                debug_assert_eq!(metadata.num_row_groups(), 1);
+                let row_group = &metadata.row_groups()[0];
                 let columns_meta = build_columns_meta(row_group);
+
                 let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     row_group.num_rows() as u64,
@@ -80,16 +73,12 @@ impl AggIndexReader {
         loc: &str,
     ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
         match self.reader.operator.stat(loc).await {
-            Ok(meta) => {
-                let reader = self.reader.operator.reader(loc).await.ok()?;
-                let metadata = pread::read_metadata_async(reader, meta.content_length())
+            Ok(_meta) => {
+                let metadata = read_metadata_async(loc, &self.reader.operator, None)
                     .await
-                    .inspect_err(|e| {
-                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                    })
                     .ok()?;
-                debug_assert_eq!(metadata.row_groups.len(), 1);
-                let row_group = &metadata.row_groups[0];
+                debug_assert_eq!(metadata.num_row_groups(), 1);
+                let row_group = &metadata.row_groups()[0];
                 let columns_meta = build_columns_meta(row_group);
                 let res = self
                     .reader

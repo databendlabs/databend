@@ -15,12 +15,9 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use std::collections::BTreeSet;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -48,16 +45,6 @@ impl FromToProto for mt::DatabaseMeta {
                 None => None,
             },
             comment: p.comment,
-            shared_by: BTreeSet::from_iter(p.shared_by),
-            from_share: match p.from_share {
-                Some(from_share) => Some(ShareNameIdentRaw::from_pb(from_share)?),
-                None => None,
-            },
-            using_share_endpoint: p.using_share_endpoint,
-            from_share_db_id: match p.from_share_db_id {
-                Some(from_share_db_id) => Some(mt::ShareDbId::from_pb(from_share_db_id)?),
-                None => None,
-            },
         };
         Ok(v)
     }
@@ -76,16 +63,10 @@ impl FromToProto for mt::DatabaseMeta {
                 None => None,
             },
             comment: self.comment.clone(),
-            shared_by: Vec::from_iter(self.shared_by.clone()),
-            from_share: match &self.from_share {
-                Some(from_share) => Some(from_share.to_pb()?),
-                None => None,
-            },
-            using_share_endpoint: self.using_share_endpoint.clone(),
-            from_share_db_id: match &self.from_share_db_id {
-                Some(from_share_db_id) => Some(from_share_db_id.to_pb()?),
-                None => None,
-            },
+            shared_by: vec![],
+            from_share: None,
+            using_share_endpoint: None,
+            from_share_db_id: None,
         };
         Ok(p)
     }

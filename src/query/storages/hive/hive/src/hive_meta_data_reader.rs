@@ -16,10 +16,10 @@ use databend_common_arrow::parquet::metadata::FileMetaData;
 use databend_common_arrow::parquet::read::read_metadata_async;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::InMemoryItemCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
-use databend_storages_common_cache_manager::CacheManager;
 use opendal::Operator;
 
 pub struct LoaderWrapper<T>(T);

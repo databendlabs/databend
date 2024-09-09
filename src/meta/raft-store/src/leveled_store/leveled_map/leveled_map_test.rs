@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::seq_value::KVMeta;
 use futures_util::TryStreamExt;
 
 use crate::leveled_store::leveled_map::LeveledMap;

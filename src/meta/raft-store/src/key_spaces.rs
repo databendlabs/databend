@@ -20,13 +20,13 @@ use databend_common_meta_sled_store::SledKeySpace;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::LogIndex;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::SeqNum;
-use databend_common_meta_types::SeqV;
 use serde::Deserialize;
 use serde::Serialize;
 

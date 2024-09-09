@@ -30,12 +30,14 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
-use databend_storages_common_txn::TxnState;
+use databend_storages_common_session::TxnState;
 use fastrace::prelude::*;
+use http::StatusCode;
 use log::info;
 use log::warn;
 use poem::web::Json;
@@ -45,8 +47,10 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use super::execute_state::ExecutionError;
 use super::HttpQueryContext;
 use super::RemoveReason;
+use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -60,7 +64,6 @@ use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
 use crate::servers::http::v1::HttpQueryManager;
-use crate::servers::http::v1::QueryError;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
@@ -226,7 +229,7 @@ impl HttpSessionStateInternal {
 fn serialize_as_json_string<S>(
     value: &Option<HttpSessionStateInternal>,
     serializer: S,
-) -> Result<S::Ok, S::Error>
+) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -242,7 +245,7 @@ where
 
 fn deserialize_from_json_string<'de, D>(
     deserializer: D,
-) -> Result<Option<HttpSessionStateInternal>, D::Error>
+) -> std::result::Result<Option<HttpSessionStateInternal>, D::Error>
 where D: Deserializer<'de> {
     let json_string: Option<String> = Option::deserialize(deserializer)?;
     match json_string {
@@ -306,7 +309,7 @@ pub struct ResponseState {
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
-    pub error: Option<ErrorCode>,
+    pub error: Option<ErrorCode<ExecutionError>>,
     pub warnings: Vec<String>,
 }
 
@@ -333,6 +336,7 @@ pub enum ExpireResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) client_session_id: Option<String>,
     pub(crate) session_id: String,
     pub(crate) node_id: String,
     request: HttpQueryRequest,
@@ -531,6 +535,7 @@ impl HttpQuery {
                     format_settings_clone,
                 ))
                 .await
+                .with_context(|| "failed to start query")
                 .flatten()
                 {
                     let state = ExecuteStopped {
@@ -560,6 +565,7 @@ impl HttpQuery {
 
         let query = HttpQuery {
             id: query_id,
+            client_session_id: http_ctx.client_session_id.clone(),
             session_id,
             node_id,
             request,
@@ -748,5 +754,18 @@ impl HttpQuery {
                 ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
         }
+    }
+
+    pub fn check_client_session_id(&self, id: &Option<String>) -> poem::error::Result<()> {
+        if *id != self.client_session_id {
+            return Err(poem::error::Error::from_string(
+                format!(
+                    "wrong client_session_id, expect {:?}, got {id:?}",
+                    &self.client_session_id
+                ),
+                StatusCode::UNAUTHORIZED,
+            ));
+        }
+        Ok(())
     }
 }

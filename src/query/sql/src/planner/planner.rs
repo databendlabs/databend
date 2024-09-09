@@ -39,32 +39,46 @@ use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::QuerySampleExecutor;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
-use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::VariableNormalizer;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
-    ctx: Arc<dyn TableContext>,
+    pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PlanExtras {
-    pub metadata: MetadataRef,
     pub format: Option<String>,
     pub statement: Statement,
 }
 
 impl Planner {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
-        Planner { ctx }
+        Planner {
+            ctx,
+            sample_executor: None,
+        }
+    }
+
+    pub fn new_with_sample_executor(
+        ctx: Arc<dyn TableContext>,
+        sample_executor: Arc<dyn QuerySampleExecutor>,
+    ) -> Self {
+        Planner {
+            ctx,
+            sample_executor: Some(sample_executor),
+        }
     }
 
     #[async_backtrace::framed]
@@ -151,8 +165,33 @@ impl Planner {
                 self.replace_stmt(&mut stmt)?;
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
-                let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                let mut enable_planner_cache =
+                    self.ctx.get_settings().get_enable_planner_cache()?;
+                let planner_cache_key = if enable_planner_cache {
+                    Some(Self::planner_cache_key(&stmt.to_string()))
+                } else {
+                    None
+                };
+
+                if enable_planner_cache {
+                    let (c, plan) = self.get_cache(
+                        name_resolution_ctx.clone(),
+                        planner_cache_key.as_ref().unwrap(),
+                        &stmt,
+                    );
+                    if let Some(mut plan) = plan {
+                        info!("logical plan from cache, time used: {:?}", start.elapsed());
+                        // update for clickhouse handler
+                        plan.extras.format = format;
+                        self.ctx
+                            .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
+                        return Ok((plan.plan, plan.extras));
+                    }
+                    enable_planner_cache = c;
+                }
+
+                let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let binder = Binder::new(
                     self.ctx.clone(),
                     CatalogManager::instance(),
@@ -172,14 +211,25 @@ impl Planner {
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
                     .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
                     .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
-                    .with_enable_dphyp(settings.get_enable_dphyp()?);
+                    .with_enable_dphyp(settings.get_enable_dphyp()?)
+                    .with_sample_executor(self.sample_executor.clone());
 
                 let optimized_plan = optimize(opt_ctx, plan).await?;
-                Ok((optimized_plan, PlanExtras {
-                    metadata,
+                let result = (optimized_plan, PlanExtras {
                     format,
                     statement: stmt,
-                }))
+                });
+
+                if enable_planner_cache {
+                    self.set_cache(
+                        planner_cache_key.clone().unwrap(),
+                        result.0.clone(),
+                        result.1.clone(),
+                    );
+                    Ok(result)
+                } else {
+                    Ok(result)
+                }
             }
             .await;
 
@@ -241,6 +291,15 @@ impl Planner {
     }
 
     fn replace_stmt(&self, stmt: &mut Statement) -> Result<()> {
+        let name_resolution_ctx =
+            NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+
+        let mut variable_normalizer =
+            VariableNormalizer::new(&name_resolution_ctx, self.ctx.clone());
+
+        stmt.drive_mut(&mut variable_normalizer);
+        variable_normalizer.render_error()?;
+
         stmt.drive_mut(&mut DistinctToGroupBy::default());
         stmt.drive_mut(&mut AggregateRewriter);
         let mut set_ops_counter = CountSetOps::default();

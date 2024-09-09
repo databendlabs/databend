@@ -13,12 +13,13 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use databend_common_base::base::tokio;
 use databend_common_meta_api::BackgroundApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
-use databend_common_meta_api::ShareApiTestSuite;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
+use test_harness::test;
+
+use crate::testing::embedded_meta_test_harness;
 
 #[derive(Clone)]
 pub struct MetaEmbeddedBuilder {}
@@ -33,10 +34,11 @@ impl kvapi::ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
         unimplemented!("embedded meta does not support cluster mode")
     }
 }
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+
+#[test(harness = embedded_meta_test_harness)]
+#[fastrace::trace]
 async fn test_meta_embedded() -> anyhow::Result<()> {
     SchemaApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
-    ShareApiTestSuite::test_single_node_share(MetaEmbeddedBuilder {}).await?;
     BackgroundApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
 
     Ok(())

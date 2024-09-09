@@ -30,7 +30,6 @@ use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::update_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -122,20 +121,7 @@ impl Interpreter for AddTableColumnInterpreter {
             new_table_meta,
         };
 
-        let resp = catalog.update_single_table_meta(req, table_info).await?;
-
-        if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
-            for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
-                update_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    share_name_vec,
-                    *db_id,
-                    share_table_info,
-                )
-                .await?;
-            }
-        }
+        let _resp = catalog.update_single_table_meta(req, table_info).await?;
 
         // If the column is not deterministic, update to refresh the value with default expr.
         if !self.plan.is_deterministic {

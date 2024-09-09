@@ -21,6 +21,8 @@ use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
+use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -30,7 +32,6 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
@@ -44,6 +45,7 @@ use databend_common_ast::ast::ShowTablesStatusStmt;
 use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
@@ -54,6 +56,8 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::CompactionLimits;
@@ -80,14 +84,17 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use derive_visitor::DriveMut;
 use log::debug;
+use opendal::Operator;
 
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
@@ -193,6 +200,7 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter("table_type = 'BASE TABLE'".to_string());
 
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
@@ -419,7 +427,7 @@ impl Binder {
             table_options,
             cluster_by,
             as_query,
-            transient,
+            table_type,
             engine,
             uri_location,
         } = stmt;
@@ -456,7 +464,7 @@ impl Binder {
                 .await?;
 
                 // create a temporary op to check if params is correct
-                DataOperator::try_create(&sp).await?;
+                let data_operator = DataOperator::try_create(&sp).await?;
 
                 // Path ends with "/" means it's a directory.
                 let fp = if uri.path.ends_with('/') {
@@ -465,6 +473,10 @@ impl Binder {
                     "".to_string()
                 };
 
+                // Verify essential privileges.
+                // The permission check might fail for reasons other than the permissions themselves,
+                // such as network communication issues.
+                verify_external_location_privileges(data_operator.operator()).await?;
                 (Some(sp), fp)
             }
             (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
@@ -474,20 +486,33 @@ impl Binder {
             _ => (None, "".to_string()),
         };
 
-        // If table is TRANSIENT, set a flag in table option
-        if *transient {
-            options.insert("TRANSIENT".to_owned(), "T".to_owned());
-        }
+        match table_type {
+            TableType::Normal => {}
+            TableType::Transient => {
+                let _ = options.insert("TRANSIENT".to_owned(), "T".to_owned());
+            }
+            TableType::Temporary => {
+                if engine != Engine::Fuse && engine != Engine::Memory {
+                    return Err(ErrorCode::BadArguments(
+                        "Temporary table is only supported for FUSE and MEMORY engine",
+                    ));
+                }
+                let _ = options.insert(
+                    OPT_KEY_TEMP_PREFIX.to_string(),
+                    self.ctx.get_temp_table_prefix()?,
+                );
+            }
+        };
 
         // todo(geometry): remove this when geometry stable.
         if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
             {
                 return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry type is an experimental feature. \
+                    "Create table using the geometry/geography type is an experimental feature. \
                     You can `set enable_geo_create_table=1` to use this feature. \
                     We do not guarantee its compatibility until we doc this feature.",
                 ));
@@ -572,6 +597,15 @@ impl Binder {
             }
         };
 
+        if engine == Engine::Memory {
+            let catalog = self.ctx.get_catalog(&catalog).await?;
+            let db = catalog
+                .get_database(&self.ctx.get_tenant(), &database)
+                .await?;
+            let db_id = db.get_db_info().database_id.db_id;
+            options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+        }
+
         if engine == Engine::Fuse {
             // Currently, [Table] can not accesses its database id yet, thus
             // here we keep the db id AS an entry of `table_meta.options`.
@@ -585,7 +619,7 @@ impl Binder {
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
-            let db_id = db.get_db_info().ident.db_id;
+            let db_id = db.get_db_info().database_id.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
 
             let config = GlobalConfig::instance();
@@ -635,16 +669,19 @@ impl Binder {
             )));
         }
 
-        let cluster_key = {
+        let mut cluster_key = None;
+        if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_by, schema.clone())
+                .analyze_cluster_keys(cluster_opt, schema.clone())
                 .await?;
-            if keys.is_empty() {
-                None
-            } else {
-                Some(format!("({})", keys.join(", ")))
+            if !keys.is_empty() {
+                options.insert(
+                    OPT_KEY_CLUSTER_TYPE.to_owned(),
+                    cluster_opt.cluster_type.to_string().to_lowercase(),
+                );
+                cluster_key = Some(format!("({})", keys.join(", ")));
             }
-        };
+        }
 
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),
@@ -966,6 +1003,7 @@ impl Binder {
                         database,
                         table,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().to_lowercase(),
                     },
                 )))
             }
@@ -1385,7 +1423,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn analyze_create_table_schema_by_columns(
+    pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<String>)> {
@@ -1590,9 +1628,21 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_cluster_keys(
         &mut self,
-        cluster_by: &[Expr],
+        cluster_opt: &ClusterOption,
         schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
+        let ClusterOption {
+            cluster_type,
+            cluster_exprs,
+        } = cluster_opt;
+
+        let expr_len = cluster_exprs.len();
+        if matches!(cluster_type, ClusterType::Hilbert) && !(2..=5).contains(&expr_len) {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering requires the dimension to be between 2 and 5",
+            ));
+        }
+
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
         for (index, field) in schema.fields().iter().enumerate() {
@@ -1618,13 +1668,13 @@ impl Binder {
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
 
-        let mut cluster_keys = Vec::with_capacity(cluster_by.len());
-        for cluster_by in cluster_by.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_by)?;
+        let mut cluster_keys = Vec::with_capacity(expr_len);
+        for cluster_expr in cluster_exprs.iter() {
+            let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",
-                    cluster_by
+                    cluster_expr
                 )));
             }
 
@@ -1632,7 +1682,7 @@ impl Binder {
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
-                    cluster_by
+                    cluster_expr
                 )));
             }
 
@@ -1640,16 +1690,16 @@ impl Binder {
             if !Self::valid_cluster_key_type(data_type) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Unsupported data type '{}' for cluster by expression `{:#}`",
-                    data_type, cluster_by
+                    data_type, cluster_expr
                 )));
             }
 
-            let mut cluster_by = cluster_by.clone();
+            let mut cluster_expr = cluster_expr.clone();
             let mut normalizer = IdentifierNormalizer {
                 ctx: &self.name_resolution_ctx,
             };
-            cluster_by.drive_mut(&mut normalizer);
-            cluster_keys.push(format!("{:#}", &cluster_by));
+            cluster_expr.drive_mut(&mut normalizer);
+            cluster_keys.push(format!("{:#}", &cluster_expr));
         }
 
         Ok(cluster_keys)
@@ -1675,4 +1725,55 @@ impl Binder {
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
     }
+}
+
+const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
+const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
+
+// verify that essential privileges has granted for accessing external location
+//
+// The permission check might fail for reasons other than the permissions themselves,
+// such as network communication issues.
+async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+    let verification_task = async move {
+        // verify privilege to put
+        let mut errors = Vec::new();
+        if let Err(e) = dal.write(VERIFICATION_KEY, "V").await {
+            errors.push(format!("Permission check for [Write] failed: {}", e));
+        }
+
+        // verify privilege to get
+        if let Err(e) = dal.read_with(VERIFICATION_KEY).range(0..1).await {
+            errors.push(format!("Permission check for [Read] failed: {}", e));
+        }
+
+        // verify privilege to stat
+        if let Err(e) = dal.stat(VERIFICATION_KEY).await {
+            errors.push(format!("Permission check for [Stat] failed: {}", e));
+        }
+
+        // verify privilege to list
+        if let Err(e) = dal.list(VERIFICATION_KEY).await {
+            errors.push(format!("Permission check for [List] failed: {}", e));
+        }
+
+        // verify privilege to delete (del something not exist)
+        if let Err(e) = dal.delete(VERIFICATION_KEY_DEL).await {
+            errors.push(format!("Permission check for [Delete] failed: {}", e));
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ErrorCode::StorageOther(
+                "Checking essential permissions for the external location failed.",
+            )
+            .add_message(errors.join("\n")))
+        }
+    };
+
+    GlobalIORuntime::instance()
+        .spawn(verification_task)
+        .await
+        .expect("join must succeed")
 }

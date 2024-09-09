@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use super::Lambda;
-use super::Literal;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
 use crate::ast::Identifier;
+use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
 use crate::Span;
@@ -566,6 +567,19 @@ impl Display for Unpivot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+pub struct WithOptions {
+    pub options: BTreeMap<String, String>,
+}
+
+impl Display for WithOptions {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "WITH (")?;
+        write_comma_separated_string_map(f, &self.options)?;
+        write!(f, ")")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesInterval {
     pub append_only: bool,
@@ -609,22 +623,44 @@ impl Display for TemporalClause {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SampleLevel {
     ROW,
     BLOCK,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SampleConfig {
-    Probability(Literal),
-    RowsNum(Literal),
+    Probability(f64),
+    RowsNum(f64),
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+impl Eq for SampleConfig {}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct Sample {
     pub sample_level: SampleLevel,
     pub sample_conf: SampleConfig,
+}
+
+impl Sample {
+    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Option<f64> {
+        let rand = match &self.sample_conf {
+            SampleConfig::Probability(probability) => probability / 100.0,
+            SampleConfig::RowsNum(rows) => {
+                if let Some(row_num) = stats_rows {
+                    if row_num > 0 {
+                        rows / row_num as f64
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+        };
+        Some(rand)
+    }
 }
 
 impl Display for Sample {
@@ -653,8 +689,7 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
-        /// whether consume the table
-        consume: bool,
+        with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
         sample: Option<Sample>,
@@ -668,6 +703,7 @@ pub enum TableReference {
         params: Vec<Expr>,
         named_params: Vec<(Identifier, Expr)>,
         alias: Option<TableAlias>,
+        sample: Option<Sample>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -729,7 +765,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 temporal,
-                consume,
+                with_options,
                 pivot,
                 unpivot,
                 sample,
@@ -743,8 +779,8 @@ impl Display for TableReference {
                     write!(f, " {temporal}")?;
                 }
 
-                if *consume {
-                    write!(f, " WITH CONSUME")?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
                 }
 
                 if let Some(alias) = alias {
@@ -769,6 +805,7 @@ impl Display for TableReference {
                 params,
                 named_params,
                 alias,
+                sample,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -787,6 +824,9 @@ impl Display for TableReference {
                 write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
                 }
             }
             TableReference::Subquery {

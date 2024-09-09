@@ -26,6 +26,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::CheckAbort;
@@ -58,9 +59,10 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -78,6 +80,8 @@ use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+
+pub struct ContextError;
 
 #[derive(Debug)]
 pub struct ProcessInfo {
@@ -191,7 +195,7 @@ pub trait TableContext: Send + Sync {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
-    fn check_aborting(&self) -> Result<()>;
+    fn check_aborting(&self) -> Result<(), ContextError>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
@@ -203,12 +207,12 @@ pub trait TableContext: Send + Sync {
             }
 
             fn try_check_aborting(&self) -> Result<()> {
-                self.this.check_aborting()
+                self.this.check_aborting().with_context(|| "query aborted")
             }
         }
         Arc::new(Checker { this: self })
     }
-    fn get_error(&self) -> Option<ErrorCode>;
+    fn get_error(&self) -> Option<ErrorCode<ContextError>>;
     fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
@@ -261,6 +265,14 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
+
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>>;
 
     async fn filter_out_copied_files(
         &self,
@@ -335,6 +347,7 @@ pub trait TableContext: Send + Sync {
     fn set_variable(&self, key: String, value: Scalar);
     fn unset_variable(&self, key: &str);
     fn get_variable(&self, key: &str) -> Option<Scalar>;
+    fn get_all_variables(&self) -> HashMap<String, Scalar>;
 
     async fn load_datalake_schema(
         &self,
@@ -360,4 +373,10 @@ pub trait TableContext: Send + Sync {
         tbl_name: &str,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
+
+    fn get_temp_table_prefix(&self) -> Result<String>;
+
+    fn session_state(&self) -> SessionState;
+
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
 }

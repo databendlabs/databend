@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -37,6 +41,14 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
+use jaq_core;
+use jaq_interpret::Ctx;
+use jaq_interpret::FilterT;
+use jaq_interpret::ParseCtx;
+use jaq_interpret::RcIter;
+use jaq_interpret::Val;
+use jaq_parse;
+use jaq_std;
 use jsonb::array_length;
 use jsonb::array_values;
 use jsonb::as_str;
@@ -47,6 +59,7 @@ use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::jsonpath::Selector;
 use jsonb::object_each;
 use jsonb::object_keys;
+use jsonb::to_serde_json;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -77,6 +90,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let val_arg = args[0].clone().to_owned();
                     let path_arg = args[1].clone().to_owned();
                     let mut results = Vec::with_capacity(ctx.num_rows);
+
                     match path_arg {
                         Value::Scalar(Scalar::String(path)) => {
                             match parse_json_path(path.as_bytes()) {
@@ -460,6 +474,175 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.properties.insert(
+        "jq".to_string(),
+        FunctionProperty::default().kind(FunctionKind::SRF),
+    );
+    registry.register_function_factory("jq", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::String {
+            return None;
+        }
+        if args_type[1].remove_nullable() != DataType::Variant && args_type[1] != DataType::Null {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "jq".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
+                    let jq_filter_col = args[0].clone().to_owned();
+                    let jq_filter = match jq_filter_col.index(0) {
+                        Some(ScalarRef::String(s)) => s,
+                        _ => {
+                            ctx.set_error(0, "jq filter must be a scalar string");
+                            return vec![];
+                        }
+                    };
+
+                    let mut defs = ParseCtx::new(vec![]);
+                    defs.insert_natives(jaq_core::core());
+                    defs.insert_defs(jaq_std::std());
+                    assert!(defs.errs.is_empty());
+                    let (filter, errs) = jaq_parse::parse(jq_filter, jaq_parse::main());
+                    if !errs.is_empty() {
+                        ctx.set_error(0, errs[0].to_string());
+                        return vec![];
+                    }
+
+                    let filter = defs.compile(filter.unwrap());
+                    if !defs.errs.is_empty() {
+                        let err_str = defs
+                            .errs
+                            .iter()
+                            .map(|e| format!("err: {} location: {:?}", e.0, e.1))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        ctx.set_error(0, err_str);
+                        return vec![];
+                    }
+
+                    let jaq_args = vec![];
+                    // You can pass additional scalar inputs as args to the jq filter.
+                    // This could be a useful enhancement, but leaving it out for now.
+                    let inputs = RcIter::new(core::iter::empty());
+                    let jaq_ctx = Ctx::new(jaq_args, &inputs);
+
+                    let json_arg = args[1].clone().to_owned();
+                    (0..ctx.num_rows)
+                        .map(|row| {
+                            // with an SRF each row returns a Value::Column or Value::Scalar of results
+                            // so it's sort of a pivot or an array of arrays, where each row returns
+                            // a column representing multiple results for that row.
+                            // if a row returns null, you return a null vec in a Value::Scalar.
+                            let mut res_builder = BinaryColumnBuilder::with_capacity(0, 1);
+                            let null_result = (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0);
+
+                            match json_arg.index(row) {
+                                Some(ScalarRef::Null) => {
+                                    return null_result;
+                                }
+                                Some(ScalarRef::Variant(v)) => {
+                                    let s = to_serde_json(v);
+                                    match s {
+                                        Err(e) => {
+                                            ctx.set_error(row, e.to_string());
+                                            return null_result;
+                                        }
+                                        Ok(s) => {
+                                            let jaq_val = Val::from(s);
+                                            let jaq_out = filter.run((jaq_ctx.clone(), jaq_val));
+
+                                            for res in jaq_out {
+                                                match res {
+                                                    Err(err) => {
+                                                        ctx.set_error(row, err.to_string());
+                                                        return null_result;
+                                                    }
+                                                    Ok(res) => match jaq_val_to_jsonb(&res) {
+                                                        Ok(res_jsonb) => {
+                                                            res_builder.put_slice(&res_jsonb);
+                                                            res_builder.commit_row();
+                                                        }
+                                                        Err(err) => {
+                                                            ctx.set_error(row, err.to_string());
+                                                            return null_result;
+                                                        }
+                                                    },
+                                                };
+                                            }
+                                        }
+                                    }
+                                }
+                                None => {
+                                    return null_result;
+                                }
+                                _ => unreachable!(),
+                            }
+
+                            let res_col = Column::Variant(res_builder.build()).wrap_nullable(None);
+                            let res_len = res_col.len();
+                            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], res_len);
+                            (Value::Column(Column::Tuple(vec![res_col])), res_len)
+                        })
+                        .collect()
+                }),
+            },
+        }))
+    });
+}
+
+// Convert a Jaq val to a jsonb value.
+fn jaq_val_to_jsonb(val: &Val) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    let jsonb_value = match val {
+        Val::Null => jsonb::Value::Null,
+        Val::Bool(b) => jsonb::Value::Bool(*b),
+        Val::Num(n) => {
+            if let Ok(f) = n.parse::<f64>() {
+                f.into()
+            } else {
+                return Err(ErrorCode::BadBytes(format!(
+                    "parse string `{}` to f64 failed",
+                    n
+                )));
+            }
+        }
+        Val::Float(f) => (*f).into(),
+        Val::Int(i) => (*i).into(),
+        Val::Str(s) => jsonb::Value::String((**s).clone().into()),
+        Val::Arr(arr) => {
+            let items = arr
+                .iter()
+                .map(jaq_val_to_jsonb)
+                .collect::<Result<Vec<_>>>()?;
+            return match jsonb::build_array(items.iter().map(|v| &v[..]), &mut buf) {
+                Ok(_) => Ok(buf),
+                Err(_) => Err(ErrorCode::BadBytes("failed to build jsonb array")),
+            };
+        }
+        Val::Obj(obj) => {
+            let mut kvs = BTreeMap::new();
+            for (k, v) in obj.iter() {
+                let key = (**k).clone();
+                let val = jaq_val_to_jsonb(v)?;
+                kvs.insert(key, val);
+            }
+            return match jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut buf) {
+                Ok(_) => Ok(buf),
+                Err(_) => Err(ErrorCode::BadBytes("failed to build jsonb object")),
+            };
+        }
+    };
+    jsonb_value.write_to_vec(&mut buf);
+    Ok(buf)
 }
 
 pub(crate) fn unnest_variant_array(
@@ -772,36 +955,38 @@ impl FlattenGenerator {
             return columns;
         }
 
+        let validity = Some(Bitmap::new_constant(true, rows));
         // Generate an empty dummy column for columns that are not needed.
-        let seq_column = UInt64Type::upcast_column(vec![seq; rows].into()).wrap_nullable(None);
+        let seq_column =
+            UInt64Type::upcast_column(vec![seq; rows].into()).wrap_nullable(validity.clone());
         let key_column = if let Some(key_builder) = key_builder {
             NullableType::<StringType>::upcast_column(key_builder.build())
         } else {
             StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
         let path_column = if let Some(path_builder) = path_builder {
-            StringType::upcast_column(path_builder.build()).wrap_nullable(None)
+            StringType::upcast_column(path_builder.build()).wrap_nullable(validity.clone())
         } else {
             StringType::upcast_column(StringColumnBuilder::repeat("", rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
         let index_column = if let Some(index_builder) = index_builder {
             NullableType::<UInt64Type>::upcast_column(index_builder.build())
         } else {
-            UInt64Type::upcast_column(vec![0u64; rows].into()).wrap_nullable(None)
+            UInt64Type::upcast_column(vec![0u64; rows].into()).wrap_nullable(validity.clone())
         };
         let value_column = if let Some(value_builder) = value_builder {
-            VariantType::upcast_column(value_builder.build()).wrap_nullable(None)
+            VariantType::upcast_column(value_builder.build()).wrap_nullable(validity.clone())
         } else {
             VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
         let this_column = if let Some(this_builder) = this_builder {
-            VariantType::upcast_column(this_builder.build()).wrap_nullable(None)
+            VariantType::upcast_column(this_builder.build()).wrap_nullable(validity.clone())
         } else {
             VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
-                .wrap_nullable(None)
+                .wrap_nullable(validity.clone())
         };
 
         let columns = vec![

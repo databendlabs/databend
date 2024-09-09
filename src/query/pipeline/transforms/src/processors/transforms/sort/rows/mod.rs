@@ -18,6 +18,7 @@ mod simple;
 pub use common::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -42,6 +43,7 @@ where Self: Sized + Clone
 {
     type Item<'a>: Ord
     where Self: 'a;
+    type Type: ArgType;
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
@@ -50,15 +52,18 @@ where Self: Sized + Clone
     fn from_column(col: &Column, desc: &[SortColumnDescription]) -> Result<Self> {
         Self::try_from_column(col, desc).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
-                "Order column type mismatched. Expecetd {} but got {}",
+                "Order column type mismatched. Expected {} but got {}",
                 Self::data_type(),
                 col.data_type()
             ))
         })
     }
+
     fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self>;
 
-    fn data_type() -> DataType;
+    fn data_type() -> DataType {
+        Self::Type::data_type()
+    }
 
     fn is_empty(&self) -> bool {
         self.len() == 0

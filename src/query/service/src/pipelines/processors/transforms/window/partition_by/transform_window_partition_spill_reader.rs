@@ -217,17 +217,19 @@ impl Processor for TransformWindowPartitionSpillReader {
                             return Err(ErrorCode::TokioError("Cannot join tokio job"));
                         }
                         Ok(read_data) => {
-                            let read_data: Result<VecDeque<Vec<u8>>, opendal::Error> =
+                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
                                 read_data.into_iter().try_collect();
 
                             self.deserializing_meta = Some((block_meta, read_data?));
                         }
                     };
 
-                    info!(
-                        "Read {} window partition spills successfully, total elapsed: {:?}",
-                        processed_count, total_elapsed
-                    );
+                    if processed_count > 0 {
+                        info!(
+                            "Read {} window partition spills successfully, total elapsed: {:?}",
+                            processed_count, total_elapsed
+                        );
+                    }
                 }
             }
         }

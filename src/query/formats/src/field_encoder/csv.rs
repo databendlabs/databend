@@ -143,8 +143,14 @@ impl FieldEncoderCSV {
 
             Column::Geometry(g) => {
                 let buf = unsafe { g.index_unchecked(row_index) };
-                let geom = Ewkb(buf.to_vec()).to_ewkt(None).unwrap();
+                let geom = Ewkb(buf).to_ewkt(None).unwrap();
                 self.string_formatter.write_string(geom.as_bytes(), out_buf);
+            }
+
+            Column::Geography(g) => {
+                let geog = unsafe { g.index_unchecked(row_index) };
+                let wkt = geog.to_ewkt().unwrap();
+                self.string_formatter.write_string(wkt.as_bytes(), out_buf);
             }
 
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {

@@ -200,7 +200,7 @@ impl QueriesPipelineExecutor {
                                     }
                                 }
                                 if graph.is_all_nodes_finished() {
-                                    graph.should_finish(Ok(()))?;
+                                    graph.should_finish::<()>(Ok(()))?;
                                 }
                             }
                             Err(node_error) => {

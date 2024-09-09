@@ -28,7 +28,7 @@ use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
 
-use crate::servers::http::v1::TokenManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
@@ -50,6 +50,7 @@ pub enum Credential {
         password: Option<Vec<u8>>,
         client_ip: Option<String>,
     },
+    NoNeed,
 }
 
 impl AuthMgr {
@@ -72,15 +73,20 @@ impl AuthMgr {
     }
 
     #[async_backtrace::framed]
-    pub async fn auth(&self, session: &mut Session, credential: &Credential) -> Result<()> {
+    pub async fn auth(
+        &self,
+        session: &mut Session,
+        credential: &Credential,
+    ) -> Result<Option<String>> {
         let user_api = UserApiProvider::instance();
         match credential {
+            Credential::NoNeed => Ok(None),
             Credential::DatabendToken {
                 token,
                 set_user,
                 token_type,
             } => {
-                let claim = TokenManager::instance()
+                let claim = ClientSessionManager::instance()
                     .verify_token(token, token_type.clone())
                     .await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
@@ -90,6 +96,7 @@ impl AuthMgr {
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
+                Ok(Some(claim.session_id))
             }
             Credential::Jwt {
                 token: t,
@@ -151,6 +158,7 @@ impl AuthMgr {
                 };
 
                 session.set_authed_user(user, jwt.custom.role).await?;
+                Ok(None)
             }
             Credential::Password {
                 name: n,
@@ -195,8 +203,8 @@ impl AuthMgr {
                 authed?;
 
                 session.set_authed_user(user, None).await?;
+                Ok(None)
             }
-        };
-        Ok(())
+        }
     }
 }

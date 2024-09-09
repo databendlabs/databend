@@ -130,7 +130,7 @@ pub async fn do_refresh_virtual_column(
             let all_generated = if let Some(schema) = schema {
                 virtual_exprs
                     .iter()
-                    .all(|virtual_name| schema.fields.iter().any(|f| &f.name == virtual_name))
+                    .all(|virtual_name| schema.fields.iter().any(|f| f.name() == virtual_name))
             } else {
                 false
             };

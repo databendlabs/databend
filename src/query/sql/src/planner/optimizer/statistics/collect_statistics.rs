@@ -15,21 +15,27 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::SampleLevel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
-use log::info;
+use databend_common_expression::Scalar;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
+use crate::plans::ConstantExpr;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::ScalarExpr;
 
 // The CollectStatisticsOptimizer will collect statistics for each leaf node in SExpr.
 pub struct CollectStatisticsOptimizer {
@@ -69,8 +75,6 @@ impl CollectStatisticsOptimizer {
                     .table_statistics(self.table_ctx.clone(), true, scan.change_type.clone())
                     .await?;
 
-                let sample_filter = scan.sample_filter(&table_stats)?;
-
                 let mut column_stats = HashMap::new();
                 let mut histograms = HashMap::new();
                 for column in columns.iter() {
@@ -86,15 +90,9 @@ impl CollectStatisticsOptimizer {
                             if let Some(col_id) = *leaf_index {
                                 let col_stat = column_statistics_provider
                                     .column_statistics(col_id as ColumnId);
-                                if col_stat.is_none() {
-                                    info!("column {} doesn't have global statistics", col_id);
-                                }
                                 column_stats.insert(*column_index, col_stat.cloned());
                                 let histogram =
                                     column_statistics_provider.histogram(col_id as ColumnId);
-                                if histogram.is_none() {
-                                    info!("column {} doesn't have accurate histogram", col_id);
-                                }
                                 histograms.insert(*column_index, histogram);
                             }
                         }
@@ -107,12 +105,46 @@ impl CollectStatisticsOptimizer {
                     column_stats,
                     histograms,
                 });
-                let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan)));
-                if let Some(sample_filter) = sample_filter {
-                    let filter = Filter {
-                        predicates: vec![sample_filter],
-                    };
-                    s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr))
+                let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan.clone())));
+                if let Some(sample) = &scan.sample {
+                    match sample.sample_level {
+                        SampleLevel::ROW => {
+                            if let Some(stats) = &table_stats
+                                && let Some(probability) = sample.sample_probability(stats.num_rows)
+                            {
+                                let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
+                                    span: None,
+                                    func_name: "rand".to_string(),
+                                    params: vec![],
+                                    arguments: vec![],
+                                });
+                                let filter = ScalarExpr::FunctionCall(FunctionCall {
+                                    span: None,
+                                    func_name: "lte".to_string(),
+                                    params: vec![],
+                                    arguments: vec![
+                                        rand_expr,
+                                        ScalarExpr::ConstantExpr(ConstantExpr {
+                                            span: None,
+                                            value: Scalar::Number(NumberScalar::Float64(
+                                                F64::from(probability),
+                                            )),
+                                        }),
+                                    ],
+                                });
+                                s_expr = SExpr::create_unary(
+                                    Arc::new(
+                                        Filter {
+                                            predicates: vec![filter],
+                                        }
+                                        .into(),
+                                    ),
+                                    Arc::new(s_expr),
+                                );
+                            }
+                        }
+                        SampleLevel::BLOCK => {}
+                    }
                 }
                 Ok(s_expr)
             }

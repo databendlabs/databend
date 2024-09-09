@@ -21,37 +21,37 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -61,6 +61,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -83,9 +84,10 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -93,10 +95,10 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
 use crate::catalogs::InMemoryMetas;
-use crate::catalogs::SYS_DB_ID_BEGIN;
-use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
@@ -218,9 +220,9 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
-        if self.sys_db.get_db_info().ident.db_id == db_id {
+        if self.sys_db.get_db_info().database_id.db_id == db_id {
             Ok("system".to_string())
-        } else if self.info_schema_db.get_db_info().ident.db_id == db_id {
+        } else if self.info_schema_db.get_db_info().database_id.db_id == db_id {
             Ok("information_schema".to_string())
         } else {
             Err(ErrorCode::UnknownDatabaseId(format!(
@@ -237,9 +239,9 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<Vec<Option<String>>> {
         let mut res = Vec::new();
         for id in db_ids {
-            if self.sys_db.get_db_info().ident.db_id == *id {
+            if self.sys_db.get_db_info().database_id.db_id == *id {
                 res.push(Some("system".to_string()));
-            } else if self.info_schema_db.get_db_info().ident.db_id == *id {
+            } else if self.info_schema_db.get_db_info().database_id.db_id == *id {
                 res.push(Some("information_schema".to_string()));
             }
         }
@@ -264,6 +266,16 @@ impl Catalog for ImmutableCatalog {
         let _db = self.get_database(tenant, db_name).await?;
 
         self.sys_db_meta.get_by_name(db_name, table_name)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_history(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(vec![self.get_table(tenant, db_name, table_name).await?])
     }
 
     #[async_backtrace::framed]
@@ -327,11 +339,11 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -427,7 +439,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -462,26 +474,17 @@ impl Catalog for ImmutableCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -509,6 +512,41 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
+        unimplemented!()
+    }
+
+    /// Dictionary
+    #[async_backtrace::framed]
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_dictionary(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_dictionary(
+        &self,
+        _req: DictionaryNameIdent,
+    ) -> Result<Option<GetDictionaryReply>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_dictionaries(
+        &self,
+        _req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
         unimplemented!()
     }
 }

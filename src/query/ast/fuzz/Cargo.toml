@@ -16,6 +16,6 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-ast = { path = ".." }
+databend-common-ast = { workspace = true }
 
 afl = "0.12"

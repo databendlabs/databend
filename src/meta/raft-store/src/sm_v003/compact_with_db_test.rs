@@ -14,8 +14,8 @@
 
 use std::io;
 
+use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::Membership;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::StoredMembership;

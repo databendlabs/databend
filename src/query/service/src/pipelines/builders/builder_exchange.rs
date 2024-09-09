@@ -40,6 +40,11 @@ impl PipelineBuilder {
 
     pub fn build_exchange_sink(&mut self, exchange_sink: &ExchangeSink) -> Result<()> {
         // ExchangeSink will be appended by `ExchangeManager::execute_pipeline`
-        self.build_pipeline(&exchange_sink.input)
+        let is_exchange_neighbor = self.is_exchange_neighbor;
+
+        self.is_exchange_neighbor = true;
+        self.build_pipeline(&exchange_sink.input)?;
+        self.is_exchange_neighbor = is_exchange_neighbor;
+        Ok(())
     }
 }

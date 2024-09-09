@@ -25,8 +25,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_sharing::ShareEndpointManager;
-use databend_common_sharing::SharePresignedCacheManager;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
@@ -36,20 +34,19 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_cache::CacheManager;
 
 use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
-use crate::catalogs::ShareCatalogCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
-use crate::servers::http::v1::TokenManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
@@ -103,7 +100,6 @@ impl GlobalServices {
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
                 (CatalogType::Hive, Arc::new(HiveCreator)),
-                (CatalogType::Share, Arc::new(ShareCatalogCreator)),
             ];
 
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
@@ -111,12 +107,11 @@ impl GlobalServices {
 
         QueriesQueueManager::init(config.query.max_running_queries as usize)?;
         HttpQueryManager::init(config).await?;
-        TokenManager::init(config).await?;
+        ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
         AuthMgr::init(config)?;
-        SharePresignedCacheManager::init()?;
 
         // Init user manager.
         // Builtin users and udfs are created here.
@@ -139,7 +134,6 @@ impl GlobalServices {
         }
 
         RoleCacheManager::init()?;
-        ShareEndpointManager::init()?;
 
         DataOperator::init(&config.storage).await?;
         ShareTableConfig::init(

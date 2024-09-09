@@ -291,7 +291,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024),
+                    value: UserSettingValue::UInt64(512),
                     desc: "Set the spilling buffer threshold (MB) for each join processor.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -379,6 +379,12 @@ impl DefaultSettings {
                     desc: "Injects a custom 'sandbox_tenant' into this session. This is only for testing purposes and will take effect only when 'internal_enable_sandbox_tenant' is turned on.",
                     mode: SettingMode::Both,
                     range: None,
+                }),
+                ("enable_planner_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables caching logic plan from same query.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -535,6 +541,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_procedure", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
@@ -576,6 +588,12 @@ impl DefaultSettings {
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("auto_compaction_segments_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -660,6 +678,12 @@ impl DefaultSettings {
                     desc: "Request batch rows to external server",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("external_server_request_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8),
+                    desc: "Request max retry times to external server",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=256)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -754,7 +778,7 @@ impl DefaultSettings {
                 // this setting will be removed when geometry type stable.
                 ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Create and alter table with geometry type",
+                    desc: "Create and alter table with geometry/geography type",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -824,7 +848,19 @@ impl DefaultSettings {
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                })
+                }),
+                ("random_function_seed", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Seed for random function",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("dynamic_sample_time_budget_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time budget for dynamic sample in milliseconds",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -847,7 +883,7 @@ impl DefaultSettings {
     /// The maximum number of days that data can be retained.
     /// The max is read from the global config:data_retention_time_in_days_max
     /// If the global config is not set, the default value is 90 days.
-    fn data_retention_time_in_days_max() -> u64 {
+    pub(crate) fn data_retention_time_in_days_max() -> u64 {
         match GlobalConfig::try_get_instance() {
             None => 90,
             Some(conf) => conf.query.data_retention_time_in_days_max,
@@ -951,7 +987,7 @@ impl DefaultSettings {
     /// If the value is not a valid u64, it will be parsed as f64.
     /// Used for:
     /// set max_memory_usage = 1024*1024*1024*1.5;
-    fn parse_to_u64(v: &str) -> Result<u64, ErrorCode> {
+    fn parse_to_u64(v: &str) -> Result<u64> {
         match v.parse::<u64>() {
             Ok(val) => Ok(val),
             Err(_) => {

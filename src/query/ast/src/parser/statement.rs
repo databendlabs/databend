@@ -33,7 +33,6 @@ use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::query::*;
-use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::stream::stream_table;
 use crate::parser::token::*;
@@ -44,8 +43,6 @@ use crate::rule;
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     GrantObjectName(GrantObjectName),
-    ShareGrantObjectName(ShareGrantObjectName),
-    ShareName(String),
 }
 
 // (tenant, share name, endpoint name)
@@ -64,14 +61,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
-                    Some(TokenKind::AST) => {
-                        let formatted_stmt =
-                            format_statement(statement.stmt.clone()).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
-                        ExplainKind::Ast(formatted_stmt)
-                    }
-                    Some(TokenKind::SYNTAX) => {
+                    Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
                         let pretty_stmt =
                             pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
                                 nom::Err::Failure(ErrorKind::Other("invalid statement"))
@@ -276,6 +266,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             SHOW ~ SETTINGS ~ #show_options?
         },
         |(_, _, show_options)| Statement::ShowSettings { show_options },
+    );
+    let show_variables = map(
+        rule! {
+            SHOW ~ VARIABLES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowVariables { show_options },
     );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
     let show_process_list = map(
@@ -697,19 +693,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_table = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
-            ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( #table_option )?
             ~ ( AS ~ ^#query )?
         },
         |(
             _,
             opt_or_replace,
-            opt_transient,
+            opt_type,
             _,
             opt_if_not_exists,
             (catalog, database, table),
@@ -722,6 +718,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            let table_type = match opt_type.map(|t| t.kind) {
+                None => TableType::Normal,
+                Some(TRANSIENT) => TableType::Transient,
+                Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
+                _ => unreachable!(),
+            };
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,
                 catalog,
@@ -730,12 +732,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 source,
                 engine,
                 uri_location,
-                cluster_by: opt_cluster_by
-                    .map(|(_, _, _, exprs, _)| exprs)
-                    .unwrap_or_default(),
+                cluster_by: opt_cluster_by.map(|(_, _, typ, _, exprs, _)| ClusterOption {
+                    cluster_type: typ.unwrap_or(ClusterType::Linear),
+                    cluster_exprs: exprs,
+                }),
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
-                transient: opt_transient.is_some(),
+                table_type,
             }))
         },
     );
@@ -1396,12 +1399,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 principal: Some(principal),
                 show_options: opt_limit,
             },
-            Some(ShowGrantOption::ShareGrantObjectName(object)) => {
-                Statement::ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt { object })
-            }
-            Some(ShowGrantOption::ShareName(share_name)) => {
-                Statement::ShowGrantsOfShare(ShowGrantsOfShareStmt { share_name })
-            }
             None => Statement::ShowGrants {
                 principal: None,
                 show_options: opt_limit,
@@ -1634,163 +1631,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }
             Statement::Presign(presign_stmt)
         },
-    );
-
-    // share statements
-    let create_share_endpoint = map_res(
-        rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
-             ~ #ident
-             ~ URL ~ "=" ~ #share_endpoint_uri_location
-             ~ ( CREDENTIAL ~ ^"=" ~ ^#options)?
-             ~ ( ARGS ~ ^"=" ~ ^#options)?
-             ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
-        },
-        |(
-            _,
-            opt_or_replace,
-            _,
-            _,
-            opt_if_not_exists,
-            endpoint,
-            _,
-            _,
-            url,
-            credential_opt,
-            args_opt,
-            comment_opt,
-        )| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-
-            let credential_options = if let Some(opt) = credential_opt {
-                opt.2
-                    .iter()
-                    .map(|(k, v)| {
-                        let k = k.to_uppercase();
-                        if k == "TYPE" {
-                            (k, v.to_uppercase())
-                        } else {
-                            (k, v.clone())
-                        }
-                    })
-                    .collect()
-            } else {
-                BTreeMap::new()
-            };
-
-            Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
-                create_option,
-                endpoint,
-                url,
-                credential_options,
-                args: match args_opt {
-                    Some(opt) => opt.2,
-                    None => BTreeMap::new(),
-                },
-                comment: match comment_opt {
-                    Some(opt) => Some(opt.2),
-                    None => None,
-                },
-            }))
-        },
-    );
-    let show_share_endpoints = map(
-        rule! {
-            SHOW ~ SHARE ~ ENDPOINT
-        },
-        |(_, _, _)| Statement::ShowShareEndpoint(ShowShareEndpointStmt {}),
-    );
-    let drop_share_endpoint = map(
-        rule! {
-            DROP ~ SHARE ~ ENDPOINT ~ ( IF ~ EXISTS)? ~ #ident
-        },
-        |(_, _, _, opt_if_exists, endpoint)| {
-            Statement::DropShareEndpoint(DropShareEndpointStmt {
-                if_exists: opt_if_exists.is_some(),
-                endpoint,
-            })
-        },
-    );
-    let create_share = map(
-        rule! {
-            CREATE ~ SHARE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
-        },
-        |(_, _, opt_if_not_exists, share, comment_opt)| {
-            Statement::CreateShare(CreateShareStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
-                share,
-                comment: match comment_opt {
-                    Some(opt) => Some(opt.2),
-                    None => None,
-                },
-            })
-        },
-    );
-    let drop_share = map(
-        rule! {
-            DROP ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident
-        },
-        |(_, _, opt_if_exists, share)| {
-            Statement::DropShare(DropShareStmt {
-                if_exists: opt_if_exists.is_some(),
-                share,
-            })
-        },
-    );
-    let grant_share_object = map(
-        rule! {
-            GRANT ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ TO ~ SHARE ~ #ident
-        },
-        |(_, privilege, _, object, _, _, share)| {
-            Statement::GrantShareObject(GrantShareObjectStmt {
-                share,
-                object,
-                privilege,
-            })
-        },
-    );
-    let revoke_share_object = map(
-        rule! {
-            REVOKE ~ #priv_share_type ~ ON ~ #grant_share_object_name ~ FROM ~ SHARE ~ #ident
-        },
-        |(_, privilege, _, object, _, _, share)| {
-            Statement::RevokeShareObject(RevokeShareObjectStmt {
-                share,
-                object,
-                privilege,
-            })
-        },
-    );
-    let alter_share_tenants = map(
-        rule! {
-            ALTER
-            ~ SHARE
-            ~ ( IF ~ ^EXISTS )?
-            ~ #ident
-            ~ #alter_add_share_accounts
-            ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
-        },
-        |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
-            Statement::AlterShareTenants(AlterShareTenantsStmt {
-                share,
-                if_exists: opt_if_exists.is_some(),
-                is_add,
-                tenants,
-            })
-        },
-    );
-    let desc_share = map(
-        rule! {
-            (DESC | DESCRIBE) ~ SHARE ~ #ident
-        },
-        |(_, _, share)| Statement::DescShare(DescShareStmt { share }),
-    );
-    let show_shares = map(
-        rule! {
-            SHOW ~ SHARES
-        },
-        |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
     );
 
     let create_file_format = map_res(
@@ -2178,6 +2018,157 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, action)| Statement::System(SystemStmt { action }),
     );
 
+    pub fn procedure_type(i: Input) -> IResult<ProcedureType> {
+        map(rule! { #ident ~ #type_name }, |(name, data_type)| {
+            ProcedureType {
+                name: Some(name.to_string()),
+                data_type,
+            }
+        })(i)
+    }
+
+    fn procedure_return(i: Input) -> IResult<Vec<ProcedureType>> {
+        let procedure_table_return = map(
+            rule! {
+                TABLE ~ "(" ~ #comma_separated_list1(procedure_type) ~ ")"
+            },
+            |(_, _, test, _)| test,
+        );
+        let procedure_single_return = map(rule! { #type_name }, |data_type| {
+            vec![ProcedureType {
+                name: None,
+                data_type,
+            }]
+        });
+        rule!(#procedure_single_return: "<type_name>"
+            | #procedure_table_return: "TABLE(<var_name> <type_name>, ...)")(i)
+    }
+
+    fn procedure_arg(i: Input) -> IResult<Option<Vec<ProcedureType>>> {
+        let procedure_args = map(
+            rule! {
+                "(" ~ #comma_separated_list1(procedure_type) ~ ")"
+            },
+            |(_, args, _)| Some(args),
+        );
+        let procedure_empty_args = map(
+            rule! {
+                "(" ~ ")"
+            },
+            |(_, _)| None,
+        );
+        rule!(#procedure_empty_args: "()"
+            | #procedure_args: "(<var_name> <type_name>, ...)")(i)
+    }
+
+    // CREATE [ OR REPLACE ] PROCEDURE <name> ()
+    // RETURNS { <result_data_type> }[ NOT NULL ]
+    // LANGUAGE SQL
+    // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
+    let create_procedure = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
+        },
+        |(_, opt_or_replace, _, name, args, _, return_type, _, _, opt_comment, _, script)| {
+            let create_option = parse_create_option(opt_or_replace.is_some(), false)?;
+
+            let name = ProcedureIdentity {
+                name: name.to_string(),
+                args_type: if let Some(args) = &args {
+                    args.iter()
+                        .map(|arg| arg.data_type.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                } else {
+                    "".to_string()
+                },
+            };
+            let stmt = CreateProcedureStmt {
+                create_option,
+                name,
+                args,
+                return_type,
+                language: ProcedureLanguage::SQL,
+                comment: match opt_comment {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+                script,
+            };
+            Ok(Statement::CreateProcedure(stmt))
+        },
+    );
+
+    let show_procedures = map(
+        rule! {
+            SHOW ~ PROCEDURES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowProcedures { show_options },
+    );
+
+    fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+        let procedure_type_names = map(
+            rule! {
+                "(" ~ #comma_separated_list1(type_name) ~ ")"
+            },
+            |(_, args, _)| args,
+        );
+        let procedure_empty_types = map(
+            rule! {
+                "(" ~ ")"
+            },
+            |(_, _)| vec![],
+        );
+        rule!(#procedure_empty_types: "()"
+            | #procedure_type_names: "(<type_name>, ...)")(i)
+    }
+
+    let call_procedure = map(
+        rule! {
+            CALL ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+        },
+        |(_, _, name, _, _)| {
+            Statement::CallProcedure(CallProcedureStmt {
+                name: name.to_string(),
+                args: vec![],
+            })
+        },
+    );
+
+    let drop_procedure = map(
+        rule! {
+            DROP ~ PROCEDURE ~ #ident ~ #procedure_type_name
+        },
+        |(_, _, name, args)| {
+            Statement::DropProcedure(DropProcedureStmt {
+                name: ProcedureIdentity {
+                    name: name.to_string(),
+                    args_type: if args.is_empty() {
+                        "".to_string()
+                    } else {
+                        args.iter()
+                            .map(|arg| arg.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    },
+                },
+            })
+        },
+    );
+
+    let describe_procedure = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
+        },
+        |(_, _, name, args)| {
+            // TODO: modify to ProcedureIdentify
+            Statement::DescProcedure(DescProcedureStmt {
+                name: name.to_string(),
+                args,
+            })
+        },
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2185,6 +2176,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
+            | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
             | #show_engines : "`SHOW ENGINES`"
             | #show_process_list : "`SHOW PROCESSLIST`"
@@ -2324,19 +2316,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
             | #describe_data_mask_policy: "`DESC MASKING POLICY mask_name`"
         ),
-        // share
-        rule!(
-            #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
-            | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"
-            | #drop_share_endpoint: "`DROP SHARE ENDPOINT <endpoint_name>`"
-            | #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
-            | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
-            | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
-            | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
-            | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
-            | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
-            | #show_shares: "`SHOW SHARES`"
-        ),
         rule!(
             #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
             | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
@@ -2394,6 +2373,11 @@ AS
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #show_connections: "`SHOW CONNECTIONS`"
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
+            | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
+            | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
+            | #show_procedures : "`SHOW PROCEDURES [<show_options>]()`"
+            | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
+            | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
     ))(i)
 }
@@ -2670,11 +2654,12 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     });
 
     let source_table = map(
-        rule!(#dot_separated_idents_1_to_3 ~ #table_alias?),
-        |((catalog, database, table), alias)| MergeSource::Table {
+        rule!(#dot_separated_idents_1_to_3 ~ #with_options? ~ #table_alias?),
+        |((catalog, database, table), with_options, alias)| MergeSource::Table {
             catalog,
             database,
             table,
+            with_options,
             alias,
         },
     );
@@ -3020,37 +3005,6 @@ pub fn alter_add_share_accounts(i: Input) -> IResult<bool> {
     alt((value(true, rule! { ADD }), value(false, rule! { REMOVE })))(i)
 }
 
-pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
-    let database = map(
-        rule! {
-            DATABASE ~ #ident
-        },
-        |(_, database)| ShareGrantObjectName::Database(database),
-    );
-
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            TABLE ~  #ident ~ "." ~ #ident
-        },
-        |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
-    );
-
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let view = map(
-        rule! {
-            VIEW ~  #ident ~ "." ~ #ident
-        },
-        |(_, database, _, table)| ShareGrantObjectName::View(database, table),
-    );
-
-    rule!(
-        #database : "DATABASE <database>"
-        | #table : "TABLE <database>.<table>"
-        | #view : "TABLE <database>.<view>"
-    )(i)
-}
-
 pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
     let database = map(
         rule! {
@@ -3208,17 +3162,9 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
         |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
-    let share_name = map(
-        rule! {
-            OF ~ SHARE ~ #ident
-        },
-        |(_, _, share_name)| ShowGrantOption::ShareName(share_name.to_string()),
-    );
-
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
         | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
-        | #share_name: "OF SHARE <share_name>"
     )(i)
 }
 
@@ -3457,9 +3403,14 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let alter_table_cluster_key = map(
         rule! {
-            CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            CLUSTER ~ ^BY ~ ( #cluster_type )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
-        |(_, _, _, cluster_by, _)| AlterTableAction::AlterTableClusterKey { cluster_by },
+        |(_, _, typ, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
+            cluster_by: ClusterOption {
+                cluster_type: typ.unwrap_or(ClusterType::Linear),
+                cluster_exprs,
+            },
+        },
     );
 
     let drop_table_cluster_key = map(
@@ -3899,6 +3850,13 @@ pub fn switch(i: Input) -> IResult<bool> {
     ))(i)
 }
 
+pub fn cluster_type(i: Input) -> IResult<ClusterType> {
+    alt((
+        value(ClusterType::Linear, rule! { LINEAR }),
+        value(ClusterType::Hilbert, rule! { HILBERT }),
+    ))(i)
+}
+
 pub fn limit_where(i: Input) -> IResult<ShowLimit> {
     map(
         rule! {
@@ -3966,7 +3924,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     })(i)
 }
 
-fn option_to_string(i: Input) -> IResult<String> {
+pub fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
 
     rule!(
@@ -4016,7 +3974,6 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
-        value(CatalogType::Share, rule! { SHARE }),
     ))(i)
 }
 
@@ -4146,7 +4103,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -4166,7 +4123,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,

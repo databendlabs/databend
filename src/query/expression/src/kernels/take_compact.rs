@@ -33,6 +33,7 @@ use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -136,6 +137,9 @@ impl Column {
                 .unwrap();
                 Column::Date(d)
             }
+            Column::Geography(column) => {
+                Self::take_compacted_arg_types::<GeographyType>(column, indices, num_rows)
+            }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(num_rows + 1);
                 offsets.push(0);
@@ -170,10 +174,10 @@ impl Column {
                 let column = c.column.take_compacted_indices(indices, num_rows);
                 let validity =
                     Self::take_compacted_arg_types::<BooleanType>(&c.validity, indices, num_rows);
-                Column::Nullable(Box::new(NullableColumn {
+                Column::Nullable(Box::new(NullableColumn::new(
                     column,
-                    validity: BooleanType::try_downcast_column(&validity).unwrap(),
-                }))
+                    BooleanType::try_downcast_column(&validity).unwrap(),
+                )))
             }
             Column::Tuple(fields) => {
                 let fields = fields

@@ -17,13 +17,13 @@ pub mod lru;
 use std::borrow::Borrow;
 use std::hash::Hash;
 
-use crate::Meter;
+use crate::mem_sized::MemSized;
 
 /// A trait for a cache.
-pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
+pub trait Cache<K: Eq + Hash + MemSized, V: MemSized> {
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
-    fn get<'a, Q>(&'a mut self, k: &Q) -> Option<&'a V>
+    fn get<Q>(&mut self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;
@@ -31,7 +31,7 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
     /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
     /// not present in the cache. Unlike `get`, `peek` does not update the Cache state so the key's
     /// position will be unchanged.
-    fn peek<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
+    fn peek<Q>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized;
@@ -44,7 +44,7 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
 
     /// Inserts a key-value pair into the cache. If the key already existed, the old value is
     /// returned.
-    fn put(&mut self, k: K, v: V) -> Option<V>;
+    fn insert(&mut self, k: K, v: V) -> Option<V>;
 
     /// Removes the given key from the cache and returns its corresponding value.
     fn pop<Q>(&mut self, k: &Q) -> Option<V>
@@ -67,17 +67,13 @@ pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
     /// Returns `true` if the cache contains no key-value pairs.
     fn is_empty(&self) -> bool;
 
-    /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
-    /// `Meter` used by the cache.
-    fn capacity(&self) -> u64;
+    /// Returns the maximum bytes size of the key-value pairs the cache can hold.
+    fn bytes_capacity(&self) -> u64;
 
-    /// Sets the size of the key-value pairs the cache can hold, as measured by the `Meter` used by
-    /// the cache.
-    fn set_capacity(&mut self, cap: u64);
+    fn items_capacity(&self) -> u64;
 
-    /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
-    /// by the cache.
-    fn size(&self) -> u64;
+    /// Returns the bytes size of all the key-value pairs in the cache.
+    fn bytes_size(&self) -> u64;
 
     /// Removes all key-value pairs from the cache.
     fn clear(&mut self);

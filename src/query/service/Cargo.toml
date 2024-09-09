@@ -42,6 +42,7 @@ async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+backon = "0.4"
 base64 = "0.21.0"
 bumpalo = { workspace = true }
 byte-unit = "4.0.19"
@@ -82,7 +83,6 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-script = { workspace = true }
 databend-common-settings = { workspace = true }
-databend-common-sharing = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-delta = { workspace = true }
@@ -96,7 +96,6 @@ databend-common-storages-null = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
-databend-common-storages-share = { workspace = true }
 databend-common-storages-stage = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
@@ -113,11 +112,10 @@ databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
-databend-storages-common-cache-manager = { workspace = true }
 databend-storages-common-index = { workspace = true }
 databend-storages-common-io = { workspace = true }
+databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-databend-storages-common-txn = { workspace = true }
 derive-visitor = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }
@@ -163,7 +161,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_stacker = { workspace = true }
 serde_urlencoded = "0.7.1"
-sha2 = "0.10.8"
+sha2 = { workspace = true }
 socket2 = "0.5.3"
 strength_reduce = "0.2.4"
 sysinfo = "0.30"
@@ -177,7 +175,6 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
-
 [dev-dependencies]
 arrow-cast = { workspace = true }
 criterion = { workspace = true }

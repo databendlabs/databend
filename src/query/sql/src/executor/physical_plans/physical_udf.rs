@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -71,41 +69,32 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_udf(
         &mut self,
         s_expr: &SExpr,
-        udf: &crate::plans::Udf,
+        udf_plan: &crate::plans::Udf,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let mut used = vec![];
-        // Keep all columns, as some udf functions may be arguments to other udf functions.
-        for s in udf.items.iter() {
-            used.push(s.clone());
-            s.scalar.used_columns().iter().for_each(|c| {
-                required.insert(*c);
-            })
+        for item in udf_plan.items.iter() {
+            if required.contains(&item.index) {
+                required.extend(item.scalar.used_columns());
+                used.push(item.clone());
+            }
         }
 
         // 2. Build physical plan.
         if used.is_empty() {
             return self.build(s_expr.child(0)?, required).await;
         }
-        let udf = crate::plans::Udf {
-            items: used,
-            script_udf: udf.script_udf,
-        };
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
-        let mut index = input_schema.num_fields();
-        let mut udf_index_map = HashMap::new();
 
-        let udf_funcs = udf
-            .items
+        let udf_funcs = used
             .iter()
             .map(|item| {
                 if let ScalarExpr::UDFCall(func) = &item.scalar {
-                    let (arguments, display_name) = (&func.arguments, &func.display_name);
-
-                    let arg_indices = arguments
+                    let arg_indices = func
+                        .arguments
                         .iter()
                         .map(|arg| match arg {
                             ScalarExpr::BoundColumnRef(col) => {
@@ -127,10 +116,8 @@ impl PhysicalPlanBuilder {
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    udf_index_map.insert(display_name.clone(), index);
-                    index += 1;
-
-                    let arg_exprs = arguments
+                    let arg_exprs = func
+                        .arguments
                         .iter()
                         .map(|arg| {
                             let expr = arg.as_expr()?;
@@ -159,7 +146,7 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             input: Box::new(input),
             udf_funcs,
-            script_udf: udf.script_udf,
+            script_udf: udf_plan.script_udf,
             stat_info: Some(stat_info),
         }))
     }

@@ -15,10 +15,14 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::Duration;
+use chrono::TimeDelta;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -27,6 +31,8 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::Bound;
+use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::NavigationDescriptor;
@@ -51,34 +57,36 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_sharing::create_share_table_operator;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
+use databend_common_sql::parse_hilbert_cluster_key;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::table::table_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use log::error;
+use log::info;
 use log::warn;
 use opendal::Operator;
 use uuid::Uuid;
@@ -86,11 +94,14 @@ use uuid::Uuid;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
+use crate::statistics::reduce_block_statistics;
+use crate::statistics::Trim;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
@@ -100,6 +111,7 @@ use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
@@ -131,7 +143,6 @@ impl FuseTable {
     pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
         // check if table is AttachedReadOnly in a lighter way
         let need_refresh_schema = match table_info.db_type {
-            DatabaseType::ShareDB(_) => false,
             DatabaseType::NormalDB => {
                 table_info.meta.storage_params.is_some()
                     && Self::is_table_attached(&table_info.meta.options)
@@ -139,6 +150,7 @@ impl FuseTable {
         };
 
         if need_refresh_schema {
+            info!("refreshing table schema {}", table_info.desc);
             let table = Self::do_create(table_info.as_ref().clone())?;
             let snapshot = table.read_table_snapshot().await?;
             let schema = snapshot
@@ -158,15 +170,10 @@ impl FuseTable {
     }
 
     pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
-        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_params) => {
-                let operator =
-                    create_share_table_operator(&share_params, table_info.ident.table_id)?;
-                (operator, FuseTableType::SharedReadOnly)
-            }
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
@@ -275,27 +282,9 @@ impl FuseTable {
         }
     }
 
-    pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
-        // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
-        if let Some(prefix) = table_info.options().get(OPT_KEY_STORAGE_PREFIX) {
-            return Ok(prefix.clone());
-        }
-
-        // otherwise, use database id and table id as storage prefix
-
-        let table_id = table_info.ident.table_id;
-        let db_id = table_info
-            .options()
-            .get(OPT_KEY_DATABASE_ID)
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Invalid fuse table, table option {} not found",
-                    OPT_KEY_DATABASE_ID
-                ))
-            })?;
-        Ok(table_storage_prefix(db_id, table_id))
+    pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
+        parse_storage_prefix(table_info.options(), table_info.ident.table_id)
     }
-
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_statistics(
@@ -373,20 +362,6 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn snapshot_loc(&self) -> Result<Option<String>> {
         match self.table_info.db_type {
-            DatabaseType::ShareDB(_) => {
-                let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-                match self.operator.read(url).await {
-                    Ok(data) => {
-                        let bs = data.to_vec();
-                        let s = str::from_utf8(&bs)?;
-                        Ok(Some(s.to_string()))
-                    }
-                    Err(e) => {
-                        error!("read share snapshot location error: {:?}", e);
-                        Ok(None)
-                    }
-                }
-            }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
@@ -428,7 +403,7 @@ impl FuseTable {
         })
     }
 
-    pub fn transient(&self) -> bool {
+    pub fn is_transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
@@ -459,12 +434,33 @@ impl FuseTable {
         let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
             return vec![];
         };
-        let cluster_keys =
-            parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
-        cluster_keys
-            .into_iter()
-            .map(|v| v.data_type().clone())
-            .collect()
+        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        match cluster_type {
+            ClusterType::Hilbert => vec![DataType::Binary],
+            ClusterType::Linear => {
+                let cluster_keys =
+                    parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+                cluster_keys
+                    .into_iter()
+                    .map(|v| v.data_type().clone())
+                    .collect()
+            }
+        }
+    }
+
+    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<TimeDelta> {
+        let retention_period = if let Some(v) = self
+            .table_info
+            .meta
+            .options
+            .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
+        {
+            let retention_period = v.parse::<u64>()?;
+            Duration::hours(retention_period as i64)
+        } else {
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64)
+        };
+        Ok(retention_period)
     }
 }
 
@@ -501,7 +497,13 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_cluster_keys(ctx, table_meta.clone(), order).unwrap();
+            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            let cluster_keys = match cluster_type {
+                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
+                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
+            }
+            .unwrap();
+
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {
@@ -546,15 +548,25 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
+        cluster_type: String,
     ) -> Result<()> {
         // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str()
             && *old_cluster_key_str == cluster_key_str
         {
-            return Ok(());
+            let old_cluster_type = self
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
+                .to_string()
+                .to_lowercase();
+            if cluster_type == old_cluster_type {
+                return Ok(());
+            }
         }
         let mut new_table_meta = self.get_table_info().meta.clone();
+        new_table_meta
+            .options
+            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type);
         new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
@@ -752,6 +764,10 @@ impl Table for FuseTable {
 
         let stats = match self.table_type {
             FuseTableType::Attached if require_fresh => {
+                info!(
+                    "refresh table statistics of attached table {}",
+                    self.table_info.desc
+                );
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
@@ -812,6 +828,83 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
+    #[async_backtrace::framed]
+    async fn accurate_columns_ranges(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        column_ids: &[ColumnId],
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
+        if column_ids.is_empty() {
+            return Ok(Some(HashMap::new()));
+        }
+
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some(HashMap::new()));
+        };
+
+        let segment_locations = &snapshot.segments;
+        let num_segments = snapshot.segments.len();
+
+        if num_segments == 0 {
+            return Ok(Some(HashMap::new()));
+        }
+
+        let column_ids: HashSet<&ColumnId, RandomState> = HashSet::from_iter(column_ids);
+
+        let schema = self.schema();
+        let num_fields = schema.fields.len();
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema);
+        let chunk_size = std::cmp::min(
+            ctx.get_settings().get_max_threads()? as usize * 4,
+            num_segments,
+        )
+        .max(1);
+
+        ctx.set_status_info(&format!(
+            "processing {} segments, chunk size {}",
+            num_segments, chunk_size
+        ));
+
+        // Fold column ranges of segments chunk by chunk
+        let mut reduced = HashMap::with_capacity(num_fields);
+
+        for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
+            let segments = segments_io
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .await?;
+            let mut partial_col_stats = Vec::with_capacity(chunk_size);
+            // 1. Carry the previously reduced ranges
+            partial_col_stats.push(reduced);
+            // 2. Append ranges of this chunk
+            for compacted_seg in segments.into_iter() {
+                let segment = compacted_seg?;
+                let mut cols_stats = segment.summary.col_stats.clone();
+                cols_stats.retain(|k, _| column_ids.contains(k));
+                partial_col_stats.push(cols_stats);
+            }
+            // 3. Reduces them
+            reduced = reduce_block_statistics(&partial_col_stats);
+            ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
+        }
+
+        let r = reduced
+            .into_iter()
+            .map(|(k, v)| {
+                (k, ColumnRange {
+                    min: Bound {
+                        may_be_truncated: v.min.may_be_trimmed(),
+                        value: v.min,
+                    },
+                    max: Bound {
+                        may_be_truncated: v.max.may_be_trimmed(),
+                        value: v.max,
+                    },
+                })
+            })
+            .collect();
+        Ok(Some(r))
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(
@@ -852,7 +945,7 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        _consume: bool,
+        _with_options: &str,
     ) -> Result<String> {
         let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {
@@ -943,5 +1036,9 @@ impl Table for FuseTable {
 
     fn is_read_only(&self) -> bool {
         self.table_type.is_readonly()
+    }
+
+    fn use_own_sample_block(&self) -> bool {
+        true
     }
 }

@@ -112,6 +112,9 @@ jobs:
         handler:
           - "mysql"
           - "http"
+        format:
+          - "native"
+          - "parquet"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
@@ -119,12 +122,12 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: all
+          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}
+          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
   cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]

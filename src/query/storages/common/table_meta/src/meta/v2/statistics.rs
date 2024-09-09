@@ -25,7 +25,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use serde::de::Error;
-use serde::Deserialize;
 
 use crate::meta::v0;
 
@@ -82,38 +81,6 @@ pub struct Statistics {
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub cluster_stats: Option<ClusterStatistics>,
-}
-
-/// An exact copy of `Statistics` with specific `deserialize_with` implementation that can
-/// correctly deserialize legacy MessagePack format.
-#[derive(serde::Deserialize)]
-pub struct StatisticsMessagePack {
-    row_count: u64,
-    block_count: u64,
-    perfect_block_count: u64,
-
-    uncompressed_byte_size: u64,
-    compressed_byte_size: u64,
-    index_size: u64,
-
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
-    col_stats: HashMap<ColumnId, ColumnStatistics>,
-    cluster_stats: Option<ClusterStatistics>,
-}
-
-impl From<StatisticsMessagePack> for Statistics {
-    fn from(v: StatisticsMessagePack) -> Self {
-        Self {
-            row_count: v.row_count,
-            block_count: v.block_count,
-            perfect_block_count: v.perfect_block_count,
-            uncompressed_byte_size: v.uncompressed_byte_size,
-            compressed_byte_size: v.compressed_byte_size,
-            index_size: v.index_size,
-            col_stats: v.col_stats,
-            cluster_stats: v.cluster_stats,
-        }
-    }
 }
 
 // conversions from old meta data
@@ -435,29 +402,5 @@ where
         }
 
         Ok(map)
-    }
-}
-
-/// Deserializes `T`, falling back to `Default::default()` on error.
-///
-/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
-/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
-/// unsupported index types cannot be deserialized correctly.
-pub fn default_on_error<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-    T: Default + serde::Deserialize<'de>,
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum DefaultOnError<T> {
-        Success(T),
-        Error(serde::de::IgnoredAny),
-    }
-
-    let v = DefaultOnError::<T>::deserialize(deserializer);
-    match v {
-        Ok(DefaultOnError::Success(v)) => Ok(v),
-        _ => Ok(T::default()),
     }
 }

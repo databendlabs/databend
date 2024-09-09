@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -50,19 +48,14 @@ use databend_common_pipeline_sinks::Sinker;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
+use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::memory_part::MemoryPartInfo;
-
-/// Shared store to support memory tables.
-///
-/// Indexed by table id etc.
-pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
-
-static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
-    LazyLock::new(|| Arc::new(Default::default()));
 
 #[derive(Clone)]
 pub struct MemoryTable {
@@ -74,13 +67,18 @@ pub struct MemoryTable {
 
 impl MemoryTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let table_id = &table_info.ident.table_id;
+        let table_id = table_info.ident.table_id;
+        let temp_prefix = table_info.options().get(OPT_KEY_TEMP_PREFIX).cloned();
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();
-            let x = in_mem_data.get(table_id);
+            let key = InMemoryDataKey {
+                temp_prefix,
+                table_id,
+            };
+            let x = in_mem_data.get(&key);
             x.cloned().unwrap_or_else(|| {
                 let blocks = Arc::new(RwLock::new(vec![]));
-                in_mem_data.insert(*table_id, blocks.clone());
+                in_mem_data.insert(key, blocks.clone());
                 blocks
             })
         };

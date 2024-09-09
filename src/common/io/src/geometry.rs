@@ -80,27 +80,38 @@ impl Display for GeometryDataType {
     }
 }
 
-pub fn parse_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
-    let wkt = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-    let input_wkt = wkt.trim().to_ascii_uppercase();
+pub fn parse_bytes_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
+    let s = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+    parse_to_ewkb(s, srid)
+}
 
-    let parts: Vec<&str> = input_wkt.split(';').collect();
-
-    let parsed_srid: Option<i32> = srid.or_else(|| {
-        if input_wkt.starts_with("SRID=") && parts.len() == 2 {
-            parts[0].replace("SRID=", "").parse().ok()
-        } else {
-            None
-        }
-    });
-
-    let geo_part = if parts.len() == 2 { parts[1] } else { parts[0] };
-
+pub fn parse_to_ewkb(buf: &str, srid: Option<i32>) -> Result<Vec<u8>> {
+    let (parsed_srid, geo_part) = cut_srid(buf)?;
+    let srid = srid.or(parsed_srid);
     let geom: Geometry<f64> = Geometry::try_from_wkt_str(geo_part)
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
 
-    geom.to_ewkb(CoordDimensions::xy(), parsed_srid)
+    geom.to_ewkb(CoordDimensions::xy(), srid)
         .map_err(ErrorCode::from)
+}
+
+pub fn cut_srid(ewkt: &str) -> Result<(Option<i32>, &str)> {
+    match ewkt.find(';') {
+        None => Ok((None, ewkt)),
+        Some(idx) => {
+            let prefix = ewkt[..idx].trim();
+            match prefix
+                .strip_prefix("SRID=")
+                .or_else(|| prefix.strip_prefix("srid="))
+                .and_then(|srid| srid.trim().parse::<i32>().ok())
+            {
+                Some(srid) => Ok((Some(srid), &ewkt[idx + 1..])),
+                None => Err(ErrorCode::GeometryError(format!(
+                    "invalid EWKT with prefix {prefix}"
+                ))),
+            }
+        }
+    }
 }
 
 /// An enum representing any possible geometry subtype.

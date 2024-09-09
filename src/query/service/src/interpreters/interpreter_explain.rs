@@ -189,7 +189,7 @@ impl Interpreter for ExplainInterpreter {
             ExplainKind::Pipeline => {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
-                let pipeline = match &self.plan {
+                let mut pipeline = match &self.plan {
                     Plan::Query { .. } | Plan::DataMutation { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
@@ -197,6 +197,15 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => PipelineBuildResult::create(),
                 };
+
+                // The explain pipeline does not require executing on_init and on_finished.
+                let _ = pipeline.main_pipeline.take_on_init();
+                let _ = pipeline.main_pipeline.take_on_finished();
+
+                for pipeline in &mut pipeline.sources_pipelines {
+                    let _ = pipeline.take_on_init();
+                    let _ = pipeline.take_on_finished();
+                }
 
                 Self::format_pipeline(&pipeline)
             }
@@ -273,7 +282,10 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
-        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
+        if self.ctx.get_settings().get_enable_query_result_cache()?
+            && self.ctx.get_cacheable()
+            && formatted_ast.is_some()
+        {
             let key = gen_result_cache_key(formatted_ast.as_ref().unwrap());
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(

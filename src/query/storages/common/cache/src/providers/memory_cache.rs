@@ -14,40 +14,52 @@
 
 use std::sync::Arc;
 
-use bytes::Bytes;
-use databend_common_cache::BytesMeter;
 use databend_common_cache::Cache;
-use databend_common_cache::Count;
-use databend_common_cache::CountableMeter;
 use databend_common_cache::LruCache;
 use parking_lot::RwLock;
 
-pub type InMemoryCache<V, M> = LruCache<String, Arc<V>, M>;
-pub type BytesCache = LruCache<String, Arc<Bytes>, BytesMeter>;
+use crate::caches::CacheValue;
+use crate::Unit;
 
-pub type InMemoryItemCacheHolder<T, M = Count> = Arc<RwLock<InMemoryCache<T, M>>>;
-pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
+pub struct InMemoryLruCache<V: Into<CacheValue<V>>> {
+    unit: Unit,
+    name: String,
+    inner: Arc<RwLock<LruCache<String, CacheValue<V>>>>,
+}
 
-pub struct InMemoryCacheBuilder;
+impl<V: Into<CacheValue<V>>> Clone for InMemoryLruCache<V> {
+    fn clone(&self) -> Self {
+        Self {
+            unit: self.unit,
+            name: self.name.clone(),
+            inner: self.inner.clone(),
+        }
+    }
+}
 
-impl InMemoryCacheBuilder {
-    // new cache that cache `V`, and metered by the given `meter`
-    pub fn new_in_memory_cache<V, M>(capacity: u64, meter: M) -> InMemoryItemCacheHolder<V, M>
-    where M: CountableMeter<String, Arc<V>> {
-        let cache = LruCache::with_meter(capacity, meter);
-        Arc::new(RwLock::new(cache))
+impl<V: Into<CacheValue<V>>> InMemoryLruCache<V> {
+    pub fn with_items_capacity(name: String, items_capacity: usize) -> Self {
+        Self {
+            name,
+            unit: Unit::Count,
+            inner: Arc::new(RwLock::new(LruCache::with_items_capacity(items_capacity))),
+        }
     }
 
-    // new cache that caches `V` and meter by counting
-    pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCacheHolder<V> {
-        let cache = LruCache::new(capacity);
-        Arc::new(RwLock::new(cache))
+    pub fn with_bytes_capacity(name: String, bytes_capacity: usize) -> Self {
+        Self {
+            unit: Unit::Bytes,
+            name,
+            inner: Arc::new(RwLock::new(LruCache::with_bytes_capacity(bytes_capacity))),
+        }
     }
 
-    // new cache that cache `Vec<u8>`, and metered by byte size
-    pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
-        let cache = LruCache::with_meter(capacity, BytesMeter);
-        Arc::new(RwLock::new(cache))
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn unit(&self) -> Unit {
+        self.unit
     }
 }
 
@@ -55,71 +67,122 @@ impl InMemoryCacheBuilder {
 mod impls {
     use std::sync::Arc;
 
-    use parking_lot::RwLock;
+    use databend_common_metrics::cache::metrics_inc_cache_access_count;
+    use databend_common_metrics::cache::metrics_inc_cache_hit_count;
+    use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
+    use databend_common_metrics::cache::metrics_inc_cache_miss_count;
 
     use super::*;
     use crate::cache::CacheAccessor;
 
     // Wrap a Cache with RwLock, and impl CacheAccessor for it
-    impl<V, C, M> CacheAccessor<String, V, M> for Arc<RwLock<C>>
-    where
-        C: Cache<String, Arc<V>, M>,
-        M: CountableMeter<String, Arc<V>>,
-    {
+    impl<V: Into<CacheValue<V>>> CacheAccessor for InMemoryLruCache<V> {
+        type V = V;
+
         fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
-            let mut guard = self.write();
-            guard.get(k.as_ref()).cloned()
+            metrics_inc_cache_access_count(1, self.name());
+            let mut guard = self.inner.write();
+            match guard.get(k.as_ref()) {
+                None => {
+                    metrics_inc_cache_miss_count(1, &self.name);
+                    None
+                }
+                Some(cached_value) => {
+                    metrics_inc_cache_hit_count(1, &self.name);
+                    Some(cached_value.get_inner())
+                }
+            }
         }
 
-        fn put(&self, k: String, v: Arc<V>) {
-            let mut guard = self.write();
-            guard.put(k, v);
+        fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+            let Some(cached_value) = self.get(k) else {
+                metrics_inc_cache_miss_bytes(len, &self.name);
+                return None;
+            };
+
+            Some(cached_value)
+        }
+
+        fn insert(&self, k: String, v: V) -> Arc<V> {
+            let cache_value = v.into();
+            let res = cache_value.get_inner();
+            let mut guard = self.inner.write();
+            guard.insert(k, cache_value);
+            res
         }
 
         fn evict(&self, k: &str) -> bool {
-            let mut guard = self.write();
+            let mut guard = self.inner.write();
             guard.pop(k).is_some()
         }
 
         fn contains_key(&self, k: &str) -> bool {
-            let guard = self.read();
+            let guard = self.inner.read();
             guard.contains(k)
         }
 
-        fn size(&self) -> u64 {
-            let guard = self.read();
-            guard.size()
+        fn items_capacity(&self) -> u64 {
+            let guard = self.inner.read();
+            guard.items_capacity()
         }
 
-        fn capacity(&self) -> u64 {
-            let guard = self.read();
-            guard.capacity()
-        }
-
-        fn set_capacity(&self, capacity: u64) {
-            let mut guard = self.write();
-            guard.set_capacity(capacity)
+        fn bytes_capacity(&self) -> u64 {
+            let guard = self.inner.read();
+            guard.bytes_capacity()
         }
 
         fn len(&self) -> usize {
-            let guard = self.read();
+            let guard = self.inner.read();
             guard.len()
+        }
+
+        fn bytes_size(&self) -> u64 {
+            let guard = self.inner.read();
+            guard.bytes_size()
+        }
+
+        fn name(&self) -> &str {
+            &self.name
         }
     }
 
     // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
-    impl<V, C, M> CacheAccessor<String, V, M> for Option<C>
-    where
-        C: CacheAccessor<String, V, M>,
-        M: CountableMeter<String, Arc<V>>,
-    {
-        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
-            self.as_ref().and_then(|cache| cache.get(k))
+    // impl<K, V, M> CacheAccessor<K, V, M>
+    impl<T: CacheAccessor> CacheAccessor for Option<T> {
+        type V = T::V;
+
+        fn name(&self) -> &str {
+            match self.as_ref() {
+                None => "Unknown",
+                Some(v) => v.name(),
+            }
         }
 
-        fn put(&self, k: String, v: Arc<V>) {
-            if let Some(cache) = self {
-                cache.put(k, v);
+        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>> {
+            let Some(inner_cache) = self.as_ref() else {
+                metrics_inc_cache_access_count(1, self.name());
+                metrics_inc_cache_miss_count(1, self.name());
+                return None;
+            };
+
+            inner_cache.get(k)
+        }
+
+        fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+            let Some(inner_cache) = self.as_ref() else {
+                metrics_inc_cache_access_count(1, self.name());
+                metrics_inc_cache_miss_count(1, self.name());
+                metrics_inc_cache_miss_bytes(len, self.name());
+                return None;
+            };
+
+            inner_cache.get_sized(k, len)
+        }
+
+        fn insert(&self, k: String, v: Self::V) -> Arc<Self::V> {
+            match self.as_ref() {
+                None => Arc::new(v),
+                Some(cache) => cache.insert(k, v),
             }
         }
 
@@ -139,33 +202,32 @@ mod impls {
             }
         }
 
-        fn size(&self) -> u64 {
+        fn bytes_size(&self) -> u64 {
             if let Some(cache) = self {
-                cache.size()
+                cache.bytes_size()
             } else {
                 0
             }
         }
 
-        fn capacity(&self) -> u64 {
-            if let Some(cache) = self {
-                cache.capacity()
-            } else {
-                0
-            }
-        }
-
-        fn set_capacity(&self, capacity: u64) {
-            if let Some(cache) = self {
-                cache.set_capacity(capacity)
+        fn items_capacity(&self) -> u64 {
+            match self.as_ref() {
+                None => 0,
+                Some(cache) => cache.items_capacity(),
             }
         }
 
         fn len(&self) -> usize {
-            if let Some(cache) = self {
-                cache.len()
-            } else {
-                0
+            match self.as_ref() {
+                None => 0,
+                Some(cache) => cache.len(),
+            }
+        }
+
+        fn bytes_capacity(&self) -> u64 {
+            match self.as_ref() {
+                None => 0,
+                Some(cache) => cache.bytes_capacity(),
             }
         }
     }

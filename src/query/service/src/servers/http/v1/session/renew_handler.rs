@@ -18,11 +18,12 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
 
-use crate::servers::http::v1::session::token_manager::TokenManager;
-use crate::servers::http::v1::session::token_manager::TokenPair;
-use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
+use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
+use crate::servers::http::v1::session::client_session_manager::TokenPair;
+use crate::servers::http::v1::session::client_session_manager::REFRESH_TOKEN_VALIDITY;
+use crate::servers::http::v1::session::client_session_manager::SESSION_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::v1::QueryError;
 
 #[derive(Deserialize, Clone)]
 struct RenewRequest {
@@ -35,6 +36,7 @@ pub enum RenewResponse {
     Ok {
         session_token: String,
         refresh_token: String,
+        session_token_validity_in_secs: u64,
         refresh_token_validity_in_secs: u64,
     },
     Error {
@@ -51,9 +53,9 @@ pub async fn renew_handler(
     let refresh_token = ctx
         .databend_token
         .as_ref()
-        .expect("/session/renew should be authed by databend token")
+        .expect("/session/renew should be authed by refresh token")
         .clone();
-    match TokenManager::instance()
+    match ClientSessionManager::instance()
         .new_token_pair(
             &ctx.session,
             Some(TokenPair {
@@ -66,6 +68,7 @@ pub async fn renew_handler(
         Ok((_, token_pair)) => Ok(Json(RenewResponse::Ok {
             session_token: token_pair.session,
             refresh_token: token_pair.refresh,
+            session_token_validity_in_secs: SESSION_TOKEN_VALIDITY.as_secs(),
             refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.as_secs(),
         })),
         Err(e) => Ok(Json(RenewResponse::Error {

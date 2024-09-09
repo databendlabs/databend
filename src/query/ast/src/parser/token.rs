@@ -149,9 +149,6 @@ pub enum TokenKind {
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
-    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
-    VariableAccess,
-
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -239,6 +236,8 @@ pub enum TokenKind {
     LBrace,
     #[token("}")]
     RBrace,
+    #[token("$")]
+    Dollar,
     #[token("->")]
     RArrow,
     #[token("->>")]
@@ -643,6 +642,8 @@ pub enum TokenKind {
     GENERATED,
     #[token("GEOMETRY", ignore(ascii_case))]
     GEOMETRY,
+    #[token("GEOGRAPHY", ignore(ascii_case))]
+    GEOGRAPHY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -655,6 +656,8 @@ pub enum TokenKind {
     HAVING,
     #[token("HIGH", ignore(ascii_case))]
     HIGH,
+    #[token("HILBERT", ignore(ascii_case))]
+    HILBERT,
     #[token("HISTORY", ignore(ascii_case))]
     HISTORY,
     #[token("HIVE", ignore(ascii_case))]
@@ -705,6 +708,10 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("PROCEDURE", ignore(ascii_case))]
+    PROCEDURE,
+    #[token("PROCEDURES", ignore(ascii_case))]
+    PROCEDURES,
     #[token("IMMEDIATE", ignore(ascii_case))]
     IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
@@ -727,6 +734,8 @@ pub enum TokenKind {
     KILL,
     #[token("LATERAL", ignore(ascii_case))]
     LATERAL,
+    #[token("LINEAR", ignore(ascii_case))]
+    LINEAR,
     #[token("LOCATION_PREFIX", ignore(ascii_case))]
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]
@@ -1012,6 +1021,8 @@ pub enum TokenKind {
     SESSION,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
+    #[token("VARIABLES", ignore(ascii_case))]
+    VARIABLES,
     #[token("STAGES", ignore(ascii_case))]
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]
@@ -1304,6 +1315,8 @@ pub enum TokenKind {
     ROLLBACK,
     #[token("TEMPORARY", ignore(ascii_case))]
     TEMPORARY,
+    #[token("TEMP", ignore(ascii_case))]
+    TEMP,
     #[token("SECONDS", ignore(ascii_case))]
     SECONDS,
     #[token("DAYS", ignore(ascii_case))]
@@ -1316,6 +1329,8 @@ pub enum TokenKind {
     PRIMARY,
     #[token("SOURCE", ignore(ascii_case))]
     SOURCE,
+    #[token("SQL", ignore(ascii_case))]
+    SQL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1376,6 +1391,7 @@ impl TokenKind {
                 | Factorial
                 | LBrace
                 | RBrace
+                | Dollar
                 | RArrow
                 | LongRArrow
                 | HashRArrow
@@ -1565,6 +1581,7 @@ impl TokenKind {
             | TokenKind::AND
             | TokenKind::ANY
             | TokenKind::FUNCTION
+            | TokenKind::PROCEDURE
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC

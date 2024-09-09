@@ -75,7 +75,7 @@ impl SessionClaim {
 
     pub fn decode(token: &str) -> Result<Self> {
         let fmt_err = |reason: String| {
-            ErrorCode::Internal(format!("fail to decode token({reason}): {token}"))
+            ErrorCode::AuthenticateFailure(format!("fail to decode token({reason}): {token}"))
         };
         if token.len() < TOKEN_PREFIX.len() {
             return Err(fmt_err("too short".to_string()));

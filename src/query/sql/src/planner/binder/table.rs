@@ -48,13 +48,10 @@ use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
-use databend_common_sharing::ShareEndpointClient;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -208,12 +205,14 @@ impl Binder {
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: Default::default(),
+            srfs: vec![],
+            have_async_func: false,
+            have_udf_script: false,
+            have_udf_server: false,
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-            share_paramas: None,
         };
 
         let (s_expr, mut res_bind_context) =
@@ -476,7 +475,7 @@ impl Binder {
                     columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Arc::new(Statistics::default()),
                     change_type,
-                    sample_conf: table_sample(sample)?,
+                    sample: table_sample(sample)?,
                     ..Default::default()
                 }
                 .into(),
@@ -485,38 +484,13 @@ impl Binder {
         ))
     }
 
-    pub fn resolve_share_reference_data_source(
-        &self,
-        share_params: &ShareDBParams,
-        tenant: &str,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        databend_common_base::runtime::block_on(async move {
-            let client = ShareEndpointClient::new();
-
-            let mut table_info = client
-                .get_reference_table_by_name(share_params, tenant, database_name, table_name)
-                .await?;
-            table_info.db_type = DatabaseType::ShareDB(share_params.clone());
-            let table = self
-                .ctx
-                .get_catalog(catalog_name)
-                .await?
-                .get_table_by_info(&table_info)?;
-
-            Ok(table)
-        })
-    }
-
     pub fn resolve_data_source(
         &self,
-        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        max_batch_size: Option<u64>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
@@ -526,7 +500,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table(catalog_name, database_name, table_name)
+                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {
@@ -663,7 +637,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, name);
         databend_common_base::runtime::block_on(async move {
             let stream = self.ctx.get_table(&catalog, &database, &name).await?;
-            if stream.engine() != "STREAM" {
+            if !stream.is_stream() {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{database}.{name} is not STREAM",
                 )));
@@ -682,7 +656,7 @@ impl Binder {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.txn_mgr())
+            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.session_state())
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
@@ -692,14 +666,15 @@ impl Binder {
     }
 }
 
-fn table_sample(sample: &Option<Sample>) -> Result<Option<SampleConfig>> {
+fn table_sample(sample: &Option<Sample>) -> Result<Option<Sample>> {
     if let Some(sample) = sample {
         if sample.sample_level == SampleLevel::BLOCK {
-            return Err(ErrorCode::SyntaxException(
-                "BLOCK sampling is not supported.".to_string(),
-            ));
+            if let SampleConfig::RowsNum(_) = sample.sample_conf {
+                return Err(ErrorCode::SyntaxException(
+                    "BLOCK sampling doesn't support fixed rows.".to_string(),
+                ));
+            }
         }
-        return Ok(Some(sample.sample_conf.clone()));
     }
-    Ok(None)
+    Ok(sample.clone())
 }

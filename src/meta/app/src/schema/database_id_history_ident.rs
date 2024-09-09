@@ -40,6 +40,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdHistoryIdent;
     use crate::schema::DbIdList;
     use crate::tenant_key::resource::TenantResource;
 
@@ -52,7 +53,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for DbIdList {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = DatabaseIdHistoryIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             self.id_list
                 .iter()
                 .map(|id| DatabaseId::new(*id).to_string_key())

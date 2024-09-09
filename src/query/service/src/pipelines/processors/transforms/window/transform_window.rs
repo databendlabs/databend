@@ -85,7 +85,7 @@ pub struct TransformWindow<T: Number> {
     /// A queue of data blocks that can be output.
     outputs: VecDeque<DataBlock>,
 
-    /// monotonically increasing index of the current block in the queue.
+    /// The monotonically increasing index of the current block in the queue.
     first_block: usize,
     next_output_block: usize,
 
@@ -229,7 +229,7 @@ impl<T: Number> TransformWindow<T> {
                 let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
                 if unsafe {
-                    start_column.index_unchecked(self.partition_start.row)
+                    start_column.index_unchecked(index.row)
                         != compare_column.index_unchecked(self.partition_end.row)
                 } {
                     break;
@@ -1003,10 +1003,12 @@ where T: Number + ResultTypeOfUnary
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         if let Some(data) = data {
             let num_rows = data.num_rows();
-            self.blocks.push_back(WindowBlock {
-                block: data.convert_to_full(),
-                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-            });
+            if num_rows != 0 {
+                self.blocks.push_back(WindowBlock {
+                    block: data.convert_to_full(),
+                    builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
+                });
+            }
         }
 
         // Each loop will do:

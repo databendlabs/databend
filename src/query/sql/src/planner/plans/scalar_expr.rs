@@ -15,16 +15,21 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::Range;
 use databend_common_ast::Span;
-use databend_common_async_functions::AsyncFunctionCall;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::tenant::Tenant;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -765,6 +770,45 @@ pub struct UDFLambdaCall {
     pub scalar: Box<ScalarExpr>,
 }
 
+// Different kinds of asynchronous functions have different arguments.
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub enum AsyncFunctionArgument {
+    // The argument of sequence function is sequence name.
+    // Used by `nextval` function to call meta's `get_sequence_next_value` api
+    // to get incremental values.
+    SequenceFunction(String),
+}
+
+// Asynchronous functions are functions that need to call remote interfaces.
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct AsyncFunctionCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub func_name: String,
+    pub display_name: String,
+    pub return_type: Box<DataType>,
+    pub arguments: Vec<ScalarExpr>,
+    pub func_arg: AsyncFunctionArgument,
+}
+
+impl AsyncFunctionCall {
+    pub async fn generate(&self, tenant: Tenant, catalog: Arc<dyn Catalog>) -> Result<Scalar> {
+        match &self.func_arg {
+            AsyncFunctionArgument::SequenceFunction(sequence_name) => {
+                let req = GetSequenceNextValueReq {
+                    ident: SequenceIdent::new(&tenant, sequence_name.clone()),
+                    count: 1,
+                };
+                // Call meta's api to generate an incremental value.
+                let reply = catalog.get_sequence_next_value(req).await?;
+                Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
+            }
+        }
+    }
+}
+
 pub trait Visitor<'a>: Sized {
     fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
         walk_expr(self, expr)
@@ -817,6 +861,13 @@ pub trait Visitor<'a>: Sized {
     fn visit_udf_lambda_call(&mut self, udf: &'a UDFLambdaCall) -> Result<()> {
         self.visit(&udf.scalar)
     }
+
+    fn visit_async_function_call(&mut self, async_func: &'a AsyncFunctionCall) -> Result<()> {
+        for expr in &async_func.arguments {
+            self.visit(expr)?;
+        }
+        Ok(())
+    }
 }
 
 pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {
@@ -831,7 +882,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
-        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
+        ScalarExpr::AsyncFunctionCall(expr) => visitor.visit_async_function_call(expr),
     }
 }
 
@@ -912,6 +963,13 @@ pub trait VisitorMut<'a>: Sized {
     fn visit_udf_lambda_call(&mut self, udf: &'a mut UDFLambdaCall) -> Result<()> {
         self.visit(&mut udf.scalar)
     }
+
+    fn visit_async_function_call(&mut self, async_func: &'a mut AsyncFunctionCall) -> Result<()> {
+        for expr in &mut async_func.arguments {
+            self.visit(expr)?;
+        }
+        Ok(())
+    }
 }
 
 pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
@@ -929,7 +987,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
         ScalarExpr::SubqueryExpr(expr) => visitor.visit_subquery_expr(expr),
         ScalarExpr::UDFCall(expr) => visitor.visit_udf_call(expr),
         ScalarExpr::UDFLambdaCall(expr) => visitor.visit_udf_lambda_call(expr),
-        ScalarExpr::AsyncFunctionCall(_expr) => Ok(()),
+        ScalarExpr::AsyncFunctionCall(expr) => visitor.visit_async_function_call(expr),
     }
 }
 

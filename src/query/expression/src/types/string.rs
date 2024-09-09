@@ -340,6 +340,7 @@ impl StringColumn {
         BinaryIterator {
             data: &self.data,
             offsets: self.offsets.windows(2),
+            _t: std::marker::PhantomData,
         }
     }
 

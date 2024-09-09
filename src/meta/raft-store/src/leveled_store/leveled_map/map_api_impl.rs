@@ -17,8 +17,8 @@ use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::snapshot_db::DB;
-use databend_common_meta_types::KVMeta;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;

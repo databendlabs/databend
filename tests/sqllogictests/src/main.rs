@@ -131,7 +131,7 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
-            client = Client::Http(HttpClient::create()?);
+            client = Client::Http(HttpClient::create().await?);
         }
     }
     if args.enable_sandbox {
@@ -140,9 +140,6 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     if args.debug {
         client.enable_debug();
     }
-    // reset table lock expire secs.
-    let secs = 60;
-    client.set_table_lock_expire_secs(secs).await?;
     Ok(Databend::create(client))
 }
 

@@ -22,15 +22,15 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 
 use crate::cluster::ClusterApi;
 
-pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters_v2";
+pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters_v3";
 
 pub struct ClusterMgr {
     metastore: MetaStore,

@@ -27,7 +27,7 @@ use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -15,15 +15,15 @@
 use std::time::Duration;
 
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -918,7 +918,11 @@ impl kvapi::TestSuite {
 
         let txn = TxnRequest {
             condition: vec![],
-            if_then: vec![TxnOp::put_with_ttl("k1", b("v1"), Some(2_000))],
+            if_then: vec![TxnOp::put_with_ttl(
+                "k1",
+                b("v1"),
+                Some(Duration::from_millis(2_000)),
+            )],
             else_then: vec![],
         };
 
