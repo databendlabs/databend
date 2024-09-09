@@ -59,9 +59,9 @@ Sort
             │                   ├── output columns: [number (#1)]
             │                   ├── read rows: 14
             │                   ├── read size: < 1 KiB
-            │                   ├── partitions total: 2
-            │                   ├── partitions scanned: 2
-            │                   ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+            │                   ├── partitions total: 6
+            │                   ├── partitions scanned: 6
+            │                   ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 6 to 6>]
             │                   ├── push downs: [filters: [], limit: NONE]
             │                   └── estimated rows: 14.00
             └── Exchange(Probe)
@@ -72,9 +72,9 @@ Sort
                     ├── output columns: [number (#0)]
                     ├── read rows: 5
                     ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── partitions total: 3
+                    ├── partitions scanned: 3
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 5.00
 
