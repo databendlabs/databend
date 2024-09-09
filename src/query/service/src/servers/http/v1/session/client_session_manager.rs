@@ -43,8 +43,8 @@ use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
 
 /// target TTL
-pub const REFRESH_TOKEN_VALIDITY: Duration = Duration::from_hours(4);
-pub const SESSION_TOKEN_VALIDITY: Duration = Duration::from_hours(1);
+pub const REFRESH_TOKEN_TTL: Duration = Duration::from_hours(4);
+pub const SESSION_TOKEN_TTL: Duration = Duration::from_hours(1);
 
 /// to cove network latency, retry and time skew
 const TOKEN_TTL_DELAY: Duration = Duration::from_secs(300);
@@ -75,7 +75,7 @@ impl QueryState {
     pub fn has_expired(&self, now: &Instant) -> bool {
         match self {
             QueryState::InUse => false,
-            QueryState::Idle(t) => (*now - *t) > SESSION_TOKEN_VALIDITY,
+            QueryState::Idle(t) => (*now - *t) > SESSION_TOKEN_TTL,
         }
     }
 }
@@ -132,7 +132,7 @@ impl ClientSessionManager {
             for (id, mgr) in expired {
                 drop_all_temp_tables(&id, mgr).await.ok();
             }
-            tokio::time::sleep(SESSION_TOKEN_VALIDITY / 4).await;
+            tokio::time::sleep(SESSION_TOKEN_TTL / 4).await;
         }
     }
 
@@ -168,7 +168,7 @@ impl ClientSessionManager {
             &tenant_name,
             &user,
             &auth_role,
-            REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY,
+            REFRESH_TOKEN_TTL + SESSION_TOKEN_TTL,
         );
         let refresh_token = if let Some(old) = &old_token_pair {
             old.refresh.clone()
@@ -187,7 +187,7 @@ impl ClientSessionManager {
             .upsert_token(
                 &refresh_token_hash,
                 token_info.clone(),
-                REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY,
+                REFRESH_TOKEN_TTL + SESSION_TOKEN_TTL + TOKEN_TTL_DELAY,
                 false,
             )
             .await?;
@@ -197,7 +197,7 @@ impl ClientSessionManager {
                 ClientSession {
                     user_name: claim.user.clone(),
                 },
-                REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY,
+                REFRESH_TOKEN_TTL + SESSION_TOKEN_TTL + TOKEN_TTL_DELAY,
             )
             .await?;
         if let Some(old) = old_token_pair {
@@ -205,7 +205,7 @@ impl ClientSessionManager {
                 .upsert_token(
                     &old.refresh,
                     token_info,
-                    REFRESH_TOKEN_VALIDITY + TOKEN_DROP_DELAY,
+                    REFRESH_TOKEN_TTL + TOKEN_DROP_DELAY,
                     true,
                 )
                 .await?;
@@ -214,7 +214,7 @@ impl ClientSessionManager {
             .write()
             .insert(refresh_token_hash.clone(), None);
 
-        claim.expire_at_in_secs = (now + SESSION_TOKEN_VALIDITY).as_secs();
+        claim.expire_at_in_secs = (now + SESSION_TOKEN_TTL).as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
 
         let session_token = claim.encode();
@@ -227,7 +227,7 @@ impl ClientSessionManager {
             .upsert_token(
                 &session_token_hash,
                 token_info,
-                REFRESH_TOKEN_VALIDITY + TOKEN_TTL_DELAY,
+                REFRESH_TOKEN_TTL + TOKEN_TTL_DELAY,
                 false,
             )
             .await?;

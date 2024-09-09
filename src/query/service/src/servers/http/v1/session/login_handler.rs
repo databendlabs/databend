@@ -24,8 +24,8 @@ use poem::IntoResponse;
 
 use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
-use crate::servers::http::v1::session::client_session_manager::REFRESH_TOKEN_VALIDITY;
-use crate::servers::http::v1::session::client_session_manager::SESSION_TOKEN_VALIDITY;
+use crate::servers::http::v1::session::client_session_manager::REFRESH_TOKEN_TTL;
+use crate::servers::http::v1::session::client_session_manager::SESSION_TOKEN_TTL;
 use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Deserialize, Clone)]
@@ -101,10 +101,12 @@ pub async fn login_handler(
         Ok((session_id, token_pair)) => Ok(Json(LoginResponse::Ok {
             version,
             session_id,
-            session_token: token_pair.session,
-            refresh_token: token_pair.refresh,
-            session_token_validity_in_secs: SESSION_TOKEN_VALIDITY.as_secs(),
-            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.as_secs(),
+            tokens: Some(TokensInfo {
+                session_token: token_pair.session,
+                refresh_token: token_pair.refresh,
+                session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                refresh_token_ttl_in_secs: REFRESH_TOKEN_TTL.as_secs(),
+            }),
         })),
         Err(e) => Ok(Json(LoginResponse::Error {
             error: QueryError::from_error_code(e),
