@@ -609,12 +609,14 @@ impl QueryContextShared {
 
     pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
         for query_profile in profiles.values() {
-            self.query_profiles
-                .entry(query_profile.id)
-                .and_modify(|existing_profile| {
-                    existing_profile.merge(query_profile);
-                })
-                .or_insert_with(|| query_profile.clone());
+            match self.query_profiles.entry(query_profile.id) {
+                Entry::Vacant(v) => {
+                    v.insert(query_profile.clone());
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().merge(query_profile);
+                }
+            }
         }
     }
 }
