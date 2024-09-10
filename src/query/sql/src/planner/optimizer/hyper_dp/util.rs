@@ -14,6 +14,8 @@
 
 use std::cmp::Ordering;
 
+use crate::optimizer::SExpr;
+use crate::plans::RelOperator;
 use crate::IndexType;
 
 // Union two nodes vector
@@ -52,4 +54,15 @@ pub fn intersect<T: PartialEq>(a: &[T], b: &[T]) -> bool {
 
 pub fn is_subset<T: PartialEq>(v1: &[T], v2: &[T]) -> bool {
     v1.iter().all(|x| v2.contains(x))
+}
+
+pub fn contain_subquery(s_expr: &SExpr) -> bool {
+    match s_expr.plan() {
+        RelOperator::Filter(_) => s_expr.children.iter().any(|child| contain_subquery(child)),
+        RelOperator::Scan(_)
+        | RelOperator::CteScan(_)
+        | RelOperator::ConstantTableScan(_)
+        | RelOperator::ExpressionScan(_) => false,
+        _ => true,
+    }
 }

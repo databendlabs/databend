@@ -46,6 +46,7 @@ use crate::binder::window::find_replaced_window_function;
 use crate::binder::window::WindowInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -56,6 +57,7 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
@@ -196,8 +198,17 @@ impl Binder {
 
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
-
-        let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
+        let child_output_cols = &child
+            .plan()
+            .derive_relational_prop(&RelExpr::with_s_expr(&child))?
+            .output_columns;
+        let mut new_expr = child.clone();
+        for item in eval_scalar.items.iter() {
+            if !child_output_cols.contains(&item.index) {
+                new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
+                break;
+            }
+        }
 
         // Set output columns
         bind_context.columns = columns.to_vec();

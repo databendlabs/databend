@@ -244,14 +244,14 @@ SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY 
 4  TX
 
 
-query IT
+query ??
 SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id
 ----
-1  CA
-2  TX
+1 CA
+2 TX
 
 
-query IT
+query ??
 SELECT *
 FROM c
 WHERE
@@ -259,7 +259,7 @@ WHERE
     AND (SELECT max(ship) FROM o WHERE o.c_id=c.c_id) = 'CA'
 ORDER BY c_id
 ----
-1  CA
+1 CA
 
 
 query IT

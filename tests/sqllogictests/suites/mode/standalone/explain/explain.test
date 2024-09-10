@@ -105,46 +105,42 @@ HashJoin
 query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
 ----
-EvalScalar
-├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
-└── Filter
-    ├── filters: [or(and(eq(t1.a (#0), t2.a (#2)), gt(t1.a (#0), 3)), eq(t1.a (#0), t2.a (#2)))]
-    └── Join(Cross)
-        ├── build keys: []
-        ├── probe keys: []
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Scan
-            ├── table: default.t2
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-query T
-explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
-----
-EvalScalar
-├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: [t2.a (#2), t2.b (#3)]
-    ├── probe keys: [t1.a (#0), t1.b (#1)]
+Filter
+├── filters: [or(and(eq(t1.a (#0), t2.a (#2)), gt(t1.a (#0), 3)), eq(t1.a (#0), t2.a (#2)))]
+└── Join(Cross)
+    ├── build keys: []
+    ├── probe keys: []
     ├── other filters: []
-    ├── Filter
-    │   ├── filters: [gt(t1.a (#0), 2)]
-    │   └── Scan
-    │       ├── table: default.t1
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
+    ├── Scan
+    │   ├── table: default.t1
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
     └── Scan
         ├── table: default.t2
         ├── filters: []
         ├── order by: []
         └── limit: NONE
+
+query T
+explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
+----
+Join(Inner)
+├── build keys: [t2.a (#2), t2.b (#3)]
+├── probe keys: [t1.a (#0), t1.b (#1)]
+├── other filters: []
+├── Filter
+│   ├── filters: [gt(t1.a (#0), 2)]
+│   └── Scan
+│       ├── table: default.t1
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.t2
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
 
 query T
 explain syntax select 1, 'ab', [1,2,3], (1, 'a')
@@ -738,7 +734,7 @@ Limit
                     ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
                     └── estimated rows: 5.00
 
-query
+query 
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 HashJoin
@@ -773,7 +769,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
-query
+query 
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
@@ -805,7 +801,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
@@ -837,7 +833,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -851,28 +847,28 @@ drop table t1
 statement ok
 drop table t2
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3')
 
-query
+query 
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
@@ -885,7 +881,7 @@ drop table if exists t4
 statement ok
 create table t4(a int, b string);
 
-query
+query 
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 Filter
@@ -908,7 +904,7 @@ drop view if exists v4
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query
+query 
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
@@ -1036,7 +1032,7 @@ Sort
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [b.register_at (#3), numbers.number (#2)]
+    ├── build keys: [b.register_at (#3), b.number (#2)]
     ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
@@ -1111,7 +1107,7 @@ Filter
     ├── estimated rows: 0.40
     ├── Filter(Build)
     │   ├── output columns: [b.id (#2)]
-    │   ├── filters: [is_true(b.id (#2) = b.id (#2))]
+    │   ├── filters: [is_true(id (#2) = b.id (#2))]
     │   ├── estimated rows: 0.40
     │   └── TableScan
     │       ├── table: default.default.b
@@ -1269,18 +1265,16 @@ EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AN
 Sort
 ├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
 ├── limit: [NONE]
-└── EvalScalar
-    ├── scalars: [t1.i (#0) AS (#0), t1.j (#1) AS (#1), t2.k (#2) AS (#2), t2.l (#3) AS (#3)]
-    └── Join(Left)
-        ├── build keys: [t2.k (#2)]
-        ├── probe keys: [t1.i (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EmptyResultScan
+└── Join(Left)
+    ├── build keys: [t2.k (#2)]
+    ├── probe keys: [t1.i (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t1
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EmptyResultScan
 
 
 statement ok
@@ -1621,13 +1615,11 @@ InsertPlan (subquery):
 ├── table: default.default.t2
 ├── inserted columns: [t2.a (#0),t2.b (#1),t2.c (#2)]
 ├── overwrite: false
-└── EvalScalar
-    ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t1.c (#2) AS (#2)]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── Scan
+    ├── table: default.t1
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
 
 
 statement ok
