@@ -2867,6 +2867,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let table_infos = do_get_table_history(self, db_filter, left_num).await?;
                 let take_num = left_num.unwrap_or(usize::MAX);
 
+                // A DB can be removed only when all its tables are removed.
                 if drop_db && take_num > table_infos.len() {
                     drop_ids.push(DroppedId::Db {
                         db_id: db_info.database_id.db_id,
