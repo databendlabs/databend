@@ -24,11 +24,15 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_sql::plans::DictionaryOperator;
 use databend_common_storage::build_operator;
+use futures::TryStreamExt;
 use opendal::services::Redis;
 use opendal::services::Mysql;
 use opendal::Operator;
-use sqlx_mysql::MySqlPoolOptions;
+use sqlx::Connection;
+use sqlx_mysql::MySqlConnection;
+use sqlx::Row;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
@@ -40,7 +44,7 @@ use crate::sql::IndexType;
 impl TransformAsyncFunction {
     pub fn init_operators(
         async_func_descs: &[AsyncFunctionDesc],
-    ) -> Result<BTreeMap<usize, Arc<Operator>>> {
+    ) -> Result<BTreeMap<usize, Arc<DictionaryOperator>>> {
         let mut operators = BTreeMap::new();
         for (i, async_func_desc) in async_func_descs.iter().enumerate() {
             if let AsyncFunctionArgument::DictGetFunction(dict_arg) = &async_func_desc.func_arg {
@@ -57,25 +61,11 @@ impl TransformAsyncFunction {
                             builder = builder.db(db_index);
                         }
                         let op = build_operator(builder)?;
-                        operators.insert(i, Arc::new(op));
+                        operators.insert(i,Arc::new(DictionaryOperator::RedisOp(op)));
                     }
                     DictionarySource::Mysql(sql_source) => {
-                        let mut builder = Mysql::default()
-                            .connection_string(&sql_source.connection_url)
-                            .key_field(&sql_source.key_field)
-                            .value_field(&sql_source.value_field)
-                            .table(&sql_source.table);
-                        let op = build_operator(builder)?;
-                        operators.insert(i, Arc::new(op));
-                        // Why not the same with Redis builder?
-                        // let pool = MySqlPoolOptions::new()
-                        //     .max_connections(5)
-                        //     .connect(&sql_source.connection_url).await?;
-                        // let sql = format!("select {} from table {} where {} = xxx;", sql_source.table, sql_source.table, sql_source.key_field);
-                        // let row: (&str,) = sqlx::query_as(&sql)
-                        //     .fetch_one(&pool).await?;
-                        // let res = row.0;//"abc"?
-                        // return Err(ErrorCode::Unimplemented("Mysql source is unsupported"));
+                        let conn = MySqlConnection::connect(&sql_source.connection_url).await?;
+                        operators.insert(i, Arc::new(DictionaryOperator::MysqlConn(conn)));
                     }
                 }
             }
@@ -100,20 +90,42 @@ impl TransformAsyncFunction {
         let value = match &entry.value {
             Value::Scalar(scalar) => {
                 if let Scalar::String(key) = scalar {
-                    let buffer = op.read(key).await;
-                    match buffer {
-                        Ok(res) => {
-                            let value =
-                                unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
-                            Value::Scalar(Scalar::String(value))
+                    match op {
+                        DictionaryOperator::RedisOp(op) => {
+                            let buffer = op.read(key).await;
+                            match buffer {
+                                Ok(res) => {
+                                    let value =
+                                        unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
+                                    Value::Scalar(Scalar::String(value))
+                                }
+                                Err(e) => {
+                                    if e.kind() == opendal::ErrorKind::NotFound {
+                                        Value::Scalar(dict_arg.default_value.clone())
+                                    } else {
+                                        return Err(ErrorCode::DictionarySourceError(format!(
+                                            "dictionary source error: {e}"
+                                        )));
+                                    }
+                                }
+                            }
                         }
-                        Err(e) => {
-                            if e.kind() == opendal::ErrorKind::NotFound {
-                                Value::Scalar(dict_arg.default_value.clone())
-                            } else {
-                                return Err(ErrorCode::DictionarySourceError(format!(
-                                    "dictionary source error: {e}"
-                                )));
+                        DictionaryOperator::MysqlConn(conn) => {
+                            if let DictionarySource::Mysql(source) = dict_arg.dict_source {
+                                let sql = format!("SELECT {} FROM {} WHERE {} = ?", &source.value_field, &source.table, &source.key_field);
+                                let mut rows = sqlx::query(&sql)
+                                    .bind(key)
+                                    .fetch(&mut conn);
+                                let values = Vec::new();
+                                while let Some(row) = rows.try_next().await? {
+                                    let value: &str = row.try_get(&source.value_field)?;
+                                    values.push(value);
+                                }
+                                let mut builder = ColumnBuilder::with_capacity(data_type, values.len());
+                                for value in values {
+                                    builder.push(ScalarRef::String(value))
+                                }
+                                Value::Column(builder.build())
                             }
                         }
                     }
@@ -125,23 +137,39 @@ impl TransformAsyncFunction {
                 let mut builder = ColumnBuilder::with_capacity(data_type, column.len());
                 for scalar in column.iter() {
                     if let ScalarRef::String(key) = scalar {
-                        let buffer = op.read(key).await;
-                        match buffer {
-                            Ok(res) => {
-                                let value =
-                                    unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
-                                builder.push(ScalarRef::String(value.as_str()));
+                        match op {
+                            DictionaryOperator::RedisOp(op) => {
+                                let buffer = op.read(key).await;
+                                match buffer {
+                                    Ok(res) => {
+                                        let value =
+                                            unsafe { String::from_utf8_unchecked(res.current().to_vec()) };
+                                        builder.push(ScalarRef::String(value.as_str()));
+                                    }
+                                    Err(e) => {
+                                        if e.kind() == opendal::ErrorKind::NotFound {
+                                            builder.push(dict_arg.default_value.as_ref());
+                                        } else {
+                                            return Err(ErrorCode::DictionarySourceError(format!(
+                                                "dictionary source error: {e}"
+                                            )));
+                                        }
+                                    }
+                                };
                             }
-                            Err(e) => {
-                                if e.kind() == opendal::ErrorKind::NotFound {
-                                    builder.push(dict_arg.default_value.as_ref());
-                                } else {
-                                    return Err(ErrorCode::DictionarySourceError(format!(
-                                        "dictionary source error: {e}"
-                                    )));
+                            DictionaryOperator::MysqlConn(conn) => {
+                                if let DictionarySource::Mysql(source) = dict_arg.dict_source {
+                                    let sql = format!("SELECT {} FROM {} WHERE {} = ?", &source.value_field, &source.table, &source.key_field);
+                                    let mut rows = sqlx::query(&sql)
+                                        .bind(key)
+                                        .fetch(&mut conn);
+                                    while let Some(row) = rows.try_next().await? {
+                                        let value: &str = row.try_get(&source.value_field)?;
+                                        builder.push(ScalarRef::String(value));
+                                    }
                                 }
                             }
-                        };
+                        }
                     } else {
                         builder.push(dict_arg.default_value.as_ref());
                     }

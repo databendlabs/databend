@@ -25,6 +25,7 @@ use databend_common_expression::Value;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_sql::plans::DictionaryOperator;
 use databend_common_storages_fuse::TableContext;
 use opendal::Operator;
 
@@ -35,7 +36,7 @@ use crate::sql::plans::AsyncFunctionArgument;
 pub struct TransformAsyncFunction {
     ctx: Arc<QueryContext>,
     // key is the index of async_func_desc
-    pub(crate) operators: BTreeMap<usize, Arc<Operator>>,
+    pub(crate) operators: BTreeMap<usize, Arc<DictionaryOperator>>,
     async_func_descs: Vec<AsyncFunctionDesc>,
 }
 
@@ -43,7 +44,7 @@ impl TransformAsyncFunction {
     pub fn new(
         ctx: Arc<QueryContext>,
         async_func_descs: Vec<AsyncFunctionDesc>,
-        operators: BTreeMap<usize, Arc<Operator>>,
+        operators: BTreeMap<usize, Arc<DictionaryOperator>>,
     ) -> Self {
         Self {
             ctx,

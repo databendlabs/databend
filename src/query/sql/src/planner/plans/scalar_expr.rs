@@ -33,6 +33,9 @@ use databend_common_meta_app::tenant::Tenant;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use opendal::Operator;
+use sqlx_mysql::MySqlConnection;
+use sqlx::Connection;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;
@@ -808,6 +811,11 @@ pub struct SqlSource {
 pub enum DictionarySource {
     Mysql(SqlSource),
     Redis(RedisSource),
+}
+
+pub enum DictionaryOperator {
+    RedisOp(Operator),
+    MysqlConn(MySqlConnection),
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]

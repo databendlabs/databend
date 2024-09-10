@@ -4207,6 +4207,8 @@ dependencies = [
  "serde",
  "sha2",
  "simsearch",
+ "sqlx",
+ "sqlx-mysql",
  "time",
  "tokio",
  "url",
