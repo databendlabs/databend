@@ -543,7 +543,7 @@ where
             input.backtrace.clear();
 
             let err_kind = match err {
-                PrattError::EmptyInput => ErrorKind::Other("expecting a oprand"),
+                PrattError::EmptyInput => ErrorKind::Other("expecting an oprand"),
                 PrattError::UnexpectedNilfix(_) => ErrorKind::Other("unable to parse the element"),
                 PrattError::UnexpectedPrefix(_) => {
                     ErrorKind::Other("unable to parse the prefix operator")
