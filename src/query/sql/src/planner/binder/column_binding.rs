@@ -55,7 +55,7 @@ pub enum DummyColumnType {
 
 impl DummyColumnType {
     fn type_identifier(&self) -> usize {
-        DUMMY_INDEX - self as usize
+        DUMMY_INDEX - (*self) as usize
     }
 }
 
