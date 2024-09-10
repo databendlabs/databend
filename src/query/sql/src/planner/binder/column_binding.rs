@@ -41,19 +41,46 @@ pub struct ColumnBinding {
 }
 
 const DUMMY_INDEX: usize = usize::MAX;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u64)]
+pub enum DummyColumnType {
+    WindowFunction = 1,
+    AggregateFunction = 2,
+    Subquery = 3,
+    UDF = 4,
+    AsyncFunction = 5,
+    Other = 6,
+}
+
+impl DummyColumnType {
+    fn type_identifier(&self) -> usize {
+        DUMMY_INDEX - self as usize
+    }
+}
+
 impl ColumnBinding {
-    pub fn new_dummy_column(name: String, data_type: Box<DataType>) -> Self {
+    pub fn new_dummy_column(
+        name: String,
+        data_type: Box<DataType>,
+        dummy_type: DummyColumnType,
+    ) -> Self {
+        let index = dummy_type.type_identifier();
         ColumnBinding {
             database_name: None,
             table_name: None,
             column_position: None,
             table_index: None,
             column_name: name,
-            index: DUMMY_INDEX,
+            index,
             data_type,
             visibility: Visibility::Visible,
             virtual_computed_expr: None,
         }
+    }
+
+    pub fn is_dummy(&self) -> bool {
+        self.index >= DummyColumnType::Other.type_identifier()
     }
 }
 
