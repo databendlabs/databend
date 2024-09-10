@@ -20,10 +20,10 @@ use tokio::net::TcpListener;
 struct Backend;
 
 pub async fn run_mysql_source() {
-    let listener = TcpListener::bind("0.0.0.0:3306").await?;
+    let listener = TcpListener::bind("0.0.0.0:3306").await.unwrap();
 
     loop {
-        let (stream, _) = listener.accept().await?;
+        let (stream, _) = listener.accept().await.unwrap();
         let (r, w) = stream.into_split();
         tokio::spawn(async move { AsyncMysqlIntermediary::run_on(Backend, r, w).await });
     }
@@ -38,7 +38,7 @@ impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
         _: &'a str,
         info: StatementMetaWriter<'a, W>,
     ) -> io::Result<()> {
-        info.reply(42, &[], &[]).await
+        Ok(())
     }
 
     async fn on_execute<'a>(
@@ -47,7 +47,7 @@ impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
         _: opensrv_mysql::ParamParser<'a>,
         results: QueryResultWriter<'a, W>,
     ) -> io::Result<()> {
-        results.completed(OkResponse::default()).await
+        Ok(())
     }
 
     async fn on_close(&mut self, _: u32) {}
@@ -58,6 +58,12 @@ impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
         results: QueryResultWriter<'a, W>,
     ) -> io::Result<()> {
         println!("execute sql {:?}", sql);
-        results.start(&["abc"]).await?.finish().await
+        let column = Column {
+            table: "table1".to_string(),
+            column: "column1".to_string(),
+            colflags: ColumnFlags::NOT_NULL_FLAG,
+            coltype: ColumnType::MYSQL_TYPE_STRING,
+        };
+        results.start(&[column]).await?.finish().await
     }
 }

@@ -29,3 +29,16 @@ query T
 SELECT dict_get(d, 'value', 1)
 ----
 1_value
+
+statement ok
+CREATE OR REPLACE TABLE default.t(a string, b string)
+
+statement ok
+CREATE OR REPLACE DICTIONARY d2(key string not null, value string not null) PRIMARY KEY key SOURCE(mysql(host='127.0.0.1' port='3308' username='root' password='1234' db='default' table='t'))
+
+statement ok
+insert into t values('key1','value1'),('key2','value2'),('key3','value3')
+
+query T
+SELECT dict_get(d2, 'value', 'a')
+----
