@@ -84,7 +84,9 @@ fn test_data_block_create_with_default_value_functions() -> Result<()> {
         let default_vals = vec![
             Scalar::Number(NumberScalar::Int32(1)),
             Scalar::Number(NumberScalar::Int32(0)),
-            Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(10.0))),
+            Scalar::Number(NumberScalar::Float32(
+                databend_common_base::base::OrderedFloat(10.0),
+            )),
             Scalar::Number(NumberScalar::Int32(0)),
             Scalar::String("ab".into()),
         ];
@@ -112,7 +114,9 @@ fn test_data_block_create_with_default_value_functions() -> Result<()> {
         let default_vals = vec![
             Scalar::Number(NumberScalar::Int32(1)),
             Scalar::Number(NumberScalar::Int32(2)),
-            Scalar::Number(NumberScalar::Float32(ordered_float::OrderedFloat(10.0))),
+            Scalar::Number(NumberScalar::Float32(
+                databend_common_base::base::OrderedFloat(10.0),
+            )),
             Scalar::Number(NumberScalar::Int32(3)),
             Scalar::String("ab".into()),
         ];
