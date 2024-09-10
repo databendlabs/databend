@@ -2889,7 +2889,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         ));
                     }
                 }
-                drop_table_infos.extend(this_db_drop_table_infos);
+                drop_table_infos.extend(
+                    this_db_drop_table_infos
+                        .iter()
+                        .map(|(table_info, _)| table_info.clone()),
+                );
             }
 
             return Ok(ListDroppedTableResp {
