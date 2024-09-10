@@ -1371,11 +1371,7 @@ impl TableContext for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if tbl.engine() != "FUSE" || tbl.is_read_only() {
-            return Ok(None);
-        }
-
-        if tbl.is_temp() {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
         }
 
