@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod dma;
 mod transforms;
+mod spiller_disk;
 
 pub use transforms::*;
