@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
@@ -230,6 +231,11 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
+
+    async fn mget_databases(
+        &self,
+        db_names: Vec<DatabaseNameIdent>,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>, MetaError>;
 

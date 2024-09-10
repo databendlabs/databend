@@ -28,6 +28,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -291,39 +292,38 @@ pub(crate) async fn dump_tables(
         }
     } else {
         let catalog_dbs = visibility_checker.get_visibility_database();
+        // None means has global level privileges
         if let Some(catalog_dbs) = catalog_dbs {
             for (catalog_name, dbs) in catalog_dbs {
                 if catalog_name == CATALOG_DEFAULT {
                     let mut catalog_db_ids = vec![];
-                    for (db_name, db_id) in dbs {
-                        if let Some(db_name) = db_name {
-                            let db_id = catalog
-                                .get_database(&tenant, db_name)
-                                .await?
-                                .get_db_info()
-                                .database_id
-                                .db_id;
-                            final_dbs.push((db_name.to_string(), db_id));
-                        }
-                        if let Some(db_id) = db_id {
-                            catalog_db_ids.push(*db_id);
-                        }
-                    }
-                    match catalog
+                    let mut catalog_db_names = vec![];
+                    catalog_db_names.extend(
+                        dbs.iter()
+                            .filter_map(|(db_name, _)| *db_name)
+                            .map(|db_name| db_name.to_string()),
+                    );
+                    catalog_db_ids.extend(dbs.iter().filter_map(|(_, db_id)| *db_id));
+                    if let Ok(databases) = catalog
                         .mget_database_names_by_ids(&tenant, &catalog_db_ids)
                         .await
                     {
-                        Ok(databases) => {
-                            for (i, db) in databases.into_iter().flatten().enumerate() {
-                                final_dbs.push((db.to_string(), catalog_db_ids[i]));
-                            }
-                        }
-                        Err(err) => {
-                            let msg =
-                                format!("Failed to get database: {}, {}", catalog.name(), err);
-                            warn!("{}", msg);
-                        }
+                        catalog_db_names.extend(databases.into_iter().flatten());
+                    } else {
+                        let msg = format!("Failed to get database name by id: {}", catalog.name());
+                        warn!("{}", msg);
                     }
+                    let db_idents = catalog_db_names
+                        .iter()
+                        .map(|name| DatabaseNameIdent::new(&tenant, name))
+                        .collect::<Vec<DatabaseNameIdent>>();
+                    let dbs: Vec<(String, u64)> = catalog
+                        .mget_databases(&tenant, &db_idents)
+                        .await?
+                        .iter()
+                        .map(|db| (db.name().to_string(), db.get_db_info().database_id.db_id))
+                        .collect();
+                    final_dbs.extend(dbs);
                 }
             }
         } else {

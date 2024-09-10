@@ -21,6 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -230,6 +231,23 @@ impl Catalog for ImmutableCatalog {
                 db_id
             )))
         }
+    }
+
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let mut res: Vec<Arc<dyn Database>> = vec![];
+        for db_name in db_names {
+            let db_name = db_name.database_name();
+            if db_name == "system" {
+                res.push(self.sys_db.clone());
+            } else if db_name == "information_schema" {
+                res.push(self.info_schema_db.clone());
+            }
+        }
+        Ok(res)
     }
 
     async fn mget_database_names_by_ids(

@@ -205,6 +205,7 @@ use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
+use crate::name_id_value_api::NameIdValueApiCompat;
 use crate::name_value_api::NameValueApi;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -1867,6 +1868,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         Ok(seq_meta.data.database_name().to_string())
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn mget_databases(
+        &self,
+        db_names: Vec<DatabaseNameIdent>,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
+        debug!(req :? =(&db_names); "SchemaApi: {}", func_name!());
+        let res = self.mget_id_value_compat(db_names.into_iter()).await?;
+        let res = res
+            .map(|(name_ident, database_id, meta)| {
+                Arc::new(DatabaseInfo {
+                    database_id,
+                    name_ident,
+                    meta,
+                })
+            })
+            .collect::<Vec<Arc<DatabaseInfo>>>();
+        Ok(res)
     }
 
     #[logcall::logcall]

@@ -422,6 +422,21 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    // Mget dbs by DatabaseNameIdent.
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self.ctx.meta.mget_databases(db_names.to_vec()).await?;
+
+        dbs.iter().try_fold(vec![], |mut acc, item| {
+            let db = self.build_db_instance(item)?;
+            acc.push(db);
+            Ok(acc)
+        })
+    }
+
     async fn mget_database_names_by_ids(
         &self,
         _tenant: &Tenant,
