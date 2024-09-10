@@ -29,6 +29,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -74,62 +75,49 @@ impl AsyncSystemTable for DatabasesTable {
 
         let visibility_checker = ctx.get_visibility_checker().await?;
         let catalog_dbs = visibility_checker.get_visibility_database();
+        // None means has global level privileges
         if let Some(catalog_dbs) = catalog_dbs {
             for (catalog, dbs) in catalog_dbs {
                 let mut catalog_db_ids = vec![];
+                let mut catalog_db_names = vec![];
                 let ctl = ctx.get_catalog(catalog).await?;
-                for (db_name, db_id) in dbs {
-                    if let Some(db_name) = db_name {
-                        let db_id = ctl
-                            .get_database(&tenant, db_name)
-                            .await?
-                            .get_db_info()
-                            .database_id
-                            .db_id;
+                catalog_db_names.extend(
+                    dbs.iter()
+                        .filter_map(|(db_name, _)| *db_name)
+                        .map(|db_name| db_name.to_string()),
+                );
+                catalog_db_ids.extend(dbs.iter().filter_map(|(_, db_id)| *db_id));
 
-                        catalog_names.push(catalog.clone());
-                        db_names.push(db_name.to_string());
-                        db_ids.push(db_id);
-                        owners.push(
-                            user_api
-                                .get_ownership(&tenant, &OwnershipObject::Database {
-                                    catalog_name: catalog.clone(),
-                                    db_id,
-                                })
-                                .await
-                                .ok()
-                                .and_then(|ownership| ownership.map(|o| o.role.clone())),
-                        );
-                    }
-                    if let Some(db_id) = db_id {
-                        catalog_db_ids.push(*db_id);
-                    }
-                }
-                match ctl
+                if let Ok(databases) = ctl
                     .mget_database_names_by_ids(&tenant, &catalog_db_ids)
                     .await
                 {
-                    Ok(databases) => {
-                        for (i, db) in databases.into_iter().flatten().enumerate() {
-                            catalog_names.push(catalog.clone());
-                            db_names.push(db);
-                            db_ids.push(catalog_db_ids[i]);
-                            owners.push(
-                                user_api
-                                    .get_ownership(&tenant, &OwnershipObject::Database {
-                                        catalog_name: catalog.clone(),
-                                        db_id: catalog_db_ids[i],
-                                    })
-                                    .await
-                                    .ok()
-                                    .and_then(|ownership| ownership.map(|o| o.role.clone())),
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        let msg = format!("Failed to get database: {}, {}", ctl.name(), err);
-                        warn!("{}", msg);
-                    }
+                    catalog_db_names.extend(databases.into_iter().flatten());
+                } else {
+                    let msg = format!("Failed to get database name by id: {}", ctl.name());
+                    warn!("{}", msg);
+                }
+
+                let db_idents = catalog_db_names
+                    .iter()
+                    .map(|name| DatabaseNameIdent::new(&tenant, name))
+                    .collect::<Vec<DatabaseNameIdent>>();
+                let dbs = ctl.mget_databases(&tenant, &db_idents).await?;
+                for db in dbs {
+                    catalog_names.push(catalog.clone());
+                    db_names.push(db.get_db_info().name_ident.database_name().to_string());
+                    let db_id = db.get_db_info().database_id.db_id;
+                    db_ids.push(db_id);
+                    owners.push(
+                        user_api
+                            .get_ownership(&tenant, &OwnershipObject::Database {
+                                catalog_name: catalog.to_string(),
+                                db_id,
+                            })
+                            .await
+                            .ok()
+                            .and_then(|ownership| ownership.map(|o| o.role.clone())),
+                    );
                 }
             }
         } else {

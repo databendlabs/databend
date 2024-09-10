@@ -33,11 +33,15 @@ echo "use grant_db" | $USER_A_CONNECT
 echo "=== show columns ==="
 echo "show columns from one from system" | $USER_A_CONNECT
 echo "show columns from t from grant_db" | $USER_A_CONNECT
-### will return err
 echo "show columns from roles from system" | $USER_A_CONNECT
 echo "show columns from keywords from information_schema" | $USER_A_CONNECT
 echo "show tables from nogrant" | $USER_A_CONNECT
 echo "show columns from t from nogrant" | $USER_A_CONNECT
+
+echo "=== grant system to a ==="
+echo "grant select on system.* to a" | $BENDSQL_CLIENT_CONNECT
+echo "show tables from system" | $USER_A_CONNECT | echo $?
+echo "use system" | $USER_A_CONNECT | echo $?
 
 echo "select count(1) from information_schema.columns where table_schema in ('grant_db');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.columns where table_schema in ('nogrant');" | $USER_A_CONNECT

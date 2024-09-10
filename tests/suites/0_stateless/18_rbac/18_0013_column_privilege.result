@@ -23,5 +23,8 @@ keywords	VARCHAR	NO		NULL	NULL
 reserved	TINYINT UNSIGNED	NO		NULL	NULL
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'nogrant.t'
+=== grant system to a ===
+0
+0
 1
 0

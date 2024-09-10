@@ -25,6 +25,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -336,6 +337,38 @@ impl Catalog for DatabaseCatalog {
         } else {
             self.mutable_catalog.get_db_name_by_id(db_id).await
         }
+    }
+
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let sys_dbs = self.immutable_catalog.list_databases(tenant).await?;
+        let sys_db_names: Vec<_> = sys_dbs
+            .iter()
+            .map(|sys_db| sys_db.get_db_info().name_ident.database_name())
+            .collect();
+
+        let mut mut_db_names: Vec<_> = Vec::new();
+        for db_name in db_names {
+            if !sys_db_names.contains(&db_name.database_name()) {
+                mut_db_names.push(db_name.clone());
+            }
+        }
+
+        let mut dbs = self
+            .immutable_catalog
+            .mget_databases(tenant, db_names)
+            .await?;
+
+        let other = self
+            .mutable_catalog
+            .mget_databases(tenant, &mut_db_names)
+            .await?;
+
+        dbs.extend(other);
+        Ok(dbs)
     }
 
     #[async_backtrace::framed]
