@@ -294,6 +294,7 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
         .meta
         .options
         .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
+    table_info.desc = "`default`.`t`".to_string();
 
     use test_accessor::AccessorFaultyDeletion;
     // Operator with mocked accessor that will fail on `remove_all`
@@ -321,7 +322,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         .meta
         .options
         .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
-
+    table_info.desc = "`default`.`t`".to_string();
     use test_accessor::AccessorFaultyDeletion;
 
     // Case 1: non-parallel vacuum dropped tables
@@ -418,6 +419,7 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     };
 
     let table_info = TableInfo {
+        desc: "`default`.`t`".to_string(),
         meta,
         ..Default::default()
     };
