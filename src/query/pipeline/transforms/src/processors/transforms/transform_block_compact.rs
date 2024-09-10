@@ -21,17 +21,23 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 
-use super::Compactor;
+use crate::processors::Compactor;
 
 pub struct BlockCompactor {
     thresholds: BlockThresholds,
     aborting: Arc<AtomicBool>,
+    // call block.memory_size() only once.
+    // we may no longer need it if we start using jsonb, otherwise it should be put in CompactorState
+    accumulated_rows: usize,
+    accumulated_bytes: usize,
 }
 
 impl BlockCompactor {
     pub fn new(thresholds: BlockThresholds) -> Self {
         BlockCompactor {
             thresholds,
+            accumulated_rows: 0,
+            accumulated_bytes: 0,
             aborting: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -57,34 +63,39 @@ impl Compactor for BlockCompactor {
 
         let size = blocks.len();
         let mut res = Vec::with_capacity(size);
-        let block = blocks[size - 1].clone();
+        let num_rows = blocks[size - 1].num_rows();
+        let num_bytes = blocks[size - 1].memory_size();
 
-        // perfect block
-        if self
-            .thresholds
-            .check_perfect_block(block.num_rows(), block.memory_size())
+        if num_rows > self.thresholds.max_rows_per_block
+            || num_bytes > self.thresholds.max_bytes_per_block * 2
         {
+            // holding slices of blocks to merge later may lead to oom, so
+            // 1. we expect blocks from file formats are not slice.
+            // 2. if block is split here, cut evenly and emit them at once.
+            let rows_per_block = self.thresholds.calc_rows_per_block(num_bytes, num_rows);
+            let block = blocks.pop().unwrap();
+            res.extend(block.split_by_rows_no_tail(rows_per_block));
+        } else if self.thresholds.check_large_enough(num_rows, num_bytes) {
+            // pass through the new data block just arrived
+            let block = blocks.pop().unwrap();
             res.push(block);
-            blocks.remove(size - 1);
         } else {
-            let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
-            let accumulated_bytes: usize = blocks.iter_mut().map(|b| b.memory_size()).sum();
+            let accumulated_rows_new = self.accumulated_rows + num_rows;
+            let accumulated_bytes_new = self.accumulated_bytes + num_bytes;
 
-            let merged = DataBlock::concat(blocks)?;
-            blocks.clear();
-
-            if accumulated_rows >= self.thresholds.max_rows_per_block {
-                let (perfect, remain) = merged.split_by_rows(self.thresholds.max_rows_per_block);
-                res.extend(perfect);
-                if let Some(b) = remain {
-                    blocks.push(b);
-                }
-            } else if accumulated_bytes >= self.thresholds.max_bytes_per_block {
-                // too large for merged block, flush to results
+            if self
+                .thresholds
+                .check_large_enough(accumulated_rows_new, accumulated_bytes_new)
+            {
+                // avoid call concat_blocks for each new block
+                let merged = DataBlock::concat(blocks)?;
+                blocks.clear();
+                self.accumulated_rows = 0;
+                self.accumulated_bytes = 0;
                 res.push(merged);
             } else {
-                // keep the merged block into blocks for future merge
-                blocks.push(merged);
+                self.accumulated_rows = accumulated_rows_new;
+                self.accumulated_bytes = accumulated_bytes_new;
             }
         }
 
@@ -92,62 +103,15 @@ impl Compactor for BlockCompactor {
     }
 
     fn compact_final(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        let mut res = Vec::with_capacity(blocks.len());
-        let mut temp_blocks = vec![];
-        let mut accumulated_rows = 0;
-        let aborted_query_err = || {
-            Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ))
-        };
-        for block in blocks.iter() {
+        let mut res = vec![];
+        if self.accumulated_rows != 0 {
             if self.aborting.load(Ordering::Relaxed) {
-                return aborted_query_err();
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
             }
 
-            // Perfect block, no need to compact
-            if self
-                .thresholds
-                .check_perfect_block(block.num_rows(), block.memory_size())
-            {
-                res.push(block.clone());
-            } else {
-                let block = if block.num_rows() > self.thresholds.max_rows_per_block {
-                    let b = block.slice(0..self.thresholds.max_rows_per_block);
-                    res.push(b);
-                    block.slice(self.thresholds.max_rows_per_block..block.num_rows())
-                } else {
-                    block.clone()
-                };
-
-                accumulated_rows += block.num_rows();
-                temp_blocks.push(block);
-
-                while accumulated_rows >= self.thresholds.max_rows_per_block {
-                    if self.aborting.load(Ordering::Relaxed) {
-                        return aborted_query_err();
-                    }
-
-                    let block = DataBlock::concat(&temp_blocks)?;
-                    res.push(block.slice(0..self.thresholds.max_rows_per_block));
-                    accumulated_rows -= self.thresholds.max_rows_per_block;
-
-                    temp_blocks.clear();
-                    if accumulated_rows != 0 {
-                        temp_blocks.push(
-                            block.slice(self.thresholds.max_rows_per_block..block.num_rows()),
-                        );
-                    }
-                }
-            }
-        }
-
-        if accumulated_rows != 0 {
-            if self.aborting.load(Ordering::Relaxed) {
-                return aborted_query_err();
-            }
-
-            let block = DataBlock::concat(&temp_blocks)?;
+            let block = DataBlock::concat(&blocks)?;
             res.push(block);
         }
 

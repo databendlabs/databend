@@ -29,7 +29,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
-use databend_common_pipeline_transforms::processors::BlockCompactorForCopy;
 use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
@@ -66,7 +65,7 @@ impl FuseTable {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactorForCopy::new(block_thresholds),
+                        BlockCompactor::new(block_thresholds),
                     )?))
                 })?;
                 pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
