@@ -28,16 +28,15 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
         RuleID::EliminateSort,
         RuleID::MergeEvalScalar,
-        // First round filter pushdown
+        // Filter pushdown
+        RuleID::EliminateFilter,
+        RuleID::MergeFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
-        // Second round: eliminate filter
-        RuleID::EliminateFilter,
-        RuleID::MergeFilter,
         // Limit PushDown
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
