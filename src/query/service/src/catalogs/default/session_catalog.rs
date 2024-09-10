@@ -23,6 +23,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -303,6 +304,14 @@ impl Catalog for SessionCatalog {
     // Get the db name by meta id.
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.inner.get_db_name_by_id(db_id).await
+    }
+
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        self.inner.mget_databases(tenant, db_names).await
     }
 
     // Mget the dbs name by meta ids.

@@ -22,6 +22,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
@@ -420,6 +421,34 @@ impl Catalog for MutableCatalog {
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
         Ok(res)
+    }
+
+    // Mget dbs by DatabaseNameIdent.
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let res = self
+            .ctx
+            .meta
+            .mget_id_value_compat(db_names.iter().cloned())
+            .await?;
+        let dbs = res
+            .map(|(name_ident, database_id, meta)| {
+                Arc::new(DatabaseInfo {
+                    database_id,
+                    name_ident,
+                    meta,
+                })
+            })
+            .collect::<Vec<Arc<DatabaseInfo>>>();
+
+        dbs.iter().try_fold(vec![], |mut acc, item| {
+            let db = self.build_db_instance(item)?;
+            acc.push(db);
+            Ok(acc)
+        })
     }
 
     async fn mget_database_names_by_ids(

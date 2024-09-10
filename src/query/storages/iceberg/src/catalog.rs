@@ -26,6 +26,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
@@ -293,6 +294,15 @@ impl Catalog for IcebergCatalog {
     async fn get_db_name_by_id(&self, _table_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in ICEBERG catalog",
+        ))
+    }
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        _db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot mget databases in ICEBERG catalog",
         ))
     }
 
