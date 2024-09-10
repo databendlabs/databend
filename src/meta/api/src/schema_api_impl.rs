@@ -2866,57 +2866,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 let table_infos = do_get_table_history(self, db_filter, left_num).await?;
 
-                // check if reach the limit
-                if let Some(left_num) = left_num {
-                    let num = min(left_num, table_infos.len());
-                    for table_info in table_infos.iter().take(num) {
-                        let (table_info, db_id) = table_info;
+                let limit = left_num.unwrap_or(table_infos.len());
+                let this_db_drop_table_infos = &table_infos[..limit];
+
+                if limit >= this_db_drop_table_infos.len() && drop_db {
+                    drop_ids.push(DroppedId::Db {
+                        db_id: db_info.database_id.db_id,
+                        db_name: db_info.name_ident.database_name().to_string(),
+                        tables: this_db_drop_table_infos
+                            .iter()
+                            .map(|(table_info, _)| {
+                                (table_info.ident.table_id, table_info.name.clone())
+                            })
+                            .collect(),
+                    });
+                } else {
+                    for (table_info, db_id) in this_db_drop_table_infos {
                         drop_ids.push(DroppedId::Table(
                             *db_id,
                             table_info.ident.table_id,
                             table_info.name.clone(),
                         ));
-                        drop_table_infos.push(table_info.clone());
                     }
-
-                    // if limit is Some, append DroppedId::Db only when table_infos is empty
-                    if drop_db && table_infos.is_empty() {
-                        drop_ids.push(DroppedId::Db {
-                            db_id: db_info.database_id.db_id,
-                            db_name: db_info.name_ident.database_name().to_string(),
-                            tables: vec![],
-                        });
-                    }
-                    if num == left_num {
-                        return Ok(ListDroppedTableResp {
-                            drop_table_infos,
-                            drop_ids,
-                        });
-                    }
-                } else {
-                    if drop_db {
-                        drop_ids.push(DroppedId::Db {
-                            db_id: db_info.database_id.db_id,
-                            db_name: db_info.name_ident.database_name().to_string(),
-                            tables: table_infos
-                                .iter()
-                                .map(|(table_info, _)| {
-                                    (table_info.ident.table_id, table_info.name.clone())
-                                })
-                                .collect(),
-                        });
-                    } else {
-                        table_infos.iter().for_each(|(table_info, db_id)| {
-                            drop_ids.push(DroppedId::Table(
-                                *db_id,
-                                table_info.ident.table_id,
-                                table_info.name.clone(),
-                            ))
-                        });
-                    }
-                    drop_table_infos
-                        .extend(table_infos.into_iter().map(|(table_info, _)| table_info));
                 }
+                drop_table_infos.extend(this_db_drop_table_infos);
             }
 
             return Ok(ListDroppedTableResp {
