@@ -4275,6 +4275,15 @@ impl SchemaApiTestSuite {
                 }
             }
         }
+        fn is_dropped_id_eq(l: &DroppedId, r: &DroppedId) -> bool {
+            match (l, r) {
+                (
+                    DroppedId::Db(left_db_id, left_db_name, _),
+                    DroppedId::Db(right_db_id, right_db_name, _),
+                ) => left_db_id == right_db_id && left_db_name == right_db_name,
+                _ => l == r,
+            }
+        }
         // case 1: test AllDroppedTables with filter time
         {
             let now = Utc::now();
@@ -4287,7 +4296,10 @@ impl SchemaApiTestSuite {
             // sort drop id by table id
             let mut sort_drop_ids = resp.drop_ids;
             sort_drop_ids.sort_by(cmp_dropped_id);
-            assert_eq!(sort_drop_ids, drop_ids_1);
+            assert_eq!(sort_drop_ids.len(), drop_ids_1.len());
+            for (id1, id2) in sort_drop_ids.iter().zip(drop_ids_1.iter()) {
+                assert!(is_dropped_id_eq(id1, id2));
+            }
 
             let expected: BTreeSet<String> = [
                 "'db1'.'tb1'".to_string(),
@@ -4316,7 +4328,10 @@ impl SchemaApiTestSuite {
             // sort drop id by table id
             let mut sort_drop_ids = resp.drop_ids;
             sort_drop_ids.sort_by(cmp_dropped_id);
-            assert_eq!(sort_drop_ids, drop_ids_2);
+            assert_eq!(sort_drop_ids.len(), drop_ids_2.len());
+            for (id1, id2) in sort_drop_ids.iter().zip(drop_ids_2.iter()) {
+                assert!(is_dropped_id_eq(id1, id2));
+            }
 
             let expected: BTreeSet<String> = [
                 "'db1'.'tb1'".to_string(),
