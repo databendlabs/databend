@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -33,7 +32,6 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
@@ -44,7 +42,6 @@ use crate::plans::UDFCall;
 use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
-use crate::WindowChecker;
 
 #[derive(Debug)]
 pub struct OrderItems {
