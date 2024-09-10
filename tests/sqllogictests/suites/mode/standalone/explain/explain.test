@@ -1032,8 +1032,8 @@ Sort
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [b.register_at (#3), b.number (#2)]
-    ├── probe keys: [a.pt (#1), a.number (#0)]
+    ├── build keys: [b.register_at (#3), numbers.number (#2)]
+    ├── probe keys: [a.pt (#1), numbers.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)

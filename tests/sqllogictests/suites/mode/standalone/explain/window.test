@@ -114,7 +114,7 @@ Filter
             ├── estimated rows: 0.00
             ├── Filter
             │   ├── output columns: [test.k (#0), test.v (#1)]
-            │   ├── filters: [is_true(test.k (#0) = 12)]
+            │   ├── filters: [is_true(t1.k (#0) = 12)]
             │   ├── estimated rows: 0.00
             │   └── TableScan
             │       ├── table: default.test_explain_window.test
@@ -127,7 +127,7 @@ Filter
             │       └── estimated rows: 0.00
             └── Filter
                 ├── output columns: [test.k (#2), test.v (#3)]
-                ├── filters: [is_true(test.k (#2) = 12)]
+                ├── filters: [is_true(k (#2) = 12)]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.test_explain_window.test

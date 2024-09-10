@@ -59,10 +59,18 @@ pub fn is_subset<T: PartialEq>(v1: &[T], v2: &[T]) -> bool {
 pub fn contain_subquery(s_expr: &SExpr) -> bool {
     match s_expr.plan() {
         RelOperator::Filter(_) => s_expr.children.iter().any(|child| contain_subquery(child)),
-        RelOperator::Scan(_)
-        | RelOperator::CteScan(_)
+        RelOperator::DummyTableScan(_)
         | RelOperator::ConstantTableScan(_)
-        | RelOperator::ExpressionScan(_) => false,
+        | RelOperator::ExpressionScan(_)
+        | RelOperator::CacheScan(_)
+        | RelOperator::CteScan(_)
+        | RelOperator::AsyncFunction(_)
+        | RelOperator::MaterializedCte(_)
+        | RelOperator::RecursiveCteScan(_)
+        | RelOperator::Mutation(_)
+        | RelOperator::MutationSource(_)
+        | RelOperator::Recluster(_)
+        | RelOperator::CompactBlock(_) => false,
         _ => true,
     }
 }

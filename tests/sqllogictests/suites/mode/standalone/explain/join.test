@@ -835,7 +835,7 @@ EvalScalar
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t2.wms_id (#4)]
-    │   ├── filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')]
+    │   ├── filters: [is_true(substr(t6.wms_id (#4), 1) = 'R006')]
     │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t2
@@ -876,7 +876,7 @@ EvalScalar
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t2.wms_id (#4)]
-    │   ├── filters: [is_true(t2.wms_id (#4) = 'R006')]
+    │   ├── filters: [is_true(t6.wms_id (#4) = 'R006')]
     │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t2

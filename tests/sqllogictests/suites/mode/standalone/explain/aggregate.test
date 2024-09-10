@@ -219,8 +219,8 @@ Sort
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
@@ -250,8 +250,8 @@ Sort
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
@@ -280,8 +280,8 @@ Sort
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#6), sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
-    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
@@ -310,8 +310,8 @@ Sort
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#6), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
-    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
@@ -340,8 +340,8 @@ Sort
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6), sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
-    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
     ├── estimated rows: 0.00
     └── AggregateFinal
         ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
