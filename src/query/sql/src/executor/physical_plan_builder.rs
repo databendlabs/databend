@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
@@ -40,6 +41,8 @@ pub struct PhysicalPlanBuilder {
     pub(crate) dry_run: bool,
     // Record cte_idx and the cte's output columns
     pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
+    // The used column offsets of each materialized cte.
+    pub(crate) cet_used_column_offsets: HashMap<IndexType, HashSet<usize>>,
     // DataMutation info, used to build MergeInto physical plan
     pub(crate) mutation_build_info: Option<MutationBuildInfo>,
 }
@@ -53,6 +56,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             cte_output_columns: Default::default(),
+            cet_used_column_offsets: Default::default(),
             mutation_build_info: None,
         }
     }

@@ -426,7 +426,7 @@ HashJoin
     ├── output columns: [t.number (#0)]
     ├── join type: INNER
     ├── build keys: [t1.number (#1)]
-    ├── probe keys: [t.number (#0)]
+    ├── probe keys: [number (#0)]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── TableScan(Build)
