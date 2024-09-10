@@ -45,7 +45,7 @@ use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::query_route;
-use crate::servers::http::v1::renew_handler;
+use crate::servers::http::v1::refresh_handler;
 use crate::servers::Server;
 
 #[derive(Copy, Clone)]
@@ -118,8 +118,15 @@ impl HttpHandler {
                 )),
             )
             .at(
-                "/session/renew",
-                post(renew_handler).with(HTTPSessionMiddleware::create(
+                "/session/refresh",
+                post(refresh_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Refresh,
+                )),
+            )
+            .at(
+                "/auth/verify",
+                post(refresh_handler).with(HTTPSessionMiddleware::create(
                     self.kind,
                     EndpointKind::Refresh,
                 )),

@@ -11,7 +11,7 @@ from pprint import pprint
 query_url = "http://localhost:8000/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
 logout_url = "http://localhost:8000/v1/session/logout"
-renew_url = "http://localhost:8000/v1/session/renew"
+renew_url = "http://localhost:8000/v1/session/refresh"
 auth = ("root", "")
 
 
@@ -51,7 +51,7 @@ def do_logout(_case_id, session_token):
 
 
 @print_error
-def do_renew(_case_id, refresh_token, session_token):
+def do_refresh(_case_id, refresh_token, session_token):
     payload = {"session_token": session_token}
     response = requests.post(
         renew_url,
@@ -80,7 +80,8 @@ def do_query(query, session_token):
 
 def fake_expired_token():
     expired_claim = {
-        "exp": int(time.time()) - 10,
+        # TTL_GRACE_PERIOD_QUERY = 600
+        "exp": int(time.time()) - 610,
         "tenant": "",
         "user": "",
         "nonce": "",
@@ -94,7 +95,6 @@ def fake_expired_token():
 def main():
     login_resp = do_login()
     pprint(sorted(login_resp.keys()))
-    print(login_resp.get("refresh_token_validity_in_secs"))
     session_token = login_resp.get("session_token")
     refresh_token = login_resp.get("refresh_token")
     # print(session_token)
@@ -108,9 +108,8 @@ def main():
     do_query("select 4", fake_expired_token())
     do_query("select 5", refresh_token)
 
-    renew_resp = do_renew(1, refresh_token, session_token)
+    renew_resp = do_refresh(1, refresh_token, session_token)
     pprint(sorted(renew_resp.keys()))
-    print(renew_resp.get("refresh_token_validity_in_secs"))
     new_session_token = renew_resp.get("session_token")
     new_refresh_token = renew_resp.get("refresh_token")
 
@@ -122,20 +121,23 @@ def main():
     pprint(query_resp.get("data"))
 
     # errors
-    do_renew(2, "xxx", session_token)
-    do_renew(3, "bend-v1-xxx", session_token)
-    do_renew(4, fake_expired_token(), session_token)
-    do_renew(5, session_token, session_token)
+    do_refresh(2, "xxx", session_token)
+    do_refresh(3, "bend-v1-xxx", session_token)
+    do_refresh(4, fake_expired_token(), session_token)
+    do_refresh(5, session_token, session_token)
 
     # test new_refresh_token works
-    do_renew(6, new_refresh_token, session_token)
+    do_refresh(6, new_refresh_token, session_token)
 
     do_logout(0, new_refresh_token)
     do_logout(1, new_session_token)
 
     do_query("select 'after logout'", new_session_token)
-    do_renew("after_logout", new_refresh_token, session_token)
+    do_refresh("after_logout", new_refresh_token, session_token)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"An error occurred: {e}")

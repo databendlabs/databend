@@ -15,7 +15,6 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
@@ -37,20 +36,15 @@ use sha2::Digest;
 use sha2::Sha256;
 use tokio::time::Instant;
 
+use crate::servers::http::v1::session::consts::REFRESH_TOKEN_TTL;
+use crate::servers::http::v1::session::consts::SESSION_TOKEN_TTL;
+use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
+use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
+use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
 use crate::servers::http::v1::session::token::unix_ts;
 use crate::servers::http::v1::SessionClaim;
 use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
-
-/// target TTL
-pub const REFRESH_TOKEN_TTL: Duration = Duration::from_hours(4);
-pub const SESSION_TOKEN_TTL: Duration = Duration::from_hours(1);
-
-/// to cove network latency, retry and time skew
-const TOKEN_TTL_DELAY: Duration = Duration::from_secs(300);
-/// in case of client retry, shorted the ttl instead of drop at once
-/// only required for refresh token.
-const TOKEN_DROP_DELAY: Duration = Duration::from_secs(90);
 
 pub struct TokenPair {
     pub refresh: String,
@@ -81,17 +75,31 @@ impl QueryState {
 }
 
 pub struct ClientSessionManager {
+    /// cache of tokens to avoid request for MetaServer on each auth.
+    ///
     /// store hash only for hit ratio with limited memory, feasible because:
     /// - token contain all info in itself.
     /// - for eviction, LRU itself is enough, no need to check expired tokens specifically.
     session_tokens: RwLock<LruCache<String, Option<String>>>,
     refresh_tokens: RwLock<LruCache<String, Option<String>>>,
 
-    /// add: write temp table
+    /// state that
+    /// 1. lives across query
+    /// 2. only in memory
+    /// 3. too large to store in client
+    ///
+    /// # Ops
+    /// add:
+    /// - write temp table
+    ///
     /// rm:
     ///  - all temp table deleted
     ///  - session closed
     ///  - timeout
+    ///
+    /// refresh:
+    ///  - query start/stop
+    ///  - /session/refresh
     session_state: Mutex<BTreeMap<String, SessionState>>,
 }
 
@@ -136,22 +144,55 @@ impl ClientSessionManager {
         }
     }
 
+    pub async fn new_session_id_for_jwt(&self, session: &Arc<Session>) -> Result<String> {
+        let client_session_id = uuid::Uuid::new_v4().to_string();
+        let tenant = session.get_current_tenant();
+        let user_name = session.get_current_user()?.name;
+        let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
+        client_session_api
+            .upsert_client_session_id(
+                &client_session_id,
+                ClientSession { user_name },
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+            )
+            .await?;
+        Ok(client_session_id)
+    }
+
+    pub async fn refresh_session_handle(
+        &self,
+        session: &Arc<Session>,
+        client_session_id: &str,
+    ) -> Result<()> {
+        let tenant = session.get_current_tenant();
+        let user_name = session.get_current_user()?.name;
+        let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
+        client_session_api
+            .upsert_client_session_id(
+                client_session_id,
+                ClientSession { user_name },
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+            )
+            .await?;
+        Ok(())
+    }
+
     /// used for both issue token for new session and renew token for existing session.
     /// currently, when renewing, always return a new refresh token instead of update the TTL,
     /// since now we include expire time in token, which can not be updated.
     pub async fn new_token_pair(
         &self,
         session: &Arc<Session>,
-        old_token_pair: Option<TokenPair>,
+        old_refresh_token: Option<String>,
+        old_session_token: Option<String>,
     ) -> Result<(String, TokenPair)> {
         // those infos are set when the request is authed
         let tenant = session.get_current_tenant();
         let tenant_name = tenant.tenant_name().to_string();
         let user = session.get_current_user()?.name;
         let auth_role = session.privilege_mgr().get_auth_role();
-
-        let client_session_id = if let Some(old) = &old_token_pair {
-            let claim = SessionClaim::decode(&old.refresh)?;
+        let client_session_id = if let Some(old) = &old_refresh_token {
+            let claim = SessionClaim::decode(&old)?;
             assert_eq!(tenant_name, claim.tenant);
             assert_eq!(user, claim.user);
             assert_eq!(auth_role, claim.auth_role);
@@ -162,58 +203,40 @@ impl ClientSessionManager {
 
         let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
 
+        // new refresh token
         let now = unix_ts();
         let mut claim = SessionClaim::new(
             None,
             &tenant_name,
             &user,
             &auth_role,
-            REFRESH_TOKEN_TTL + SESSION_TOKEN_TTL,
+            REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
         );
-        let refresh_token = if let Some(old) = &old_token_pair {
-            old.refresh.clone()
-        } else {
-            claim.encode()
-        };
+        let refresh_token = claim.encode();
         let refresh_token_hash = hash_token(refresh_token.as_bytes());
         let token_info = QueryTokenInfo {
             token_type: TokenType::Refresh,
             parent: None,
         };
-
-        // by adding SESSION_TOKEN_VALIDITY_IN_SECS, avoid touch refresh token for each request.
-        // note the ttl is not accurate, the TTL is in fact longer (by 0 to 1 hour) then expected.
         client_session_api
             .upsert_token(
                 &refresh_token_hash,
                 token_info.clone(),
-                REFRESH_TOKEN_TTL + SESSION_TOKEN_TTL + TOKEN_TTL_DELAY,
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
                 false,
             )
             .await?;
-        client_session_api
-            .upsert_client_session_id(
-                &client_session_id,
-                ClientSession {
-                    user_name: claim.user.clone(),
-                },
-                REFRESH_TOKEN_TTL + SESSION_TOKEN_TTL + TOKEN_TTL_DELAY,
-            )
-            .await?;
-        if let Some(old) = old_token_pair {
+        if let Some(old) = old_refresh_token {
             client_session_api
-                .upsert_token(
-                    &old.refresh,
-                    token_info,
-                    REFRESH_TOKEN_TTL + TOKEN_DROP_DELAY,
-                    true,
-                )
+                .upsert_token(&old, token_info, TOMBSTONE_TTL, true)
                 .await?;
+            self.refresh_in_memory_states(&client_session_id, session);
         };
         self.refresh_tokens
             .write()
             .insert(refresh_token_hash.clone(), None);
 
+        // session token
         claim.expire_at_in_secs = (now + SESSION_TOKEN_TTL).as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
 
@@ -226,14 +249,30 @@ impl ClientSessionManager {
         client_session_api
             .upsert_token(
                 &session_token_hash,
-                token_info,
-                REFRESH_TOKEN_TTL + TOKEN_TTL_DELAY,
+                token_info.clone(),
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
                 false,
             )
             .await?;
         self.session_tokens
             .write()
             .insert(session_token_hash, Some(refresh_token_hash));
+        if let Some(old) = old_session_token {
+            client_session_api
+                .upsert_token(&old, token_info, TOMBSTONE_TTL, true)
+                .await?;
+        };
+
+        // client session id
+        client_session_api
+            .upsert_client_session_id(
+                &client_session_id,
+                ClientSession {
+                    user_name: claim.user.clone(),
+                },
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+            )
+            .await?;
 
         Ok((client_session_id, TokenPair {
             refresh: refresh_token,
@@ -248,7 +287,7 @@ impl ClientSessionManager {
     ) -> Result<SessionClaim> {
         let claim = SessionClaim::decode(token)?;
         let now = unix_ts().as_secs();
-        if now > claim.expire_at_in_secs {
+        if now > claim.expire_at_in_secs + TTL_GRACE_PERIOD_QUERY.as_secs() {
             return match token_type {
                 TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired("refresh token expired")),
                 TokenType::Session => Err(ErrorCode::SessionTokenExpired("session token expired")),
@@ -324,11 +363,21 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    pub fn on_query_start(&self, client_session_id: &str, session: &Arc<Session>) {
+    pub fn refresh_in_memory_states(&self, client_session_id: &str, session: &Arc<Session>) {
         let mut guard = self.session_state.lock();
         guard.entry(client_session_id.to_string()).and_modify(|e| {
             e.query_state = QueryState::InUse;
             session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone())
+        });
+    }
+
+    pub fn on_query_start(&self, client_session_id: &str, session: &Arc<Session>) {
+        let mut guard = self.session_state.lock();
+        guard.entry(client_session_id.to_string()).and_modify(|e| {
+            if matches!(e.query_state, QueryState::Idle(_)) {
+                e.query_state = QueryState::Idle(Instant::now());
+                session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
+            }
         });
     }
     pub fn on_query_finish(&self, client_session_id: &str, session: &Arc<Session>) {

@@ -35,6 +35,7 @@ pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
+#[derive(Clone)]
 pub enum Credential {
     DatabendToken {
         token: String,

@@ -60,7 +60,7 @@ use super::v1::HttpQueryContext;
 use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
-use crate::servers::http::error::JsonErrorCode;
+use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
 use crate::servers::HttpHandlerKind;
@@ -314,10 +314,6 @@ impl<E> HTTPSessionEndpoint<E> {
         if let Some(id) = client_session_id.clone() {
             session.set_client_session_id(id)
         }
-        let databend_token = match credential {
-            Credential::DatabendToken { token, .. } => Some(token),
-            _ => None,
-        };
 
         let session = session_manager.register_session(session)?;
 
@@ -349,6 +345,7 @@ impl<E> HTTPSessionEndpoint<E> {
             session,
             query_id,
             node_id,
+            credential,
             expected_node_id,
             deduplicate_label,
             user_agent,
@@ -357,7 +354,6 @@ impl<E> HTTPSessionEndpoint<E> {
             http_method: req.method().to_string(),
             uri: req.uri().to_string(),
             client_host,
-            databend_token,
             client_session_id,
         })
     }
@@ -389,7 +385,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     self.ep.call(req).await.map(|v| v.into_response())
                 }
                 Err(err) => {
-                    let err = JsonErrorCode(err);
+                    let err = HttpErrorCode::error_code(err);
                     if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
