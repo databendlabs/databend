@@ -65,7 +65,7 @@ impl VacuumDropTablesInterpreter {
         let mut drop_db_table_ids = vec![];
         for drop_id in drop_ids {
             match drop_id {
-                DroppedId::Db(_, _, _) => {
+                DroppedId::Db { .. } => {
                     drop_db_ids.push(drop_id);
                 }
                 DroppedId::Table(_, _, _) => {
@@ -175,7 +175,11 @@ impl Interpreter for VacuumDropTablesInterpreter {
             let mut success_dropped_ids = vec![];
             for drop_id in drop_ids {
                 match &drop_id {
-                    DroppedId::Db(db_id, db_name, tables) => {
+                    DroppedId::Db {
+                        db_id,
+                        db_name,
+                        tables,
+                    } => {
                         if !failed_dbs.contains(db_name) {
                             success_dropped_ids.push(drop_id);
                         } else {

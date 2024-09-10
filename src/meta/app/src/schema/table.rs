@@ -922,8 +922,11 @@ pub struct ListDroppedTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    // db id, db name, (table id, table name)s
-    Db(u64, String, Arc<Vec<(u64, String)>>),
+    Db {
+        db_id: u64,
+        db_name: String,
+        tables: Vec<(u64, String)>,
+    },
     // db id, table id, table name
     Table(u64, u64, String),
 }
