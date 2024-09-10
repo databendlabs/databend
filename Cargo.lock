@@ -4351,6 +4351,7 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "fastrace",
+ "futures",
  "iceberg",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",

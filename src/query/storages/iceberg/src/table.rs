@@ -46,6 +46,8 @@ use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_pruner::RangePrunerCreator;
+use futures::Stream;
+use futures::TryStreamExt;
 use iceberg::spec::DataContentType;
 use iceberg::spec::ManifestContentType;
 use tokio::sync::OnceCell;
@@ -249,66 +251,34 @@ impl IcebergTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
-        let metadata = table.metadata_ref();
-        let snapshot = metadata.current_snapshot().ok_or_else(|| {
-            ErrorCode::ReadTableDataError("Iceberg table doesn't have valid snapshot")
-        })?;
+        let mut scan = table.scan();
 
-        let manifest_list = snapshot
-            .load_manifest_list(table.file_io(), &metadata)
-            .await
-            .map_err(|e| {
-                ErrorCode::ReadTableDataError(format!("Cannot load manifest list: {e:?}"))
-            })?;
-
-        let mut data_files = vec![];
-
-        for manifest_file in manifest_list
-            .entries()
-            .iter()
-            .filter(|v| v.content == ManifestContentType::Data)
-        {
-            let manifest = manifest_file
-                .load_manifest(table.file_io())
-                .await
-                .map_err(|e| {
-                    ErrorCode::ReadTableDataError(format!("Cannot load manifest file: {e:?}"))
-                })?;
-            manifest.entries().iter().for_each(|v| {
-                if v.content_type() == DataContentType::Data {
-                    data_files.push(v.data_file().clone());
-                }
-            });
+        if let Some(push_downs) = &push_downs {
+            if let Some(projection) = &push_downs.projection {
+                scan = scan.select(
+                    projection
+                        .project_schema(&self.schema())
+                        .fields
+                        .iter()
+                        .map(|v| v.name),
+                );
+            }
+            // Implement filter based on iceberg-rust's scan builder.
+            // if let Some(filter) = &push_downs.filters {}
         }
 
-        let filter = push_downs.as_ref().and_then(|extra| {
-            extra
-                .filters
-                .as_ref()
-                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
-        });
-
-        let schema = self.schema();
-
-        let pruner =
-            RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
+        let tasks = scan.build()?.plan_files().await?.try_collect().await?;
 
         // TODO: support other file formats. We only support parquet files now.
         let mut read_rows = 0;
         let mut read_bytes = 0;
-        let total_files = data_files.len();
-        let parts = data_files
+        let total_files = tasks.len();
+        let parts = tasks
             .into_iter()
-            .filter(|df| {
-                if let Some(stats) = get_stats_of_data_file(&schema, df) {
-                    pruner.should_keep(&stats, None)
-                } else {
-                    true
-                }
-            })
-            .map(|v: iceberg::spec::DataFile| {
-                read_rows += v.record_count() as usize;
-                read_bytes += v.file_size_in_bytes() as usize;
+            .map(|v: iceberg::scan::FileScanTask| {
+                // TODO: we need to know about the record_count.
+                // read_rows += v.record_count() as usize;
+                // read_bytes += v.file_size_in_bytes() as usize;
                 match v.file_format() {
                     iceberg::spec::DataFileFormat::Parquet => {
                         let location = v.file_path().to_string();
@@ -327,8 +297,6 @@ impl IcebergTable {
                 }
             })
             .collect::<Result<Vec<_>>>()?;
-
-        // TODO: more precise pruning.
 
         Ok((
             PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
