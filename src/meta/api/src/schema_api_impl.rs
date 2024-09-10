@@ -2865,15 +2865,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 };
 
                 let table_infos = do_get_table_history(self, db_filter, left_num).await?;
+                let take_num = left_num.unwrap_or(usize::MAX);
 
-                let limit = left_num.unwrap_or(table_infos.len());
-                let this_db_drop_table_infos = &table_infos[..limit];
-
-                if limit >= this_db_drop_table_infos.len() && drop_db {
+                if drop_db && take_num > table_infos.len() {
                     drop_ids.push(DroppedId::Db {
                         db_id: db_info.database_id.db_id,
                         db_name: db_info.name_ident.database_name().to_string(),
-                        tables: this_db_drop_table_infos
+                        tables: table_infos
                             .iter()
                             .map(|(table_info, _)| {
                                 (table_info.ident.table_id, table_info.name.clone())
@@ -2881,7 +2879,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             .collect(),
                     });
                 } else {
-                    for (table_info, db_id) in this_db_drop_table_infos {
+                    for (table_info, db_id) in table_infos.iter().take(take_num) {
                         drop_ids.push(DroppedId::Table(
                             *db_id,
                             table_info.ident.table_id,
@@ -2890,8 +2888,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     }
                 }
                 drop_table_infos.extend(
-                    this_db_drop_table_infos
+                    table_infos
                         .iter()
+                        .take(take_num)
                         .map(|(table_info, _)| table_info.clone()),
                 );
             }
