@@ -9413,6 +9413,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a45489186a6123c128fdf6016183fcfab7113e1820eb813127e036e287233fb"
 dependencies = [
  "jiff-tzdb-platform",
+ "serde",
  "windows-sys 0.59.0",
 ]
 
@@ -9932,15 +9933,22 @@ dependencies = [
 
 [[package]]
 name = "logforth"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4abc724f90e0ed134f80d18d39300038c0a65db1e96e22279ce7b2ee43638117"
+version = "0.11.0"
+source = "git+http://github.com/andylokandy/logforth?rev=0ca61ca#0ca61ca0fa3c87b5af5a08aa0354d96604e685c0"
 dependencies = [
  "anyhow",
  "colored",
+ "crossbeam-channel",
+ "fastrace 0.7.2",
  "jiff",
  "log",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "parking_lot 0.12.3",
  "paste",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -11088,6 +11096,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prost 0.13.1",
  "reqwest",
+ "serde_json",
  "thiserror",
  "tokio",
  "tonic 0.12.2",
@@ -11099,9 +11108,11 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30ee9f20bff9c984511a02f082dc8ede839e4a9bf15cc2487c8d6fea5ad850d9"
 dependencies = [
+ "hex",
  "opentelemetry",
  "opentelemetry_sdk",
  "prost 0.13.1",
+ "serde",
  "tonic 0.12.2",
 ]
 
