@@ -17,13 +17,16 @@ use std::alloc::dealloc;
 use std::alloc::Layout;
 use std::io;
 use std::io::IoSlice;
+use std::io::SeekFrom;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::ops::Range;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
 use databend_common_base::runtime::spawn_blocking;
 use tokio::fs::File;
+use tokio::io::AsyncSeekExt;
 
 /// An aligned buffer used to perform io on a `DmaFile`.
 #[derive(Debug)]
@@ -38,7 +41,7 @@ unsafe impl Send for DmaBuffer {}
 
 impl DmaBuffer {
     /// Allocates an aligned buffer.
-    pub(crate) fn new(cap: usize, align: usize) -> DmaBuffer {
+    fn new(cap: usize, align: usize) -> DmaBuffer {
         let layout = Layout::from_size_align(cap, align).unwrap();
         let data = unsafe { alloc(layout) };
         Self {
@@ -115,35 +118,17 @@ impl Drop for DmaBuffer {
 
 /// A `DmaFile` is similar to a `File`, but it is openened with the `O_DIRECT` file in order to
 /// perform direct IO.
-pub struct DmaFile {
+struct DmaFile {
     fd: File,
     alignment: usize,
-    buf: DmaBuffer,
+    buf: Option<DmaBuffer>,
 }
 
 impl DmaFile {
     /// Attempts to open a file in read-only mode.
-    // pub async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
-    //     let options = OpenOptions::new();
-    //     const O_DIRECT: i32 = 0x00040000;
-
-    //     let file = options.read(true).custom_flags(O_DIRECT).open(path).await?;
-
-    //     let statfs = fstatfs(&fd).await?;
-    //     // TODO: the actual aligment may differ from the optimal io size? we should probably get
-    //     // this information from the the device the file lives on.
-    //     let alignment = statfs.f_bsize.max(512) as usize;
-    //     Ok(DmaFile { fd, alignment });
-
-    //     OpenOptions::new().read(true).open_dma(path).await
-    // }
-
-    /// Opens a file in write-only mode.
-    pub async fn create(path: impl AsRef<Path>) -> io::Result<DmaFile> {
+    async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
         let file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
+            .read(true)
             .custom_flags(libc::O_DIRECT)
             .open(path)
             .await?;
@@ -151,40 +136,67 @@ impl DmaFile {
         open_dma(file).await
     }
 
+    /// Opens a file in write-only mode.
+    async fn create(path: impl AsRef<Path>) -> io::Result<DmaFile> {
+        let file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .custom_flags(libc::O_DIRECT | libc::O_EXCL)
+            .open(path)
+            .await?;
+
+        open_dma(file).await
+    }
+
+    fn set_buffer(&mut self, buf: DmaBuffer) {
+        self.buf = Some(buf)
+    }
+
     /// Aligns `value` up to the memory alignement requirement for this file.
     pub fn align_up(&self, value: usize) -> usize {
-        (value + self.alignment - 1) & !(self.alignment - 1)
+        align_up(self.alignment, value)
     }
 
     /// Aligns `value` down to the memory alignement requirement for this file.
+    #[allow(dead_code)]
     pub fn align_down(&self, value: usize) -> usize {
-        value & !(self.alignment - 1)
+        align_down(self.alignment, value)
     }
 
     /// Return the alignement requirement for this file. The returned alignement value can be used
     /// to allocate a buffer to use with this file:
+    #[allow(dead_code)]
     pub fn alignment(&self) -> usize {
         self.alignment
     }
 
-    pub fn buffer(&self) -> &DmaBuffer {
-        &self.buf
+    fn buffer(&self) -> &DmaBuffer {
+        self.buf.as_ref().unwrap()
     }
 
-    pub fn mut_buffer(&mut self) -> &mut DmaBuffer {
-        &mut self.buf
+    fn mut_buffer(&mut self) -> &mut DmaBuffer {
+        self.buf.as_mut().unwrap()
     }
 
     fn write_direct(&mut self) -> io::Result<usize> {
-        let rt = unsafe {
-            libc::write(
-                self.fd.as_raw_fd(),
-                self.buf.as_ptr().cast(),
-                self.buf.capacity(),
-            )
-        };
-        unsafe { self.buf.set_len(0) }
+        let buf = self.buffer();
+        let rt = unsafe { libc::write(self.fd.as_raw_fd(), buf.as_ptr().cast(), buf.len()) };
+        unsafe { self.mut_buffer().set_len(0) }
         if rt >= 0 {
+            Ok(rt as usize)
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    fn read_direct(&mut self) -> io::Result<usize> {
+        let fd = self.fd.as_raw_fd();
+        let buf = self.mut_buffer();
+        let rt = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.capacity()) };
+        if rt >= 0 {
+            debug_assert_eq!(buf.capacity(), rt as usize);
+            unsafe { buf.set_len(rt as usize) }
             Ok(rt as usize)
         } else {
             Err(io::Error::last_os_error())
@@ -200,9 +212,17 @@ impl DmaFile {
         }
     }
 
-    pub async fn close(self) -> io::Result<()> {
-        todo!()
+    async fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        self.fd.seek(pos).await
     }
+}
+
+pub fn align_up(alignment: usize, value: usize) -> usize {
+    (value + alignment - 1) & !(alignment - 1)
+}
+
+pub fn align_down(alignment: usize, value: usize) -> usize {
+    value & !(alignment - 1)
 }
 
 async fn open_dma(file: File) -> io::Result<DmaFile> {
@@ -210,11 +230,11 @@ async fn open_dma(file: File) -> io::Result<DmaFile> {
     // TODO: the actual aligment may differ from the optimal io size? we should probably get
     // this information from the the device the file lives on.
     let alignment = statfs.f_bsize.max(512) as usize;
-    let buf = DmaBuffer::new(alignment, alignment);
+
     Ok(DmaFile {
         fd: file,
         alignment,
-        buf,
+        buf: None,
     })
 }
 
@@ -251,6 +271,8 @@ pub async fn dma_write_file_vectored<'a>(
     bufs: &'a [IoSlice<'a>],
 ) -> io::Result<usize> {
     let mut file = DmaFile::create(path.as_ref()).await?;
+    let buf = DmaBuffer::new(file.alignment, file.alignment);
+    file.set_buffer(buf);
 
     for buf in bufs {
         let mut buf = &buf[..];
@@ -270,56 +292,154 @@ pub async fn dma_write_file_vectored<'a>(
     }
 
     let file_length = bufs.iter().map(|buf| buf.len()).sum();
-    let dst = file.mut_buffer();
-    if dst.remaining() > 0 {
-        unsafe { dst.set_len(dst.cap) }
-        file = asyncify(move || file.write_direct().map(|_| file)).await?;
-        asyncify(move || file.truncate(file_length).map(|_| file)).await?;
+    let len = file.buffer().len();
+    if len > 0 {
+        let align_up = file.align_up(len);
+        if align_up == len {
+            asyncify(move || file.write_direct().map(|_| file)).await?;
+        } else {
+            let dst = file.mut_buffer();
+            unsafe { dst.set_len(align_up) }
+            file = asyncify(move || file.write_direct().map(|_| file)).await?;
+            asyncify(move || file.truncate(file_length).map(|_| file)).await?;
+        }
     }
 
     Ok(file_length)
 }
 
-// fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
-//     let data_len = buf.len();
-//     if self.n != 0 {
-//         let end = self.n + buf.len();
-//         if end < self.buf.len() {
-//             self.buf[self.n..end].copy_from_slice(buf);
-//             self.n = end;
-//             return Ok(buf.len());
-//         } else {
-//             let r = self.buf.len() - self.n;
-//             self.buf[self.n..].copy_from_slice(&buf[..r]);
-//             let n = self.write_direct(&self.buf)?;
-//             assert_eq!(n, self.buf.len());
-//             self.n = 0;
-//             buf = &buf[r..];
-//         }
-//     }
-//     while buf.len() >= SIZE_OF_BLOCK {
-//         let r = buf.len() & ALIGN_SIZE_OF_BLOCK;
-//         let n = self.write_direct(&buf[..r])?;
-//         buf = &buf[n..];
-//     }
-//     if !buf.is_empty() {
-//         self.buf[0..buf.len()].copy_from_slice(buf);
-//         self.n = buf.len();
-//     }
-//     Ok(data_len)
-// }
+pub async fn dma_read_file(
+    path: impl AsRef<Path>,
+    mut writer: impl io::Write,
+) -> io::Result<usize> {
+    let mut file = DmaFile::open(path.as_ref()).await?;
+    let buf = DmaBuffer::new(file.alignment, file.alignment);
+    file.set_buffer(buf);
+
+    let mut n = 0;
+    loop {
+        file = asyncify(move || file.read_direct().map(|_| file)).await?;
+
+        let buf = file.buffer();
+        if buf.is_empty() {
+            return Ok(n);
+        }
+        n += buf.len();
+        writer.write_all(buf)?;
+        let eof = buf.remaining() > 0;
+        unsafe { file.mut_buffer().set_len(0) }
+        if eof {
+            return Ok(n);
+        }
+    }
+}
+
+pub async fn dma_read_file_range(
+    path: impl AsRef<Path>,
+    range: Range<u64>,
+) -> io::Result<(DmaBuffer, Range<usize>)> {
+    if range.is_empty() {
+        return Ok((DmaBuffer::new(2, 2), 0..0));
+    }
+
+    let mut file = DmaFile::open(path.as_ref()).await?;
+
+    let align_start = file.align_down(range.start as usize);
+    let align_end = file.align_up(range.end as usize);
+
+    let buf = DmaBuffer::new(align_end - align_start, file.alignment);
+    file.set_buffer(buf);
+
+    let offset = file.seek(SeekFrom::Start(align_start as u64)).await?;
+
+    if offset as usize != align_start {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "range out of range",
+        ));
+    }
+
+    file = asyncify(move || file.read_direct().map(|_| file)).await?;
+
+    let rt_range = range.start as usize - align_start..range.end as usize - align_start;
+    Ok((file.buf.unwrap(), rt_range))
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_xxx() {
-        let data1 = b"aaa";
+    async fn test_read_write() {
+        let _ = std::fs::remove_file("test_file");
 
-        let bufs = vec![IoSlice::new(data1)];
-        let length = dma_write_file_vectored("./test_file", &bufs).await.unwrap();
+        run_test(0).await.unwrap();
+        run_test(100).await.unwrap();
+        run_test(200).await.unwrap();
 
-        println!("{length}");
+        run_test(4096 - 1).await.unwrap();
+        run_test(4096).await.unwrap();
+        run_test(4096 + 1).await.unwrap();
+
+        run_test(4096 * 2 - 1).await.unwrap();
+        run_test(4096 * 2).await.unwrap();
+        run_test(4096 * 2 + 1).await.unwrap();
+    }
+
+    async fn run_test(n: usize) -> io::Result<()> {
+        let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
+
+        let bufs = vec![IoSlice::new(&want)];
+        let length = dma_write_file_vectored("test_file", &bufs).await?;
+
+        assert_eq!(length, want.len());
+
+        let mut got = Vec::new();
+
+        let length = dma_read_file("test_file", &mut got).await?;
+        assert_eq!(length, want.len());
+        assert_eq!(got, want);
+
+        std::fs::remove_file("test_file")?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_range_read() {
+        let _ = std::fs::remove_file("test_file");
+        let n: usize = 4096 * 2;
+
+        let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
+
+        let bufs = vec![IoSlice::new(&want)];
+        dma_write_file_vectored("test_file", &bufs).await.unwrap();
+
+        let got = dma_read_file_range("test_file", 0..10).await.unwrap();
+        let got = got.0[got.1].to_vec();
+        assert_eq!(&want[0..10], got);
+
+        let got = dma_read_file_range("test_file", 10..30).await.unwrap();
+        let got = got.0[got.1].to_vec();
+        assert_eq!(&want[10..30], got);
+
+        let got = dma_read_file_range("test_file", 4096 - 5..4096 + 5)
+            .await
+            .unwrap();
+        let got = got.0[got.1].to_vec();
+        assert_eq!(&want[4096 - 5..4096 + 5], got);
+
+        let got = dma_read_file_range("test_file", 4096..4096 + 5)
+            .await
+            .unwrap();
+        let got = got.0[got.1].to_vec();
+        assert_eq!(&want[4096..4096 + 5], got);
+
+        let got = dma_read_file_range("test_file", 4096 * 2 - 5..4096 * 2)
+            .await
+            .unwrap();
+        let got = got.0[got.1].to_vec();
+        assert_eq!(&want[4096 * 2 - 5..4096 * 2], got);
+
+        let _ = std::fs::remove_file("test_file");
     }
 }

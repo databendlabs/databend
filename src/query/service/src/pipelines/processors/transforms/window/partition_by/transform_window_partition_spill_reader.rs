@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_cache::dma_read_file_range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
@@ -31,13 +32,13 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use itertools::Itertools;
 use log::info;
 use opendal::Operator;
 
+use super::BucketSpilledWindowPayload;
+use super::Location;
 use super::WindowPartitionMeta;
 use super::WindowPayload;
-use crate::pipelines::processors::transforms::window::partition_by::BucketSpilledWindowPayload;
 
 type DeserializingMeta = (WindowPartitionMeta, VecDeque<Vec<u8>>);
 
@@ -130,16 +131,12 @@ impl Processor for TransformWindowPartitionSpillReader {
                     let mut new_data = Vec::with_capacity(data.len());
 
                     for meta in data {
-                        if matches!(&meta, WindowPartitionMeta::BucketSpilled(_)) {
-                            if let WindowPartitionMeta::BucketSpilled(p) = meta {
-                                let data = read_data.pop_front().unwrap();
-                                new_data.push(Self::deserialize(p, data));
-                            }
-
-                            continue;
+                        if let WindowPartitionMeta::BucketSpilled(p) = meta {
+                            let data = read_data.pop_front().unwrap();
+                            new_data.push(Self::deserialize(p, data));
+                        } else {
+                            new_data.push(meta);
                         }
-
-                        new_data.push(meta);
                     }
 
                     self.deserialized_meta =
@@ -159,77 +156,11 @@ impl Processor for TransformWindowPartitionSpillReader {
                 WindowPartitionMeta::Spilling(_) => unreachable!(),
                 WindowPartitionMeta::BucketSpilled(_) => unreachable!(),
                 WindowPartitionMeta::Payload(_) => unreachable!(),
-                WindowPartitionMeta::Partitioned { data, .. } => {
-                    let mut total_elapsed = Duration::default();
-                    let log_interval = 100;
-                    let mut processed_count = 0;
-
-                    let mut read_data = Vec::with_capacity(data.len());
-                    for meta in data {
-                        if let WindowPartitionMeta::BucketSpilled(p) = meta {
-                            let location = p.location.clone();
-                            let operator = self.operator.clone();
-                            let data_range = p.data_range.clone();
-                            read_data.push(databend_common_base::runtime::spawn(async move {
-                                let instant = Instant::now();
-                                let data = operator
-                                    .read_with(&location)
-                                    .range(data_range)
-                                    .await?
-                                    .to_vec();
-
-                                // perf
-                                {
-                                    Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadCount,
-                                        1,
-                                    );
-                                    Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadBytes,
-                                        data.len(),
-                                    );
-                                    Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadTime,
-                                        instant.elapsed().as_millis() as usize,
-                                    );
-                                }
-
-                                total_elapsed += instant.elapsed();
-                                processed_count += 1;
-
-                                // log the progress
-                                if processed_count % log_interval == 0 {
-                                    info!(
-                                        "Read window partition {}/{} spilled buckets, elapsed: {:?}",
-                                        processed_count,
-                                        data.len(),
-                                        total_elapsed
-                                    );
-                                }
-
-                                Ok(data)
-                            }));
-                        }
-                    }
-
-                    match futures::future::try_join_all(read_data).await {
-                        Err(_) => {
-                            return Err(ErrorCode::TokioError("Cannot join tokio job"));
-                        }
-                        Ok(read_data) => {
-                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
-                                read_data.into_iter().try_collect();
-
-                            self.deserializing_meta = Some((block_meta, read_data?));
-                        }
-                    };
-
-                    if processed_count > 0 {
-                        info!(
-                            "Read {} window partition spills successfully, total elapsed: {:?}",
-                            processed_count, total_elapsed
-                        );
-                    }
+                WindowPartitionMeta::Partitioned {
+                    data: data_meta, ..
+                } => {
+                    let data = self.load_bytes(data_meta).await?;
+                    self.deserializing_meta = Some((block_meta, data));
                 }
             }
         }
@@ -269,5 +200,79 @@ impl TransformWindowPartitionSpillReader {
             bucket: payload.bucket,
             data: DataBlock::new_from_columns(columns),
         })
+    }
+
+    async fn load_bytes(&mut self, data_meta: &[WindowPartitionMeta]) -> Result<VecDeque<Vec<u8>>> {
+        let mut total_elapsed = Duration::default();
+        let log_interval = 100;
+        let mut processed_count = 0;
+
+        let load_jobs = data_meta
+            .iter()
+            .filter_map(|meta| {
+                if let WindowPartitionMeta::BucketSpilled(p) = meta {
+                    let location = p.location.clone();
+                    let operator = self.operator.clone();
+                    let data_range = p.data_range.clone();
+
+                    Some(databend_common_base::runtime::spawn(async move {
+                        let instant = Instant::now();
+
+                        let data = match location {
+                            Location::Storage(path) => {
+                                operator.read_with(&path).range(data_range).await?.to_vec()
+                            }
+                            Location::Disk(path) => {
+                                let (buf, range) = dma_read_file_range(path, data_range).await?;
+                                buf[range].to_vec()
+                            }
+                        };
+
+                        // perf
+                        {
+                            Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+                            Profile::record_usize_profile(
+                                ProfileStatisticsName::SpillReadBytes,
+                                data.len(),
+                            );
+                            Profile::record_usize_profile(
+                                ProfileStatisticsName::SpillReadTime,
+                                instant.elapsed().as_millis() as usize,
+                            );
+                        }
+
+                        total_elapsed += instant.elapsed();
+                        processed_count += 1;
+
+                        // log the progress
+                        if processed_count % log_interval == 0 {
+                            info!(
+                                "Read window partition {}/{} spilled buckets, elapsed: {:?}",
+                                processed_count,
+                                data.len(),
+                                total_elapsed,
+                            );
+                        }
+                        Ok::<_, ErrorCode>(data)
+                    }))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let data = match futures::future::try_join_all(load_jobs).await {
+            Err(_) => {
+                return Err(ErrorCode::TokioError("Cannot join tokio job"));
+            }
+            Ok(data) => data.into_iter().collect::<std::result::Result<_, _>>()?,
+        };
+
+        if processed_count > 0 {
+            info!(
+                "Read {processed_count} window partition spills successfully, total elapsed: {total_elapsed:?}",
+            );
+        }
+        Ok(data)
     }
 }

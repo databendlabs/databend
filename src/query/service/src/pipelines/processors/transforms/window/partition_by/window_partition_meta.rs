@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Range;
+use std::path::PathBuf;
 
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
@@ -32,9 +33,15 @@ pub struct SpillingWindowPayloads {
 
 pub struct BucketSpilledWindowPayload {
     pub bucket: isize,
-    pub location: String,
+    pub location: Location,
     pub data_range: Range<u64>,
     pub columns_layout: Vec<u64>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Location {
+    Storage(String),
+    Disk(PathBuf),
 }
 
 pub enum WindowPartitionMeta {

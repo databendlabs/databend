@@ -185,6 +185,7 @@ impl PipelineBuilder {
                     input,
                     output,
                     operator.clone(),
+                    None,
                     location_prefix.clone(),
                 ),
             ))

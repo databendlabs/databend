@@ -3212,8 +3212,11 @@ dependencies = [
 name = "databend-common-cache"
 version = "0.1.0"
 dependencies = [
+ "databend-common-base",
  "hashbrown 0.14.5",
  "hashlink 0.8.4",
+ "libc",
+ "tokio",
 ]
 
 [[package]]
@@ -3996,7 +3999,6 @@ dependencies = [
  "databend-common-pipeline-core",
  "itertools 0.10.5",
  "jsonb",
- "libc",
  "log",
  "match-template",
  "rand 0.8.5",

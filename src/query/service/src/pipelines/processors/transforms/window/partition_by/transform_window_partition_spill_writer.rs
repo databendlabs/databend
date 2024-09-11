@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::io;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -20,6 +23,7 @@ use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_cache::dma_write_file_vectored;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,6 +40,7 @@ use opendal::Operator;
 
 use super::convert_to_partitions;
 use super::BucketSpilledWindowPayload;
+use super::Location;
 use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::window::partition_by::SpillingWindowPayloads;
 use crate::pipelines::processors::transforms::window::partition_by::PARTITION_COUNT;
@@ -48,6 +53,7 @@ pub struct TransformWindowPartitionSpillWriter {
 
     operator: Operator,
     location_prefix: String,
+    disk: Option<DiskConfig>,
     spilled_block: Option<DataBlock>,
     spilling_meta: Option<WindowPartitionMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
@@ -59,6 +65,7 @@ impl TransformWindowPartitionSpillWriter {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
+        disk: Option<DiskConfig>,
         location_prefix: String,
     ) -> Box<dyn Processor> {
         Box::new(TransformWindowPartitionSpillWriter {
@@ -66,12 +73,18 @@ impl TransformWindowPartitionSpillWriter {
             input,
             output,
             operator,
+            disk,
             location_prefix,
             spilled_block: None,
             spilling_meta: None,
             spilling_future: None,
         })
     }
+}
+
+pub struct DiskConfig {
+    pub root: PathBuf,
+    pub bytes_limit: usize,
 }
 
 #[async_trait::async_trait]
@@ -148,6 +161,8 @@ impl Processor for TransformWindowPartitionSpillWriter {
                         self.ctx.clone(),
                         self.operator.clone(),
                         &self.location_prefix,
+                        self.disk.as_mut(),
+                        GlobalUniqName::unique(),
                         payload,
                     )?);
 
@@ -179,66 +194,80 @@ pub fn spilling_window_payload(
     ctx: Arc<QueryContext>,
     operator: Operator,
     location_prefix: &str,
+    disk: Option<&mut DiskConfig>,
+    unique_name: String,
     payload: SpillingWindowPayloads,
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
     let partitions = convert_to_partitions(payload.data)?;
 
-    let unique_name = GlobalUniqName::unique();
-    let location = format!("{}/{}", location_prefix, unique_name);
-
-    let mut write_size = 0;
-    let mut write_data = Vec::with_capacity(PARTITION_COUNT);
-    let mut spilled_buckets_payloads = Vec::with_capacity(PARTITION_COUNT);
     let mut rows = 0;
+    let mut write_size: u64 = 0;
+    let mut write_data = Vec::with_capacity(PARTITION_COUNT);
 
-    for (bucket, block) in partitions.into_iter() {
-        if block.is_empty() {
-            continue;
+    let partitions = partitions
+        .into_iter()
+        .filter_map(|(bucket, block)| {
+            if block.is_empty() {
+                return None;
+            }
+            rows += block.num_rows();
+
+            let columns_data = block
+                .columns()
+                .iter()
+                .map(|entry| {
+                    let column = entry
+                        .value
+                        .convert_to_full_column(&entry.data_type, block.num_rows());
+                    serialize_column(&column)
+                })
+                .collect::<Vec<_>>();
+
+            let columns_layout = columns_data
+                .iter()
+                .map(|data| data.len() as u64)
+                .collect::<Vec<_>>();
+
+            write_data.push(columns_data);
+
+            let begin = write_size;
+            write_size += columns_layout.iter().sum::<u64>();
+
+            Some((bucket, columns_layout, begin..write_size))
+        })
+        .collect::<Vec<_>>();
+
+    let location = match disk {
+        Some(disk) if disk.bytes_limit as u64 >= write_size => {
+            disk.bytes_limit -= write_size as usize;
+            Location::Disk(disk.root.join(unique_name))
         }
+        _ => Location::Storage(format!("{location_prefix}/{unique_name}")),
+    };
 
-        rows += block.num_rows();
+    let spilled_buckets_payloads = partitions
+        .into_iter()
+        .map(
+            |(bucket, columns_layout, data_range)| BucketSpilledWindowPayload {
+                bucket,
+                location: location.clone(),
+                data_range,
+                columns_layout,
+            },
+        )
+        .collect::<Vec<_>>();
 
-        let begin = write_size;
-        let columns = block.columns().to_vec();
-        let mut columns_data = Vec::with_capacity(columns.len());
-        let mut columns_layout = Vec::with_capacity(columns.len());
-        for column in columns.into_iter() {
-            let column = column
-                .value
-                .convert_to_full_column(&column.data_type, block.num_rows());
-            let column_data = serialize_column(&column);
-            write_size += column_data.len() as u64;
-            columns_layout.push(column_data.len() as u64);
-            columns_data.push(column_data);
-        }
-
-        write_data.push(columns_data);
-        spilled_buckets_payloads.push(BucketSpilledWindowPayload {
-            bucket,
-            location: location.clone(),
-            data_range: begin..write_size,
-            columns_layout,
-        });
-    }
-
-    Ok(Box::pin(async move {
+    let future = Box::pin(async move {
         let instant = Instant::now();
 
-        let mut write_bytes = 0;
-        if !write_data.is_empty() {
-            let mut writer = operator
-                .writer_with(&location)
-                .chunk(8 * 1024 * 1024)
-                .await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
-                }
+        let write_bytes = if write_data.is_empty() {
+            0
+        } else {
+            match &location {
+                Location::Storage(path) => write_to_storage(&operator, path, write_data).await?,
+                Location::Disk(path) => write_to_disk(path, write_data).await?,
             }
-
-            writer.close().await?;
-        }
+        };
 
         // perf
         {
@@ -260,13 +289,40 @@ pub fn spilling_window_payload(
         }
 
         info!(
-            "Write window partition spill {} successfully, elapsed: {:?}",
-            location,
+            "Write window partition spill {location:?} successfully, elapsed: {:?}",
             instant.elapsed()
         );
 
         Ok(DataBlock::empty_with_meta(
             WindowPartitionMeta::create_spilled(spilled_buckets_payloads),
         ))
-    }))
+    });
+    Ok(future)
+}
+
+async fn write_to_storage(
+    operator: &Operator,
+    path: &str,
+    write_data: Vec<Vec<Vec<u8>>>,
+) -> Result<usize> {
+    let mut writer = operator.writer_with(path).chunk(8 * 1024 * 1024).await?;
+
+    let mut writen = 0;
+    for data in write_data.into_iter().flatten() {
+        writen += data.len();
+        writer.write(data).await?;
+    }
+
+    writer.close().await?;
+    Ok(writen)
+}
+
+async fn write_to_disk(path: impl AsRef<Path>, write_data: Vec<Vec<Vec<u8>>>) -> io::Result<usize> {
+    let bufs = write_data
+        .iter()
+        .flatten()
+        .map(|data| io::IoSlice::new(data))
+        .collect::<Vec<_>>();
+
+    dma_write_file_vectored(path, &bufs).await
 }
