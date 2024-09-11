@@ -813,11 +813,6 @@ pub enum DictionarySource {
     Redis(RedisSource),
 }
 
-pub enum DictionaryOperator {
-    RedisOp(Operator),
-    MysqlConn(MySqlConnection),
-}
-
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct DictGetFunctionArgument {

@@ -139,7 +139,7 @@ naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
-opensrv-mysql = "0.7.0"
+opensrv-mysql = { version = "0.7.0", features = ["tls"] }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
@@ -163,8 +163,7 @@ serde_stacker = { workspace = true }
 serde_urlencoded = "0.7.1"
 sha2 = { workspace = true }
 socket2 = "0.5.3"
-sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls" ] }
-sqlx-mysql = { version = "=0.8.2" }
+sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 strength_reduce = "0.2.4"
 sysinfo = "0.30"
 tempfile = "3.4.0"
