@@ -72,7 +72,7 @@ impl BlockThresholds {
             return total_rows;
         }
 
-        let mut rows_per_block = total_rows.div_ceil(total_bytes / self.max_bytes_per_block);
+        let mut rows_per_block = total_rows.div_ceil(std::cmp::max(total_bytes / self.max_bytes_per_block, 1));
         let max_bytes_per_block = match rows_per_block {
             v if v < self.max_rows_per_block / 10 => {
                 // If block rows < 100_000, max_bytes_per_block set to 200M
