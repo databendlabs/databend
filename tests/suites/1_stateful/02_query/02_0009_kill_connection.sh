@@ -8,16 +8,28 @@ perform_initial_query() {
 }
 poll_stats_uri() {
     local uri=$1
+    local timeout=30
+    local elapsed=0
     local state_exists=true
+
     while $state_exists; do
         local response=$(curl -s -u root: -XGET "http://localhost:8000$uri")
+        echo "$response"
         if ! echo "$response" | jq -e '.state' > /dev/null; then
             state_exists=false
         else
             sleep 2
+            elapsed=$((elapsed + 2))
+
+            if [ "$elapsed" -ge "$timeout" ]; then
+                echo "Polling timed out after $timeout seconds."
+                kill $$
+                exit 1
+            fi
         fi
     done
 }
+
 get_final_state() {
     local uri=$1
     local response=$(curl -s -u root: -XGET "http://localhost:8000$uri")
@@ -74,3 +86,4 @@ wait $POLL_PID
 final_state=$(get_final_state "$final_uri")
 echo "Final state: $final_state"
 
+cat tcpkill_output.txt
