@@ -45,6 +45,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
@@ -247,16 +248,28 @@ impl Binder {
         };
 
         if let Some(fields) = fields {
-            if let RelOperator::EvalScalar(plan) = (*srf_expr.plan).clone() {
-                if plan.items.len() != 1 {
+            if let RelOperator::ProjectSet(plan) = (*srf_expr.plan).clone() {
+                if plan.srfs.len() != 1 {
                     return Err(ErrorCode::Internal(format!(
-                        "Invalid table function subquery EvalScalar items, expect 1, but got {}",
-                        plan.items.len()
+                        "Invalid table function subquery items, expect 1, but got {}",
+                        plan.srfs.len()
                     )));
                 }
                 // Delete srf result tuple column, extract tuple inner columns instead
                 let _ = bind_context.columns.pop();
-                let scalar = &plan.items[0].scalar;
+                let column = self.metadata.read().column(plan.srfs[0].index).clone();
+                let column_binding = ColumnBindingBuilder::new(
+                    column.name(),
+                    column.index(),
+                    Box::new(column.data_type().clone()),
+                    Visibility::InVisible,
+                )
+                .build();
+
+                let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                });
 
                 // Add tuple inner columns
                 let mut items = Vec::with_capacity(fields.len());
@@ -290,7 +303,7 @@ impl Binder {
                 }
                 let eval_scalar = EvalScalar { items };
                 let new_expr =
-                    SExpr::create_unary(Arc::new(eval_scalar.into()), srf_expr.children[0].clone());
+                    SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
 
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
