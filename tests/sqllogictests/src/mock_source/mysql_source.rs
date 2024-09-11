@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::io;
-use tokio::io::AsyncWrite;
 
 use opensrv_mysql::*;
+use tokio::io::AsyncWrite;
 use tokio::net::TcpListener;
 struct Backend;
 
