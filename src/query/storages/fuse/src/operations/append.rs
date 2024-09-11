@@ -15,7 +15,6 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -25,11 +24,9 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
-use databend_common_pipeline_transforms::processors::BlockCompactor;
-use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
@@ -45,32 +42,10 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        append_mode: AppendMode,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
-
-        match append_mode {
-            AppendMode::Normal => {
-                pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    Ok(ProcessorPtr::create(TransformCompact::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        BlockCompactor::new(block_thresholds),
-                    )?))
-                })?;
-            }
-            AppendMode::Copy => {
-                pipeline.try_resize(1)?;
-                pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    Ok(ProcessorPtr::create(TransformCompact::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        BlockCompactor::new(block_thresholds),
-                    )?))
-                })?;
-                pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
-            }
-        }
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        build_compact_block_pipeline(pipeline, block_thresholds, max_threads)?;
 
         let schema = DataSchema::from(self.schema()).into();
         let cluster_stats_gen =
