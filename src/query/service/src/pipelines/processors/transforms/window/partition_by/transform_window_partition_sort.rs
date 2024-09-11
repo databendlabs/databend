@@ -26,7 +26,8 @@ use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 
-use crate::pipelines::processors::transforms::WindowPartitionMeta;
+use super::Partitioned;
+use super::WindowPartitionMeta;
 
 pub struct TransformWindowPartitionSort {
     sort_desc: Vec<SortColumnDescription>,
@@ -67,19 +68,16 @@ impl BlockMetaTransform<WindowPartitionMeta> for TransformWindowPartitionSort {
     const NAME: &'static str = "TransformWindowPartitionSort";
 
     fn transform(&mut self, meta: WindowPartitionMeta) -> Result<Vec<DataBlock>> {
-        if let WindowPartitionMeta::Partitioned { bucket, data } = meta {
+        if let WindowPartitionMeta::Partitioned(Partitioned { bucket, data }) = meta {
             let mut sort_blocks = Vec::with_capacity(data.len());
             for bucket_data in data {
                 match bucket_data {
-                    WindowPartitionMeta::Spilled(_) => unreachable!(),
-                    WindowPartitionMeta::BucketSpilled(_) => unreachable!(),
-                    WindowPartitionMeta::Partitioned { .. } => unreachable!(),
-                    WindowPartitionMeta::Spilling(_) => unreachable!(),
                     WindowPartitionMeta::Payload(p) => {
                         debug_assert!(bucket == p.bucket);
                         let sort_block = DataBlock::sort(&p.data, &self.sort_desc, None)?;
                         sort_blocks.push(sort_block);
                     }
+                    _ => unreachable!(),
                 }
             }
 

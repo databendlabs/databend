@@ -31,6 +31,7 @@ pub struct SpillingWindowPayloads {
     pub data: BTreeMap<usize, Vec<DataBlock>>,
 }
 
+#[derive(Clone)]
 pub struct BucketSpilledWindowPayload {
     pub bucket: isize,
     pub location: Location,
@@ -50,7 +51,12 @@ pub enum WindowPartitionMeta {
     BucketSpilled(BucketSpilledWindowPayload),
     Payload(WindowPayload),
 
-    Partitioned { bucket: isize, data: Vec<Self> },
+    Partitioned(Partitioned),
+}
+
+pub struct Partitioned {
+    pub bucket: isize,
+    pub data: Vec<WindowPartitionMeta>,
 }
 
 impl WindowPartitionMeta {
@@ -73,7 +79,10 @@ impl WindowPartitionMeta {
     }
 
     pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
-        Box::new(WindowPartitionMeta::Partitioned { bucket, data })
+        Box::new(WindowPartitionMeta::Partitioned(Partitioned {
+            bucket,
+            data,
+        }))
     }
 }
 

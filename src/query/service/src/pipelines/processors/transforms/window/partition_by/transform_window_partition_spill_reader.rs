@@ -37,10 +37,9 @@ use opendal::Operator;
 
 use super::BucketSpilledWindowPayload;
 use super::Location;
+use super::Partitioned;
 use super::WindowPartitionMeta;
 use super::WindowPayload;
-
-type DeserializingMeta = (WindowPartitionMeta, VecDeque<Vec<u8>>);
 
 pub struct TransformWindowPartitionSpillReader {
     input: Arc<InputPort>,
@@ -48,8 +47,7 @@ pub struct TransformWindowPartitionSpillReader {
 
     operator: Operator,
     deserialized_meta: Option<BlockMetaInfoPtr>,
-    reading_meta: Option<WindowPartitionMeta>,
-    deserializing_meta: Option<DeserializingMeta>,
+    reading_meta: Option<Partitioned>,
 }
 
 #[async_trait::async_trait]
@@ -79,11 +77,6 @@ impl Processor for TransformWindowPartitionSpillReader {
             return Ok(Event::NeedConsume);
         }
 
-        if self.deserializing_meta.is_some() {
-            self.input.set_not_need_data();
-            return Ok(Event::Sync);
-        }
-
         if self.reading_meta.is_some() {
             self.input.set_not_need_data();
             return Ok(Event::Async);
@@ -92,7 +85,7 @@ impl Processor for TransformWindowPartitionSpillReader {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
 
-            if let Some(WindowPartitionMeta::Partitioned { data, .. }) = data_block
+            if let Some(WindowPartitionMeta::Partitioned(Partitioned { data, .. })) = data_block
                 .get_meta()
                 .and_then(WindowPartitionMeta::downcast_ref_from)
             {
@@ -101,8 +94,12 @@ impl Processor for TransformWindowPartitionSpillReader {
                     .any(|meta| matches!(meta, WindowPartitionMeta::BucketSpilled(_)))
                 {
                     self.input.set_not_need_data();
-                    let block_meta = data_block.take_meta().unwrap();
-                    self.reading_meta = WindowPartitionMeta::downcast_from(block_meta);
+                    let meta = WindowPartitionMeta::downcast_from(data_block.take_meta().unwrap());
+                    if let Some(WindowPartitionMeta::Partitioned(partitioned)) = meta {
+                        self.reading_meta = Some(partitioned)
+                    } else {
+                        unreachable!()
+                    }
                     return Ok(Event::Async);
                 }
             }
@@ -120,50 +117,23 @@ impl Processor for TransformWindowPartitionSpillReader {
         Ok(Event::NeedData)
     }
 
-    fn process(&mut self) -> Result<()> {
-        if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
-            match meta {
-                WindowPartitionMeta::Spilled(_) => unreachable!(),
-                WindowPartitionMeta::Spilling(_) => unreachable!(),
-                WindowPartitionMeta::BucketSpilled(_) => unreachable!(),
-                WindowPartitionMeta::Payload(_) => unreachable!(),
-                WindowPartitionMeta::Partitioned { bucket, data } => {
-                    let mut new_data = Vec::with_capacity(data.len());
-
-                    for meta in data {
-                        if let WindowPartitionMeta::BucketSpilled(p) = meta {
-                            let data = read_data.pop_front().unwrap();
-                            new_data.push(Self::deserialize(p, data));
-                        } else {
-                            new_data.push(meta);
-                        }
-                    }
-
-                    self.deserialized_meta =
-                        Some(WindowPartitionMeta::create_partitioned(bucket, new_data));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(block_meta) = self.reading_meta.take() {
-            match &block_meta {
-                WindowPartitionMeta::Spilled(_) => unreachable!(),
-                WindowPartitionMeta::Spilling(_) => unreachable!(),
-                WindowPartitionMeta::BucketSpilled(_) => unreachable!(),
-                WindowPartitionMeta::Payload(_) => unreachable!(),
-                WindowPartitionMeta::Partitioned {
-                    data: data_meta, ..
-                } => {
-                    let data = self.load_bytes(data_meta).await?;
-                    self.deserializing_meta = Some((block_meta, data));
+        let Partitioned { bucket, data } = self.reading_meta.take().unwrap();
+        let mut blocks = self.load_blocks(&data).await?;
+
+        let new_data = data
+            .into_iter()
+            .map(|meta| {
+                if let WindowPartitionMeta::BucketSpilled(_) = meta {
+                    let data = blocks.pop_front().unwrap();
+                    WindowPartitionMeta::Payload(WindowPayload { bucket, data })
+                } else {
+                    meta
                 }
-            }
-        }
+            })
+            .collect::<_>();
+        self.deserialized_meta = Some(WindowPartitionMeta::create_partitioned(bucket, new_data));
 
         Ok(())
     }
@@ -182,49 +152,43 @@ impl TransformWindowPartitionSpillReader {
                 operator,
                 deserialized_meta: None,
                 reading_meta: None,
-                deserializing_meta: None,
             },
         )))
     }
 
-    fn deserialize(payload: BucketSpilledWindowPayload, data: Vec<u8>) -> WindowPartitionMeta {
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(payload.columns_layout.len());
-
-        for column_layout in payload.columns_layout {
-            columns.push(deserialize_column(&data[begin..begin + column_layout as usize]).unwrap());
-            begin += column_layout as usize;
-        }
-
-        WindowPartitionMeta::Payload(WindowPayload {
-            bucket: payload.bucket,
-            data: DataBlock::new_from_columns(columns),
-        })
-    }
-
-    async fn load_bytes(&mut self, data_meta: &[WindowPartitionMeta]) -> Result<VecDeque<Vec<u8>>> {
+    async fn load_blocks(&mut self, data: &[WindowPartitionMeta]) -> Result<VecDeque<DataBlock>> {
         let mut total_elapsed = Duration::default();
         let log_interval = 100;
         let mut processed_count = 0;
 
-        let load_jobs = data_meta
+        let jobs = data
             .iter()
             .filter_map(|meta| {
-                if let WindowPartitionMeta::BucketSpilled(p) = meta {
-                    let location = p.location.clone();
+                if let WindowPartitionMeta::BucketSpilled(payload) = meta {
                     let operator = self.operator.clone();
-                    let data_range = p.data_range.clone();
+                    let BucketSpilledWindowPayload {
+                        location,
+                        data_range,
+                        columns_layout,
+                        ..
+                    } = payload.clone();
 
                     Some(databend_common_base::runtime::spawn(async move {
                         let instant = Instant::now();
 
-                        let data = match location {
+                        let (block, data_size) = match location {
                             Location::Storage(path) => {
-                                operator.read_with(&path).range(data_range).await?.to_vec()
+                                let data = operator
+                                    .read_with(&path)
+                                    .range(data_range)
+                                    .await?
+                                    .to_bytes();
+                                (deserialize_block(&columns_layout, &data), data.len())
                             }
                             Location::Disk(path) => {
                                 let (buf, range) = dma_read_file_range(path, data_range).await?;
-                                buf[range].to_vec()
+                                let data = &buf[range];
+                                (deserialize_block(&columns_layout, data), data.len())
                             }
                         };
 
@@ -233,7 +197,7 @@ impl TransformWindowPartitionSpillReader {
                             Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
                             Profile::record_usize_profile(
                                 ProfileStatisticsName::SpillReadBytes,
-                                data.len(),
+                                data_size,
                             );
                             Profile::record_usize_profile(
                                 ProfileStatisticsName::SpillReadTime,
@@ -248,12 +212,10 @@ impl TransformWindowPartitionSpillReader {
                         if processed_count % log_interval == 0 {
                             info!(
                                 "Read window partition {}/{} spilled buckets, elapsed: {:?}",
-                                processed_count,
-                                data.len(),
-                                total_elapsed,
+                                processed_count, data_size, total_elapsed,
                             );
                         }
-                        Ok::<_, ErrorCode>(data)
+                        Ok::<_, ErrorCode>(block)
                     }))
                 } else {
                     None
@@ -261,7 +223,7 @@ impl TransformWindowPartitionSpillReader {
             })
             .collect::<Vec<_>>();
 
-        let data = match futures::future::try_join_all(load_jobs).await {
+        let blocks = match futures::future::try_join_all(jobs).await {
             Err(_) => {
                 return Err(ErrorCode::TokioError("Cannot join tokio job"));
             }
@@ -273,6 +235,19 @@ impl TransformWindowPartitionSpillReader {
                 "Read {processed_count} window partition spills successfully, total elapsed: {total_elapsed:?}",
             );
         }
-        Ok(data)
+        Ok(blocks)
     }
+}
+
+pub fn deserialize_block(columns_layout: &[u64], mut data: &[u8]) -> DataBlock {
+    let columns = columns_layout
+        .iter()
+        .map(|layout| {
+            let (cur, remain) = data.split_at(*layout as usize);
+            data = remain;
+            deserialize_column(cur).unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    DataBlock::new_from_columns(columns)
 }

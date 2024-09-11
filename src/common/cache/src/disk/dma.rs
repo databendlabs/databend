@@ -195,7 +195,6 @@ impl DmaFile {
         let buf = self.mut_buffer();
         let rt = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.capacity()) };
         if rt >= 0 {
-            debug_assert_eq!(buf.capacity(), rt as usize);
             unsafe { buf.set_len(rt as usize) }
             Ok(rt as usize)
         } else {
@@ -387,59 +386,59 @@ mod tests {
     }
 
     async fn run_test(n: usize) -> io::Result<()> {
+        let filename = "test_file";
         let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
 
         let bufs = vec![IoSlice::new(&want)];
-        let length = dma_write_file_vectored("test_file", &bufs).await?;
+        let length = dma_write_file_vectored(filename, &bufs).await?;
 
         assert_eq!(length, want.len());
 
         let mut got = Vec::new();
 
-        let length = dma_read_file("test_file", &mut got).await?;
+        let length = dma_read_file(filename, &mut got).await?;
         assert_eq!(length, want.len());
         assert_eq!(got, want);
 
-        std::fs::remove_file("test_file")?;
+        std::fs::remove_file(filename)?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_range_read() {
-        let _ = std::fs::remove_file("test_file");
+        let filename = "test_file2";
+        let _ = std::fs::remove_file(filename);
         let n: usize = 4096 * 2;
 
         let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
 
         let bufs = vec![IoSlice::new(&want)];
-        dma_write_file_vectored("test_file", &bufs).await.unwrap();
+        dma_write_file_vectored(filename, &bufs).await.unwrap();
 
-        let got = dma_read_file_range("test_file", 0..10).await.unwrap();
+        let got = dma_read_file_range(filename, 0..10).await.unwrap();
         let got = got.0[got.1].to_vec();
         assert_eq!(&want[0..10], got);
 
-        let got = dma_read_file_range("test_file", 10..30).await.unwrap();
+        let got = dma_read_file_range(filename, 10..30).await.unwrap();
         let got = got.0[got.1].to_vec();
         assert_eq!(&want[10..30], got);
 
-        let got = dma_read_file_range("test_file", 4096 - 5..4096 + 5)
+        let got = dma_read_file_range(filename, 4096 - 5..4096 + 5)
             .await
             .unwrap();
         let got = got.0[got.1].to_vec();
         assert_eq!(&want[4096 - 5..4096 + 5], got);
 
-        let got = dma_read_file_range("test_file", 4096..4096 + 5)
-            .await
-            .unwrap();
+        let got = dma_read_file_range(filename, 4096..4096 + 5).await.unwrap();
         let got = got.0[got.1].to_vec();
         assert_eq!(&want[4096..4096 + 5], got);
 
-        let got = dma_read_file_range("test_file", 4096 * 2 - 5..4096 * 2)
+        let got = dma_read_file_range(filename, 4096 * 2 - 5..4096 * 2)
             .await
             .unwrap();
         let got = got.0[got.1].to_vec();
         assert_eq!(&want[4096 * 2 - 5..4096 * 2], got);
 
-        let _ = std::fs::remove_file("test_file");
+        let _ = std::fs::remove_file(filename);
     }
 }
