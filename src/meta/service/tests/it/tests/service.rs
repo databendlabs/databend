@@ -158,6 +158,9 @@ impl MetaSrvTestContext {
         // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
         config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
 
+        // For testing, we use a fake license to enable clustering functions
+        config.raft_config.fake_ee_license = true;
+
         {
             let grpc_port = next_port();
             config.grpc_api_address = format!("{}:{}", host, grpc_port);

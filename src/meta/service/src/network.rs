@@ -24,6 +24,7 @@ use backon::ExponentialBuilder;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::Instant;
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
@@ -68,6 +69,7 @@ use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
+use databend_enterprise_meta::MetaServiceEnterpriseGate;
 use fastrace::func_name;
 use futures::FutureExt;
 use futures::TryStreamExt;
@@ -75,7 +77,6 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::metrics::raft_metrics;
@@ -133,17 +134,20 @@ impl Default for Backoff {
     }
 }
 
-#[derive(Clone)]
 pub struct NetworkFactory {
     sto: RaftStore,
+
+    /// Enterprise edition features gate
+    ee_gate: MetaServiceEnterpriseGate,
 
     backoff: Backoff,
 }
 
 impl NetworkFactory {
-    pub fn new(sto: RaftStore) -> NetworkFactory {
+    pub fn new(sto: RaftStore, ee_gate: MetaServiceEnterpriseGate) -> NetworkFactory {
         NetworkFactory {
             sto,
+            ee_gate,
             backoff: Backoff::default(),
         }
     }
@@ -159,7 +163,10 @@ pub struct Network {
     /// The endpoint of the target node.
     endpoint: Endpoint,
 
-    client: Mutex<Option<RaftClient>>,
+    /// Enterprise edition features gate
+    ee_gate: MetaServiceEnterpriseGate,
+
+    raft_client: std::sync::Mutex<Option<RaftClient>>,
 
     sto: RaftStore,
 
@@ -170,22 +177,31 @@ impl Network {
     /// Create a new RaftClient to the specified target node.
     #[logcall::logcall(err = "debug")]
     #[fastrace::trace]
-    pub async fn new_client(&self, addr: &str) -> Result<RaftClient, tonic::transport::Error> {
-        info!(id = self.id; "Raft NetworkConnection connect: target={}: {}", self.target, addr);
+    pub async fn new_raft_client(&self, addr: &str) -> Result<RaftClient, Unreachable> {
+        info!(
+            "id={} Raft NetworkConnection connect: target={}: {}",
+            self.id, self.target, addr
+        );
 
-        let channel = tonic::transport::Endpoint::new(addr.to_string())?
+        if let Err(e) = self.ee_gate.assert_cluster_enabled() {
+            return Err(Unreachable::new(&AnyError::error(e.to_string())));
+        };
+
+        let channel = tonic::transport::Endpoint::new(addr.to_string())
+            .map_err(|e| Unreachable::new(&e))?
             .connect()
             .log_elapsed_debug(format!(
-                "Raft NetworkConnection new_client: connect target: {}",
-                self.target
+                "id={} Raft NetworkConnection new_client: connect target: {}",
+                self.id, self.target
             ))
-            .await?;
+            .await
+            .map_err(|e| Unreachable::new(&e))?;
 
         let client = RaftClientApi::new(self.target, self.endpoint.clone(), channel);
 
         info!(
-            "Raft NetworkConnection connected to: target={}: {}",
-            self.target, addr
+            "id={} Raft NetworkConnection connected to: target={}: {}",
+            self.id, self.target, addr
         );
 
         Ok(client)
@@ -195,13 +211,17 @@ impl Network {
     #[logcall::logcall(err = "debug")]
     #[fastrace::trace]
     async fn take_client(&mut self) -> Result<RaftClient, Unreachable> {
-        let mut client = self.client.lock().await;
+        {
+            let mut client = self.raft_client.lock().unwrap();
 
-        if let Some(c) = client.take() {
-            return Ok(c);
+            if let Some(c) = client.take() {
+                return Ok(c);
+            }
         }
 
         let n = 3;
+        let mut errors = vec![];
+
         for _i in 0..n {
             let endpoint = self
                 .lookup_target_address()
@@ -225,7 +245,7 @@ impl Network {
 
             let addr = format!("http://{}", self.endpoint);
 
-            let res = self.new_client(&addr).await;
+            let res = self.new_raft_client(&addr).await;
             match res {
                 Ok(c) => {
                     return Ok(c);
@@ -235,14 +255,17 @@ impl Network {
                         "Raft NetworkConnection fail to connect: target={}: addr={}: {}",
                         self.target, &addr, e
                     );
+                    errors.push(e);
                     tokio::time::sleep(Duration::from_millis(50)).await;
                 }
             }
         }
 
         let any_err = AnyError::error(format!(
-            "Raft NetworkConnection fail to connect: target={}, retry={}",
-            self.target, n
+            "Raft NetworkConnection fail to connect: target={}, retry={}, errors={}",
+            self.target,
+            n,
+            errors.display()
         ));
         error!("{}", any_err);
 
@@ -502,7 +525,7 @@ impl Network {
 
         match &grpc_res {
             Ok(_) => {
-                self.client.lock().await.replace(client);
+                self.raft_client.lock().unwrap().replace(client);
             }
             Err(e) => {
                 warn!(target = self.target; "install_snapshot failed: {}", e);
@@ -686,7 +709,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
         match &grpc_res {
             Ok(_) => {
-                self.client.lock().await.replace(client);
+                self.raft_client.lock().unwrap().replace(client);
             }
             Err(e) => {
                 warn!(target = self.target, rpc = rpc.summary(); "append_entries failed: {}", e);
@@ -787,7 +810,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
         match &grpc_res {
             Ok(_) => {
-                self.client.lock().await.replace(client);
+                self.raft_client.lock().unwrap().replace(client);
             }
             Err(e) => {
                 warn!(target = self.target, rpc = rpc.summary(); "vote failed: {}", e);
@@ -823,7 +846,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
         match &grpc_res {
             Ok(_) => {
-                self.client.lock().await.replace(client);
+                self.raft_client.lock().unwrap().replace(client);
             }
             Err(e) => {
                 warn!(target = self.target; "{} failed: {}", func_name!(), e);
@@ -861,7 +884,8 @@ impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
             sto: self.sto.clone(),
             backoff: self.backoff.clone(),
             endpoint: Default::default(),
-            client: Default::default(),
+            ee_gate: self.ee_gate.clone(),
+            raft_client: Default::default(),
         }
     }
 }

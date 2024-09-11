@@ -57,6 +57,7 @@ impl RaftClientApi for RaftClient {
         let cli = RaftServiceClient::new(channel)
             .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+
         count::WithCount::new(cli, PeerCounter {
             target,
             endpoint,

@@ -131,6 +131,12 @@ pub struct RaftConfig {
 
     /// Max timeout(in milli seconds) when waiting a cluster leader.
     pub wait_leader_timeout: u64,
+
+    /// License token in string to enable enterprise features(including: `cluster`)
+    pub databend_enterprise_license: Option<String>,
+
+    /// For test only: whether to fake an enterprise license.
+    pub fake_ee_license: bool,
 }
 
 pub fn get_default_raft_advertise_host() -> String {
@@ -172,6 +178,8 @@ impl Default for RaftConfig {
             sled_max_cache_size_mb: 10 * 1024,
             cluster_name: "foo_cluster".to_string(),
             wait_leader_timeout: 70000,
+            databend_enterprise_license: None,
+            fake_ee_license: false,
         }
     }
 }

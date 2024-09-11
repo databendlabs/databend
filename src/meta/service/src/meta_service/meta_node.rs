@@ -58,6 +58,7 @@ use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RaftMetrics;
 use databend_common_meta_types::TypeConfig;
+use databend_enterprise_meta::MetaServiceEnterpriseGate;
 use fastrace::func_name;
 use fastrace::prelude::*;
 use futures::channel::oneshot;
@@ -107,6 +108,7 @@ pub struct MetaNode {
     pub sto: RaftStore,
     pub dispatcher_handle: EventDispatcherHandle,
     pub raft: MetaRaft,
+    pub(crate) ee_gate: MetaServiceEnterpriseGate,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
@@ -122,6 +124,7 @@ impl Opened for MetaNode {
 pub struct MetaNodeBuilder {
     node_id: Option<NodeId>,
     raft_config: Option<Config>,
+    ee_gate: MetaServiceEnterpriseGate,
     sto: Option<RaftStore>,
     raft_service_endpoint: Option<Endpoint>,
 }
@@ -142,7 +145,9 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
-        let net = NetworkFactory::new(sto.clone());
+        let ee_gate = self.ee_gate.clone();
+
+        let net = NetworkFactory::new(sto.clone(), ee_gate.clone());
 
         let log_store = sto.clone();
         let sm_store = sto.clone();
@@ -163,6 +168,7 @@ impl MetaNodeBuilder {
             sto: sto.clone(),
             dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
             raft: raft.clone(),
+            ee_gate,
             running_tx: tx,
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
@@ -208,11 +214,27 @@ impl MetaNodeBuilder {
 
 impl MetaNode {
     pub fn builder(config: &RaftConfig) -> MetaNodeBuilder {
+        let ee_gate = if config.fake_ee_license {
+            MetaServiceEnterpriseGate::new_testing()
+        } else {
+            // read env var QUERY_DATABEND_ENTERPRISE_LICENSE:
+            // - if it is set, use it as the license.
+            // - if it is not set, use the license in config.
+
+            let license = std::env::var("QUERY_DATABEND_ENTERPRISE_LICENSE");
+            if let Ok(token) = license {
+                MetaServiceEnterpriseGate::new(Some(token))
+            } else {
+                MetaServiceEnterpriseGate::new(config.databend_enterprise_license.clone())
+            }
+        };
+
         let raft_config = MetaNode::new_raft_config(config);
 
         MetaNodeBuilder {
             node_id: None,
             raft_config: Some(raft_config),
+            ee_gate,
             sto: None,
             raft_service_endpoint: None,
         }

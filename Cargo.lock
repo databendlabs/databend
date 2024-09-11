@@ -4842,7 +4842,12 @@ dependencies = [
 name = "databend-enterprise-meta"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "databend-common-base",
  "databend-common-building",
+ "databend-common-license",
+ "jwt-simple 0.11.9",
+ "log",
 ]
 
 [[package]]
@@ -4976,6 +4981,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-grpc",
  "databend-common-http",
+ "databend-common-license",
  "databend-common-meta-api",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
@@ -4985,6 +4991,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
+ "databend-enterprise-meta",
  "deepsize",
  "derive_more",
  "env_logger",

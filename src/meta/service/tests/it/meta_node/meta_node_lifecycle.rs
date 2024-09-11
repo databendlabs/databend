@@ -550,7 +550,7 @@ async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Restart them.
-    // - Check old data an new written data.
+    // - Check old data and new written data.
 
     let tc0 = {
         let mut tc = MetaSrvTestContext::new(0);
@@ -615,7 +615,8 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     info!("restart all");
 
     // restart
-    let config = configs::Config::default();
+    let mut config = configs::Config::default();
+    config.raft_config.fake_ee_license = true;
     let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
