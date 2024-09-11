@@ -66,15 +66,13 @@ impl Compactor for BlockCompactor {
         let num_rows = blocks[size - 1].num_rows();
         let num_bytes = blocks[size - 1].memory_size();
 
-        if num_rows > self.thresholds.max_rows_per_block
-            || num_bytes > self.thresholds.max_bytes_per_block * 2
-        {
+        if !self.thresholds.check_for_compact(num_rows, num_bytes) {
             // holding slices of blocks to merge later may lead to oom, so
             // 1. we expect blocks from file formats are not slice.
             // 2. if block is split here, cut evenly and emit them at once.
             let rows_per_block = self.thresholds.calc_rows_per_block(num_bytes, num_rows);
             let block = blocks.pop().unwrap();
-            res.extend(block.split_by_rows_no_tail(rows_per_block));
+            res.extend(block.split_by_rows_if_needed_no_tail(rows_per_block));
         } else if self.thresholds.check_large_enough(num_rows, num_bytes) {
             // pass through the new data block just arrived
             let block = blocks.pop().unwrap();
