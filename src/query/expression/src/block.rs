@@ -319,7 +319,7 @@ impl DataBlock {
     }
 
     pub fn split_by_rows_if_needed_no_tail(&self, min_rows_per_block: usize) -> Vec<Self> {
-        let max_rows_per_block = min_rows_per_block * 2;
+        let max_rows_per_block = min_rows_per_block * 9 / 5;
         let mut res = vec![];
         let mut offset = 0;
         let mut remain_rows = self.num_rows;
