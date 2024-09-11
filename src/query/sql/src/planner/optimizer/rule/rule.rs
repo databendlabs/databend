@@ -28,7 +28,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
         RuleID::EliminateSort,
         RuleID::MergeEvalScalar,
-        // Filter pushdown
+        // Filter
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::NormalizeScalarFilter,
@@ -37,7 +37,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterWindow,
         RuleID::PushDownFilterSort,
         RuleID::PushDownFilterEvalScalar,
-        // Limit PushDown
+        // Limit
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
         RuleID::PushDownLimit,
