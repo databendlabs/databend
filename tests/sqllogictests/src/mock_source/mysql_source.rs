@@ -36,7 +36,7 @@ impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
     async fn on_prepare<'a>(
         &'a mut self,
         _: &'a str,
-        info: StatementMetaWriter<'a, W>,
+        _info: StatementMetaWriter<'a, W>,
     ) -> io::Result<()> {
         Ok(())
     }
@@ -45,7 +45,7 @@ impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
         &'a mut self,
         _: u32,
         _: opensrv_mysql::ParamParser<'a>,
-        results: QueryResultWriter<'a, W>,
+        _results: QueryResultWriter<'a, W>,
     ) -> io::Result<()> {
         Ok(())
     }

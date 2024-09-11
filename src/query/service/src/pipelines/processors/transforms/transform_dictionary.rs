@@ -33,7 +33,6 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_storage::build_operator;
 use opendal::services::Redis;
-use opendal::Operator;
 use sqlx::MySqlPool;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
@@ -127,10 +126,18 @@ impl DictionaryOperator {
                     })
                 }
                 DataType::Date => {
-                    todo!()
+                    let value: Option<i32> = sqlx::query_scalar(&sql)
+                        .bind(self.format_key(key))
+                        .fetch_optional(pool)
+                        .await?;
+                    Ok(value.map(|v| Scalar::Date(v)))
                 }
                 DataType::Timestamp => {
-                    todo!()
+                    let value: Option<i64> = sqlx::query_scalar(&sql)
+                        .bind(self.format_key(key))
+                        .fetch_optional(pool)
+                        .await?;
+                    Ok(value.map(|v| Scalar::Timestamp(v)))
                 }
                 _ => Err(ErrorCode::DictionarySourceError(format!(
                     "unsupported value type {data_type}"

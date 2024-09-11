@@ -33,9 +33,6 @@ use databend_common_meta_app::tenant::Tenant;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use opendal::Operator;
-use sqlx::Connection;
-use sqlx_mysql::MySqlConnection;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;
