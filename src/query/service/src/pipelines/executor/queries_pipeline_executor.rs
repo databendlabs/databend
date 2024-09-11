@@ -25,7 +25,7 @@ use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use log::warn;
 use log::LevelFilter;
@@ -122,7 +122,7 @@ impl QueriesPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent(full_name!())
+            let span = Span::enter_with_local_parent(func_path!())
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
