@@ -25,6 +25,7 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
@@ -201,6 +202,20 @@ pub struct TableInfo {
     pub db_type: DatabaseType,
 }
 
+impl TableInfo {
+    pub fn database_name(&self) -> Result<&str> {
+        if self.engine() != "FUSE" {
+            return Err(ErrorCode::Internal(format!(
+                "Invalid engine: {}",
+                self.engine()
+            )));
+        }
+        let database_name = self.desc.split('.').next().unwrap();
+        let database_name = &database_name[1..database_name.len() - 1];
+        Ok(database_name)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableStatistics {
     /// Number of rows
@@ -360,7 +375,7 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(TableSchema::empty()),
-            engine: "".to_string(),
+            engine: "FUSE".to_string(),
             engine_options: BTreeMap::new(),
             storage_params: None,
             part_prefix: "".to_string(),
@@ -907,8 +922,11 @@ pub struct ListDroppedTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    // db id, db name
-    Db(u64, String),
+    Db {
+        db_id: u64,
+        db_name: String,
+        tables: Vec<(u64, String)>,
+    },
     // db id, table id, table name
     Table(u64, u64, String),
 }
