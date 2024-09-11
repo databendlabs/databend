@@ -655,6 +655,7 @@ impl FlightDataAckStream {
         let notify = Self::streaming_receiver(state.clone(), client_stream);
         let mut state_guard = state.lock();
         state_guard.seq.store(begin, Ordering::SeqCst);
+        state_guard.finish.store(false, Ordering::SeqCst);
         if let Some(handle) = state_guard.clean_up_handle.take() {
             handle.abort();
         }

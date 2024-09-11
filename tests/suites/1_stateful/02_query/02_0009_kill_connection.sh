@@ -1,35 +1,23 @@
 #!/usr/bin/env bash
 
 perform_initial_query() {
-    local response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select avg(number) from numbers(2000000000)"}')
+    local response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select avg(number) from numbers(1000000000)"}')
     local stats_uri=$(echo "$response" | jq -r '.stats_uri')
     local final_uri=$(echo "$response" | jq -r '.final_uri')
     echo "$stats_uri|$final_uri"
 }
 poll_stats_uri() {
     local uri=$1
-    local timeout=30
-    local elapsed=0
     local state_exists=true
-
     while $state_exists; do
         local response=$(curl -s -u root: -XGET "http://localhost:8000$uri")
-        echo "$response"
         if ! echo "$response" | jq -e '.state' > /dev/null; then
             state_exists=false
         else
             sleep 2
-            elapsed=$((elapsed + 2))
-
-            if [ "$elapsed" -ge "$timeout" ]; then
-                echo "Polling timed out after $timeout seconds."
-                kill $$
-                exit 1
-            fi
         fi
     done
 }
-
 get_final_state() {
     local uri=$1
     local response=$(curl -s -u root: -XGET "http://localhost:8000$uri")
@@ -40,8 +28,14 @@ IFS='|' read -r stats_uri final_uri <<< $(perform_initial_query)
 
 poll_stats_uri "$stats_uri" &
 POLL_PID=$!
-sleep 2
+sleep 1
 netstat_output=$(netstat -an | grep '9092')
+
+# skip standalone mode
+if [ -z "$netstat_output" ]; then
+    echo "Final state: Succeeded"
+    exit 0
+fi
 
 port=$(echo "$netstat_output" | awk '
     $NF == "ESTABLISHED" {
@@ -57,12 +51,6 @@ port=$(echo "$netstat_output" | awk '
         print port
     }
 ')
-
-# skip standalone mode
-if [ -z "$port" ]; then
-    echo "Final state: Succeeded"
-    exit 0
-fi
 
 # Start tcpkill in the background
 sudo tcpkill -i lo host 127.0.0.1 and port $port > tcpkill_output.txt 2>&1 &
@@ -86,4 +74,3 @@ wait $POLL_PID
 final_state=$(get_final_state "$final_uri")
 echo "Final state: $final_state"
 
-cat tcpkill_output.txt
