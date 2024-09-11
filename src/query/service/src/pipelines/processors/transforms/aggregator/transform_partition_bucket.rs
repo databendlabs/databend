@@ -34,6 +34,7 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::DataOperator;
+use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -459,12 +460,23 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
 
         pipeline.try_resize(input_nums)?;
 
+        let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
         let operator = DataOperator::instance().operator();
         pipeline.add_transform(|input, output| {
             let operator = operator.clone();
             match params.aggregate_functions.is_empty() {
-                true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
-                false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+                true => TransformGroupBySpillReader::<Method>::create(
+                    input,
+                    output,
+                    operator,
+                    semaphore.clone(),
+                ),
+                false => TransformAggregateSpillReader::<Method>::create(
+                    input,
+                    output,
+                    operator,
+                    semaphore.clone(),
+                ),
             }
         })?;
 
@@ -501,12 +513,23 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
 
         pipeline.try_resize(input_nums)?;
 
+        let semaphore = Arc::new(Semaphore::new(128));
         let operator = DataOperator::instance().operator();
         pipeline.add_transform(|input, output| {
             let operator = operator.clone();
             match params.aggregate_functions.is_empty() {
-                true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
-                false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+                true => TransformGroupBySpillReader::<Method>::create(
+                    input,
+                    output,
+                    operator,
+                    semaphore.clone(),
+                ),
+                false => TransformAggregateSpillReader::<Method>::create(
+                    input,
+                    output,
+                    operator,
+                    semaphore.clone(),
+                ),
             }
         })?;
 
