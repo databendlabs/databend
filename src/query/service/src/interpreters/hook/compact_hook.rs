@@ -17,9 +17,11 @@ use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::{CompactTarget, CompactionLimits};
+use databend_common_catalog::table::CompactTarget;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::{ErrorCode, Result};
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -135,7 +137,6 @@ async fn compact_table(
     compaction_limits: CompactionLimits,
     lock_opt: LockTableOption,
 ) -> Result<()> {
-
     evict_target_table_from_ctx_cache(&ctx, &compact_target)?;
 
     let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
@@ -181,8 +182,8 @@ async fn compact_table(
 
 async fn execute_complete_pipeline(
     ctx: &Arc<QueryContext>,
-    build_res: PipelineBuildResult) -> Result<()> {
-
+    build_res: PipelineBuildResult,
+) -> Result<()> {
     if build_res.main_pipeline.is_empty() {
         return Ok(());
     }
@@ -206,12 +207,18 @@ async fn execute_complete_pipeline(
         ctx.get_write_progress().set(&progress_value);
         Ok(())
     } else {
-        Err(ErrorCode::Internal(format!("expecting complete_pipeline, but got {:?}", build_res.main_pipeline)))
+        Err(ErrorCode::Internal(format!(
+            "expecting complete_pipeline, but got {:?}",
+            build_res.main_pipeline
+        )))
     }
 }
 
 // evict the table from ctx cache
-fn evict_target_table_from_ctx_cache(ctx: &QueryContext, compact_target: &CompactTargetTableDescription) -> Result<()> {
+fn evict_target_table_from_ctx_cache(
+    ctx: &QueryContext,
+    compact_target: &CompactTargetTableDescription,
+) -> Result<()> {
     ctx.evict_table_from_cache(
         &compact_target.catalog,
         &compact_target.database,
