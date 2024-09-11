@@ -56,10 +56,13 @@ pub fn is_subset<T: PartialEq>(v1: &[T], v2: &[T]) -> bool {
     v1.iter().all(|x| v2.contains(x))
 }
 
+// The method isn't strictly to check if the s_expr contains a subquery.
+// Please don't use it in other places.
 pub fn contain_subquery(s_expr: &SExpr) -> bool {
     match s_expr.plan() {
         RelOperator::Filter(_) => s_expr.children.iter().any(|child| contain_subquery(child)),
-        RelOperator::DummyTableScan(_)
+        RelOperator::Join(_)
+        | RelOperator::DummyTableScan(_)
         | RelOperator::ConstantTableScan(_)
         | RelOperator::ExpressionScan(_)
         | RelOperator::CacheScan(_)
