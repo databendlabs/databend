@@ -8,6 +8,11 @@
 ---- do_query('select 1',)
 200
 [['1']]
+---- do_query('select count(*) from system.clusters',)
+200
+---- do_query("select 'cluster'",)
+200
+[['cluster']]
 ---- do_query('select 2',)
 401
 {'code': 5100, 'message': 'jwt auth not configured.'}

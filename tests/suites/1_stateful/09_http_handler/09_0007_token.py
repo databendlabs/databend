@@ -9,6 +9,7 @@ from pprint import pprint
 
 # Define the URLs and credentials
 query_url = "http://localhost:8000/v1/query"
+query_url2 = "http://localhost:8002/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
 logout_url = "http://localhost:8000/v1/session/logout"
 renew_url = "http://localhost:8000/v1/session/refresh"
@@ -65,10 +66,10 @@ def do_refresh(_case_id, refresh_token, session_token):
 
 
 @print_error
-def do_query(query, session_token):
+def do_query(query, session_token, url=query_url):
     query_payload = {"sql": query, "pagination": {"wait_time_secs": 11}}
     response = requests.post(
-        query_url,
+        url,
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {session_token}",
@@ -102,6 +103,16 @@ def main():
     # ok
     query_resp = do_query("select 1", session_token)
     pprint(query_resp.get("data"))
+
+    # cluster
+    query_resp = do_query("select count(*) from system.clusters", session_token)
+    num_nodes = int(query_resp.get("data")[0][0])
+    url = query_url
+    if num_nodes > 1:
+        url = query_url2
+    query_resp = do_query("select 'cluster'", session_token, url)
+    pprint(query_resp.get("data"))
+
     # errors
     do_query("select 2", "xxx")
     do_query("select 3", "bend-v1-xxx")
