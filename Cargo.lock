@@ -2406,6 +2406,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "combine"
+version = "4.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "comfy-table"
 version = "6.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2689,6 +2703,12 @@ dependencies = [
  "wasmparser",
  "wasmtime-types",
 ]
+
+[[package]]
+name = "crc16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32c"
@@ -3164,6 +3184,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-trait",
+ "borsh",
  "bytesize",
  "chrono",
  "ctrlc",
@@ -3175,6 +3196,8 @@ dependencies = [
  "libc",
  "log",
  "logcall",
+ "micromarshal 0.5.0",
+ "num-traits",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.3",
@@ -3188,6 +3211,8 @@ dependencies = [
  "replace_with",
  "semver",
  "serde",
+ "serde_json",
+ "serde_test",
  "state",
  "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
@@ -3393,7 +3418,6 @@ dependencies = [
  "micromarshal 0.5.0",
  "num-bigint",
  "num-traits",
- "ordered-float 4.2.2",
  "pretty_assertions",
  "rand 0.8.5",
  "recursive",
@@ -3420,6 +3444,7 @@ dependencies = [
  "bstr",
  "chrono-tz 0.8.6",
  "databend-common-arrow",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
@@ -3436,7 +3461,6 @@ dependencies = [
  "micromarshal 0.7.0",
  "num",
  "num-traits",
- "ordered-float 4.2.2",
  "pretty_assertions",
  "roaring",
  "serde_json",
@@ -3491,7 +3515,6 @@ dependencies = [
  "naive-cityhash",
  "num-traits",
  "once_cell",
- "ordered-float 4.2.2",
  "proj4rs",
  "rand 0.8.5",
  "regex",
@@ -3534,7 +3557,6 @@ dependencies = [
  "databend-common-arrow",
  "databend-common-base",
  "ethnum",
- "ordered-float 4.2.2",
  "rand 0.8.5",
 ]
 
@@ -3565,6 +3587,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz 0.8.6",
+ "databend-common-base",
  "databend-common-exception",
  "ethnum",
  "geo",
@@ -3572,7 +3595,6 @@ dependencies = [
  "geozero 0.13.0",
  "lexical-core",
  "micromarshal 0.5.0",
- "ordered-float 4.2.2",
  "rand 0.8.5",
  "rmp-serde",
  "roaring",
@@ -4130,7 +4152,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "opendal",
- "ordered-float 4.2.2",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prqlc",
@@ -4166,7 +4187,6 @@ dependencies = [
  "futures",
  "log",
  "opendal",
- "ordered-float 4.2.2",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4197,7 +4217,6 @@ dependencies = [
  "maplit",
  "match-template",
  "object_store_opendal",
- "ordered-float 4.2.2",
  "parquet",
  "serde",
  "serde_json",
@@ -4324,7 +4343,6 @@ dependencies = [
  "hive_metastore",
  "log",
  "opendal",
- "ordered-float 4.2.2",
  "recursive",
  "serde",
  "typetag",
@@ -4358,6 +4376,7 @@ dependencies = [
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
+ "ordered-float 4.2.2",
  "parquet",
  "serde",
  "tokio",
@@ -4696,6 +4715,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "enumflags2",
+ "itertools 0.13.0",
  "jwt-simple 0.11.9",
  "log",
  "p256 0.13.2",
@@ -5228,6 +5248,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "clap",
+ "databend-common-base",
  "databend-common-exception",
  "env_logger",
  "futures-util",
@@ -10790,6 +10811,7 @@ dependencies = [
  "prometheus-client",
  "prost 0.13.1",
  "quick-xml 0.36.1",
+ "redis",
  "reqsign",
  "reqwest 0.12.5",
  "serde",
@@ -11028,7 +11050,6 @@ version = "4.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a91171844676f8c7990ce64959210cd2eaef32c2612c50f9fae9f8aaa6065a6"
 dependencies = [
- "borsh",
  "num-traits",
  "rand 0.8.5",
  "serde",
@@ -12592,6 +12613,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e902a69d09078829137b4a5d9d082e0490393537badd7c91a3d69d14639e115f"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "futures",
+ "futures-util",
+ "itoa",
+ "log",
+ "num-bigint",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.8.5",
+ "rustls 0.23.12",
+ "rustls-native-certs 0.7.1",
+ "rustls-pemfile 2.1.3",
+ "rustls-pki-types",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.5.7",
+ "tokio",
+ "tokio-retry",
+ "tokio-rustls 0.26.0",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13641,6 +13695,15 @@ checksum = "babfccff5773ff80657f0ecf553c7c516bdc2eb16389c0918b36b73e7015276e"
 dependencies = [
  "serde",
  "stacker",
+]
+
+[[package]]
+name = "serde_test"
+version = "1.0.177"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f901ee573cab6b3060453d2d5f0bae4e6d628c23c0a962ff9b5f1d7c8d4f1ed"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

@@ -450,14 +450,15 @@ impl Binder {
                 continue;
             }
             let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-            let left_output_columns = cte_info.columns.clone();
+            let materialized_output_columns = cte_info.columns.clone();
             s_expr = SExpr::create_binary(
                 Arc::new(RelOperator::MaterializedCte(MaterializedCte {
-                    left_output_columns,
                     cte_idx: cte_info.cte_idx,
+                    materialized_output_columns,
+                    materialized_indexes: self.m_cte_materialized_indexes.clone(),
                 })),
-                Arc::new(cte_s_expr.clone()),
                 Arc::new(s_expr),
+                Arc::new(cte_s_expr.clone()),
             );
         }
         s_expr

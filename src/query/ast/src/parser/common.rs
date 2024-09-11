@@ -481,11 +481,18 @@ where
 {
     move |input: Input| {
         let i = input;
-        let (input, o1) = parser.parse(input)?;
+        let bt = i.backtrace.clone();
+        let (rest, o1) = parser.parse(input)?;
         match f(o1) {
-            Ok(o2) => Ok((input, o2)),
-            Err(nom::Err::Error(e)) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
-            Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(Error::from_error_kind(i, e))),
+            Ok(o2) => Ok((rest, o2)),
+            Err(nom::Err::Error(e)) => {
+                i.backtrace.restore(bt);
+                Err(nom::Err::Error(Error::from_error_kind(i, e)))
+            }
+            Err(nom::Err::Failure(e)) => {
+                i.backtrace.restore(bt);
+                Err(nom::Err::Failure(Error::from_error_kind(i, e)))
+            }
             Err(nom::Err::Incomplete(_)) => unreachable!(),
         }
     }
@@ -536,7 +543,7 @@ where
             input.backtrace.clear();
 
             let err_kind = match err {
-                PrattError::EmptyInput => ErrorKind::Other("expecting more oprands"),
+                PrattError::EmptyInput => ErrorKind::Other("expecting an oprand"),
                 PrattError::UnexpectedNilfix(_) => ErrorKind::Other("unable to parse the element"),
                 PrattError::UnexpectedPrefix(_) => {
                     ErrorKind::Other("unable to parse the prefix operator")

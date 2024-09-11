@@ -1,0 +1,31 @@
+statement ok
+create or replace table t(a string)
+
+statement ok
+insert into t values('a'),('b'),('%c')
+
+statement ok
+CREATE OR REPLACE DICTIONARY d(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+query T
+select a, dict_get(d, 'value', a) from t
+----
+a a_value
+b b_value
+%c (empty)
+
+query T
+SELECT dict_get(d, 'value', 'b')
+----
+b_value
+
+statement error 1006
+select dict_get(d, 'value11', 'a')
+
+statement error 3114
+select dict_get(test, 'value', 'b')
+
+query T
+SELECT dict_get(d, 'value', 1)
+----
+1_value

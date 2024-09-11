@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -22,7 +23,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use ordered_float::OrderedFloat;
 
 use crate::optimizer::rule::constant::check_float_range;
 use crate::optimizer::rule::constant::check_int_range;

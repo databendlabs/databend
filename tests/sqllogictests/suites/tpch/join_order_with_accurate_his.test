@@ -699,9 +699,9 @@ order by
     s_suppkey;
 ----
 MaterializedCte: 0
-├── Left
+├── Right
 │   └── Scan: default.tpch_test.lineitem (#1) (read rows: 600572)
-└── Right
+└── Left
     └── HashJoin: INNER
         ├── Build
         │   └── CTEScan

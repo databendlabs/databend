@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod net;
+mod ordered_float;
 mod profiling;
 mod progress;
 mod select;
@@ -28,6 +29,7 @@ mod watch_notify;
 
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
+pub use ordered_float::OrderedFloat;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;

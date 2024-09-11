@@ -29,10 +29,12 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::UserApiProvider;
+use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -68,47 +70,94 @@ impl AsyncSystemTable for DatabasesTable {
         let user_api = UserApiProvider::instance();
         let mut catalog_names = vec![];
         let mut db_names = vec![];
-        let mut db_id = vec![];
+        let mut db_ids = vec![];
         let mut owners: Vec<Option<String>> = vec![];
 
         let visibility_checker = ctx.get_visibility_checker().await?;
-
-        for (ctl_name, catalog) in catalogs.into_iter() {
-            let databases = catalog.list_databases(&tenant).await?;
-            let final_dbs = databases
-                .into_iter()
-                .filter(|db| {
-                    visibility_checker.check_database_visibility(
-                        &ctl_name,
-                        db.name(),
-                        db.get_db_info().database_id.db_id,
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            for db in final_dbs {
-                catalog_names.push(ctl_name.clone());
-                let db_name = db.name().to_string();
-                db_names.push(db_name);
-                let id = db.get_db_info().database_id.db_id;
-                db_id.push(id);
-                owners.push(
-                    user_api
-                        .get_ownership(&tenant, &OwnershipObject::Database {
-                            catalog_name: ctl_name.to_string(),
-                            db_id: id,
-                        })
-                        .await
-                        .ok()
-                        .and_then(|ownership| ownership.map(|o| o.role.clone())),
+        let catalog_dbs = visibility_checker.get_visibility_database();
+        // None means has global level privileges
+        if let Some(catalog_dbs) = catalog_dbs {
+            for (catalog, dbs) in catalog_dbs {
+                let mut catalog_db_ids = vec![];
+                let mut catalog_db_names = vec![];
+                let ctl = ctx.get_catalog(catalog).await?;
+                catalog_db_names.extend(
+                    dbs.iter()
+                        .filter_map(|(db_name, _)| *db_name)
+                        .map(|db_name| db_name.to_string()),
                 );
+                catalog_db_ids.extend(dbs.iter().filter_map(|(_, db_id)| *db_id));
+
+                if let Ok(databases) = ctl
+                    .mget_database_names_by_ids(&tenant, &catalog_db_ids)
+                    .await
+                {
+                    catalog_db_names.extend(databases.into_iter().flatten());
+                } else {
+                    let msg = format!("Failed to get database name by id: {}", ctl.name());
+                    warn!("{}", msg);
+                }
+
+                let db_idents = catalog_db_names
+                    .iter()
+                    .map(|name| DatabaseNameIdent::new(&tenant, name))
+                    .collect::<Vec<DatabaseNameIdent>>();
+                let dbs = ctl.mget_databases(&tenant, &db_idents).await?;
+                for db in dbs {
+                    catalog_names.push(catalog.clone());
+                    db_names.push(db.get_db_info().name_ident.database_name().to_string());
+                    let db_id = db.get_db_info().database_id.db_id;
+                    db_ids.push(db_id);
+                    owners.push(
+                        user_api
+                            .get_ownership(&tenant, &OwnershipObject::Database {
+                                catalog_name: catalog.to_string(),
+                                db_id,
+                            })
+                            .await
+                            .ok()
+                            .and_then(|ownership| ownership.map(|o| o.role.clone())),
+                    );
+                }
+            }
+        } else {
+            for (ctl_name, catalog) in catalogs.into_iter() {
+                let databases = catalog.list_databases(&tenant).await?;
+                let final_dbs = databases
+                    .into_iter()
+                    .filter(|db| {
+                        visibility_checker.check_database_visibility(
+                            &ctl_name,
+                            db.name(),
+                            db.get_db_info().database_id.db_id,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                for db in final_dbs {
+                    catalog_names.push(ctl_name.clone());
+                    let db_name = db.name().to_string();
+                    db_names.push(db_name);
+                    let id = db.get_db_info().database_id.db_id;
+                    db_ids.push(id);
+                    owners.push(
+                        user_api
+                            .get_ownership(&tenant, &OwnershipObject::Database {
+                                catalog_name: ctl_name.to_string(),
+                                db_id: id,
+                            })
+                            .await
+                            .ok()
+                            .and_then(|ownership| ownership.map(|o| o.role.clone())),
+                    );
+                }
             }
         }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalog_names),
             StringType::from_data(db_names),
-            UInt64Type::from_data(db_id),
+            UInt64Type::from_data(db_ids),
             StringType::from_opt_data(owners),
         ]))
     }

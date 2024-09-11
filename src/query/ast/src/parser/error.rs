@@ -72,6 +72,14 @@ impl Backtrace {
     pub fn clear(&self) {
         self.inner.replace(None);
     }
+
+    /// Restore the backtrace to a previous state.
+    ///
+    /// This is useful when the furthest-reached error reporting strategy is undesirable,
+    /// particularly when the furthest path is reached but considered invalid.
+    pub fn restore(&self, other: Backtrace) {
+        *self.inner.borrow_mut() = other.inner.into_inner();
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

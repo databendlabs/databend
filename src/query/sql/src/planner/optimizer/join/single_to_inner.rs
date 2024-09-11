@@ -32,6 +32,7 @@ impl SingleToInnerOptimizer {
         Self::single_to_inner(s_expr)
     }
 
+    #[recursive::recursive]
     fn single_to_inner(s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = if let RelOperator::Join(join) = s_expr.plan.as_ref()
             && join.single_to_inner.is_some()

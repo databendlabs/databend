@@ -58,6 +58,8 @@ Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does n
 test -- show columns from one from system
 dummy	TINYINT UNSIGNED	NO		NULL	NULL
 c1	INT	NO		NULL	NULL
+0
+Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tasks'
 catalog	VARCHAR	NO		NULL	NULL
 cluster_by	VARCHAR	NO		NULL	NULL
 comment	VARCHAR	NO		NULL	NULL
@@ -81,6 +83,8 @@ table_type	VARCHAR	NO		NULL	NULL
 updated_on	TIMESTAMP	NO		NULL	NULL
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
+0
+0
 0
 === Test: show grants on privilege check ===
 Error: APIError: ResponseError with 1063: Permission denied: privilege USAGE is required on udf root_func for user b.

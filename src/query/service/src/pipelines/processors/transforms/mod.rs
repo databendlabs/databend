@@ -25,6 +25,7 @@ mod transform_block_compact_no_split;
 mod transform_cache_scan;
 mod transform_cast_schema;
 mod transform_create_sets;
+mod transform_dictionary;
 mod transform_expression_scan;
 mod transform_filter;
 mod transform_limit;
