@@ -1,2 +1,3 @@
 Error: APIError: ResponseError with 1006: invalid utf8 sequence while evaluating function `to_string(D00C)` in expr `to_string()`, during run expr: `CAST(from_hex('D00C')::string AS String NULL)`
+ (while in processor thread 0)
 null
