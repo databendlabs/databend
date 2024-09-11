@@ -973,7 +973,7 @@ impl Table for FuseTable {
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let min_rows_per_block = std::cmp::max((max_rows_per_block as f64 * 0.8) as usize, 1);
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
