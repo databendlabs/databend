@@ -69,7 +69,7 @@ impl DmaBuffer {
         self.cap
     }
 
-    /// Returns the remining capacity in the buffer.
+    /// Returns the remaining capacity in the buffer.
     pub fn remaining(&self) -> usize {
         self.capacity() - self.len()
     }
@@ -116,7 +116,7 @@ impl Drop for DmaBuffer {
     }
 }
 
-/// A `DmaFile` is similar to a `File`, but it is openened with the `O_DIRECT` file in order to
+/// A `DmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
 /// perform direct IO.
 struct DmaFile {
     fd: File,
@@ -153,18 +153,18 @@ impl DmaFile {
         self.buf = Some(buf)
     }
 
-    /// Aligns `value` up to the memory alignement requirement for this file.
+    /// Aligns `value` up to the memory alignment requirement for this file.
     pub fn align_up(&self, value: usize) -> usize {
         align_up(self.alignment, value)
     }
 
-    /// Aligns `value` down to the memory alignement requirement for this file.
+    /// Aligns `value` down to the memory alignment requirement for this file.
     #[allow(dead_code)]
     pub fn align_down(&self, value: usize) -> usize {
         align_down(self.alignment, value)
     }
 
-    /// Return the alignement requirement for this file. The returned alignement value can be used
+    /// Return the alignment requirement for this file. The returned alignment value can be used
     /// to allocate a buffer to use with this file:
     #[allow(dead_code)]
     pub fn alignment(&self) -> usize {
@@ -227,7 +227,7 @@ pub fn align_down(alignment: usize, value: usize) -> usize {
 
 async fn open_dma(file: File) -> io::Result<DmaFile> {
     let statfs = fstatfs(&file).await?;
-    // TODO: the actual aligment may differ from the optimal io size? we should probably get
+    // TODO: the actual alignment may differ from the optimal io size? we should probably get
     // this information from the the device the file lives on.
     let alignment = statfs.f_bsize.max(512) as usize;
 

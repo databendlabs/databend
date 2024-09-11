@@ -307,14 +307,14 @@ async fn write_to_storage(
 ) -> Result<usize> {
     let mut writer = operator.writer_with(path).chunk(8 * 1024 * 1024).await?;
 
-    let mut writen = 0;
+    let mut written = 0;
     for data in write_data.into_iter().flatten() {
-        writen += data.len();
+        written += data.len();
         writer.write(data).await?;
     }
 
     writer.close().await?;
-    Ok(writen)
+    Ok(written)
 }
 
 async fn write_to_disk(path: impl AsRef<Path>, write_data: Vec<Vec<Vec<u8>>>) -> io::Result<usize> {
