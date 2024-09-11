@@ -88,9 +88,9 @@ statement ok
 set numeric_cast_option = 'truncating'
 
 query T
-select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED)
+select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED), '29.55'::Int, '29.155'::Int
 ----
-1024954
+1024954 29 29
 
 query T
 select to_uint64(1024954.98046875::double)
@@ -101,9 +101,9 @@ statement ok
 set numeric_cast_option = 'rounding'
 
 query T
-select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED)
+select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED), '29.55'::Int, '29.155'::Int
 ----
-1024955
+1024955 30 29
 
 query T
 select to_uint64(1024954.98046875::double)
