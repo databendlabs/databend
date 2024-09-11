@@ -1105,11 +1105,18 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        unsafe {
+        let mut license = unsafe {
             self.get_settings()
                 .get_enterprise_license()
                 .unwrap_or_default()
+        };
+
+        // Try load license from embedded env if failed to load from settings.
+        if license.is_empty() {
+            license = env!("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").to_string();
         }
+
+        license
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
