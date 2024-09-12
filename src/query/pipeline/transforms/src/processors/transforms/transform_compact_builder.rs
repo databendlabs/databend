@@ -25,11 +25,11 @@ use crate::processors::TransformPipelineHelper;
 pub fn build_compact_block_pipeline(
     pipeline: &mut Pipeline,
     thresholds: BlockThresholds,
-    max_threads: usize,
 ) -> Result<()> {
+    let output_len = pipeline.output_len();
     pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactBuilder::new(thresholds));
-    pipeline.try_resize(max_threads)?;
+    pipeline.try_resize(output_len)?;
     pipeline.add_block_meta_transformer(TransformCompactBlock::default);
     Ok(())
 }

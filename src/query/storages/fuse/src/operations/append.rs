@@ -44,8 +44,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        build_compact_block_pipeline(pipeline, block_thresholds, max_threads)?;
+        build_compact_block_pipeline(pipeline, block_thresholds)?;
 
         let schema = DataSchema::from(self.schema()).into();
         let cluster_stats_gen =
