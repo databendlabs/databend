@@ -76,6 +76,7 @@ pub enum EndpointKind {
     PollQuery,
     Clickhouse,
     NoAuth,
+    Verify,
 }
 
 const USER_AGENT: &str = "User-Agent";
@@ -209,11 +210,12 @@ fn auth_by_header(
             Some(bearer) => {
                 let token = bearer.token().to_string();
                 if SessionClaim::is_databend_token(&token) {
-                    let (token_type, set_user) = match endpoint_kind {
-                        EndpointKind::Refresh => (TokenType::Refresh, true),
-                        EndpointKind::StartQuery => (TokenType::Session, true),
+                    let (exp_token_type, set_user) = match endpoint_kind {
+                        EndpointKind::Verify => (None, false),
+                        EndpointKind::Refresh => (Some(TokenType::Refresh), true),
+                        EndpointKind::StartQuery => (Some(TokenType::Session), true),
                         EndpointKind::PollQuery | EndpointKind::Logout => {
-                            (TokenType::Session, false)
+                            (Some(TokenType::Session), false)
                         }
                         EndpointKind::Login => {
                             return Err(ErrorCode::AuthenticateFailure(
@@ -229,11 +231,13 @@ fn auth_by_header(
                             unreachable!()
                         }
                     };
-                    Ok(Credential::DatabendToken {
-                        token,
-                        token_type,
-                        set_user,
-                    })
+
+                    if let Some(t) = exp_token_type {
+                        if t != SessionClaim::get_type(&token)? {
+                            return Err(ErrorCode::AuthenticateFailure("wrong data token type"));
+                        }
+                    }
+                    Ok(Credential::DatabendToken { token, set_user })
                 } else {
                     Ok(Credential::Jwt { token, client_ip })
                 }

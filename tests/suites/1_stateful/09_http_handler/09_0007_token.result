@@ -20,13 +20,13 @@
 401
 {'code': 5100,
  'message': 'fail to decode token(base64 decode error: Invalid padding): '
-            'bend-v1-xxx'}
+            'bend-v1-s-xxx'}
 ---- do_query('select 4',)
 401
 {'code': 5101, 'message': 'session token expired'}
 ---- do_query('select 5',)
 401
-{'code': 5103, 'message': 'session token not found'}
+{'code': 5100, 'message': 'wrong data token type'}
 ---- do_refresh(1,)
 200
 ['refresh_interval_in_secs', 'refresh_token', 'session_token']
@@ -41,20 +41,18 @@
 {'code': 5100, 'message': 'jwt auth not configured.'}
 ---- do_refresh(3,)
 401
-{'code': 5100,
- 'message': 'fail to decode token(base64 decode error: Invalid padding): '
-            'bend-v1-xxx'}
+{'code': 5100, 'message': "unknown token type '120'"}
 ---- do_refresh(4,)
 401
 {'code': 5102, 'message': 'refresh token expired'}
 ---- do_refresh(5,)
 401
-{'code': 5104, 'message': 'refresh token not found'}
+{'code': 5100, 'message': 'wrong data token type'}
 ---- do_refresh(6,)
 200
 ---- do_logout(0,)
 401
-{'code': 5103, 'message': 'session token not found'}
+{'code': 5100, 'message': 'wrong data token type'}
 ---- do_logout(1,)
 200
 ---- do_query("select 'after logout'",)

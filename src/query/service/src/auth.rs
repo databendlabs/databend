@@ -18,7 +18,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -39,7 +38,6 @@ pub struct AuthMgr {
 pub enum Credential {
     DatabendToken {
         token: String,
-        token_type: TokenType,
         set_user: bool,
     },
     Jwt {
@@ -82,14 +80,8 @@ impl AuthMgr {
         let user_api = UserApiProvider::instance();
         match credential {
             Credential::NoNeed => Ok(None),
-            Credential::DatabendToken {
-                token,
-                set_user,
-                token_type,
-            } => {
-                let claim = ClientSessionManager::instance()
-                    .verify_token(token, token_type.clone())
-                    .await?;
+            Credential::DatabendToken { token, set_user } => {
+                let claim = ClientSessionManager::instance().verify_token(token).await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
                 if *set_user {
                     let identity = UserIdentity::new(claim.user, "%");

@@ -13,6 +13,7 @@ query_url2 = "http://localhost:8002/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
 logout_url = "http://localhost:8000/v1/session/logout"
 renew_url = "http://localhost:8000/v1/session/refresh"
+verify_url = "http://localhost:8000/v1/auth/verify"
 auth = ("root", "")
 
 
@@ -51,6 +52,33 @@ def do_logout(_case_id, session_token):
     return response
 
 
+def do_verify(session_token):
+    for token in [session_token, 'xxx']:
+        print("---- verify token ", token)
+        response = requests.get(
+            verify_url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        print(response.status_code)
+        print(response.text)
+
+    for a in [auth, ('u', 'p')]:
+        print("---- verify password: ", a)
+        response = requests.post(
+            verify_url,
+            auth=a,
+        )
+        print(response.status_code)
+        print(response.text)
+
+    print("---- verify no auth header ", token)
+    response = requests.get(
+        verify_url,
+    )
+    print(response.status_code)
+    print(response.text)
+
+
 @print_error
 def do_refresh(_case_id, refresh_token, session_token):
     payload = {"session_token": session_token}
@@ -79,7 +107,7 @@ def do_query(query, session_token, url=query_url):
     return response
 
 
-def fake_expired_token():
+def fake_expired_token(ty):
     expired_claim = {
         # TTL_GRACE_PERIOD_QUERY = 600
         "exp": int(time.time()) - 610,
@@ -88,7 +116,7 @@ def fake_expired_token():
         "nonce": "",
         "sid": "",
     }
-    return "bend-v1-" + base64.b64encode(
+    return "bend-v1-" + ty + '-' + base64.b64encode(
         json.dumps(expired_claim).encode("utf-8")
     ).decode("utf-8")
 
@@ -115,8 +143,8 @@ def main():
 
     # errors
     do_query("select 2", "xxx")
-    do_query("select 3", "bend-v1-xxx")
-    do_query("select 4", fake_expired_token())
+    do_query("select 3", "bend-v1-s-xxx")
+    do_query("select 4", fake_expired_token('s'))
     do_query("select 5", refresh_token)
 
     renew_resp = do_refresh(1, refresh_token, session_token)
@@ -134,7 +162,7 @@ def main():
     # errors
     do_refresh(2, "xxx", session_token)
     do_refresh(3, "bend-v1-xxx", session_token)
-    do_refresh(4, fake_expired_token(), session_token)
+    do_refresh(4, fake_expired_token('r'), session_token)
     do_refresh(5, session_token, session_token)
 
     # test new_refresh_token works

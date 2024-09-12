@@ -192,7 +192,7 @@ impl ClientSessionManager {
         let user = session.get_current_user()?.name;
         let auth_role = session.privilege_mgr().get_auth_role();
         let client_session_id = if let Some(old) = &old_refresh_token {
-            let claim = SessionClaim::decode(&old)?;
+            let (claim, _) = SessionClaim::decode(&old)?;
             assert_eq!(tenant_name, claim.tenant);
             assert_eq!(user, claim.user);
             assert_eq!(auth_role, claim.auth_role);
@@ -212,7 +212,7 @@ impl ClientSessionManager {
             &auth_role,
             REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
         );
-        let refresh_token = claim.encode();
+        let refresh_token = claim.encode(TokenType::Refresh);
         let refresh_token_hash = hash_token(refresh_token.as_bytes());
         let token_info = QueryTokenInfo {
             token_type: TokenType::Refresh,
@@ -240,7 +240,7 @@ impl ClientSessionManager {
         claim.expire_at_in_secs = (now + SESSION_TOKEN_TTL).as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
 
-        let session_token = claim.encode();
+        let session_token = claim.encode(TokenType::Session);
         let session_token_hash = hash_token(session_token.as_bytes());
         let token_info = QueryTokenInfo {
             token_type: TokenType::Session,
@@ -280,12 +280,8 @@ impl ClientSessionManager {
         }))
     }
 
-    pub(crate) async fn verify_token(
-        self: &Arc<Self>,
-        token: &str,
-        token_type: TokenType,
-    ) -> Result<SessionClaim> {
-        let claim = SessionClaim::decode(token)?;
+    pub(crate) async fn verify_token(self: &Arc<Self>, token: &str) -> Result<SessionClaim> {
+        let (claim, token_type) = SessionClaim::decode(token)?;
         let now = unix_ts().as_secs();
         if now > claim.expire_at_in_secs + TTL_GRACE_PERIOD_QUERY.as_secs() {
             return match token_type {
@@ -325,7 +321,7 @@ impl ClientSessionManager {
         Ok(claim)
     }
     pub async fn drop_client_session(self: &Arc<Self>, session_token: &str) -> Result<()> {
-        let claim = SessionClaim::decode(session_token)?;
+        let (claim, _) = SessionClaim::decode(session_token)?;
         let now = unix_ts().as_secs();
 
         let client_session_api =
