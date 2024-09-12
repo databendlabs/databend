@@ -210,8 +210,57 @@ Limit
             └── estimated rows: 0.00
 
 # Will use lazy materialization
-query error mysql client error: Server error: `ERROR HY000 \(1105\): BadArguments\. Code: 1006, Text = Unable to get field named "1"\. Valid fields: \["0", "9"\]\.'
+query ?
 explain with cte as (select a, a + 1 as X, b + 1 as Y from t_lazy order by a limit 3) select X,Y,a from (select * from cte order by Y limit 2) order by X limit 1;
+----
+Limit
+├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8), t_lazy.b (#1)]
+├── limit: 1
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8), t_lazy.b (#1)]
+    ├── sort keys: [x ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── RowFetch
+        ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8), t_lazy.b (#1)]
+        ├── columns to fetch: [b]
+        ├── estimated rows: 0.00
+        └── Limit
+            ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8)]
+            ├── limit: 2
+            ├── offset: 0
+            ├── estimated rows: 0.00
+            └── Sort
+                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8)]
+                ├── sort keys: [y ASC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── EvalScalar
+                    ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8)]
+                    ├── expressions: [t_lazy.a (#0) + 1, t_lazy.b (#1) + 1]
+                    ├── estimated rows: 0.00
+                    └── RowFetch
+                        ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), t_lazy.b (#1)]
+                        ├── columns to fetch: [b]
+                        ├── estimated rows: 0.00
+                        └── Limit
+                            ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9)]
+                            ├── limit: 3
+                            ├── offset: 0
+                            ├── estimated rows: 0.00
+                            └── Sort
+                                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9)]
+                                ├── sort keys: [a ASC NULLS LAST]
+                                ├── estimated rows: 0.00
+                                └── TableScan
+                                    ├── table: default.default.t_lazy
+                                    ├── output columns: [a (#0), _row_id (#9)]
+                                    ├── read rows: 0
+                                    ├── read size: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [], limit: 3]
+                                    └── estimated rows: 0.00
 
 statement ok
 drop table t_lazy

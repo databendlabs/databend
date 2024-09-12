@@ -393,27 +393,24 @@ impl Binder {
                                 )
                                 .build()
                             };
-
+                        // Add srf result column
+                        bind_context.add_column_binding(column_binding.clone());
+                        let (mut new_expr, mut bind_context) = self
+                            .extract_srf_table_function_columns(
+                                &mut bind_context,
+                                span,
+                                &func_name,
+                                srf_expr,
+                                alias,
+                            )?;
                         let eval_scalar = EvalScalar {
                             items: vec![ScalarItem {
                                 scalar: srf_result,
                                 index: column_binding.index,
                             }],
                         };
-                        // Add srf result column
-                        bind_context.add_column_binding(column_binding);
-
-                        let flatten_expr =
-                            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
-
-                        let (new_expr, mut bind_context) = self
-                            .extract_srf_table_function_columns(
-                                &mut bind_context,
-                                span,
-                                &func_name,
-                                flatten_expr,
-                                alias,
-                            )?;
+                        new_expr =
+                            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
 
                         // add left table columns.
                         let mut new_columns = parent_context.columns.clone();

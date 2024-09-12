@@ -25,6 +25,7 @@ use super::rewrite::RulePushDownFilterWindow;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitEvalScalar;
 use super::rewrite::RulePushDownPrewhere;
+use super::rewrite::RulePushDownSortEvalScalar;
 use super::rewrite::RuleTryApplyAggIndex;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleEliminateSort;
@@ -68,6 +69,9 @@ impl RuleFactory {
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
+            RuleID::PushDownSortEvalScalar => {
+                Ok(Box::new(RulePushDownSortEvalScalar::new(metadata)))
+            }
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
             RuleID::PushDownLimitSort => {
