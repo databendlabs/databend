@@ -15,10 +15,12 @@
 mod frame_bound;
 mod partition_by;
 mod transform_window;
+mod window_buffer;
 mod window_function;
 
 pub use frame_bound::FrameBound;
 pub use transform_window::TransformWindow;
+pub use window_buffer::WindowSpillSettings;
 pub use window_function::WindowFunctionInfo;
 
 pub use self::partition_by::*;

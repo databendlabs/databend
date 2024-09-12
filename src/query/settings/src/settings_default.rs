@@ -453,7 +453,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
-
+                ("window_num_partitions", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256),
+                    desc: "Set the number of window partitions.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",

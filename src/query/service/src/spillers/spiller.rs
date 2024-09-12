@@ -37,6 +37,7 @@ use crate::sessions::QueryContext;
 pub enum SpillerType {
     HashJoinBuild,
     HashJoinProbe,
+    Window,
     OrderBy,
     // Todo: Add more spillers type
     // Aggregation
@@ -47,6 +48,7 @@ impl Display for SpillerType {
         match self {
             SpillerType::HashJoinBuild => write!(f, "HashJoinBuild"),
             SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
+            SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
         }
     }
@@ -78,11 +80,11 @@ pub struct Spiller {
     _spiller_type: SpillerType,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
-    pub partition_location: HashMap<u8, Vec<String>>,
+    pub partition_location: HashMap<usize, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
     pub columns_layout: HashMap<String, Vec<usize>>,
     /// Record how many bytes have been spilled for each partition.
-    pub partition_spilled_bytes: HashMap<u8, u64>,
+    pub partition_spilled_bytes: HashMap<usize, u64>,
 }
 
 impl Spiller {
@@ -106,7 +108,7 @@ impl Spiller {
         })
     }
 
-    pub fn spilled_partitions(&self) -> HashSet<u8> {
+    pub fn spilled_partitions(&self) -> HashSet<usize> {
         self.partition_location.keys().copied().collect()
     }
 
@@ -183,7 +185,7 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Spill data block with location
-    pub async fn spill_with_partition(&mut self, p_id: u8, data: DataBlock) -> Result<()> {
+    pub async fn spill_with_partition(&mut self, p_id: usize, data: DataBlock) -> Result<()> {
         let progress_val = ProgressValues {
             rows: data.num_rows(),
             bytes: data.memory_size(),
@@ -210,7 +212,7 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, p_id: &u8) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_partition(&mut self, p_id: &usize) -> Result<Vec<DataBlock>> {
         if let Some(files) = self.partition_location.get(p_id) {
             let mut spilled_data = Vec::with_capacity(files.len());
             for file in files.iter() {

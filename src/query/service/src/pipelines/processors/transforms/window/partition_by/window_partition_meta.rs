@@ -12,61 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Range;
 
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 
-pub struct WindowPayload {
-    pub bucket: isize,
-    pub data: DataBlock,
-}
-
-pub struct SpillingWindowPayloads {
-    pub data: BTreeMap<usize, Vec<DataBlock>>,
-}
-
-pub struct BucketSpilledWindowPayload {
-    pub bucket: isize,
-    pub location: String,
-    pub data_range: Range<u64>,
-    pub columns_layout: Vec<u64>,
-}
-
-pub enum WindowPartitionMeta {
-    Spilling(SpillingWindowPayloads),
-    Spilled(Vec<BucketSpilledWindowPayload>),
-    BucketSpilled(BucketSpilledWindowPayload),
-    Payload(WindowPayload),
-
-    Partitioned { bucket: isize, data: Vec<Self> },
+pub struct WindowPartitionMeta {
+    // Each element in `partitioned_data` is (partition_id, data_block).
+    pub partitioned_data: Vec<(usize, DataBlock)>,
 }
 
 impl WindowPartitionMeta {
-    pub fn create_payload(bucket: isize, data: DataBlock) -> BlockMetaInfoPtr {
-        Box::new(WindowPartitionMeta::Payload(WindowPayload { bucket, data }))
-    }
-
-    pub fn create_spilling(data: BTreeMap<usize, Vec<DataBlock>>) -> BlockMetaInfoPtr {
-        Box::new(WindowPartitionMeta::Spilling(SpillingWindowPayloads {
-            data,
-        }))
-    }
-
-    pub fn create_spilled(buckets_payload: Vec<BucketSpilledWindowPayload>) -> BlockMetaInfoPtr {
-        Box::new(WindowPartitionMeta::Spilled(buckets_payload))
-    }
-
-    pub fn create_bucket_spilled(payload: BucketSpilledWindowPayload) -> BlockMetaInfoPtr {
-        Box::new(WindowPartitionMeta::BucketSpilled(payload))
-    }
-
-    pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
-        Box::new(WindowPartitionMeta::Partitioned { bucket, data })
+    pub fn create(partitioned_data: Vec<(usize, DataBlock)>) -> BlockMetaInfoPtr {
+        Box::new(WindowPartitionMeta { partitioned_data })
     }
 }
 
@@ -86,23 +46,7 @@ impl<'de> serde::Deserialize<'de> for WindowPartitionMeta {
 
 impl Debug for WindowPartitionMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            WindowPartitionMeta::Payload(_) => {
-                f.debug_struct("WindowPartitionMeta::Bucket").finish()
-            }
-            WindowPartitionMeta::Spilling(_) => {
-                f.debug_struct("WindowPartitionMeta::Spilling").finish()
-            }
-            WindowPartitionMeta::Spilled(_) => {
-                f.debug_struct("WindowPartitionMeta::Spilled").finish()
-            }
-            WindowPartitionMeta::BucketSpilled(_) => f
-                .debug_struct("WindowPartitionMeta::BucketSpilled")
-                .finish(),
-            WindowPartitionMeta::Partitioned { .. } => {
-                f.debug_struct("WindowPartitionMeta::Partitioned").finish()
-            }
-        }
+        f.debug_struct("WindowPartitionMeta").finish()
     }
 }
 

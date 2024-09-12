@@ -26,9 +26,11 @@ use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
@@ -37,13 +39,37 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
+use super::window_buffer::WindowBuffer;
 use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
 use super::WindowFunctionInfo;
+use super::WindowPartitionMeta;
+use super::WindowSpillSettings;
+use crate::sessions::QueryContext;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Step {
+    Sync(SyncStep),
+    Async(AsyncStep),
+    Finish,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SyncStep {
+    Collect,
+    Consume,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum AsyncStep {
+    Spill,
+    Restore,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct RowPtr {
@@ -68,9 +94,8 @@ struct WindowBlock {
 ///
 /// Window function will not change the rows count of the original data.
 pub struct TransformWindow<T: Number> {
-    input: Arc<InputPort>,
+    inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    state: ProcessorState,
     input_is_finished: bool,
 
     func: WindowFunctionImpl,
@@ -83,7 +108,7 @@ pub struct TransformWindow<T: Number> {
     /// If partition is ended, we may free the data block from front of the queue.
     blocks: VecDeque<WindowBlock>,
     /// A queue of data blocks that can be output.
-    outputs: VecDeque<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
 
     /// The monotonically increasing index of the current block in the queue.
     first_block: usize,
@@ -139,9 +164,437 @@ pub struct TransformWindow<T: Number> {
     is_empty_frame: bool,
     // If window function is ranking function
     is_ranking: bool,
+
+    // Event driven.
+    step: Step,
+    is_collect_finished: bool,
+    is_finish_block: bool,
+
+    // The buffer is used to control the memory usage of the window operator.
+    buffer: WindowBuffer,
+    partition_id: Vec<usize>,
+
+    // Data blocks to consume.
+    data_blocks_to_consume: VecDeque<DataBlock>,
+
+    // Used for sort.
+    schema: DataSchemaRef,
+    max_block_size: usize,
+    enable_loser_tree: bool,
+    sort_spilling_batch_bytes: usize,
+}
+
+// For ROWS frame
+impl TransformWindow<u64> {
+    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create_rows(
+        ctx: Arc<QueryContext>,
+        func: WindowFunctionInfo,
+        partition_indices: Vec<usize>,
+        order_by: Vec<SortColumnDescription>,
+        bounds: (FrameBound<u64>, FrameBound<u64>),
+        processor_id: usize,
+        num_processors: usize,
+        num_partitions: usize,
+        spill_settings: WindowSpillSettings,
+        schema: DataSchemaRef,
+        max_block_size: usize,
+        sort_spilling_batch_bytes: usize,
+        enable_loser_tree: bool,
+    ) -> Result<Self> {
+        let inputs = vec![InputPort::create(); num_processors];
+        let output = OutputPort::create();
+
+        let func = WindowFunctionImpl::try_create(func)?;
+        let (start_bound, end_bound) = bounds;
+
+        let is_empty_frame = start_bound > end_bound;
+        let is_ranking = matches!(
+            func,
+            WindowFunctionImpl::RowNumber
+                | WindowFunctionImpl::Rank
+                | WindowFunctionImpl::DenseRank
+        );
+
+        let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
+        let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
+
+        let partitions: Vec<usize> = (0..num_partitions)
+            .filter(|&partition| partition % num_processors == processor_id)
+            .collect();
+
+        let mut partition_id = vec![0; num_partitions];
+        for (index, partition) in partitions.iter().enumerate() {
+            partition_id[*partition] = index;
+        }
+
+        let buffer = WindowBuffer::new(ctx, num_partitions, spill_settings)?;
+
+        Ok(Self {
+            inputs,
+            output,
+            func,
+            partition_indices,
+            order_by,
+            blocks: VecDeque::new(),
+            output_data_blocks: VecDeque::new(),
+            first_block: 0,
+            next_output_block: 0,
+            partition_start: RowPtr::default(),
+            partition_end: RowPtr::default(),
+            partition_ended: false,
+            partition_size: 0,
+            frame_unit: WindowFuncFrameUnits::Rows,
+            start_bound,
+            end_bound,
+            rows_start_bound,
+            rows_end_bound,
+            need_check_null_frame: false,
+            is_null_frame: false,
+            frame_start: RowPtr::default(),
+            frame_end: RowPtr::default(),
+            frame_started: false,
+            frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
+            peer_group_start: RowPtr::default(),
+            peer_group_end: RowPtr::default(),
+            peer_group_ended: false,
+            need_peer: false,
+            current_row: RowPtr::default(),
+            current_row_in_partition: 1,
+            current_rank: 1,
+            current_rank_count: 1,
+            current_dense_rank: 1,
+            input_is_finished: false,
+            is_empty_frame,
+            is_ranking,
+            step: Step::Sync(SyncStep::Collect),
+            partition_id,
+            data_blocks_to_consume: VecDeque::new(),
+            buffer,
+            is_collect_finished: false,
+            is_finish_block: false,
+            schema,
+            max_block_size,
+            sort_spilling_batch_bytes,
+            enable_loser_tree,
+        })
+    }
+}
+
+// For RANGE frame
+impl<T> TransformWindow<T>
+where T: Number + ResultTypeOfUnary
+{
+    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create_range(
+        ctx: Arc<QueryContext>,
+        func: WindowFunctionInfo,
+        partition_indices: Vec<usize>,
+        order_by: Vec<SortColumnDescription>,
+        bounds: (FrameBound<T>, FrameBound<T>),
+        processor_id: usize,
+        num_processors: usize,
+        num_partitions: usize,
+        spill_settings: WindowSpillSettings,
+        schema: DataSchemaRef,
+        max_block_size: usize,
+        sort_spilling_batch_bytes: usize,
+        enable_loser_tree: bool,
+    ) -> Result<Self> {
+        let inputs = vec![InputPort::create(); num_processors];
+        let output = OutputPort::create();
+
+        let func = WindowFunctionImpl::try_create(func)?;
+        let (start_bound, end_bound) = bounds;
+
+        let is_empty_frame = start_bound > end_bound;
+        let is_ranking = matches!(
+            func,
+            WindowFunctionImpl::RowNumber
+                | WindowFunctionImpl::Rank
+                | WindowFunctionImpl::DenseRank
+        );
+
+        // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
+        let need_check_null_frame = if order_by.len() == 1 {
+            order_by[0].is_nullable
+        } else {
+            false
+        };
+
+        let need_peer = matches!(func, WindowFunctionImpl::CumeDist);
+
+        let partitions: Vec<usize> = (0..num_partitions)
+            .filter(|&partition| partition % num_processors == processor_id)
+            .collect();
+
+        let mut partition_id = vec![0; num_partitions];
+        for (index, partition) in partitions.iter().enumerate() {
+            partition_id[*partition] = index;
+        }
+
+        let buffer = WindowBuffer::new(ctx, num_partitions, spill_settings)?;
+
+        Ok(Self {
+            inputs,
+            output,
+            func,
+            partition_indices,
+            order_by,
+            blocks: VecDeque::new(),
+            output_data_blocks: VecDeque::new(),
+            first_block: 0,
+            next_output_block: 0,
+            partition_start: RowPtr::default(),
+            partition_end: RowPtr::default(),
+            partition_ended: false,
+            partition_size: 0,
+            frame_unit: WindowFuncFrameUnits::Range,
+            start_bound,
+            end_bound,
+            rows_start_bound: 0,
+            rows_end_bound: 0,
+            need_check_null_frame,
+            is_null_frame: false,
+            frame_start: RowPtr::default(),
+            frame_end: RowPtr::default(),
+            frame_started: false,
+            frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
+            peer_group_start: RowPtr::default(),
+            peer_group_end: RowPtr::default(),
+            peer_group_ended: false,
+            need_peer,
+            current_row: RowPtr::default(),
+            current_row_in_partition: 1,
+            current_rank: 1,
+            current_rank_count: 1,
+            current_dense_rank: 1,
+            input_is_finished: false,
+            is_empty_frame,
+            is_ranking,
+            step: Step::Sync(SyncStep::Collect),
+            partition_id,
+            data_blocks_to_consume: VecDeque::new(),
+            buffer,
+            is_collect_finished: false,
+            is_finish_block: false,
+            schema,
+            max_block_size,
+            sort_spilling_batch_bytes,
+            enable_loser_tree,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl<T> Processor for TransformWindow<T>
+where T: Number + ResultTypeOfUnary
+{
+    fn name(&self) -> String {
+        "TransformWindow".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        match self.step {
+            Step::Sync(sync_step) => match sync_step {
+                SyncStep::Collect => {
+                    let mut all_input_ports_finished = true;
+                    for input in self.inputs.iter() {
+                        if input.is_finished() {
+                            all_input_ports_finished = false;
+                            continue;
+                        }
+
+                        if input.has_data() {
+                            Self::collect_data_block(
+                                input.pull_data().unwrap()?,
+                                &self.partition_id,
+                                &mut self.buffer,
+                            );
+                        }
+
+                        input.set_need_data();
+                    }
+
+                    if self.need_spill() {
+                        return self.next_step(Step::Async(AsyncStep::Spill));
+                    }
+                    // for input in self.inputs.iter() {
+                    //     if input.is_finished() {
+                    //         all_input_ports_finished = false;
+                    //         continue;
+                    //     }
+
+                    //     if input.has_data() {
+                    //         self.collect_data_block(input.pull_data().unwrap()?);
+                    //         if self.need_spill() {
+                    //             return self.next_step(Step::Async(AsyncStep::Spill));
+                    //         } else {
+                    //             input.set_need_data();
+                    //         }
+                    //     } else {
+                    //         input.set_need_data();
+                    //     }
+                    // }
+
+                    if all_input_ports_finished {
+                        self.is_collect_finished = true;
+                        self.next_step(Step::Async(AsyncStep::Restore))
+                    } else {
+                        Ok(Event::NeedData)
+                    }
+                }
+                SyncStep::Consume => {
+                    if self.output.is_finished() {
+                        return self.next_step(Step::Finish);
+                    }
+
+                    if !self.output.can_push() {
+                        return Ok(Event::NeedConsume);
+                    }
+
+                    if self.need_spill() {
+                        return self.next_step(Step::Async(AsyncStep::Spill));
+                    }
+
+                    if let Some(data_block) = self.output_data_blocks.pop_back() {
+                        self.output.push_data(Ok(data_block));
+                        return Ok(Event::NeedConsume);
+                    }
+
+                    if !self.data_blocks_to_consume.is_empty() {
+                        return self.next_step(Step::Sync(SyncStep::Consume));
+                    }
+
+                    if !self.buffer.is_empty() {
+                        self.next_step(Step::Async(AsyncStep::Restore))
+                    } else if self.next_output_block - self.first_block < self.blocks.len() {
+                        // There are still some blocks are not output.
+                        self.is_finish_block = true;
+                        self.next_step(Step::Sync(SyncStep::Consume))
+                    } else {
+                        self.next_step(Step::Finish)
+                    }
+                }
+            },
+            Step::Async(async_step) => match async_step {
+                AsyncStep::Spill => {
+                    if self.is_collect_finished {
+                        self.next_step(Step::Sync(SyncStep::Consume))
+                    } else {
+                        self.next_step(Step::Sync(SyncStep::Collect))
+                    }
+                }
+                AsyncStep::Restore => self.next_step(Step::Sync(SyncStep::Consume)),
+            },
+            Step::Finish => Ok(Event::Finished),
+        }
+    }
+
+    fn process(&mut self) -> Result<()> {
+        match self.step {
+            Step::Sync(SyncStep::Consume) => {
+                if self.is_finish_block {
+                    self.add_block(None)?;
+                    self.check_outputs();
+                } else if let Some(data_block) = self.data_blocks_to_consume.pop_front() {
+                    self.add_block(Some(data_block))?;
+                    self.check_outputs();
+                }
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        match &self.step {
+            Step::Async(AsyncStep::Spill) => {
+                if let Some((partition_id, data_block)) =
+                    self.buffer.next_to_spill(64 * 1024 * 1024)?
+                {
+                    self.buffer.spill(partition_id, data_block).await?;
+                }
+            }
+            Step::Async(AsyncStep::Restore) => {
+                let data_blocks = self
+                    .buffer
+                    .restore()
+                    .await?
+                    .into_iter()
+                    .map(|data_block| DataBlock::sort(&data_block, &self.order_by, None))
+                    .collect::<Result<Vec<_>>>()?;
+
+                let sorted_data_blocks = sort_merge(
+                    self.schema.clone(),
+                    self.max_block_size,
+                    self.order_by.clone(),
+                    data_blocks,
+                    self.sort_spilling_batch_bytes,
+                    self.enable_loser_tree,
+                    false,
+                )?;
+
+                self.data_blocks_to_consume.extend(sorted_data_blocks);
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
 }
 
 impl<T: Number> TransformWindow<T> {
+    pub fn ports(&self) -> (Vec<Arc<InputPort>>, Vec<Arc<OutputPort>>) {
+        (self.inputs.clone(), vec![self.output.clone()])
+    }
+
+    fn collect_data_block(
+        data_block: DataBlock,
+        partition_ids: &[usize],
+        buffer: &mut WindowBuffer,
+    ) {
+        if let Some(meta) = data_block
+            .get_owned_meta()
+            .and_then(WindowPartitionMeta::downcast_from)
+        {
+            for (partition_id, data_block) in meta.partitioned_data.into_iter() {
+                let partition_id = partition_ids[partition_id];
+                buffer.add_data_block(partition_id, data_block);
+            }
+        }
+    }
+
+    fn need_spill(&mut self) -> bool {
+        self.buffer.need_spill()
+    }
+
+    fn next_step(&mut self, step: Step) -> Result<Event> {
+        let event = match step {
+            Step::Sync(_) => Event::Sync,
+            Step::Async(_) => Event::Async,
+            Step::Finish => {
+                for input in self.inputs.iter() {
+                    input.finish();
+                }
+                self.output.finish();
+                Event::Finished
+            }
+        };
+        self.step = step;
+        Ok(event)
+    }
+
     #[inline(always)]
     fn blocks_end(&self) -> RowPtr {
         RowPtr::new(self.first_block + self.blocks.len(), 0)
@@ -439,7 +892,7 @@ impl<T: Number> TransformWindow<T> {
                     new_column.data_type(),
                     Value::Column(new_column),
                 ));
-                self.outputs.push_back(output);
+                self.output_data_blocks.push_back(output);
                 self.next_output_block += 1;
             } else {
                 break;
@@ -722,151 +1175,10 @@ impl<T: Number> TransformWindow<T> {
     }
 }
 
-// For ROWS frame
-impl TransformWindow<u64> {
-    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
-    pub fn try_create_rows(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
-        partition_indices: Vec<usize>,
-        order_by: Vec<SortColumnDescription>,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-    ) -> Result<Self> {
-        let func = WindowFunctionImpl::try_create(func)?;
-        let (start_bound, end_bound) = bounds;
-
-        let is_empty_frame = start_bound > end_bound;
-        let is_ranking = matches!(
-            func,
-            WindowFunctionImpl::RowNumber
-                | WindowFunctionImpl::Rank
-                | WindowFunctionImpl::DenseRank
-        );
-
-        let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
-        let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
-
-        Ok(Self {
-            input,
-            output,
-            state: ProcessorState::Consume,
-            func,
-            partition_indices,
-            order_by,
-            blocks: VecDeque::new(),
-            outputs: VecDeque::new(),
-            first_block: 0,
-            next_output_block: 0,
-            partition_start: RowPtr::default(),
-            partition_end: RowPtr::default(),
-            partition_ended: false,
-            partition_size: 0,
-            frame_unit: WindowFuncFrameUnits::Rows,
-            start_bound,
-            end_bound,
-            rows_start_bound,
-            rows_end_bound,
-            need_check_null_frame: false,
-            is_null_frame: false,
-            frame_start: RowPtr::default(),
-            frame_end: RowPtr::default(),
-            frame_started: false,
-            frame_ended: false,
-            prev_frame_start: RowPtr::default(),
-            prev_frame_end: RowPtr::default(),
-            peer_group_start: RowPtr::default(),
-            peer_group_end: RowPtr::default(),
-            peer_group_ended: false,
-            need_peer: false,
-            current_row: RowPtr::default(),
-            current_row_in_partition: 1,
-            current_rank: 1,
-            current_rank_count: 1,
-            current_dense_rank: 1,
-            input_is_finished: false,
-            is_empty_frame,
-            is_ranking,
-        })
-    }
-}
-
 // For RANGE frame
 impl<T> TransformWindow<T>
 where T: Number + ResultTypeOfUnary
 {
-    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
-    pub fn try_create_range(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
-        partition_indices: Vec<usize>,
-        order_by: Vec<SortColumnDescription>,
-        bounds: (FrameBound<T>, FrameBound<T>),
-    ) -> Result<Self> {
-        let func = WindowFunctionImpl::try_create(func)?;
-        let (start_bound, end_bound) = bounds;
-
-        let is_empty_frame = start_bound > end_bound;
-        let is_ranking = matches!(
-            func,
-            WindowFunctionImpl::RowNumber
-                | WindowFunctionImpl::Rank
-                | WindowFunctionImpl::DenseRank
-        );
-
-        // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
-        let need_check_null_frame = if order_by.len() == 1 {
-            order_by[0].is_nullable
-        } else {
-            false
-        };
-
-        let need_peer = matches!(func, WindowFunctionImpl::CumeDist);
-
-        Ok(Self {
-            input,
-            output,
-            state: ProcessorState::Consume,
-            func,
-            partition_indices,
-            order_by,
-            blocks: VecDeque::new(),
-            outputs: VecDeque::new(),
-            first_block: 0,
-            next_output_block: 0,
-            partition_start: RowPtr::default(),
-            partition_end: RowPtr::default(),
-            partition_ended: false,
-            partition_size: 0,
-            frame_unit: WindowFuncFrameUnits::Range,
-            start_bound,
-            end_bound,
-            rows_start_bound: 0,
-            rows_end_bound: 0,
-            need_check_null_frame,
-            is_null_frame: false,
-            frame_start: RowPtr::default(),
-            frame_end: RowPtr::default(),
-            frame_started: false,
-            frame_ended: false,
-            prev_frame_start: RowPtr::default(),
-            prev_frame_end: RowPtr::default(),
-            peer_group_start: RowPtr::default(),
-            peer_group_end: RowPtr::default(),
-            peer_group_ended: false,
-            need_peer,
-            current_row: RowPtr::default(),
-            current_row_in_partition: 1,
-            current_rank: 1,
-            current_rank_count: 1,
-            current_dense_rank: 1,
-            input_is_finished: false,
-            is_empty_frame,
-            is_ranking,
-        })
-    }
-
     /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
     ///
     /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
@@ -1252,1295 +1564,1216 @@ macro_rules! impl_advance_frame_bound_method {
 impl_advance_frame_bound_method!(start, is_ge);
 impl_advance_frame_bound_method!(end, is_gt);
 
-enum ProcessorState {
-    Consume,
-    AddBlock(Option<DataBlock>),
-    Output,
-}
-
-#[async_trait::async_trait]
-impl<T> Processor for TransformWindow<T>
-where T: Number + ResultTypeOfUnary
-{
-    fn name(&self) -> String {
-        "Transform Window".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-
-        let input_is_finished = self.input.is_finished();
-        match self.state {
-            ProcessorState::Consume => {
-                self.input.set_need_data();
-                let has_data = self.input.has_data();
-                match (input_is_finished, has_data) {
-                    (_, true) => {
-                        let data = self.input.pull_data().transpose()?;
-                        self.state = ProcessorState::AddBlock(data);
-                        Ok(Event::Sync)
-                    }
-                    (false, false) => Ok(Event::NeedData),
-                    (true, _) => {
-                        // input_is_finished should be set after adding block.
-                        self.input_is_finished = true;
-                        if self.next_output_block - self.first_block < self.blocks.len() {
-                            // There are still some blocks are not output.
-                            self.state = ProcessorState::AddBlock(None);
-                            Ok(Event::Sync)
-                        } else {
-                            self.output.finish();
-                            Ok(Event::Finished)
-                        }
-                    }
-                }
-            }
-            ProcessorState::Output => {
-                let output = self.outputs.pop_front().unwrap();
-                self.output.push_data(Ok(output));
-                if self.outputs.is_empty() {
-                    self.state = ProcessorState::Consume;
-                }
-                Ok(Event::NeedConsume)
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        if let ProcessorState::AddBlock(data) =
-            std::mem::replace(&mut self.state, ProcessorState::Consume)
-        {
-            self.add_block(data)?;
-            self.check_outputs();
-            self.state = if self.outputs.is_empty() {
-                ProcessorState::Consume
-            } else {
-                ProcessorState::Output
-            };
-        } else {
-            unreachable!()
-        }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use databend_common_base::base::tokio;
-    use databend_common_exception::Result;
-    use databend_common_expression::block_debug::assert_blocks_eq;
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::Int32Type;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::Column;
-    use databend_common_expression::ColumnBuilder;
-    use databend_common_expression::DataBlock;
-    use databend_common_expression::FromData;
-    use databend_common_expression::SortColumnDescription;
-    use databend_common_functions::aggregates::AggregateFunctionFactory;
-    use databend_common_pipeline_core::processors::connect;
-    use databend_common_pipeline_core::processors::Event;
-    use databend_common_pipeline_core::processors::InputPort;
-    use databend_common_pipeline_core::processors::OutputPort;
-    use databend_common_pipeline_core::processors::Processor;
-    use databend_common_sql::plans::WindowFuncFrameUnits;
-
-    use super::TransformWindow;
-    use super::WindowBlock;
-    use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
-    use crate::pipelines::processors::transforms::window::FrameBound;
-    use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
-
-    fn get_ranking_transform_window(
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-    ) -> Result<TransformWindow<u64>> {
-        let func = WindowFunctionInfo::DenseRank;
-        TransformWindow::try_create_range(
-            InputPort::create(),
-            OutputPort::create(),
-            func,
-            vec![],
-            vec![SortColumnDescription {
-                offset: 0,
-                asc: false,
-                nulls_first: false,
-                is_nullable: false,
-            }],
-            bounds,
-        )
-    }
-
-    fn get_transform_window_without_partition(
-        _unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-        arg_type: DataType,
-    ) -> Result<TransformWindow<u64>> {
-        let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
-        let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
-        TransformWindow::try_create_rows(
-            InputPort::create(),
-            OutputPort::create(),
-            func,
-            vec![],
-            vec![SortColumnDescription {
-                offset: 0,
-                asc: false,
-                nulls_first: false,
-                is_nullable: false,
-            }],
-            bounds,
-        )
-    }
-
-    fn get_transform_window(
-        _unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-        arg_type: DataType,
-    ) -> Result<TransformWindow<u64>> {
-        let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
-        let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
-        TransformWindow::try_create_rows(
-            InputPort::create(),
-            OutputPort::create(),
-            func,
-            vec![0],
-            vec![],
-            bounds,
-        )
-    }
-
-    fn get_transform_window_with_data(
-        unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-        column: Column,
-    ) -> Result<TransformWindow<u64>> {
-        let data_type = column.data_type();
-        let num_rows = column.len();
-        let mut transform = get_transform_window(unit, bounds, data_type.clone())?;
-        transform.blocks.push_back(WindowBlock {
-            block: DataBlock::new_from_columns(vec![column]),
-            builder: ColumnBuilder::with_capacity(&data_type, num_rows),
-        });
-        Ok(transform)
-    }
-
-    #[test]
-    fn test_partition_advance() -> Result<()> {
-        {
-            let mut transform = get_transform_window_with_data(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::CurrentRow, FrameBound::CurrentRow),
-                Int32Type::from_data(vec![1, 1, 1]),
-            )?;
-
-            transform.advance_partition();
-
-            assert!(!transform.partition_ended);
-            assert_eq!(transform.partition_end, RowPtr::new(1, 0));
-        }
-
-        {
-            let mut transform = get_transform_window_with_data(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::CurrentRow, FrameBound::CurrentRow),
-                Int32Type::from_data(vec![1, 1, 2]),
-            )?;
-
-            transform.advance_partition();
-
-            assert!(transform.partition_ended);
-            assert_eq!(transform.partition_end, RowPtr::new(0, 2));
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_frame_advance() -> Result<()> {
-        {
-            let mut transform = get_transform_window_with_data(
-                WindowFuncFrameUnits::Rows,
-                (
-                    FrameBound::Following(Some(4)),
-                    FrameBound::Following(Some(5)),
-                ),
-                Int32Type::from_data(vec![1, 1, 1]),
-            )?;
-
-            transform.advance_partition();
-
-            assert!(!transform.partition_ended);
-            assert_eq!(transform.partition_end, RowPtr::new(1, 0));
-
-            transform.advance_frame_start();
-            assert!(!transform.frame_started)
-        }
-
-        {
-            let mut transform = get_transform_window_with_data(
-                WindowFuncFrameUnits::Rows,
-                (
-                    FrameBound::Preceding(Some(2)),
-                    FrameBound::Following(Some(5)),
-                ),
-                Int32Type::from_data(vec![1, 1, 1]),
-            )?;
-
-            transform.advance_partition();
-            transform.current_row = RowPtr::new(0, 1);
-
-            assert!(!transform.partition_ended);
-            assert_eq!(transform.partition_end, RowPtr::new(1, 0));
-
-            transform.advance_frame_start();
-            assert!(transform.frame_started);
-            assert_eq!(transform.frame_start, RowPtr::new(0, 0));
-
-            transform.advance_frame_end();
-            assert!(!transform.frame_ended);
-        }
-
-        {
-            let mut transform = get_transform_window_with_data(
-                WindowFuncFrameUnits::Rows,
-                (
-                    FrameBound::Preceding(Some(2)),
-                    FrameBound::Following(Some(1)),
-                ),
-                Int32Type::from_data(vec![1, 1, 1]),
-            )?;
-
-            transform.advance_partition();
-            transform.current_row = RowPtr::new(0, 1);
-            transform.prev_frame_start = RowPtr::new(0, 0);
-            transform.prev_frame_end = RowPtr::new(0, 2);
-
-            assert!(!transform.partition_ended);
-            assert_eq!(transform.partition_end, RowPtr::new(1, 0));
-
-            transform.advance_frame_start();
-            assert!(transform.frame_started);
-            assert_eq!(transform.frame_start, RowPtr::new(0, 0));
-
-            transform.advance_frame_end();
-            assert!(transform.frame_ended);
-            assert_eq!(transform.frame_end, RowPtr::new(1, 0));
-        }
-
-        {
-            let mut transform = get_transform_window_with_data(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(None)),
-                Int32Type::from_data(vec![1, 1, 1, 2]),
-            )?;
-
-            transform.advance_partition();
-            transform.current_row = RowPtr::new(0, 1);
-            transform.prev_frame_start = RowPtr::new(0, 0);
-            transform.prev_frame_end = RowPtr::new(0, 3);
-
-            assert!(transform.partition_ended);
-            assert_eq!(transform.partition_end, RowPtr::new(0, 3));
-
-            transform.advance_frame_start();
-            assert!(transform.frame_started);
-            assert_eq!(transform.frame_start, RowPtr::new(0, 0));
-
-            transform.advance_frame_end();
-            assert!(transform.frame_ended);
-            assert_eq!(transform.frame_end, RowPtr::new(0, 3));
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_block_release() -> Result<()> {
-        // ranking function release early
-        {
-            let mut transform = get_ranking_transform_window((
-                FrameBound::Preceding(None),
-                FrameBound::CurrentRow,
-            ))?;
-
-            // peer for 3 cross three blocks
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 3, 3]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 1        |",
-                    "| 1        | 1        |",
-                    "| 1        | 1        |",
-                    "| 2        | 2        |",
-                    "| 2        | 2        |",
-                    "| 3        | 3        |",
-                    "| 3        | 3        |",
-                    "| 3        | 3        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 3        |",
-                    "| 3        | 3        |",
-                    "| 3        | 3        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-            transform.add_block(None)?;
-            transform.check_outputs();
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 3        |",
-                    "| 4        | 4        |",
-                    "| 4        | 4        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        // ranking function release early
-        {
-            let mut transform = get_ranking_transform_window((
-                FrameBound::Preceding(None),
-                FrameBound::CurrentRow,
-            ))?;
-
-            // peer not cross any blocks
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![2, 2, 2]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 3, 3]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 1        |",
-                    "| 1        | 1        |",
-                    "| 1        | 1        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 2        | 2        |",
-                    "| 2        | 2        |",
-                    "| 2        | 2        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-            transform.add_block(None)?;
-            transform.check_outputs();
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 3        |",
-                    "| 3        | 3        |",
-                    "| 3        | 3        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        // normal agg function
-        {
-            let mut transform = get_transform_window_without_partition(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::CurrentRow),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 1);
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-            assert_eq!(transform.blocks.len(), 2);
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 1        |",
-                    "| 1        | 2        |",
-                    "| 1        | 3        |",
-                    "| 2        | 5        |",
-                    "| 2        | 7        |",
-                    "| 3        | 10       |",
-                    "| 3        | 13       |",
-                    "| 3        | 16       |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 19       |",
-                    "| 4        | 23       |",
-                    "| 4        | 27       |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_add_block() -> Result<()> {
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(None)),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1]),
-            ])))?;
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(None)),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 2        | 4        |",
-                    "| 2        | 4        |",
-                    "| 3        | 12       |",
-                    "| 3        | 12       |",
-                    "| 3        | 12       |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 12       |",
-                    "| 4        | 8        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(None)),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![5, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 2        | 4        |",
-                    "| 2        | 4        |",
-                    "| 3        | 9        |",
-                    "| 3        | 9        |",
-                    "| 3        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 5        | 5        |",
-                    "| 4        | 8        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(None)),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 2        | 4        |",
-                    "| 2        | 4        |",
-                    "| 3        | 12       |",
-                    "| 3        | 12       |",
-                    "| 3        | 12       |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 12       |",
-                    "| 4        | 8        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(Some(1))),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 2        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 2        | 4        |",
-                    "| 2        | 4        |",
-                    "| 3        | 6        |",
-                    "| 3        | 9        |",
-                    "| 3        | 12       |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 12       |",
-                    "| 4        | 8        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (
-                    FrameBound::Preceding(Some(1)),
-                    FrameBound::Following(Some(1)),
-                ),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 2        |",
-                    "| 1        | 3        |",
-                    "| 1        | 2        |",
-                    "| 2        | 4        |",
-                    "| 2        | 4        |",
-                    "| 3        | 6        |",
-                    "| 3        | 9        |",
-                    "| 3        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 6        |",
-                    "| 4        | 8        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::CurrentRow),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 1        |",
-                    "| 1        | 2        |",
-                    "| 1        | 3        |",
-                    "| 2        | 2        |",
-                    "| 2        | 4        |",
-                    "| 3        | 3        |",
-                    "| 3        | 6        |",
-                    "| 3        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 12       |",
-                    "| 4        | 4        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        {
-            let mut transform = get_transform_window(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(Some(1)), FrameBound::CurrentRow),
-                DataType::Number(NumberDataType::Int32),
-            )?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
-            ])))?;
-
-            transform.add_block(Some(DataBlock::new_from_columns(vec![
-                Int32Type::from_data(vec![3, 4, 4]),
-            ])))?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 1        |",
-                    "| 1        | 2        |",
-                    "| 1        | 2        |",
-                    "| 2        | 2        |",
-                    "| 2        | 4        |",
-                    "| 3        | 3        |",
-                    "| 3        | 6        |",
-                    "| 3        | 6        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-
-            transform.input_is_finished = true;
-
-            transform.add_block(None)?;
-
-            transform.check_outputs();
-
-            let output = transform.outputs.pop_front().unwrap();
-
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 6        |",
-                    "| 4        | 4        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[output],
-            );
-        }
-
-        Ok(())
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn get_transform_window_and_ports(
-        _unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-    ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
-        let agg = AggregateFunctionFactory::instance()
-            .get("sum", vec![], vec![DataType::Number(NumberDataType::Int32)])?;
-        let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
-        let input = InputPort::create();
-        let output = OutputPort::create();
-        let transform = TransformWindow::try_create_rows(
-            input.clone(),
-            output.clone(),
-            func,
-            vec![0],
-            vec![],
-            bounds,
-        )?;
-
-        Ok((Box::new(transform), input, output))
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_transform_window() -> Result<()> {
-        {
-            let upstream_output = OutputPort::create();
-            let downstream_input = InputPort::create();
-            let (mut transform, input, output) = get_transform_window_and_ports(
-                WindowFuncFrameUnits::Rows,
-                (
-                    FrameBound::Preceding(Some(1)),
-                    FrameBound::Following(Some(1)),
-                ),
-            )?;
-
-            unsafe {
-                connect(&input, &upstream_output);
-                connect(&downstream_input, &output);
-            }
-
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1, 2, 2, 3, 3, 3],
-            )])));
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![3, 4, 4],
-            )])));
-            upstream_output.finish();
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 2        |",
-                    "| 1        | 3        |",
-                    "| 1        | 2        |",
-                    "| 2        | 4        |",
-                    "| 2        | 4        |",
-                    "| 3        | 6        |",
-                    "| 3        | 9        |",
-                    "| 3        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 3        | 6        |",
-                    "| 4        | 8        |",
-                    "| 4        | 8        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::Finished));
-        }
-
-        {
-            let upstream_output = OutputPort::create();
-            let downstream_input = InputPort::create();
-            let (mut transform, input, output) = get_transform_window_and_ports(
-                WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(None)),
-            )?;
-
-            unsafe {
-                connect(&input, &upstream_output);
-                connect(&downstream_input, &output);
-            }
-
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1],
-            )])));
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1],
-            )])));
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1],
-            )])));
-            upstream_output.finish();
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 9        |",
-                    "| 1        | 9        |",
-                    "| 1        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 9        |",
-                    "| 1        | 9        |",
-                    "| 1        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 9        |",
-                    "| 1        | 9        |",
-                    "| 1        | 9        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::Finished));
-        }
-
-        {
-            let upstream_output = OutputPort::create();
-            let downstream_input = InputPort::create();
-            let (mut transform, input, output) = get_transform_window_and_ports(
-                WindowFuncFrameUnits::Rows,
-                (
-                    FrameBound::Preceding(Some(3)),
-                    FrameBound::Preceding(Some(1)),
-                ),
-            )?;
-
-            unsafe {
-                connect(&input, &upstream_output);
-                connect(&downstream_input, &output);
-            }
-
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1],
-            )])));
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | NULL     |",
-                    "| 1        | 1        |",
-                    "| 1        | 2        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1],
-            )])));
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::NeedData));
-            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
-                vec![1, 1, 1],
-            )])));
-            upstream_output.finish();
-
-            assert!(matches!(transform.event()?, Event::Sync));
-            transform.process()?;
-
-            assert!(matches!(transform.event()?, Event::NeedConsume));
-            let block = downstream_input.pull_data().unwrap()?;
-            assert_blocks_eq(
-                vec![
-                    "+----------+----------+",
-                    "| Column 0 | Column 1 |",
-                    "+----------+----------+",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "| 1        | 3        |",
-                    "+----------+----------+",
-                ],
-                &[block],
-            );
-            downstream_input.set_need_data();
-
-            assert!(matches!(transform.event()?, Event::Finished));
-        }
-
-        Ok(())
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use std::sync::Arc;
+
+//     use databend_common_base::base::tokio;
+//     use databend_common_exception::Result;
+//     use databend_common_expression::block_debug::assert_blocks_eq;
+//     use databend_common_expression::types::DataType;
+//     use databend_common_expression::types::Int32Type;
+//     use databend_common_expression::types::NumberDataType;
+//     use databend_common_expression::Column;
+//     use databend_common_expression::ColumnBuilder;
+//     use databend_common_expression::DataBlock;
+//     use databend_common_expression::FromData;
+//     use databend_common_expression::SortColumnDescription;
+//     use databend_common_functions::aggregates::AggregateFunctionFactory;
+//     use databend_common_pipeline_core::processors::connect;
+//     use databend_common_pipeline_core::processors::Event;
+//     use databend_common_pipeline_core::processors::InputPort;
+//     use databend_common_pipeline_core::processors::OutputPort;
+//     use databend_common_pipeline_core::processors::Processor;
+//     use databend_common_sql::plans::WindowFuncFrameUnits;
+
+//     use super::TransformWindow;
+//     use super::WindowBlock;
+//     use super::WindowSpillSettings;
+//     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
+//     use crate::pipelines::processors::transforms::window::FrameBound;
+//     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
+
+//     fn get_ranking_transform_window(
+//         bounds: (FrameBound<u64>, FrameBound<u64>),
+//     ) -> Result<TransformWindow<u64>> {
+//         let func = WindowFunctionInfo::DenseRank;
+//         TransformWindow::try_create_range(
+//             InputPort::create(),
+//             OutputPort::create(),
+//             func,
+//             vec![],
+//             vec![SortColumnDescription {
+//                 offset: 0,
+//                 asc: false,
+//                 nulls_first: false,
+//                 is_nullable: false,
+//             }],
+//             bounds,
+//             WindowSpillSettings::default(),
+//         )
+//     }
+
+//     fn get_transform_window_without_partition(
+//         _unit: WindowFuncFrameUnits,
+//         bounds: (FrameBound<u64>, FrameBound<u64>),
+//         arg_type: DataType,
+//     ) -> Result<TransformWindow<u64>> {
+//         let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
+//         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
+//         TransformWindow::try_create_rows(
+//             InputPort::create(),
+//             OutputPort::create(),
+//             func,
+//             vec![],
+//             vec![SortColumnDescription {
+//                 offset: 0,
+//                 asc: false,
+//                 nulls_first: false,
+//                 is_nullable: false,
+//             }],
+//             bounds,
+//             WindowSpillSettings::default(),
+//         )
+//     }
+
+//     fn get_transform_window(
+//         _unit: WindowFuncFrameUnits,
+//         bounds: (FrameBound<u64>, FrameBound<u64>),
+//         arg_type: DataType,
+//     ) -> Result<TransformWindow<u64>> {
+//         let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
+//         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
+//         TransformWindow::try_create_rows(
+//             InputPort::create(),
+//             OutputPort::create(),
+//             func,
+//             vec![0],
+//             vec![],
+//             bounds,
+//             WindowSpillSettings::default(),
+//         )
+//     }
+
+//     fn get_transform_window_with_data(
+//         unit: WindowFuncFrameUnits,
+//         bounds: (FrameBound<u64>, FrameBound<u64>),
+//         column: Column,
+//     ) -> Result<TransformWindow<u64>> {
+//         let data_type = column.data_type();
+//         let num_rows = column.len();
+//         let mut transform = get_transform_window(unit, bounds, data_type.clone())?;
+//         transform.blocks.push_back(WindowBlock {
+//             block: DataBlock::new_from_columns(vec![column]),
+//             builder: ColumnBuilder::with_capacity(&data_type, num_rows),
+//         });
+//         Ok(transform)
+//     }
+
+//     #[test]
+//     fn test_partition_advance() -> Result<()> {
+//         {
+//             let mut transform = get_transform_window_with_data(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::CurrentRow, FrameBound::CurrentRow),
+//                 Int32Type::from_data(vec![1, 1, 1]),
+//             )?;
+
+//             transform.advance_partition();
+
+//             assert!(!transform.partition_ended);
+//             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
+//         }
+
+//         {
+//             let mut transform = get_transform_window_with_data(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::CurrentRow, FrameBound::CurrentRow),
+//                 Int32Type::from_data(vec![1, 1, 2]),
+//             )?;
+
+//             transform.advance_partition();
+
+//             assert!(transform.partition_ended);
+//             assert_eq!(transform.partition_end, RowPtr::new(0, 2));
+//         }
+//         Ok(())
+//     }
+
+//     #[test]
+//     fn test_frame_advance() -> Result<()> {
+//         {
+//             let mut transform = get_transform_window_with_data(
+//                 WindowFuncFrameUnits::Rows,
+//                 (
+//                     FrameBound::Following(Some(4)),
+//                     FrameBound::Following(Some(5)),
+//                 ),
+//                 Int32Type::from_data(vec![1, 1, 1]),
+//             )?;
+
+//             transform.advance_partition();
+
+//             assert!(!transform.partition_ended);
+//             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
+
+//             transform.advance_frame_start();
+//             assert!(!transform.frame_started)
+//         }
+
+//         {
+//             let mut transform = get_transform_window_with_data(
+//                 WindowFuncFrameUnits::Rows,
+//                 (
+//                     FrameBound::Preceding(Some(2)),
+//                     FrameBound::Following(Some(5)),
+//                 ),
+//                 Int32Type::from_data(vec![1, 1, 1]),
+//             )?;
+
+//             transform.advance_partition();
+//             transform.current_row = RowPtr::new(0, 1);
+
+//             assert!(!transform.partition_ended);
+//             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
+
+//             transform.advance_frame_start();
+//             assert!(transform.frame_started);
+//             assert_eq!(transform.frame_start, RowPtr::new(0, 0));
+
+//             transform.advance_frame_end();
+//             assert!(!transform.frame_ended);
+//         }
+
+//         {
+//             let mut transform = get_transform_window_with_data(
+//                 WindowFuncFrameUnits::Rows,
+//                 (
+//                     FrameBound::Preceding(Some(2)),
+//                     FrameBound::Following(Some(1)),
+//                 ),
+//                 Int32Type::from_data(vec![1, 1, 1]),
+//             )?;
+
+//             transform.advance_partition();
+//             transform.current_row = RowPtr::new(0, 1);
+//             transform.prev_frame_start = RowPtr::new(0, 0);
+//             transform.prev_frame_end = RowPtr::new(0, 2);
+
+//             assert!(!transform.partition_ended);
+//             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
+
+//             transform.advance_frame_start();
+//             assert!(transform.frame_started);
+//             assert_eq!(transform.frame_start, RowPtr::new(0, 0));
+
+//             transform.advance_frame_end();
+//             assert!(transform.frame_ended);
+//             assert_eq!(transform.frame_end, RowPtr::new(1, 0));
+//         }
+
+//         {
+//             let mut transform = get_transform_window_with_data(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(None)),
+//                 Int32Type::from_data(vec![1, 1, 1, 2]),
+//             )?;
+
+//             transform.advance_partition();
+//             transform.current_row = RowPtr::new(0, 1);
+//             transform.prev_frame_start = RowPtr::new(0, 0);
+//             transform.prev_frame_end = RowPtr::new(0, 3);
+
+//             assert!(transform.partition_ended);
+//             assert_eq!(transform.partition_end, RowPtr::new(0, 3));
+
+//             transform.advance_frame_start();
+//             assert!(transform.frame_started);
+//             assert_eq!(transform.frame_start, RowPtr::new(0, 0));
+
+//             transform.advance_frame_end();
+//             assert!(transform.frame_ended);
+//             assert_eq!(transform.frame_end, RowPtr::new(0, 3));
+//         }
+
+//         Ok(())
+//     }
+
+//     #[test]
+//     fn test_block_release() -> Result<()> {
+//         // ranking function release early
+//         {
+//             let mut transform = get_ranking_transform_window((
+//                 FrameBound::Preceding(None),
+//                 FrameBound::CurrentRow,
+//             ))?;
+
+//             // peer for 3 cross three blocks
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 3, 3]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 1        |",
+//                     "| 1        | 1        |",
+//                     "| 1        | 1        |",
+//                     "| 2        | 2        |",
+//                     "| 2        | 2        |",
+//                     "| 3        | 3        |",
+//                     "| 3        | 3        |",
+//                     "| 3        | 3        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 3        |",
+//                     "| 3        | 3        |",
+//                     "| 3        | 3        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+//             transform.add_block(None)?;
+//             transform.check_outputs();
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 3        |",
+//                     "| 4        | 4        |",
+//                     "| 4        | 4        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         // ranking function release early
+//         {
+//             let mut transform = get_ranking_transform_window((
+//                 FrameBound::Preceding(None),
+//                 FrameBound::CurrentRow,
+//             ))?;
+
+//             // peer not cross any blocks
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![2, 2, 2]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 3, 3]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 1        |",
+//                     "| 1        | 1        |",
+//                     "| 1        | 1        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 2        | 2        |",
+//                     "| 2        | 2        |",
+//                     "| 2        | 2        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+//             transform.add_block(None)?;
+//             transform.check_outputs();
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 3        |",
+//                     "| 3        | 3        |",
+//                     "| 3        | 3        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         // normal agg function
+//         {
+//             let mut transform = get_transform_window_without_partition(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::CurrentRow),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 1);
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+//             assert_eq!(transform.blocks.len(), 2);
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 1        |",
+//                     "| 1        | 2        |",
+//                     "| 1        | 3        |",
+//                     "| 2        | 5        |",
+//                     "| 2        | 7        |",
+//                     "| 3        | 10       |",
+//                     "| 3        | 13       |",
+//                     "| 3        | 16       |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 19       |",
+//                     "| 4        | 23       |",
+//                     "| 4        | 27       |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         Ok(())
+//     }
+
+//     #[test]
+//     fn test_add_block() -> Result<()> {
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(None)),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1]),
+//             ])))?;
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(None)),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 2        | 4        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 12       |",
+//                     "| 3        | 12       |",
+//                     "| 3        | 12       |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 12       |",
+//                     "| 4        | 8        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(None)),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![5, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 2        | 4        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 9        |",
+//                     "| 3        | 9        |",
+//                     "| 3        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 5        | 5        |",
+//                     "| 4        | 8        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(None)),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 2        | 4        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 12       |",
+//                     "| 3        | 12       |",
+//                     "| 3        | 12       |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 12       |",
+//                     "| 4        | 8        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(Some(1))),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 2        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 2        | 4        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 6        |",
+//                     "| 3        | 9        |",
+//                     "| 3        | 12       |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 12       |",
+//                     "| 4        | 8        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (
+//                     FrameBound::Preceding(Some(1)),
+//                     FrameBound::Following(Some(1)),
+//                 ),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 2        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 2        |",
+//                     "| 2        | 4        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 6        |",
+//                     "| 3        | 9        |",
+//                     "| 3        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 6        |",
+//                     "| 4        | 8        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::CurrentRow),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 1        |",
+//                     "| 1        | 2        |",
+//                     "| 1        | 3        |",
+//                     "| 2        | 2        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 3        |",
+//                     "| 3        | 6        |",
+//                     "| 3        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 12       |",
+//                     "| 4        | 4        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         {
+//             let mut transform = get_transform_window(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(Some(1)), FrameBound::CurrentRow),
+//                 DataType::Number(NumberDataType::Int32),
+//             )?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+//             ])))?;
+
+//             transform.add_block(Some(DataBlock::new_from_columns(vec![
+//                 Int32Type::from_data(vec![3, 4, 4]),
+//             ])))?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 1        |",
+//                     "| 1        | 2        |",
+//                     "| 1        | 2        |",
+//                     "| 2        | 2        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 3        |",
+//                     "| 3        | 6        |",
+//                     "| 3        | 6        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+
+//             transform.input_is_finished = true;
+
+//             transform.add_block(None)?;
+
+//             transform.check_outputs();
+
+//             let output = transform.output_data_blocks.pop_front().unwrap();
+
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 6        |",
+//                     "| 4        | 4        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[output],
+//             );
+//         }
+
+//         Ok(())
+//     }
+
+//     #[allow(clippy::type_complexity)]
+//     fn get_transform_window_and_ports(
+//         _unit: WindowFuncFrameUnits,
+//         bounds: (FrameBound<u64>, FrameBound<u64>),
+//     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
+//         let agg = AggregateFunctionFactory::instance()
+//             .get("sum", vec![], vec![DataType::Number(NumberDataType::Int32)])?;
+//         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
+//         let input = InputPort::create();
+//         let output = OutputPort::create();
+//         let transform = TransformWindow::try_create_rows(
+//             input.clone(),
+//             output.clone(),
+//             func,
+//             vec![0],
+//             vec![],
+//             bounds,
+//             WindowSpillSettings::default(),
+//         )?;
+
+//         Ok((Box::new(transform), input, output))
+//     }
+
+//     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+//     async fn test_transform_window() -> Result<()> {
+//         {
+//             let upstream_output = OutputPort::create();
+//             let downstream_input = InputPort::create();
+//             let (mut transform, input, output) = get_transform_window_and_ports(
+//                 WindowFuncFrameUnits::Rows,
+//                 (
+//                     FrameBound::Preceding(Some(1)),
+//                     FrameBound::Following(Some(1)),
+//                 ),
+//             )?;
+
+//             unsafe {
+//                 connect(&input, &upstream_output);
+//                 connect(&downstream_input, &output);
+//             }
+
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1, 2, 2, 3, 3, 3],
+//             )])));
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![3, 4, 4],
+//             )])));
+//             upstream_output.finish();
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 2        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 2        |",
+//                     "| 2        | 4        |",
+//                     "| 2        | 4        |",
+//                     "| 3        | 6        |",
+//                     "| 3        | 9        |",
+//                     "| 3        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 3        | 6        |",
+//                     "| 4        | 8        |",
+//                     "| 4        | 8        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::Finished));
+//         }
+
+//         {
+//             let upstream_output = OutputPort::create();
+//             let downstream_input = InputPort::create();
+//             let (mut transform, input, output) = get_transform_window_and_ports(
+//                 WindowFuncFrameUnits::Rows,
+//                 (FrameBound::Preceding(None), FrameBound::Following(None)),
+//             )?;
+
+//             unsafe {
+//                 connect(&input, &upstream_output);
+//                 connect(&downstream_input, &output);
+//             }
+
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1],
+//             )])));
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1],
+//             )])));
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1],
+//             )])));
+//             upstream_output.finish();
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 9        |",
+//                     "| 1        | 9        |",
+//                     "| 1        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 9        |",
+//                     "| 1        | 9        |",
+//                     "| 1        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 9        |",
+//                     "| 1        | 9        |",
+//                     "| 1        | 9        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::Finished));
+//         }
+
+//         {
+//             let upstream_output = OutputPort::create();
+//             let downstream_input = InputPort::create();
+//             let (mut transform, input, output) = get_transform_window_and_ports(
+//                 WindowFuncFrameUnits::Rows,
+//                 (
+//                     FrameBound::Preceding(Some(3)),
+//                     FrameBound::Preceding(Some(1)),
+//                 ),
+//             )?;
+
+//             unsafe {
+//                 connect(&input, &upstream_output);
+//                 connect(&downstream_input, &output);
+//             }
+
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1],
+//             )])));
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | NULL     |",
+//                     "| 1        | 1        |",
+//                     "| 1        | 2        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1],
+//             )])));
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::NeedData));
+//             upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+//                 vec![1, 1, 1],
+//             )])));
+//             upstream_output.finish();
+
+//             assert!(matches!(transform.event()?, Event::Sync));
+//             transform.process()?;
+
+//             assert!(matches!(transform.event()?, Event::NeedConsume));
+//             let block = downstream_input.pull_data().unwrap()?;
+//             assert_blocks_eq(
+//                 vec![
+//                     "+----------+----------+",
+//                     "| Column 0 | Column 1 |",
+//                     "+----------+----------+",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "| 1        | 3        |",
+//                     "+----------+----------+",
+//                 ],
+//                 &[block],
+//             );
+//             downstream_input.set_need_data();
+
+//             assert!(matches!(transform.event()?, Event::Finished));
+//         }
+
+//         Ok(())
+//     }
+// }

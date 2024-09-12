@@ -12,204 +12,159 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::group_hash_columns_slice;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
+use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::AccumulatingTransform;
-use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::PipeItem;
 
 use super::WindowPartitionMeta;
-use crate::sessions::QueryContext;
-
-pub static PARTITION_COUNT: usize = 256;
-
-#[derive(Default)]
-pub struct PartitionHashTable {
-    pub buckets_blocks: BTreeMap<usize, Vec<DataBlock>>,
-    hash_keys: Vec<usize>,
-    allocated_bytes: usize,
-}
-
-impl PartitionHashTable {
-    pub fn new(hash_keys: Vec<usize>) -> Self {
-        Self {
-            buckets_blocks: BTreeMap::new(),
-            hash_keys,
-            allocated_bytes: 0,
-        }
-    }
-
-    pub fn add_block(&mut self, block: DataBlock) -> Result<()> {
-        let num_rows = block.num_rows();
-
-        let hash_cols = self
-            .hash_keys
-            .iter()
-            .map(|&offset| {
-                let entry = block.get_by_offset(offset);
-                match &entry.value {
-                    Value::Scalar(s) => {
-                        ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
-                    }
-                    Value::Column(c) => c.clone(),
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let mut hashes = vec![0u64; num_rows];
-        group_hash_columns_slice(&hash_cols, &mut hashes);
-
-        let indices = hashes
-            .iter()
-            .map(|&hash| (hash % PARTITION_COUNT as u64) as u8)
-            .collect::<Vec<_>>();
-        let scatter_blocks = DataBlock::scatter(&block, &indices, PARTITION_COUNT)?;
-        debug_assert_eq!(scatter_blocks.len(), PARTITION_COUNT);
-
-        for (bucket, block) in scatter_blocks.into_iter().enumerate() {
-            if !block.is_empty() {
-                self.allocated_bytes += block.memory_size();
-                match self.buckets_blocks.entry(bucket) {
-                    Entry::Vacant(v) => {
-                        v.insert(vec![block]);
-                    }
-                    Entry::Occupied(mut v) => {
-                        v.get_mut().push(block);
-                    }
-                };
-            }
-        }
-
-        Ok(())
-    }
-
-    #[inline]
-    pub fn allocated_bytes(&self) -> usize {
-        self.allocated_bytes
-    }
-}
-
-pub fn convert_to_partitions(
-    mut buckets_blocks: BTreeMap<usize, Vec<DataBlock>>,
-) -> Result<Vec<(isize, DataBlock)>> {
-    let mut partitions = Vec::with_capacity(PARTITION_COUNT);
-    while let Some((bucket, blocks)) = buckets_blocks.pop_first() {
-        let payload = DataBlock::concat(&blocks)?;
-        partitions.push((bucket as isize, payload));
-    }
-
-    Ok(partitions)
-}
-
-struct WindowPartitionSettings {
-    max_memory_usage: usize,
-    spilling_bytes_threshold_per_proc: usize,
-}
-
-impl TryFrom<Arc<QueryContext>> for WindowPartitionSettings {
-    type Error = ErrorCode;
-
-    fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
-        let settings = ctx.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-        let mut memory_ratio =
-            settings.get_window_partition_spilling_memory_ratio()? as f64 / 100_f64;
-
-        if memory_ratio > 1_f64 {
-            memory_ratio = 1_f64;
-        }
-
-        let max_memory_usage = match settings.get_max_memory_usage()? {
-            0 => usize::MAX,
-            max_memory_usage => match memory_ratio {
-                x if x == 0_f64 => usize::MAX,
-                memory_ratio => (max_memory_usage as f64 * memory_ratio) as usize,
-            },
-        };
-
-        Ok(WindowPartitionSettings {
-            max_memory_usage,
-            spilling_bytes_threshold_per_proc: match settings
-                .get_window_partition_spilling_bytes_threshold_per_proc()?
-            {
-                0 => max_memory_usage / max_threads,
-                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
-            },
-        })
-    }
-}
 
 pub struct TransformWindowPartitionScatter {
-    hash_table: PartitionHashTable,
-    settings: WindowPartitionSettings,
+    input_port: Arc<InputPort>,
+    output_ports: Vec<Arc<OutputPort>>,
+    input_data_blocks: VecDeque<DataBlock>,
+    output_data_blocks: Vec<VecDeque<DataBlock>>,
+    num_processors: usize,
+    num_partitions: usize,
+    hash_keys: Vec<usize>,
 }
 
 impl TransformWindowPartitionScatter {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
+    pub fn new(
+        num_processors: usize,
+        num_partitions: usize,
         hash_keys: Vec<usize>,
-    ) -> Result<Box<dyn Processor>> {
-        let hash_table = PartitionHashTable::new(hash_keys.clone());
+    ) -> Result<Self> {
+        let input_port = InputPort::create();
+        let output_ports = vec![OutputPort::create(); num_processors];
+        Ok(Self {
+            input_port,
+            output_ports,
+            input_data_blocks: VecDeque::new(),
+            output_data_blocks: vec![VecDeque::new(); num_processors],
+            num_processors,
+            num_partitions,
+            hash_keys,
+        })
+    }
 
-        Ok(AccumulatingTransformer::create(
-            input,
-            output,
-            TransformWindowPartitionScatter {
-                hash_table,
-                settings: WindowPartitionSettings::try_from(ctx)?,
-            },
-        ))
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input_port = self.input_port.clone();
+        let output_ports = self.output_ports.clone();
+        let processor_ptr = ProcessorPtr::create(Box::new(self));
+        PipeItem::create(processor_ptr, vec![input_port], output_ports)
     }
 }
 
-impl AccumulatingTransform for TransformWindowPartitionScatter {
-    const NAME: &'static str = "TransformWindowPartitionScatter";
-
-    fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
-        self.hash_table.add_block(block)?;
-
-        if self.hash_table.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
-            || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
-        {
-            let hash_table = std::mem::take(&mut self.hash_table);
-            let blocks = vec![DataBlock::empty_with_meta(
-                WindowPartitionMeta::create_spilling(hash_table.buckets_blocks),
-            )];
-
-            self.hash_table = PartitionHashTable::new(hash_table.hash_keys);
-            return Ok(blocks);
-        }
-
-        Ok(vec![])
+impl Processor for TransformWindowPartitionScatter {
+    fn name(&self) -> String {
+        "WindowPartitionScatter".to_string()
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        let mut blocks = Vec::with_capacity(PARTITION_COUNT);
-        let hash_table = std::mem::take(&mut self.hash_table);
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
 
-        let partitions = convert_to_partitions(hash_table.buckets_blocks)?;
-        for (bucket, block) in partitions.into_iter() {
-            if !block.is_empty() {
-                blocks.push(DataBlock::empty_with_meta(
-                    WindowPartitionMeta::create_payload(bucket, block),
-                ));
+    fn event(&mut self) -> Result<Event> {
+        let mut all_output_ports_finished = true;
+        let mut need_consume = false;
+        for (index, output_port) in self.output_ports.iter().enumerate() {
+            if output_port.is_finished() {
+                all_output_ports_finished = false;
+                continue;
+            }
+
+            if !output_port.can_push() {
+                need_consume = true;
+            }
+
+            if let Some(data_block) = self.output_data_blocks[index].pop_front() {
+                output_port.push_data(Ok(data_block));
+                need_consume = true;
             }
         }
 
-        Ok(blocks)
+        if need_consume {
+            self.input_port.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if all_output_ports_finished {
+            self.input_port.finish();
+            for output_port in &self.output_ports {
+                output_port.finish();
+            }
+            return Ok(Event::Finished);
+        }
+
+        if self.input_port.has_data() {
+            let data_block = self.input_port.pull_data().unwrap()?;
+            self.input_data_blocks.push_back(data_block);
+            return Ok(Event::Sync);
+        }
+
+        if !self.input_port.is_finished() {
+            self.input_port.set_need_data();
+            return Ok(Event::NeedData);
+        }
+
+        self.input_port.finish();
+        for output_port in &self.output_ports {
+            output_port.finish();
+        }
+        Ok(Event::Finished)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(data_block) = self.input_data_blocks.pop_front() {
+            let num_rows = data_block.num_rows();
+
+            let hash_cols = self
+                .hash_keys
+                .iter()
+                .map(|&offset| {
+                    let entry = data_block.get_by_offset(offset);
+                    match &entry.value {
+                        Value::Scalar(s) => {
+                            ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
+                        }
+                        Value::Column(c) => c.clone(),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let mut hashes = vec![0u64; num_rows];
+            group_hash_columns_slice(&hash_cols, &mut hashes);
+
+            let indices = hashes
+                .iter()
+                .map(|&hash| (hash % self.num_partitions as u64) as u8)
+                .collect::<Vec<_>>();
+            let scatter_blocks = DataBlock::scatter(&data_block, &indices, self.num_partitions)?;
+
+            let mut output_data_blocks = vec![vec![]; self.num_processors];
+            for (partition_id, data_block) in scatter_blocks.into_iter().enumerate() {
+                let output_index = partition_id % self.num_processors;
+                output_data_blocks[output_index].push((partition_id, data_block));
+            }
+
+            for (output_index, partitioned_data) in output_data_blocks.into_iter().enumerate() {
+                let meta = WindowPartitionMeta::create(partitioned_data);
+                let data_block = DataBlock::empty_with_meta(meta);
+                self.output_data_blocks[output_index].push_back(data_block);
+            }
+        }
+        Ok(())
     }
 }

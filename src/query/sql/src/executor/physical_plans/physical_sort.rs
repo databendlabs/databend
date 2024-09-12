@@ -23,7 +23,6 @@ use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::SortDesc;
-use crate::executor::physical_plans::WindowPartition;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
@@ -122,12 +121,6 @@ impl PhysicalPlanBuilder {
 
         let input_plan = self.build(s_expr.child(0)?, required).await?;
 
-        let window_partition = sort
-            .window_partition
-            .iter()
-            .map(|v| v.index)
-            .collect::<Vec<_>>();
-
         let order_by = sort
             .items
             .iter()
@@ -138,18 +131,6 @@ impl PhysicalPlanBuilder {
                 display_name: self.metadata.read().column(v.index).name(),
             })
             .collect::<Vec<_>>();
-
-        // Add WindowPartition for parallel sort in window.
-        if !window_partition.is_empty() {
-            return Ok(PhysicalPlan::WindowPartition(WindowPartition {
-                plan_id: 0,
-                input: Box::new(input_plan.clone()),
-                partition_by: window_partition.clone(),
-                order_by: order_by.clone(),
-                after_exchange: sort.after_exchange,
-                stat_info: Some(stat_info.clone()),
-            }));
-        }
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {
