@@ -20,11 +20,8 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] i
 1	1	377
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'
- (while in processor thread 0)
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'
- (while in processor thread 0)
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'
- (while in processor thread 0)
 2
 1
 1

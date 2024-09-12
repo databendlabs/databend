@@ -31,7 +31,6 @@ candidate functions:
 
 
 Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `1 + to_uint64('a')`
- (while in processor thread 0)
 Error: APIError: ResponseError with 1025: error: 
   --> SQL:1:20
   |

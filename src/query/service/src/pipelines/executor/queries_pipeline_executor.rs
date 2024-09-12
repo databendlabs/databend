@@ -127,21 +127,7 @@ impl QueriesPipelineExecutor {
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
-                let try_result = catch_unwind(move || -> Result<()> {
-                    match this_clone.execute_single_thread(thread_num) {
-                        Ok(_) => Ok(()),
-                        Err(cause) => {
-                            if log::max_level() == LevelFilter::Trace {
-                                Err(cause.add_message_back(format!(
-                                    " (while in processor thread {})",
-                                    thread_num
-                                )))
-                            } else {
-                                Err(cause)
-                            }
-                        }
-                    }
-                });
+                let try_result = catch_unwind(|| this_clone.execute_single_thread(thread_num));
 
                 // finish the pipeline executor when has error or panic
                 if let Err(cause) = try_result.flatten() {
