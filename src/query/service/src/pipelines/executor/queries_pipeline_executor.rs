@@ -28,7 +28,6 @@ use databend_common_exception::Result;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use log::warn;
-use log::LevelFilter;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorWorkerContext;
