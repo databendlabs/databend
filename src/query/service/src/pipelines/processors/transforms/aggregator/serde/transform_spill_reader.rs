@@ -34,6 +34,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
@@ -47,6 +48,7 @@ pub struct TransformSpillReader<Method: HashMethodBounds, V: Send + Sync + 'stat
     output: Arc<OutputPort>,
 
     operator: Operator,
+    semaphore: Arc<Semaphore>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
     reading_meta: Option<AggregateMeta<Method, V>>,
     deserializing_meta: Option<DeserializingMeta<Method, V>>,
@@ -183,6 +185,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
+                    let _guard = self.semaphore.acquire().await;
                     let instant = Instant::now();
                     let data = self
                         .operator
@@ -211,7 +214,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
+                            let semaphore = self.semaphore.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
+                                let _guard = semaphore.acquire().await;
                                 let instant = Instant::now();
                                 let data = operator
                                     .read_with(&location)
@@ -282,6 +287,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
+        semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<
             Method,
@@ -290,6 +296,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
             input,
             output,
             operator,
+            semaphore,
             deserialized_meta: None,
             reading_meta: None,
             deserializing_meta: None,

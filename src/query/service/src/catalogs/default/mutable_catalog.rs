@@ -22,6 +22,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
@@ -98,7 +99,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -422,6 +422,34 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    // Mget dbs by DatabaseNameIdent.
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let res = self
+            .ctx
+            .meta
+            .mget_id_value_compat(db_names.iter().cloned())
+            .await?;
+        let dbs = res
+            .map(|(name_ident, database_id, meta)| {
+                Arc::new(DatabaseInfo {
+                    database_id,
+                    name_ident,
+                    meta,
+                })
+            })
+            .collect::<Vec<Arc<DatabaseInfo>>>();
+
+        dbs.iter().try_fold(vec![], |mut acc, item| {
+            let db = self.build_db_instance(item)?;
+            acc.push(db);
+            Ok(acc)
+        })
+    }
+
     async fn mget_database_names_by_ids(
         &self,
         _tenant: &Tenant,
@@ -521,14 +549,14 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.undrop_table(req).await
     }
 
-    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<()> {
         let res = self.ctx.meta.undrop_table_by_id(req).await?;
         Ok(res)
     }
