@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::DeclareItem;
+use databend_common_ast::ast::DeclareVar;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ScriptStatement;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
@@ -28,7 +30,7 @@ use databend_common_expression::FromData;
 use databend_common_script::compile;
 use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
-use databend_common_sql::plans::ExecuteImmediatePlan;
+use databend_common_sql::plans::CallProcedurePlan;
 use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::util::ScriptClient;
@@ -37,21 +39,21 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct ExecuteImmediateInterpreter {
+pub struct CallProcedureInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ExecuteImmediatePlan,
+    plan: CallProcedurePlan,
 }
 
-impl ExecuteImmediateInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ExecuteImmediatePlan) -> Result<Self> {
-        Ok(ExecuteImmediateInterpreter { ctx, plan })
+impl CallProcedureInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CallProcedurePlan) -> Result<Self> {
+        Ok(CallProcedureInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ExecuteImmediateInterpreter {
+impl Interpreter for CallProcedureInterpreter {
     fn name(&self) -> &str {
-        "ExecuteImmediateInterpreter"
+        "ProcedureCall"
     }
 
     fn is_ddl(&self) -> bool {
@@ -62,6 +64,16 @@ impl Interpreter for ExecuteImmediateInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {
+            let mut src = vec![];
+            for (arg, arg_name) in self.plan.args.iter().zip(self.plan.arg_names.iter()) {
+                src.push(ScriptStatement::LetVar {
+                    declare: DeclareVar {
+                        span: None,
+                        name: Identifier::from_name(None, arg_name),
+                        default: arg.clone(),
+                    },
+                });
+            }
             let settings = self.ctx.get_settings();
             let sql_dialect = settings.get_sql_dialect()?;
             let tokens = tokenize_sql(&self.plan.script)?;
@@ -73,7 +85,6 @@ impl Interpreter for ExecuteImmediateInterpreter {
                 script_block,
             )?;
 
-            let mut src = vec![];
             for declare in ast.declares {
                 match declare {
                     DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),

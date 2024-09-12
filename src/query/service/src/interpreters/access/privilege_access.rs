@@ -1260,6 +1260,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DescDatamaskPolicy(_) => {}
             Plan::Begin => {}
             Plan::ExecuteImmediate(_)
+            | Plan::CallProcedure(_)
             | Plan::CreateProcedure(_)
             | Plan::DropProcedure(_)
             /*| Plan::ShowCreateProcedure(_)
