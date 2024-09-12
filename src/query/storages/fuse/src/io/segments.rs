@@ -26,7 +26,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 
@@ -102,7 +102,7 @@ impl SegmentsIO {
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
                 }
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                .in_span(Span::enter_with_local_parent(func_path!()))
             })
         });
 
