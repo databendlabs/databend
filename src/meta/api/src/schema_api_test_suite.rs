@@ -3396,7 +3396,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -3606,7 +3606,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -3803,7 +3803,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4316,7 +4316,7 @@ impl SchemaApiTestSuite {
             let now = Utc::now();
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(Some(now)),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(Some(now)),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4348,7 +4348,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4557,7 +4557,7 @@ impl SchemaApiTestSuite {
         for (limit, number, drop_ids) in limit_and_drop_ids {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -5234,7 +5234,7 @@ impl SchemaApiTestSuite {
             // vacuum drop table
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
