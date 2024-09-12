@@ -654,9 +654,6 @@ impl Display for UndropTableReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropTableReply {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub name_ident: TableNameIdent,
