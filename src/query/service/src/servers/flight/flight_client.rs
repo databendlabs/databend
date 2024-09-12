@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
@@ -328,13 +329,16 @@ impl FlightRxInner {
         }
     }
 
+    pub fn stop_cluster(&self) {
+        let _ = self.server_tx.send(
+            FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close)).unwrap(),
+        );
+    }
+
     pub fn close(&self) {
         self.rx.close();
         self.notify.notify_waiters();
-        let res = self.server_tx.send(
-            FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close)).unwrap(),
-        );
-        info!("Send close signal to flight server, result: {:?}", res);
+        self.server_tx.close();
     }
 }
 
@@ -438,6 +442,7 @@ impl RetryableFlightReceiver {
             let inner = self.inner.load(Ordering::SeqCst);
 
             if !inner.is_null() {
+                (*inner).stop_cluster();
                 (*inner).close();
             }
         }
@@ -556,22 +561,25 @@ pub struct FlightDataAckState {
     seq: AtomicUsize,
     finish: AtomicBool,
     receiver: Receiver<std::result::Result<FlightData, Status>>,
-    last_packet: Option<(usize, std::result::Result<Arc<FlightData>, Status>)>,
+    ack_window: VecDeque<(usize, std::result::Result<Arc<FlightData>, Status>)>,
     clean_up_handle: Option<JoinHandle<()>>,
     waker: Option<Waker>,
+    window_size: usize,
 }
 
 impl FlightDataAckState {
     pub fn create(
         receiver: Receiver<std::result::Result<FlightData, Status>>,
+        window_size: usize
     ) -> Arc<Mutex<FlightDataAckState>> {
         Arc::new(Mutex::new(FlightDataAckState {
             receiver,
             seq: AtomicUsize::new(0),
-            last_packet: None,
+            ack_window: VecDeque::with_capacity(window_size),
             finish: AtomicBool::new(false),
             clean_up_handle: None,
             waker: None,
+            window_size
         }))
     }
 
@@ -580,7 +588,7 @@ impl FlightDataAckState {
         cause: Status,
     ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
         let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
-        self.last_packet = Some((message_seq, Err(cause.clone())));
+        self.ack_window.push_back((message_seq, Err(cause.clone())));
         Poll::Ready(Some(Err(cause)))
     }
 
@@ -597,18 +605,33 @@ impl FlightDataAckState {
         let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
         let data = Arc::new(data);
         let duplicate = data.clone();
-        self.last_packet = Some((message_seq, Ok(data)));
+        self.ack_window.push_back((message_seq, Ok(data)));
         Poll::Ready(Some(Ok(duplicate)))
     }
 
     fn check_resend(&mut self) -> Option<std::result::Result<Arc<FlightData>, Status>> {
         let current_seq = self.seq.load(Ordering::SeqCst);
 
-        if let Some((seq, packet)) = &self.last_packet {
-            if seq == &current_seq {
-                self.seq.fetch_add(1, Ordering::SeqCst);
-                return Some(packet.clone());
+        if let Some((seq, _packet)) = self.ack_window.back() {
+            if seq + 1 == current_seq{
+                return None;
             }
+        }
+        // resend case, iterate the queue to find the message to resend
+        for (id, res) in self.ack_window.iter() {
+            if *id == current_seq {
+                self.seq.fetch_add(1, Ordering::SeqCst);
+                return Some(res.clone());
+            }
+        }
+
+        None
+    }
+
+    fn check_ack_window(&mut self, cx: &mut Context<'_>)-> Option<Poll<Option<std::result::Result<Arc<FlightData>, Status>>>> {
+        if self.ack_window.len() == self.window_size {
+            self.waker = Some(cx.waker().clone());
+            return Some(Poll::Pending);
         }
 
         None
@@ -627,11 +650,12 @@ impl FlightDataAckState {
             return Poll::Ready(Some(res));
         }
 
-        // last packet is not acked, need to wait
-        if self.last_packet.is_some() {
-            self.waker = Some(cx.waker().clone());
-            return Poll::Pending;
+        // check if ack window is full, if so, wait for ack
+        if let Some(res) = self.check_ack_window(cx) {
+            return res;
         }
+
+
         match Pin::new(&mut self.receiver).poll_next(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => self.end_of_stream(),
@@ -689,7 +713,7 @@ impl FlightDataAckStream {
                                         Ok(DataPacket::FlightControl(command)) => match command {
                                             FlightControlCommand::Ack(_seq) => {
                                                 let mut state_guard = state.lock();
-                                                state_guard.last_packet = None;
+                                                state_guard.ack_window.pop_front();
                                                 if let Some(waker) = state_guard.waker.take() {
                                                     waker.wake();
                                                 }

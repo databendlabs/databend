@@ -678,7 +678,7 @@ impl QueryCoordinator {
 
         match self.exchanges.entry(identifier) {
             Entry::Vacant(v) => {
-                let state = FlightDataAckState::create(rx);
+                let state = FlightDataAckState::create(rx, 10);
                 v.insert(FlightExchange::create_sender(state.clone(), tx));
                 FlightDataAckStream::create(state, begin, client_stream)
             }
@@ -721,7 +721,7 @@ impl QueryCoordinator {
 
         match self.exchanges.entry(identifier) {
             Entry::Vacant(v) => {
-                let state = FlightDataAckState::create(rx);
+                let state = FlightDataAckState::create(rx, 10);
                 v.insert(FlightExchange::create_sender(state.clone(), tx));
                 FlightDataAckStream::create(state, begin, client_stream)
             }
