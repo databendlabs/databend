@@ -84,7 +84,6 @@ impl PipelineBuilder {
 
                 self.ctx.set_partitions(plan.parts.clone())?;
 
-                // ReadDataKind to avoid OOM.
                 table.read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
 
                 let num_input_columns = schema.fields().len();
