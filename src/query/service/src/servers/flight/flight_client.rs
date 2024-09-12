@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
-use std::task::Waker;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -41,7 +40,6 @@ use futures::Stream;
 use futures::StreamExt;
 use futures_util::future::Either;
 use log::info;
-use log::warn;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -370,15 +368,7 @@ impl RetryableFlightReceiver {
             let inner = unsafe { &*self.inner.load(Ordering::SeqCst) };
             return match inner.recv().await {
                 Ok(message) => {
-                    let ack_seq = self.seq.fetch_add(1, Ordering::SeqCst);
-                    if message.is_some() {
-                        let _ = inner
-                            .server_tx
-                            .send(FlightData::try_from(DataPacket::FlightControl(
-                                FlightControlCommand::Ack(ack_seq),
-                            ))?)
-                            .await;
-                    }
+                    self.seq.fetch_add(1, Ordering::SeqCst);
                     Ok(message)
                 }
                 Err(cause) => {
@@ -560,7 +550,6 @@ pub struct FlightDataAckState {
     receiver: Receiver<std::result::Result<FlightData, Status>>,
     ack_window: VecDeque<(usize, std::result::Result<Arc<FlightData>, Status>)>,
     clean_up_handle: Option<JoinHandle<()>>,
-    waker: Option<Waker>,
     window_size: usize,
 }
 
@@ -575,7 +564,6 @@ impl FlightDataAckState {
             ack_window: VecDeque::with_capacity(window_size),
             finish: false,
             clean_up_handle: None,
-            waker: None,
             window_size,
         }))
     }
@@ -640,10 +628,9 @@ impl FlightDataAckState {
             return Poll::Ready(Some(res));
         }
 
-        // check if ack window is full, if so, wait for ack
+        // check if ack window is full, if so, pop the oldest packet
         if self.ack_window.len() == self.window_size {
-            self.waker = Some(cx.waker().clone());
-            return Poll::Pending;
+            self.ack_window.pop_front();
         }
 
         match Pin::new(&mut self.receiver).poll_next(cx) {
@@ -685,50 +672,17 @@ impl FlightDataAckStream {
         let fut = {
             let notify = notify.clone();
             async move {
-                let mut notified = Box::pin(notify.notified());
-                let mut streaming_next = streaming.next();
+                let notified = Box::pin(notify.notified());
+                let streaming_next = streaming.next();
 
-                loop {
-                    match futures::future::select(notified, streaming_next).await {
-                        Either::Left((_, _)) | Either::Right((None, _)) => {
-                            break;
-                        }
-                        Either::Right((Some(message), next_notified)) => {
-                            notified = next_notified;
-                            streaming_next = streaming.next();
-                            match message {
-                                Ok(message) => {
-                                    let packet = DataPacket::try_from(message);
-                                    match packet {
-                                        Ok(DataPacket::FlightControl(command)) => match command {
-                                            FlightControlCommand::Ack(_seq) => {
-                                                let mut state_guard = state.lock();
-                                                state_guard.ack_window.pop_front();
-                                                if let Some(waker) = state_guard.waker.take() {
-                                                    waker.wake();
-                                                }
-                                                drop(state_guard);
-                                            }
-                                            FlightControlCommand::Close => {
-                                                state.lock().finish = true;
-                                                info!("Received Command Close");
-                                                break;
-                                            }
-                                        },
-                                        Ok(_) => {
-                                            unreachable!(
-                                                "logic error: only FlightControl packet is expected"
-                                            )
-                                        }
-                                        Err(_) => {
-                                            warn!("flight data is broken");
-                                            break;
-                                        }
-                                    }
-                                }
-                                Err(_) => {
-                                    break;
-                                }
+                match futures::future::select(notified, streaming_next).await {
+                    Either::Left((_, _)) | Either::Right((None, _)) => {}
+                    Either::Right((Some(message), _next_notified)) => {
+                        if let Ok(flight_data) = message {
+                            let packet = DataPacket::try_from(flight_data).unwrap();
+                            if let DataPacket::FlightControl(FlightControlCommand::Close) = packet {
+                                state.lock().finish = true;
+                                info!("Receive close command from remote, close the flight data ack stream.");
                             }
                         }
                     }
@@ -737,7 +691,7 @@ impl FlightDataAckStream {
                 drop(streaming);
             }
         }
-        .in_span(Span::enter_with_local_parent(full_name!()));
+        .in_span(Span::enter_with_local_parent(func_path!()));
 
         databend_common_base::runtime::spawn(fut);
 
