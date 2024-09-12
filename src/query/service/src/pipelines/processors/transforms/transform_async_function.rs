@@ -26,7 +26,6 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_storages_fuse::TableContext;
-use opendal::Operator;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
