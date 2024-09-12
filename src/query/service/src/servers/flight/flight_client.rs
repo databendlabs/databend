@@ -329,24 +329,16 @@ impl FlightRxInner {
         }
     }
 
-    pub fn stop_cluster(&self) {
-        let tx = self.server_tx.clone();
-        let fut = async move {
-            let _ = tx
-                .send(
-                    FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close))
-                        .unwrap(),
-                )
-                .await;
-        }
-        .in_span(Span::enter_with_local_parent(full_name!()));
-
-        databend_common_base::runtime::spawn(fut);
-    }
-
     pub fn close(&self) {
         self.rx.close();
         self.notify.notify_waiters();
+    }
+
+    pub fn stop_cluster(&mut self) {
+        let _ = self.server_tx.send_blocking(
+            FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close))
+                .expect("convert to flight data error"),
+        );
     }
 }
 
@@ -380,15 +372,12 @@ impl RetryableFlightReceiver {
                 Ok(message) => {
                     let ack_seq = self.seq.fetch_add(1, Ordering::SeqCst);
                     if message.is_some() {
-                        let error = inner
+                        let _ = inner
                             .server_tx
                             .send(FlightData::try_from(DataPacket::FlightControl(
                                 FlightControlCommand::Ack(ack_seq),
                             ))?)
                             .await;
-                        if error.is_err() {
-                            info!("Error while sending ack to flight : {:?}", error);
-                        }
                     }
                     Ok(message)
                 }
