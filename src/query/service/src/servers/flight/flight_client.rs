@@ -330,15 +330,23 @@ impl FlightRxInner {
     }
 
     pub fn stop_cluster(&self) {
-        let _ = self.server_tx.send(
-            FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close)).unwrap(),
-        );
+        let tx = self.server_tx.clone();
+        let fut = async move {
+            let _ = tx
+                .send(
+                    FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close))
+                        .unwrap(),
+                )
+                .await;
+        }
+        .in_span(Span::enter_with_local_parent(full_name!()));
+
+        databend_common_base::runtime::spawn(fut);
     }
 
     pub fn close(&self) {
         self.rx.close();
         self.notify.notify_waiters();
-        self.server_tx.close();
     }
 }
 
@@ -570,7 +578,7 @@ pub struct FlightDataAckState {
 impl FlightDataAckState {
     pub fn create(
         receiver: Receiver<std::result::Result<FlightData, Status>>,
-        window_size: usize
+        window_size: usize,
     ) -> Arc<Mutex<FlightDataAckState>> {
         Arc::new(Mutex::new(FlightDataAckState {
             receiver,
@@ -579,7 +587,7 @@ impl FlightDataAckState {
             finish: AtomicBool::new(false),
             clean_up_handle: None,
             waker: None,
-            window_size
+            window_size,
         }))
     }
 
@@ -613,7 +621,7 @@ impl FlightDataAckState {
         let current_seq = self.seq.load(Ordering::SeqCst);
 
         if let Some((seq, _packet)) = self.ack_window.back() {
-            if seq + 1 == current_seq{
+            if seq + 1 == current_seq {
                 return None;
             }
         }
@@ -623,15 +631,6 @@ impl FlightDataAckState {
                 self.seq.fetch_add(1, Ordering::SeqCst);
                 return Some(res.clone());
             }
-        }
-
-        None
-    }
-
-    fn check_ack_window(&mut self, cx: &mut Context<'_>)-> Option<Poll<Option<std::result::Result<Arc<FlightData>, Status>>>> {
-        if self.ack_window.len() == self.window_size {
-            self.waker = Some(cx.waker().clone());
-            return Some(Poll::Pending);
         }
 
         None
@@ -651,10 +650,10 @@ impl FlightDataAckState {
         }
 
         // check if ack window is full, if so, wait for ack
-        if let Some(res) = self.check_ack_window(cx) {
-            return res;
+        if self.ack_window.len() == self.window_size {
+            self.waker = Some(cx.waker().clone());
+            return Poll::Pending;
         }
-
 
         match Pin::new(&mut self.receiver).poll_next(cx) {
             Poll::Pending => Poll::Pending,
