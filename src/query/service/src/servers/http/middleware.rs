@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_SESSION_ID;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
@@ -314,7 +315,13 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant);
         }
 
-        let client_session_id = self.auth_manager.auth(&mut session, &credential).await?;
+        let header_client_session_id = req
+            .headers()
+            .get(HEADER_SESSION_ID)
+            .map(|v| v.to_str().unwrap().to_string());
+        let (user_name, authed_client_session_id) =
+            self.auth_manager.auth(&mut session, &credential, self.endpoint_kind.need_user_info()).await?;
+        let client_session_id = authed_client_session_id.or(header_client_session_id);
         if let Some(id) = client_session_id.clone() {
             session.set_client_session_id(id)
         }

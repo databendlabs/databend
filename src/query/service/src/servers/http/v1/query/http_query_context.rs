@@ -43,6 +43,7 @@ pub struct HttpQueryContext {
     pub uri: String,
     pub client_host: Option<String>,
     pub client_session_id: Option<String>,
+    pub user_name: String,
 }
 
 impl HttpQueryContext {
