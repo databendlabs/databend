@@ -34,6 +34,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use log::info;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use super::BucketSpilledWindowPayload;
 use super::Location;
@@ -46,6 +47,7 @@ pub struct TransformWindowPartitionSpillReader {
     output: Arc<OutputPort>,
 
     operator: Operator,
+    semaphore: Arc<Semaphore>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
     reading_meta: Option<Partitioned>,
 }
@@ -144,12 +146,14 @@ impl TransformWindowPartitionSpillReader {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
+        semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(
             TransformWindowPartitionSpillReader {
                 input,
                 output,
                 operator,
+                semaphore,
                 deserialized_meta: None,
                 reading_meta: None,
             },
@@ -166,6 +170,7 @@ impl TransformWindowPartitionSpillReader {
             .filter_map(|meta| {
                 if let WindowPartitionMeta::BucketSpilled(payload) = meta {
                     let operator = self.operator.clone();
+                    let semaphore = self.semaphore.clone();
                     let BucketSpilledWindowPayload {
                         location,
                         data_range,
@@ -178,6 +183,7 @@ impl TransformWindowPartitionSpillReader {
 
                         let (block, data_size) = match location {
                             Location::Storage(path) => {
+                                let _guard = semaphore.acquire().await;
                                 let data = operator
                                     .read_with(&path)
                                     .range(data_range)

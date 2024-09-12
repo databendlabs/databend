@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -27,6 +29,7 @@ use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_common_storage::DataOperator;
 use databend_storages_common_cache::CacheManager;
+use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::DiskSpillConfig;
 use crate::pipelines::processors::transforms::FrameBound;
@@ -218,8 +221,15 @@ impl PipelineBuilder {
 
         self.main_pipeline.try_resize(input_nums)?;
 
+        let max_spill_io_requests = self.settings.get_max_spill_io_requests()? as usize;
+        let semaphore = Arc::new(Semaphore::new(max_spill_io_requests));
         self.main_pipeline.add_transform(|input, output| {
-            TransformWindowPartitionSpillReader::create(input, output, operator.clone())
+            TransformWindowPartitionSpillReader::create(
+                input,
+                output,
+                operator.clone(),
+                semaphore.clone(),
+            )
         })?;
 
         let block_size = self.settings.get_max_block_size()? as usize;
