@@ -96,7 +96,10 @@ impl BlockThresholds {
         };
 
         if max_bytes_per_block > self.max_bytes_per_block {
-            rows_per_block = total_rows / (std::cmp::max(total_bytes / max_bytes_per_block, 1));
+            rows_per_block = std::cmp::max(
+                total_rows / (std::cmp::max(total_bytes / max_bytes_per_block, 1)),
+                1,
+            );
         }
         rows_per_block
     }
