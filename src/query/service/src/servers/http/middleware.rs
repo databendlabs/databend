@@ -68,7 +68,7 @@ use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
     Logout,
@@ -78,6 +78,24 @@ pub enum EndpointKind {
     Clickhouse,
     NoAuth,
     Verify,
+}
+
+impl EndpointKind {
+    pub fn need_user_info(&self) -> bool {
+        !matches!(self, EndpointKind::NoAuth | EndpointKind::PollQuery)
+    }
+    pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
+        match self {
+            EndpointKind::Verify => Ok(None),
+            EndpointKind::Refresh => Ok(Some(TokenType::Refresh)),
+            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout => {
+                Ok(Some(TokenType::Session))
+            }
+            _ => Err(ErrorCode::AuthenticateFailure(format!(
+                "should not use databend token for {self:?}",
+            ))),
+        }
+    }
 }
 
 const USER_AGENT: &str = "User-Agent";
@@ -211,34 +229,12 @@ fn auth_by_header(
             Some(bearer) => {
                 let token = bearer.token().to_string();
                 if SessionClaim::is_databend_token(&token) {
-                    let (exp_token_type, set_user) = match endpoint_kind {
-                        EndpointKind::Verify => (None, false),
-                        EndpointKind::Refresh => (Some(TokenType::Refresh), true),
-                        EndpointKind::StartQuery => (Some(TokenType::Session), true),
-                        EndpointKind::PollQuery | EndpointKind::Logout => {
-                            (Some(TokenType::Session), false)
-                        }
-                        EndpointKind::Login => {
-                            return Err(ErrorCode::AuthenticateFailure(
-                                "should not use databend token for login",
-                            ));
-                        }
-                        EndpointKind::Clickhouse => {
-                            return Err(ErrorCode::AuthenticateFailure(
-                                "clickhouse handler should not use databend auth",
-                            ));
-                        }
-                        EndpointKind::NoAuth => {
-                            unreachable!()
-                        }
-                    };
-
-                    if let Some(t) = exp_token_type {
+                    if let Some(t) = endpoint_kind.require_databend_token_type()? {
                         if t != SessionClaim::get_type(&token)? {
                             return Err(ErrorCode::AuthenticateFailure("wrong data token type"));
                         }
                     }
-                    Ok(Credential::DatabendToken { token, set_user })
+                    Ok(Credential::DatabendToken { token })
                 } else {
                     Ok(Credential::Jwt { token, client_ip })
                 }
@@ -319,8 +315,14 @@ impl<E> HTTPSessionEndpoint<E> {
             .headers()
             .get(HEADER_SESSION_ID)
             .map(|v| v.to_str().unwrap().to_string());
-        let (user_name, authed_client_session_id) =
-            self.auth_manager.auth(&mut session, &credential, self.endpoint_kind.need_user_info()).await?;
+        let (user_name, authed_client_session_id) = self
+            .auth_manager
+            .auth(
+                &mut session,
+                &credential,
+                self.endpoint_kind.need_user_info(),
+            )
+            .await?;
         let client_session_id = authed_client_session_id.or(header_client_session_id);
         if let Some(id) = client_session_id.clone() {
             session.set_client_session_id(id)
@@ -366,6 +368,7 @@ impl<E> HTTPSessionEndpoint<E> {
             uri: req.uri().to_string(),
             client_host,
             client_session_id,
+            user_name,
         })
     }
 }
