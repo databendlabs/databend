@@ -209,12 +209,6 @@ impl SnapshotGenerator for AppendGenerator {
             .ctx
             .get_settings()
             .get_auto_compaction_imperfect_blocks_threshold()?;
-        println!("table_name: {}", table_name);
-        println!("imperfect_count: {}", imperfect_count);
-        println!(
-            "auto_compaction_imperfect_blocks_threshold: {}",
-            auto_compaction_imperfect_blocks_threshold
-        );
 
         if imperfect_count >= auto_compaction_imperfect_blocks_threshold {
             // If imperfect_count is larger, SLIGHTLY increase the number of blocks
