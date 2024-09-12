@@ -74,9 +74,7 @@ impl Processor for ShuffleProcessor {
 
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         let (input, output) = match cause {
-            EventCause::Other => {
-                return Ok(Event::NeedConsume);
-            }
+            EventCause::Other => unreachable!(),
             EventCause::Input(index) => {
                 (&self.inputs[index], &self.outputs[self.input2output[index]])
             }
@@ -87,6 +85,19 @@ impl Processor for ShuffleProcessor {
 
         if output.is_finished() {
             input.finish();
+
+            for input in &self.inputs {
+                if !input.is_finished() {
+                    return Ok(Event::NeedConsume);
+                }
+            }
+
+            for output in &self.outputs {
+                if !output.is_finished() {
+                    return Ok(Event::NeedConsume);
+                }
+            }
+
             return Ok(Event::Finished);
         }
 
@@ -102,6 +113,19 @@ impl Processor for ShuffleProcessor {
 
         if input.is_finished() {
             output.finish();
+
+            for input in &self.inputs {
+                if !input.is_finished() {
+                    return Ok(Event::NeedConsume);
+                }
+            }
+
+            for output in &self.outputs {
+                if !output.is_finished() {
+                    return Ok(Event::NeedConsume);
+                }
+            }
+
             return Ok(Event::Finished);
         }
 
