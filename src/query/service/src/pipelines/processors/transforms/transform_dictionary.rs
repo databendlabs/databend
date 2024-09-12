@@ -15,10 +15,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::date::date_to_string;
+use databend_common_expression::types::timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
@@ -33,7 +37,10 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_storage::build_operator;
 use opendal::services::Redis;
+use opendal::Operator;
+use p256::pkcs8::der::DateTime;
 use sqlx::MySqlPool;
+use time::serde::timestamp;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
@@ -126,18 +133,20 @@ impl DictionaryOperator {
                     })
                 }
                 DataType::Date => {
-                    let value: Option<i32> = sqlx::query_scalar(&sql)
+                    let value: Option<NaiveDate> = sqlx::query_scalar(&sql)
                         .bind(self.format_key(key))
                         .fetch_optional(pool)
                         .await?;
-                    Ok(value.map(|v| Scalar::Date(v)))
+                    Ok(value.map(|v| {
+                        Scalar::Date(uniform_date(v))
+                    }))
                 }
                 DataType::Timestamp => {
-                    let value: Option<i64> = sqlx::query_scalar(&sql)
+                    let value: Option<NaiveDateTime> = sqlx::query_scalar(&sql)
                         .bind(self.format_key(key))
                         .fetch_optional(pool)
                         .await?;
-                    Ok(value.map(|v| Scalar::Timestamp(v)))
+                    Ok(value.map(|v| Scalar::Timestamp(v.timestamp_micros())))
                 }
                 _ => Err(ErrorCode::DictionarySourceError(format!(
                     "unsupported value type {data_type}"
