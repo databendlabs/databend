@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -556,8 +555,8 @@ impl FlightExchange {
 }
 
 pub struct FlightDataAckState {
-    seq: AtomicUsize,
-    finish: AtomicBool,
+    seq: usize,
+    finish: bool,
     receiver: Receiver<std::result::Result<FlightData, Status>>,
     ack_window: VecDeque<(usize, std::result::Result<Arc<FlightData>, Status>)>,
     clean_up_handle: Option<JoinHandle<()>>,
@@ -572,9 +571,9 @@ impl FlightDataAckState {
     ) -> Arc<Mutex<FlightDataAckState>> {
         Arc::new(Mutex::new(FlightDataAckState {
             receiver,
-            seq: AtomicUsize::new(0),
+            seq: 0,
             ack_window: VecDeque::with_capacity(window_size),
-            finish: AtomicBool::new(false),
+            finish: false,
             clean_up_handle: None,
             waker: None,
             window_size,
@@ -585,14 +584,15 @@ impl FlightDataAckState {
         &mut self,
         cause: Status,
     ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
-        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+        let message_seq = self.seq;
+        self.seq += 1;
         self.ack_window.push_back((message_seq, Err(cause.clone())));
         Poll::Ready(Some(Err(cause)))
     }
 
     fn end_of_stream(&mut self) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
-        self.seq.fetch_add(1, Ordering::SeqCst);
-        self.finish.store(true, Ordering::SeqCst);
+        self.seq += 1;
+        self.finish = true;
         Poll::Ready(None)
     }
 
@@ -600,7 +600,8 @@ impl FlightDataAckState {
         &mut self,
         data: FlightData,
     ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
-        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+        let message_seq = self.seq;
+        self.seq += 1;
         let data = Arc::new(data);
         let duplicate = data.clone();
         self.ack_window.push_back((message_seq, Ok(data)));
@@ -608,7 +609,7 @@ impl FlightDataAckState {
     }
 
     fn check_resend(&mut self) -> Option<std::result::Result<Arc<FlightData>, Status>> {
-        let current_seq = self.seq.load(Ordering::SeqCst);
+        let current_seq = self.seq;
 
         if let Some((seq, _packet)) = self.ack_window.back() {
             if seq + 1 == current_seq {
@@ -618,7 +619,7 @@ impl FlightDataAckState {
         // resend case, iterate the queue to find the message to resend
         for (id, res) in self.ack_window.iter() {
             if *id == current_seq {
-                self.seq.fetch_add(1, Ordering::SeqCst);
+                self.seq += 1;
                 return Some(res.clone());
             }
         }
@@ -630,7 +631,7 @@ impl FlightDataAckState {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<Option<std::result::Result<Arc<FlightData>, Status>>> {
-        if self.finish.load(Ordering::SeqCst) {
+        if self.finish {
             return Poll::Ready(None);
         }
 
@@ -667,8 +668,8 @@ impl FlightDataAckStream {
     ) -> Result<FlightDataAckStream> {
         let notify = Self::streaming_receiver(state.clone(), client_stream);
         let mut state_guard = state.lock();
-        state_guard.seq.store(begin, Ordering::SeqCst);
-        state_guard.finish.store(false, Ordering::SeqCst);
+        state_guard.seq = begin;
+        state_guard.finish = false;
         if let Some(handle) = state_guard.clean_up_handle.take() {
             handle.abort();
         }
@@ -709,7 +710,7 @@ impl FlightDataAckStream {
                                                 drop(state_guard);
                                             }
                                             FlightControlCommand::Close => {
-                                                state.lock().finish.store(true, Ordering::SeqCst);
+                                                state.lock().finish = true;
                                                 info!("Received Command Close");
                                                 break;
                                             }
@@ -747,7 +748,7 @@ impl FlightDataAckStream {
 impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
         let mut state = self.state.lock();
-        if state.finish.load(Ordering::SeqCst) {
+        if state.finish {
             self.notify.notify_waiters();
             state.receiver.close();
             return;
