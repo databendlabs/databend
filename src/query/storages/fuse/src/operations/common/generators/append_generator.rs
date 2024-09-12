@@ -119,6 +119,7 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        table_name: &str,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -223,7 +224,7 @@ impl SnapshotGenerator for AppendGenerator {
             ) + 1;
             info!("set compact_num_block_hint to {compact_num_block_hint }");
             self.ctx
-                .set_compaction_num_block_hint(compact_num_block_hint);
+                .set_compaction_num_block_hint(table_name, compact_num_block_hint);
         }
 
         Ok(TableSnapshot::new(

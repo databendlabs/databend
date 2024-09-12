@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -102,7 +103,7 @@ impl Interpreter for InsertMultiTableInterpreter {
                 let hook_operator = HookOperator::create(
                     self.ctx.clone(),
                     // multi table insert only support default catalog
-                    "DEFAULT".to_string(),
+                    CATALOG_DEFAULT.to_string(),
                     db.to_string(),
                     tbl.to_string(),
                     MutationKind::Insert,

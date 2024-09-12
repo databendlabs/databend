@@ -80,8 +80,8 @@ async fn do_hook_compact(
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         let compaction_limits = match compact_target.mutation_kind {
             MutationKind::Insert => {
-                let compaction_num_block_hint = ctx.get_compaction_num_block_hint();
-                info!("hint number of blocks need to be compacted {}", compaction_num_block_hint);
+                let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
+                info!("table {} hint number of blocks need to be compacted {}", compact_target.table, compaction_num_block_hint);
                 if compaction_num_block_hint == 0 {
                     return Ok(());
                 }

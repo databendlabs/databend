@@ -767,14 +767,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_compaction_num_block_hint(&self, _enable: u64) {
-        todo!()
-    }
-
-    fn get_compaction_num_block_hint(&self) -> u64 {
-        todo!()
-    }
-
     fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
         todo!()
     }
