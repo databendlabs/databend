@@ -54,7 +54,7 @@ async fn test_shuffle_output_finish() -> Result<()> {
 
     assert!(matches!(
         processor.event_with_cause(EventCause::Output(0))?,
-        Event::Finished
+        Event::NeedConsume
     ));
     assert!(input1.is_finished());
     assert!(!input2.is_finished());

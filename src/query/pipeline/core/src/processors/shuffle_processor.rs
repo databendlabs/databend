@@ -27,8 +27,9 @@ pub struct ShuffleProcessor {
     input2output: Vec<usize>,
     output2input: Vec<usize>,
 
-    inputs: Vec<Arc<InputPort>>,
-    outputs: Vec<Arc<OutputPort>>,
+    finished_port: usize,
+    inputs: Vec<(bool, Arc<InputPort>)>,
+    outputs: Vec<(bool, Arc<OutputPort>)>,
 }
 
 impl ShuffleProcessor {
@@ -56,8 +57,9 @@ impl ShuffleProcessor {
         ShuffleProcessor {
             input2output,
             output2input,
-            inputs,
-            outputs,
+            finished_port: 0,
+            inputs: inputs.into_iter().map(|x| (false, x)).collect(),
+            outputs: outputs.into_iter().map(|x| (false, x)).collect(),
         }
     }
 }
@@ -73,32 +75,35 @@ impl Processor for ShuffleProcessor {
     }
 
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
-        let (input, output) = match cause {
+        let ((input_finished, input), (output_finished, output)) = match cause {
             EventCause::Other => unreachable!(),
-            EventCause::Input(index) => {
-                (&self.inputs[index], &self.outputs[self.input2output[index]])
-            }
-            EventCause::Output(index) => {
-                (&self.inputs[self.output2input[index]], &self.outputs[index])
-            }
+            EventCause::Input(index) => (
+                &mut self.inputs[index],
+                &mut self.outputs[self.input2output[index]],
+            ),
+            EventCause::Output(index) => (
+                &mut self.inputs[self.output2input[index]],
+                &mut self.outputs[index],
+            ),
         };
 
         if output.is_finished() {
             input.finish();
 
-            for input in &self.inputs {
-                if !input.is_finished() {
-                    return Ok(Event::NeedConsume);
-                }
+            if !*input_finished {
+                *input_finished = true;
+                self.finished_port += 1;
             }
 
-            for output in &self.outputs {
-                if !output.is_finished() {
-                    return Ok(Event::NeedConsume);
-                }
+            if !*output_finished {
+                *output_finished = true;
+                self.finished_port += 1;
             }
 
-            return Ok(Event::Finished);
+            return match self.finished_port == (self.inputs.len() + self.outputs.len()) {
+                true => Ok(Event::Finished),
+                false => Ok(Event::NeedConsume),
+            };
         }
 
         if !output.can_push() {
@@ -114,19 +119,20 @@ impl Processor for ShuffleProcessor {
         if input.is_finished() {
             output.finish();
 
-            for input in &self.inputs {
-                if !input.is_finished() {
-                    return Ok(Event::NeedConsume);
-                }
+            if !*input_finished {
+                *input_finished = true;
+                self.finished_port += 1;
             }
 
-            for output in &self.outputs {
-                if !output.is_finished() {
-                    return Ok(Event::NeedConsume);
-                }
+            if !*output_finished {
+                *output_finished = true;
+                self.finished_port += 1;
             }
 
-            return Ok(Event::Finished);
+            return match self.finished_port == (self.inputs.len() + self.outputs.len()) {
+                true => Ok(Event::Finished),
+                false => Ok(Event::NeedConsume),
+            };
         }
 
         input.set_need_data();
