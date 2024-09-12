@@ -880,6 +880,7 @@ fn unary_minus_decimal(
     })
 }
 
+#[inline]
 fn parse_number<T>(
     s: &str,
     number_datatype: &NumberDataType,
@@ -909,6 +910,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|DEST_TYPE| match dest_type {
             NumberDataType::DEST_TYPE => {
                 let name = format!("to_{dest_type}").to_lowercase();
+                let data_type = DEST_TYPE::data_type();
                 registry
                     .register_passthrough_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
                         &name,
@@ -917,7 +919,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                             move |val, output, ctx| {
                                 match parse_number::<DEST_TYPE>(
                                     val,
-                                    &DEST_TYPE::data_type(),
+                                    &data_type,
                                     ctx.func_ctx.rounding_mode,
                                 ) {
                                     Ok(new_val) => output.push(new_val),
@@ -931,6 +933,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                     );
 
                 let name = format!("try_to_{dest_type}").to_lowercase();
+                let data_type = DEST_TYPE::data_type();
                 registry
                     .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
                         &name,
@@ -938,10 +941,10 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                         vectorize_with_builder_1_arg::<
                             StringType,
                             NullableType<NumberType<DEST_TYPE>>,
-                        >(|val, output, ctx| {
+                        >(move |val, output, ctx| {
                             if let Ok(new_val) = parse_number::<DEST_TYPE>(
                                 val,
-                                &DEST_TYPE::data_type(),
+                                &data_type,
                                 ctx.func_ctx.rounding_mode,
                             ) {
                                 output.push(new_val);
