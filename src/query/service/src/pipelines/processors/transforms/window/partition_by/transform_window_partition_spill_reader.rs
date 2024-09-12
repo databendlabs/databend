@@ -34,6 +34,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use super::WindowPartitionMeta;
 use super::WindowPayload;
@@ -46,6 +47,7 @@ pub struct TransformWindowPartitionSpillReader {
     output: Arc<OutputPort>,
 
     operator: Operator,
+    semaphore: Arc<Semaphore>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
     reading_meta: Option<WindowPartitionMeta>,
     deserializing_meta: Option<DeserializingMeta>,
@@ -170,7 +172,9 @@ impl Processor for TransformWindowPartitionSpillReader {
                             let location = p.location.clone();
                             let operator = self.operator.clone();
                             let data_range = p.data_range.clone();
+                            let semaphore = self.semaphore.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
+                                let _guard = semaphore.acquire().await;
                                 let instant = Instant::now();
                                 let data = operator
                                     .read_with(&location)
@@ -243,12 +247,14 @@ impl TransformWindowPartitionSpillReader {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
+        semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(
             TransformWindowPartitionSpillReader {
                 input,
                 output,
                 operator,
+                semaphore,
                 deserialized_meta: None,
                 reading_meta: None,
                 deserializing_meta: None,
