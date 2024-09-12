@@ -15,7 +15,5 @@
 mod spiller;
 mod spiller_buffer;
 
-pub use spiller::Spiller;
-pub use spiller::SpillerConfig;
-pub use spiller::SpillerType;
+pub use spiller::*;
 pub use spiller_buffer::SpillBuffer;

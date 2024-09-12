@@ -23,7 +23,6 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_cache::dma_read_file_range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -41,6 +40,7 @@ use super::Location;
 use super::Partitioned;
 use super::WindowPartitionMeta;
 use super::WindowPayload;
+use crate::spillers::deserialize_block;
 
 pub struct TransformWindowPartitionSpillReader {
     input: Arc<InputPort>,
@@ -243,17 +243,4 @@ impl TransformWindowPartitionSpillReader {
         }
         Ok(blocks)
     }
-}
-
-pub fn deserialize_block(columns_layout: &[u64], mut data: &[u8]) -> DataBlock {
-    let columns = columns_layout
-        .iter()
-        .map(|layout| {
-            let (cur, remain) = data.split_at(*layout as usize);
-            data = remain;
-            deserialize_column(cur).unwrap()
-        })
-        .collect::<Vec<_>>();
-
-    DataBlock::new_from_columns(columns)
 }

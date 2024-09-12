@@ -36,7 +36,7 @@ pub struct BucketSpilledWindowPayload {
     pub bucket: isize,
     pub location: Location,
     pub data_range: Range<u64>,
-    pub columns_layout: Vec<u64>,
+    pub columns_layout: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]

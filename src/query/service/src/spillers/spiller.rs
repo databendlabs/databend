@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -114,18 +115,12 @@ impl Spiller {
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         debug_assert!(self.columns_layout.contains_key(file));
+        let instant = Instant::now();
+
         let data = self.operator.read(file).await?.to_bytes();
         let bytes = data.len();
-
-        let mut begin = 0;
-        let instant = Instant::now();
-        let mut columns = Vec::with_capacity(self.columns_layout.len());
         let columns_layout = self.columns_layout.get(file).unwrap();
-        for column_layout in columns_layout.iter() {
-            columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
-            begin += column_layout;
-        }
-        let block = DataBlock::new_from_columns(columns);
+        let block = deserialize_block(columns_layout, &data);
 
         Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, bytes);
@@ -138,35 +133,25 @@ impl Spiller {
     }
 
     /// Write a [`DataBlock`] to storage.
-    pub async fn spill_block(&mut self, data: DataBlock) -> Result<String> {
+    pub async fn spill_block(&mut self, block: DataBlock) -> Result<String> {
         let instant = Instant::now();
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
-        let mut write_bytes = 0;
+
+        let encoded = EncodedBlock::from_block(&block);
+        let columns_layout = encoded.columns_layout();
+        let write_bytes = encoded.size();
+
+        self.columns_layout
+            .insert(location.to_string(), columns_layout);
 
         let mut writer = self
             .operator
             .writer_with(&location)
             .chunk(8 * 1024 * 1024)
             .await?;
-        let columns = data.columns().to_vec();
-        let mut columns_data = Vec::with_capacity(columns.len());
-        for column in columns.into_iter() {
-            let column = column
-                .value
-                .convert_to_full_column(&column.data_type, data.num_rows());
-            let column_data = serialize_column(&column);
-            self.columns_layout
-                .entry(location.to_string())
-                .and_modify(|layouts| {
-                    layouts.push(column_data.len());
-                })
-                .or_insert(vec![column_data.len()]);
-            write_bytes += column_data.len();
-            columns_data.push(column_data);
-        }
 
-        for data in columns_data.into_iter() {
+        for data in encoded.0.into_iter() {
             writer.write(data).await?;
         }
         writer.close().await?;
@@ -228,4 +213,49 @@ impl Spiller {
     pub(crate) fn spilled_files(&self) -> Vec<String> {
         self.columns_layout.keys().cloned().collect()
     }
+}
+
+pub struct EncodedBlock(pub Vec<Vec<u8>>);
+
+impl EncodedBlock {
+    pub fn from_block(block: &DataBlock) -> Self {
+        let data = block
+            .columns()
+            .iter()
+            .map(|entry| {
+                let column = entry
+                    .value
+                    .convert_to_full_column(&entry.data_type, block.num_rows());
+                serialize_column(&column)
+            })
+            .collect();
+        EncodedBlock(data)
+    }
+
+    pub fn columns_layout(&self) -> Vec<usize> {
+        self.0.iter().map(|data| data.len()).collect()
+    }
+
+    pub fn size(&self) -> usize {
+        self.0.iter().map(|data| data.len()).sum()
+    }
+}
+
+pub fn deserialize_block(columns_layout: &[usize], mut data: &[u8]) -> DataBlock {
+    let columns = columns_layout
+        .iter()
+        .map(|layout| {
+            let (cur, remain) = data.split_at(*layout);
+            data = remain;
+            deserialize_column(cur).unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    DataBlock::new_from_columns(columns)
+}
+
+#[derive(Clone)]
+pub struct DiskSpillConfig {
+    pub root: PathBuf,
+    pub bytes_limit: usize,
 }

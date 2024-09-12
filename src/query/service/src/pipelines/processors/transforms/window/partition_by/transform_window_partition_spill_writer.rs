@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::io;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -27,7 +26,6 @@ use databend_common_cache::dma_write_file_vectored;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
@@ -45,6 +43,8 @@ use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::window::partition_by::SpillingWindowPayloads;
 use crate::pipelines::processors::transforms::window::partition_by::PARTITION_COUNT;
 use crate::sessions::QueryContext;
+use crate::spillers::DiskSpillConfig;
+use crate::spillers::EncodedBlock;
 
 pub struct TransformWindowPartitionSpillWriter {
     ctx: Arc<QueryContext>,
@@ -80,12 +80,6 @@ impl TransformWindowPartitionSpillWriter {
             spilling_future: None,
         })
     }
-}
-
-#[derive(Clone)]
-pub struct DiskSpillConfig {
-    pub root: PathBuf,
-    pub bytes_limit: usize,
 }
 
 #[async_trait::async_trait]
@@ -213,26 +207,13 @@ pub fn spilling_window_payload(
             }
             rows += block.num_rows();
 
-            let columns_data = block
-                .columns()
-                .iter()
-                .map(|entry| {
-                    let column = entry
-                        .value
-                        .convert_to_full_column(&entry.data_type, block.num_rows());
-                    serialize_column(&column)
-                })
-                .collect::<Vec<_>>();
-
-            let columns_layout = columns_data
-                .iter()
-                .map(|data| data.len() as u64)
-                .collect::<Vec<_>>();
-
-            write_data.push(columns_data);
+            let encoded = EncodedBlock::from_block(&block);
 
             let begin = write_size;
-            write_size += columns_layout.iter().sum::<u64>();
+            write_size += encoded.size() as u64;
+            let columns_layout = encoded.columns_layout();
+
+            write_data.push(encoded);
 
             Some((bucket, columns_layout, begin..write_size))
         })
@@ -304,12 +285,12 @@ pub fn spilling_window_payload(
 async fn write_to_storage(
     operator: &Operator,
     path: &str,
-    write_data: Vec<Vec<Vec<u8>>>,
+    write_data: Vec<EncodedBlock>,
 ) -> Result<usize> {
     let mut writer = operator.writer_with(path).chunk(8 * 1024 * 1024).await?;
 
     let mut written = 0;
-    for data in write_data.into_iter().flatten() {
+    for data in write_data.into_iter().flat_map(|x| x.0) {
         written += data.len();
         writer.write(data).await?;
     }
@@ -318,10 +299,10 @@ async fn write_to_storage(
     Ok(written)
 }
 
-async fn write_to_disk(path: impl AsRef<Path>, write_data: Vec<Vec<Vec<u8>>>) -> io::Result<usize> {
+async fn write_to_disk(path: impl AsRef<Path>, write_data: Vec<EncodedBlock>) -> io::Result<usize> {
     let bufs = write_data
         .iter()
-        .flatten()
+        .flat_map(|x| &x.0)
         .map(|data| io::IoSlice::new(data))
         .collect::<Vec<_>>();
 

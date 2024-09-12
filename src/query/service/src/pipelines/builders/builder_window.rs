@@ -25,13 +25,13 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_common_storage::DataOperator;
 use databend_storages_common_cache::CacheManager;
 use tokio::sync::Semaphore;
 
-use crate::pipelines::processors::transforms::DiskSpillConfig;
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindowPartitionBucket;
 use crate::pipelines::processors::transforms::TransformWindowPartitionScatter;
@@ -41,6 +41,7 @@ use crate::pipelines::processors::transforms::TransformWindowPartitionSpillWrite
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
+use crate::spillers::DiskSpillConfig;
 
 impl PipelineBuilder {
     pub(crate) fn build_window(&mut self, window: &Window) -> Result<()> {
@@ -206,20 +207,7 @@ impl PipelineBuilder {
             ))
         })?;
 
-        let input_nums = self.main_pipeline.output_len();
-        let transform = TransformWindowPartitionBucket::create(input_nums)?;
-
-        let inputs = transform.get_inputs();
-        let output = transform.get_output();
-
-        self.main_pipeline
-            .add_pipe(Pipe::create(inputs.len(), 1, vec![PipeItem::create(
-                ProcessorPtr::create(Box::new(transform)),
-                inputs,
-                vec![output],
-            )]));
-
-        self.main_pipeline.try_resize(input_nums)?;
+        add_partition_bucket(&mut self.main_pipeline)?;
 
         let max_spill_io_requests = self.settings.get_max_spill_io_requests()? as usize;
         let semaphore = Arc::new(Semaphore::new(max_spill_io_requests));
@@ -254,4 +242,20 @@ impl PipelineBuilder {
 
         Ok(())
     }
+}
+
+fn add_partition_bucket(pipeline: &mut Pipeline) -> Result<()> {
+    let input_nums = pipeline.output_len();
+    let transform = TransformWindowPartitionBucket::create(input_nums)?;
+
+    let inputs = transform.get_inputs();
+    let output = transform.get_output();
+
+    pipeline.add_pipe(Pipe::create(inputs.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs,
+        vec![output],
+    )]));
+
+    pipeline.try_resize(input_nums)
 }
