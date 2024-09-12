@@ -18,6 +18,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_pipeline_core::processors::connect;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -51,8 +52,19 @@ async fn test_shuffle_output_finish() -> Result<()> {
     downstream_input1.finish();
     downstream_input2.finish();
 
-    assert!(matches!(processor.event()?, Event::Finished));
-    assert!(input1.is_finished() && input2.is_finished());
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(0))?,
+        Event::Finished
+    ));
+    assert!(input1.is_finished());
+    assert!(!input2.is_finished());
+
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(1))?,
+        Event::Finished
+    ));
+    assert!(input1.is_finished());
+    assert!(input2.is_finished());
 
     Ok(())
 }
@@ -122,17 +134,159 @@ async fn test_shuffle_processor() -> Result<()> {
     upstream_output3.push_data(Ok(block3));
     upstream_output4.push_data(Ok(block4));
 
-    assert!(matches!(processor.event()?, Event::NeedData));
+    // 0 input and 0 output
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(0))?,
+        Event::NeedConsume
+    ));
 
-    let out1 = downstream_input1.pull_data().unwrap()?;
-    let out2 = downstream_input2.pull_data().unwrap()?;
-    let out3 = downstream_input3.pull_data().unwrap()?;
-    let out4 = downstream_input4.pull_data().unwrap()?;
+    assert!(downstream_input1.has_data());
+    assert!(
+        !downstream_input2.has_data()
+            && !downstream_input3.has_data()
+            && !downstream_input4.has_data()
+    );
+    assert!(
+        !upstream_output1.can_push()
+            && !upstream_output2.can_push()
+            && !upstream_output3.can_push()
+            && !upstream_output4.can_push()
+    );
 
-    assert!(out1.columns()[0].value.as_column().unwrap().eq(&col1));
-    assert!(out2.columns()[0].value.as_column().unwrap().eq(&col3));
-    assert!(out3.columns()[0].value.as_column().unwrap().eq(&col2));
-    assert!(out4.columns()[0].value.as_column().unwrap().eq(&col4));
+    let block = downstream_input1.pull_data().unwrap()?;
+    downstream_input1.set_need_data();
+    assert!(block.columns()[0].value.as_column().unwrap().eq(&col1));
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(0))?,
+        Event::NeedData
+    ));
+
+    assert!(upstream_output1.can_push());
+    assert!(
+        !upstream_output2.can_push()
+            && !upstream_output3.can_push()
+            && !upstream_output4.can_push()
+    );
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input2.has_data()
+            && !downstream_input3.has_data()
+            && !downstream_input4.has_data()
+    );
+
+    // 2 input and 1 output
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(1))?,
+        Event::NeedConsume
+    ));
+
+    assert!(downstream_input2.has_data());
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input3.has_data()
+            && !downstream_input4.has_data()
+    );
+    assert!(
+        upstream_output1.can_push()
+            && !upstream_output2.can_push()
+            && !upstream_output3.can_push()
+            && !upstream_output4.can_push()
+    );
+
+    let block = downstream_input2.pull_data().unwrap()?;
+    downstream_input2.set_need_data();
+    assert!(block.columns()[0].value.as_column().unwrap().eq(&col3));
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(1))?,
+        Event::NeedData
+    ));
+
+    assert!(upstream_output3.can_push());
+    assert!(
+        upstream_output1.can_push() && !upstream_output2.can_push() && !upstream_output4.can_push()
+    );
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input2.has_data()
+            && !downstream_input3.has_data()
+            && !downstream_input4.has_data()
+    );
+
+    // 1 input and 2 output
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(2))?,
+        Event::NeedConsume
+    ));
+
+    assert!(downstream_input3.has_data());
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input2.has_data()
+            && !downstream_input4.has_data()
+    );
+    assert!(
+        upstream_output1.can_push()
+            && !upstream_output2.can_push()
+            && upstream_output3.can_push()
+            && !upstream_output4.can_push()
+    );
+
+    let block = downstream_input3.pull_data().unwrap()?;
+    downstream_input3.set_need_data();
+    assert!(block.columns()[0].value.as_column().unwrap().eq(&col2));
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(2))?,
+        Event::NeedData
+    ));
+
+    assert!(upstream_output2.can_push());
+    assert!(
+        upstream_output1.can_push() && upstream_output3.can_push() && !upstream_output4.can_push()
+    );
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input2.has_data()
+            && !downstream_input3.has_data()
+            && !downstream_input4.has_data()
+    );
+
+    // 3 input and 3 output
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(3))?,
+        Event::NeedConsume
+    ));
+
+    assert!(downstream_input4.has_data());
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input2.has_data()
+            && !downstream_input3.has_data()
+    );
+    assert!(
+        upstream_output1.can_push()
+            && upstream_output2.can_push()
+            && upstream_output3.can_push()
+            && !upstream_output4.can_push()
+    );
+
+    let block = downstream_input4.pull_data().unwrap()?;
+    downstream_input4.set_need_data();
+    assert!(block.columns()[0].value.as_column().unwrap().eq(&col4));
+    assert!(matches!(
+        processor.event_with_cause(EventCause::Output(3))?,
+        Event::NeedData
+    ));
+
+    assert!(upstream_output4.can_push());
+    assert!(
+        upstream_output1.can_push() && upstream_output3.can_push() && upstream_output2.can_push()
+    );
+    assert!(
+        !downstream_input1.has_data()
+            && !downstream_input2.has_data()
+            && !downstream_input3.has_data()
+            && !downstream_input4.has_data()
+    );
 
     Ok(())
 }

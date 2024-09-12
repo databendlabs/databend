@@ -18,34 +18,47 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::processors::Event;
+use crate::processors::EventCause;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
 use crate::processors::Processor;
 
 pub struct ShuffleProcessor {
-    channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>,
+    input2output: Vec<usize>,
+    output2input: Vec<usize>,
+
+    inputs: Vec<Arc<InputPort>>,
+    outputs: Vec<Arc<OutputPort>>,
 }
 
 impl ShuffleProcessor {
     pub fn create(
         inputs: Vec<Arc<InputPort>>,
         outputs: Vec<Arc<OutputPort>>,
-        rule: Vec<usize>,
+        edges: Vec<usize>,
     ) -> Self {
-        let len = rule.len();
+        let len = edges.len();
         debug_assert!({
-            let mut sorted = rule.clone();
+            let mut sorted = edges.clone();
             sorted.sort();
             let expected = (0..len).collect::<Vec<_>>();
             sorted == expected
         });
 
-        let mut channel = Vec::with_capacity(len);
-        for (i, input) in inputs.into_iter().enumerate() {
-            let output = outputs[rule[i]].clone();
-            channel.push((input, output));
+        let mut input2output = vec![0_usize; edges.len()];
+        let mut output2input = vec![0_usize; edges.len()];
+
+        for (input, output) in edges.into_iter().enumerate() {
+            input2output[input] = output;
+            output2input[output] = input;
         }
-        ShuffleProcessor { channel }
+
+        ShuffleProcessor {
+            input2output,
+            output2input,
+            inputs,
+            outputs,
+        }
     }
 }
 
@@ -59,23 +72,40 @@ impl Processor for ShuffleProcessor {
         self
     }
 
-    fn event(&mut self) -> Result<Event> {
-        let mut finished = true;
-        for (input, output) in self.channel.iter() {
-            if output.is_finished() || input.is_finished() {
-                input.finish();
-                output.finish();
-                continue;
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        let (input, output) = match cause {
+            EventCause::Other => {
+                return Ok(Event::NeedConsume);
             }
-            finished = false;
-            input.set_need_data();
-            if output.can_push() && input.has_data() {
-                output.push_data(input.pull_data().unwrap());
+            EventCause::Input(index) => {
+                (&self.inputs[index], &self.outputs[self.input2output[index]])
             }
-        }
-        if finished {
+            EventCause::Output(index) => {
+                (&self.inputs[self.output2input[index]], &self.outputs[index])
+            }
+        };
+
+        if output.is_finished() {
+            input.finish();
             return Ok(Event::Finished);
         }
+
+        if !output.can_push() {
+            input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if input.has_data() {
+            output.push_data(input.pull_data().unwrap());
+            return Ok(Event::NeedConsume);
+        }
+
+        if input.is_finished() {
+            output.finish();
+            return Ok(Event::Finished);
+        }
+
+        input.set_need_data();
         Ok(Event::NeedData)
     }
 }
