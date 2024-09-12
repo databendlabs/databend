@@ -87,10 +87,10 @@ impl PartitionBuffer {
                 }
             }
             PartitionBufferFetchOption::PickPartitionBytes(required_bytes) => {
-                let partition_datas = &mut self.partition_data[partition_id];
+                let partition_data = &mut self.partition_data[partition_id];
                 let mut accumulated_bytes = 0;
                 let mut data_blocks = Vec::new();
-                while let Some(data_block) = partition_datas.pop() {
+                while let Some(data_block) = partition_data.pop() {
                     accumulated_bytes += data_block.memory_size();
                     data_blocks.push(data_block);
                     if accumulated_bytes >= *required_bytes {
