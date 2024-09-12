@@ -335,10 +335,11 @@ impl FlightRxInner {
     }
 
     pub fn stop_cluster(&mut self) {
-        let _ = self.server_tx.send_blocking(
+        let _ = self.server_tx.try_send(
             FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close))
                 .expect("convert to flight data error"),
         );
+        // ignore the error, because we cannot determine the state of server side
     }
 }
 
