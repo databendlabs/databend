@@ -93,17 +93,23 @@ impl Interpreter for InsertMultiTableInterpreter {
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         // Execute hook.
-        for (_, (db, tbl)) in &self.plan.target_tables {
-            let hook_operator = HookOperator::create(
-                self.ctx.clone(),
-                // multi table insert only support default catalog
-                "DEFAULT".to_string(),
-                db.to_string(),
-                tbl.to_string(),
-                MutationKind::Insert,
-                LockTableOption::LockNoRetry,
-            );
-            hook_operator.execute(&mut build_res.main_pipeline).await;
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_compact_after_multi_table_insert()?
+        {
+            for (_, (db, tbl)) in &self.plan.target_tables {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    // multi table insert only support default catalog
+                    "DEFAULT".to_string(),
+                    db.to_string(),
+                    tbl.to_string(),
+                    MutationKind::Insert,
+                    LockTableOption::LockNoRetry,
+                );
+                hook_operator.execute(&mut build_res.main_pipeline).await;
+            }
         }
         Ok(build_res)
     }
