@@ -98,6 +98,7 @@ impl PipelineBuilder {
 
         let max_block_size = self.settings.get_max_block_size()?;
         let max_threads = self.settings.get_max_threads()?;
+        let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
 
         let enable_experimental_aggregate_hashtable = self
             .settings
@@ -111,6 +112,7 @@ impl PipelineBuilder {
             self.is_exchange_neighbor,
             max_block_size as usize,
             None,
+            max_spill_io_requests as usize,
         )?;
 
         if params.group_columns.is_empty() {
@@ -214,6 +216,8 @@ impl PipelineBuilder {
         let enable_experimental_aggregate_hashtable = self
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
+        let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
+
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
@@ -222,6 +226,7 @@ impl PipelineBuilder {
             self.is_exchange_neighbor,
             max_block_size as usize,
             aggregate.limit,
+            max_spill_io_requests as usize,
         )?;
 
         if params.group_columns.is_empty() {
@@ -288,6 +293,7 @@ impl PipelineBuilder {
         cluster_aggregator: bool,
         max_block_size: usize,
         limit: Option<usize>,
+        max_spill_io_requests: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -330,6 +336,7 @@ impl PipelineBuilder {
             cluster_aggregator,
             max_block_size,
             limit,
+            max_spill_io_requests,
         )?;
 
         Ok(params)
