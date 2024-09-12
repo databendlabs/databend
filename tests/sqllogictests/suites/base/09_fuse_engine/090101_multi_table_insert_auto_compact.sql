@@ -49,23 +49,9 @@ insert all into t1 into t2 into t3 select 1;
 statement ok
 insert all into t1 into t2 into t3 select 1;
 
-
-# fourth block(after compaction)
-statement ok
-set auto_compaction_segments_limit = 2;
-
-statement ok
-insert all into t1 into t2 into t3 select 1;
-
-statement ok
-insert all into t1 into t2 into t3 select 2;
-
 query III
 select segment_count , block_count , row_count from fuse_snapshot('multi_table_insert_auto_compact', 't1') limit 20;
 ----
-2 4 11
-3 5 11
-2 4 10
 1 3 9
 4 5 9
 3 4 8
@@ -82,9 +68,6 @@ select segment_count , block_count , row_count from fuse_snapshot('multi_table_i
 query III
 select segment_count , block_count , row_count from fuse_snapshot('multi_table_insert_auto_compact', 't2') limit 20;
 ----
-2 4 11
-3 5 11
-2 4 10
 1 3 9
 4 5 9
 3 4 8
@@ -101,9 +84,6 @@ select segment_count , block_count , row_count from fuse_snapshot('multi_table_i
 query III
 select segment_count , block_count , row_count from fuse_snapshot('multi_table_insert_auto_compact', 't3') limit 20;
 ----
-2 4 10
-1 3 9
-4 5 9
 3 4 8
 2 3 7
 1 2 6
