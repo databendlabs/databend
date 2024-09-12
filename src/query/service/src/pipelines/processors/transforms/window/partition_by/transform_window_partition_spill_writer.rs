@@ -53,7 +53,7 @@ pub struct TransformWindowPartitionSpillWriter {
 
     operator: Operator,
     location_prefix: String,
-    disk: Option<DiskConfig>,
+    disk_spill: Option<DiskSpillConfig>,
     spilled_block: Option<DataBlock>,
     spilling_meta: Option<WindowPartitionMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
@@ -65,7 +65,7 @@ impl TransformWindowPartitionSpillWriter {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
-        disk: Option<DiskConfig>,
+        disk_spill: Option<DiskSpillConfig>,
         location_prefix: String,
     ) -> Box<dyn Processor> {
         Box::new(TransformWindowPartitionSpillWriter {
@@ -73,7 +73,7 @@ impl TransformWindowPartitionSpillWriter {
             input,
             output,
             operator,
-            disk,
+            disk_spill,
             location_prefix,
             spilled_block: None,
             spilling_meta: None,
@@ -82,7 +82,8 @@ impl TransformWindowPartitionSpillWriter {
     }
 }
 
-pub struct DiskConfig {
+#[derive(Clone)]
+pub struct DiskSpillConfig {
     pub root: PathBuf,
     pub bytes_limit: usize,
 }
@@ -161,7 +162,7 @@ impl Processor for TransformWindowPartitionSpillWriter {
                         self.ctx.clone(),
                         self.operator.clone(),
                         &self.location_prefix,
-                        self.disk.as_mut(),
+                        self.disk_spill.as_mut(),
                         GlobalUniqName::unique(),
                         payload,
                     )?);
@@ -194,7 +195,7 @@ pub fn spilling_window_payload(
     ctx: Arc<QueryContext>,
     operator: Operator,
     location_prefix: &str,
-    disk: Option<&mut DiskConfig>,
+    disk_spill: Option<&mut DiskSpillConfig>,
     unique_name: String,
     payload: SpillingWindowPayloads,
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
@@ -237,7 +238,7 @@ pub fn spilling_window_payload(
         })
         .collect::<Vec<_>>();
 
-    let location = match disk {
+    let location = match disk_spill {
         Some(disk) if disk.bytes_limit as u64 >= write_size => {
             disk.bytes_limit -= write_size as usize;
             Location::Disk(disk.root.join(unique_name))

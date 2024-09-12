@@ -26,7 +26,9 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_common_storage::DataOperator;
+use databend_storages_common_cache::CacheManager;
 
+use crate::pipelines::processors::transforms::DiskSpillConfig;
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindowPartitionBucket;
 use crate::pipelines::processors::transforms::TransformWindowPartitionScatter;
@@ -176,8 +178,18 @@ impl PipelineBuilder {
         })?;
 
         let operator = DataOperator::instance().operator();
+
         let location_prefix =
             query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
+
+        let disk_spill =
+            CacheManager::instance()
+                .get_temp_dir_config()
+                .map(|cfg| DiskSpillConfig {
+                    root: cfg.path.join(self.ctx.get_id()),
+                    bytes_limit: 1 << 20, // todo
+                });
+
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
                 TransformWindowPartitionSpillWriter::create(
@@ -185,7 +197,7 @@ impl PipelineBuilder {
                     input,
                     output,
                     operator.clone(),
-                    None,
+                    disk_spill.clone(),
                     location_prefix.clone(),
                 ),
             ))

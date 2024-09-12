@@ -20,6 +20,7 @@ mod caches;
 mod manager;
 mod providers;
 mod read;
+mod temp_file;
 
 pub use cache::CacheAccessor;
 pub use cache::Unit;
@@ -45,3 +46,4 @@ pub use read::InMemoryCacheReader;
 pub use read::InMemoryItemCacheReader;
 pub use read::LoadParams;
 pub use read::Loader;
+pub use temp_file::TempDir;
