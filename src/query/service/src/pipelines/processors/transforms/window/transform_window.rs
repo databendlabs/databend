@@ -203,7 +203,7 @@ impl TransformWindow<u64> {
         sort_spilling_batch_bytes: usize,
         enable_loser_tree: bool,
     ) -> Result<Self> {
-        let inputs = vec![InputPort::create(); num_processors];
+        let inputs = (0..num_processors).map(|_| InputPort::create()).collect();
         let output = OutputPort::create();
 
         let func = WindowFunctionImpl::try_create(func)?;
@@ -305,7 +305,7 @@ where T: Number + ResultTypeOfUnary
         sort_spilling_batch_bytes: usize,
         enable_loser_tree: bool,
     ) -> Result<Self> {
-        let inputs = vec![InputPort::create(); num_processors];
+        let inputs = (0..num_processors).map(|_| InputPort::create()).collect();
         let output = OutputPort::create();
 
         let func = WindowFunctionImpl::try_create(func)?;
@@ -408,12 +408,12 @@ where T: Number + ResultTypeOfUnary
         match self.step {
             Step::Sync(sync_step) => match sync_step {
                 SyncStep::Collect => {
-                    let mut all_input_ports_finished = true;
+                    let mut all_input_finished = true;
                     for input in self.inputs.iter() {
                         if input.is_finished() {
                             continue;
                         }
-                        all_input_ports_finished = false;
+                        all_input_finished = false;
 
                         if input.has_data() {
                             Self::collect_data_block(
@@ -422,33 +422,18 @@ where T: Number + ResultTypeOfUnary
                                 &mut self.buffer,
                             );
                         }
-
                         input.set_need_data();
+                    }
+
+                    if all_input_finished {
+                        self.is_collect_finished = true;
                     }
 
                     if self.need_spill() {
                         return self.next_step(Step::Async(AsyncStep::Spill));
                     }
-                    // for input in self.inputs.iter() {
-                    //     if input.is_finished() {
-                    //         all_input_ports_finished = false;
-                    //         continue;
-                    //     }
 
-                    //     if input.has_data() {
-                    //         self.collect_data_block(input.pull_data().unwrap()?);
-                    //         if self.need_spill() {
-                    //             return self.next_step(Step::Async(AsyncStep::Spill));
-                    //         } else {
-                    //             input.set_need_data();
-                    //         }
-                    //     } else {
-                    //         input.set_need_data();
-                    //     }
-                    // }
-
-                    if all_input_ports_finished {
-                        self.is_collect_finished = true;
+                    if self.is_collect_finished {
                         self.next_step(Step::Async(AsyncStep::Restore))
                     } else {
                         Ok(Event::NeedData)

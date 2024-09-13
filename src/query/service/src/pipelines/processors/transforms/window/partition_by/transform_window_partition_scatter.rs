@@ -48,7 +48,9 @@ impl TransformWindowPartitionScatter {
         hash_keys: Vec<usize>,
     ) -> Result<Self> {
         let input_port = InputPort::create();
-        let output_ports = vec![OutputPort::create(); num_processors];
+        let output_ports = (0..num_processors)
+            .map(|_| OutputPort::create())
+            .collect::<Vec<_>>();
         Ok(Self {
             input_port,
             output_ports,
