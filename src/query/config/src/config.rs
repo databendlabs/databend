@@ -132,6 +132,10 @@ pub struct Config {
     #[clap(flatten)]
     pub cache: CacheConfig,
 
+    // spill Config
+    #[clap(flatten)]
+    pub spill: SpillConfig,
+
     // background configs
     #[clap(flatten)]
     pub background: BackgroundConfig,
@@ -2930,6 +2934,18 @@ pub struct DiskCacheConfig {
     pub sync_data: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct SpillConfig {
+    /// Path of spill to local disk. disable if it's empty.
+    #[clap(
+        long,
+        value_name = "VALUE",
+        default_value = "./.databend/temp/_query_spill"
+    )]
+    pub spill_local_disk_path: String,
+}
+
 mod cache_config_converters {
     use log::warn;
 
@@ -2953,6 +2969,7 @@ mod cache_config_converters {
                     .map(|(k, v)| (k, v.into()))
                     .collect(),
                 cache: inner.cache.into(),
+                spill: inner.spill.into(),
                 background: inner.background.into(),
             }
         }
@@ -2985,6 +3002,7 @@ mod cache_config_converters {
                 storage: self.storage.try_into()?,
                 catalogs,
                 cache: self.cache.try_into()?,
+                spill: self.spill.try_into()?,
                 background: self.background.try_into()?,
             })
         }
@@ -3043,6 +3061,24 @@ mod cache_config_converters {
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
+            }
+        }
+    }
+
+    impl TryFrom<SpillConfig> for inner::SpillConfig {
+        type Error = ErrorCode;
+
+        fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
+            Ok(Self {
+                path: value.spill_local_disk_path,
+            })
+        }
+    }
+
+    impl From<inner::SpillConfig> for SpillConfig {
+        fn from(value: inner::SpillConfig) -> Self {
+            Self {
+                spill_local_disk_path: value.path,
             }
         }
     }

@@ -37,7 +37,6 @@ use crate::caches::TableSnapshotStatisticCache;
 use crate::InMemoryLruCache;
 use crate::TableDataCache;
 use crate::TableDataCacheBuilder;
-use crate::TempDir;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: usize = 3000;
 
@@ -55,7 +54,6 @@ pub struct CacheManager {
     table_data_cache: Option<TableDataCache>,
     in_memory_table_data_cache: Option<ColumnArrayCache>,
     block_meta_cache: Option<BlockMetaCache>,
-    temp_dir_config: Option<TempDir>,
 }
 
 impl CacheManager {
@@ -65,15 +63,13 @@ impl CacheManager {
         max_server_memory_usage: &u64,
         tenant_id: impl Into<String>,
     ) -> Result<()> {
-        let tenant_id = tenant_id.into();
-
         // setup table data cache
         let table_data_cache = {
             match config.data_cache_storage {
                 CacheStorageTypeInnerConfig::None => None,
                 CacheStorageTypeInnerConfig::Disk => {
                     let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
+                        .join(tenant_id.into())
                         .join("v1");
 
                     let queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
@@ -100,22 +96,6 @@ impl CacheManager {
                         config.disk_cache_config.sync_data,
                     )?
                 }
-            }
-        };
-
-        let temp_dir_config = match config.data_cache_storage {
-            CacheStorageTypeInnerConfig::None => None,
-            CacheStorageTypeInnerConfig::Disk => {
-                let path = PathBuf::from(&config.disk_cache_config.path)
-                    .join("temp")
-                    .join(tenant_id.clone());
-
-                let temp_dir = TempDir {
-                    path,
-                    bytes_limit: config.disk_cache_config.max_bytes as usize,
-                };
-                temp_dir.init()?;
-                Some(temp_dir)
             }
         };
 
@@ -147,7 +127,6 @@ impl CacheManager {
                 table_data_cache,
                 in_memory_table_data_cache,
                 block_meta_cache: None,
-                temp_dir_config,
             }));
         } else {
             let table_snapshot_cache = Self::new_named_items_cache(
@@ -215,7 +194,6 @@ impl CacheManager {
                 table_data_cache,
                 in_memory_table_data_cache,
                 block_meta_cache,
-                temp_dir_config,
             }));
         }
 
@@ -272,10 +250,6 @@ impl CacheManager {
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
         self.in_memory_table_data_cache.clone()
-    }
-
-    pub fn get_temp_dir_config(&self) -> Option<TempDir> {
-        self.temp_dir_config.clone()
     }
 
     pub fn new_named_items_cache<V: Into<CacheValue<V>>>(

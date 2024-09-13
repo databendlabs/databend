@@ -43,7 +43,7 @@ use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::window::partition_by::SpillingWindowPayloads;
 use crate::pipelines::processors::transforms::window::partition_by::PARTITION_COUNT;
 use crate::sessions::QueryContext;
-use crate::spillers::DiskSpillConfig;
+use crate::spillers::DiskSpill;
 use crate::spillers::EncodedBlock;
 
 pub struct TransformWindowPartitionSpillWriter {
@@ -53,7 +53,7 @@ pub struct TransformWindowPartitionSpillWriter {
 
     operator: Operator,
     location_prefix: String,
-    disk_spill: Option<DiskSpillConfig>,
+    disk_spill: Option<DiskSpill>,
     spilled_block: Option<DataBlock>,
     spilling_meta: Option<WindowPartitionMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
@@ -65,7 +65,7 @@ impl TransformWindowPartitionSpillWriter {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
-        disk_spill: Option<DiskSpillConfig>,
+        disk_spill: Option<DiskSpill>,
         location_prefix: String,
     ) -> Box<dyn Processor> {
         Box::new(TransformWindowPartitionSpillWriter {
@@ -189,7 +189,7 @@ pub fn spilling_window_payload(
     ctx: Arc<QueryContext>,
     operator: Operator,
     location_prefix: &str,
-    disk_spill: Option<&mut DiskSpillConfig>,
+    disk_spill: Option<&mut DiskSpill>,
     unique_name: String,
     payload: SpillingWindowPayloads,
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
@@ -219,11 +219,14 @@ pub fn spilling_window_payload(
         })
         .collect::<Vec<_>>();
 
-    let location = match disk_spill {
-        Some(disk) if disk.bytes_limit as u64 >= write_size => {
-            disk.bytes_limit -= write_size as usize;
-            Location::Disk(disk.root.join(unique_name))
+    let location = match disk_spill.map(|disk| {
+        if disk.try_write(write_size as isize) {
+            Some(Location::Disk(disk.root.join(unique_name.clone())))
+        } else {
+            None
         }
+    }) {
+        Some(Some(x)) => x,
         _ => Location::Storage(format!("{location_prefix}/{unique_name}")),
     };
 

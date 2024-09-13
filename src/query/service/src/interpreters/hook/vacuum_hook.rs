@@ -23,7 +23,7 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::TempDirManager;
 use opendal::Buffer;
 
 use crate::sessions::QueryContext;
@@ -70,8 +70,8 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    Ok(CacheManager::instance()
-        .get_temp_dir_config()
+    Ok(TempDirManager::instance()
+        .get_disk_spill_config()
         .map(|cfg| {
             let root = cfg.path.join(query_ctx.get_id());
             std::fs::remove_dir_all(root)

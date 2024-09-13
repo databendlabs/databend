@@ -18,6 +18,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
@@ -255,7 +256,26 @@ pub fn deserialize_block(columns_layout: &[usize], mut data: &[u8]) -> DataBlock
 }
 
 #[derive(Clone)]
-pub struct DiskSpillConfig {
+pub struct DiskSpill {
     pub root: PathBuf,
-    pub bytes_limit: usize,
+    pub bytes_limit: Arc<Mutex<isize>>,
+}
+
+impl DiskSpill {
+    pub fn new(root: PathBuf, limit: isize) -> DiskSpill {
+        DiskSpill {
+            root,
+            bytes_limit: Arc::new(Mutex::new(limit)),
+        }
+    }
+
+    pub fn try_write(&mut self, size: isize) -> bool {
+        let mut guard = self.bytes_limit.lock().unwrap();
+        if *guard > size {
+            *guard -= size;
+            true
+        } else {
+            false
+        }
+    }
 }

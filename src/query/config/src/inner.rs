@@ -64,6 +64,9 @@ pub struct InnerConfig {
     // Cache Config
     pub cache: CacheConfig,
 
+    // Spill Config
+    pub spill: SpillConfig,
+
     // Background Config
     pub background: InnerBackgroundConfig,
 }
@@ -698,6 +701,20 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: Default::default(),
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpillConfig {
+    /// Path of spill to local disk. disable if it's empty.
+    pub path: String,
+}
+
+impl Default for SpillConfig {
+    fn default() -> Self {
+        Self {
+            path: "./.databend/temp/_query_spill".to_string(),
         }
     }
 }

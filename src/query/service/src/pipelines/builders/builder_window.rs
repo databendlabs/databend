@@ -29,7 +29,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_common_storage::DataOperator;
-use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::TempDirManager;
 use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::FrameBound;
@@ -41,7 +41,7 @@ use crate::pipelines::processors::transforms::TransformWindowPartitionSpillWrite
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
-use crate::spillers::DiskSpillConfig;
+use crate::spillers::DiskSpill;
 
 impl PipelineBuilder {
     pub(crate) fn build_window(&mut self, window: &Window) -> Result<()> {
@@ -186,13 +186,14 @@ impl PipelineBuilder {
         let location_prefix =
             query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
 
-        let disk_spill =
-            CacheManager::instance()
-                .get_temp_dir_config()
-                .map(|cfg| DiskSpillConfig {
-                    root: cfg.path.join(self.ctx.get_id()),
-                    bytes_limit: 1 << 20, // todo
-                });
+        let disk_spill = match TempDirManager::instance().get_disk_spill_config() {
+            None => None,
+            Some(cfg) => {
+                let root = cfg.path.join(self.ctx.get_id());
+                std::fs::create_dir(&root)?;
+                Some(DiskSpill::new(root, 5 << 20)) // todo
+            }
+        };
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
