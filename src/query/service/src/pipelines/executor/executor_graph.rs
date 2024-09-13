@@ -41,7 +41,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
 use fastrace::prelude::*;
 use log::debug;
-use log::info;
 use log::trace;
 use log::warn;
 use parking_lot::Condvar;
@@ -347,9 +346,6 @@ impl ExecutingGraph {
         for sink_index in locker.graph.externals(Direction::Outgoing) {
             ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
         }
-
-        println!("{}", graph.format_graph_nodes());
-
         Ok(schedule_queue)
     }
 
@@ -399,60 +395,6 @@ impl ExecutingGraph {
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
 
-                let inputs_status = node
-                    .inputs_port
-                    .iter()
-                    .map(|x| {
-                        let finished = match x.is_finished() {
-                            true => "Finished",
-                            false => "Unfinished",
-                        };
-
-                        let has_data = match x.has_data() {
-                            true => "HasData",
-                            false => "Nodata",
-                        };
-
-                        let need_data = match x.is_need_data() {
-                            true => "NeedData",
-                            false => "UnNeeded",
-                        };
-
-                        (finished, has_data, need_data)
-                    })
-                    .collect::<Vec<_>>();
-
-                let outputs_status = node
-                    .outputs_port
-                    .iter()
-                    .map(|x| {
-                        let finished = match x.is_finished() {
-                            true => "Finished",
-                            false => "Unfinished",
-                        };
-
-                        let has_data = match x.has_data() {
-                            true => "HasData",
-                            false => "Nodata",
-                        };
-
-                        let need_data = match x.is_need_data() {
-                            true => "NeedData",
-                            false => "UnNeeded",
-                        };
-
-                        (finished, has_data, need_data)
-                    })
-                    .collect::<Vec<_>>();
-
-                println!(
-                    "node id BEFORE EVENT: {:?}, name: {:?}, inputs_status: {:?}, output_status: {:?}",
-                    node.processor.id(),
-                    node.processor.name(),
-                    inputs_status,
-                    outputs_status,
-                );
-
                 let event = {
                     let _guard = ThreadTracker::tracking(node.tracking_payload.clone());
 
@@ -462,61 +404,6 @@ impl ExecutingGraph {
 
                     node.processor.event(event_cause)
                 }?;
-
-                let inputs_status = node
-                    .inputs_port
-                    .iter()
-                    .map(|x| {
-                        let finished = match x.is_finished() {
-                            true => "Finished",
-                            false => "Unfinished",
-                        };
-
-                        let has_data = match x.has_data() {
-                            true => "HasData",
-                            false => "Nodata",
-                        };
-
-                        let need_data = match x.is_need_data() {
-                            true => "NeedData",
-                            false => "UnNeeded",
-                        };
-
-                        (finished, has_data, need_data)
-                    })
-                    .collect::<Vec<_>>();
-
-                let outputs_status = node
-                    .outputs_port
-                    .iter()
-                    .map(|x| {
-                        let finished = match x.is_finished() {
-                            true => "Finished",
-                            false => "Unfinished",
-                        };
-
-                        let has_data = match x.has_data() {
-                            true => "HasData",
-                            false => "Nodata",
-                        };
-
-                        let need_data = match x.is_need_data() {
-                            true => "NeedData",
-                            false => "UnNeeded",
-                        };
-
-                        (finished, has_data, need_data)
-                    })
-                    .collect::<Vec<_>>();
-
-                println!(
-                    "node id AFTER EVENT: {:?}, name: {:?}, event: {:?}, inputs_status: {:?}, output_status: {:?}",
-                    node.processor.id(),
-                    node.processor.name(),
-                    event,
-                    inputs_status,
-                    outputs_status,
-                );
 
                 trace!(
                     "node id: {:?}, name: {:?}, event: {:?}",
@@ -809,7 +696,7 @@ impl RunningGraph {
     ) -> Result<Arc<RunningGraph>> {
         let graph_state =
             ExecutingGraph::create(pipeline, init_epoch, query_id, finish_condvar_notify)?;
-        info!("Create running graph 1:{:?}", graph_state);
+        debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
 
@@ -821,7 +708,7 @@ impl RunningGraph {
     ) -> Result<Arc<RunningGraph>> {
         let graph_state =
             ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, finish_condvar_notify)?;
-        info!("Create running graph 2:{:?}", graph_state);
+        debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
 
@@ -1010,7 +897,6 @@ impl RunningGraph {
                         .field("state", &self.state)
                         .field("inputs_status", &self.inputs_status)
                         .field("outputs_status", &self.outputs_status)
-                        .field("\n", &self.id)
                         .finish(),
                     Some(details_status) => f
                         .debug_struct("Node")
@@ -1020,7 +906,6 @@ impl RunningGraph {
                         .field("inputs_status", &self.inputs_status)
                         .field("outputs_status", &self.outputs_status)
                         .field("details", details_status)
-                        .field("\n", &self.id)
                         .finish(),
                 }
             }
@@ -1112,8 +997,7 @@ impl Debug for ExecutingGraph {
         write!(
             f,
             "{:?}",
-            Dot::with_attr_getters(&self.graph, &[Config::EdgeNoLabel], &|_, s| format!("{} -> {}", s.weight().input_index, s.weight().output_index), &|_, _| String::new())
-            // Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
+            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
         )
     }
 }
