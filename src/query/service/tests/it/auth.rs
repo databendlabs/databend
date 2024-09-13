@@ -128,10 +128,14 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             .with_subject(user2.to_string());
         let token2 = pair2.sign(claims)?;
         let res = auth_mgr
-            .auth(&mut session, &Credential::Jwt {
-                token: token2,
-                client_ip: None,
-            })
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token: token2,
+                    client_ip: None,
+                },
+                true,
+            )
             .await;
         assert!(res.is_ok());
 
@@ -245,10 +249,14 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&mut session, &Credential::Jwt {
-                token,
-                client_ip: None,
-            })
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
             .await;
         assert!(res.is_err());
 
@@ -266,10 +274,14 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&mut session, &Credential::Jwt {
-                token,
-                client_ip: None,
-            })
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
             .await;
         assert!(res.is_err());
         assert!(
@@ -288,10 +300,14 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(&mut session, &Credential::Jwt {
-                token,
-                client_ip: None,
-            })
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
             .await;
         assert!(res.is_err());
         assert!(
@@ -310,10 +326,14 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(&mut session, &Credential::Jwt {
-                token,
-                client_ip: None,
-            })
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
             .await?;
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
