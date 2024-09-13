@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::dma_read_file_range;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_cache::dma_read_file_range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;

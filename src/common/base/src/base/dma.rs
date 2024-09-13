@@ -24,9 +24,10 @@ use std::ops::Range;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
-use databend_common_base::runtime::spawn_blocking;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
+
+use crate::runtime::spawn_blocking;
 
 /// An aligned buffer used to perform io on a `DmaFile`.
 #[derive(Debug)]

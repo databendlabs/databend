@@ -18,11 +18,11 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_cache::dma_write_file_vectored;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

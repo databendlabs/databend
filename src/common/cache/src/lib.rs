@@ -16,13 +16,9 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cache;
-mod disk;
 mod mem_sized;
 
 pub use cache::lru::LruCache;
 pub use cache::Cache;
-pub use disk::dma::dma_read_file;
-pub use disk::dma::dma_read_file_range;
-pub use disk::dma::dma_write_file_vectored;
 pub use hashbrown::hash_map::DefaultHashBuilder;
 pub use mem_sized::MemSized;
