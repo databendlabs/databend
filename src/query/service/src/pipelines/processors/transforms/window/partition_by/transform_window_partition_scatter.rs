@@ -38,6 +38,7 @@ pub struct TransformWindowPartitionScatter {
     num_processors: usize,
     num_partitions: usize,
     hash_keys: Vec<usize>,
+    is_initialized: bool,
 }
 
 impl TransformWindowPartitionScatter {
@@ -56,7 +57,16 @@ impl TransformWindowPartitionScatter {
             num_processors,
             num_partitions,
             hash_keys,
+            is_initialized: false,
         })
+    }
+
+    pub fn finish(&mut self) -> Result<Event> {
+        self.input_port.finish();
+        for output_port in self.output_ports.iter() {
+            output_port.finish();
+        }
+        Ok(Event::Finished)
     }
 
     pub fn into_pipe_item(self) -> PipeItem {
@@ -77,16 +87,41 @@ impl Processor for TransformWindowPartitionScatter {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let mut all_output_ports_finished = true;
+        if !self.is_initialized {
+            let mut all_output_finished = true;
+            let mut all_output_can_push = true;
+            for (index, output_port) in self.output_ports.iter().enumerate() {
+                if output_port.is_finished() {
+                    continue;
+                }
+                all_output_finished = false;
+
+                if !output_port.can_push() {
+                    all_output_can_push = false;
+                    continue;
+                }
+            }
+            if all_output_finished {
+                return self.finish();
+            }
+            if all_output_can_push {
+                self.is_initialized = true;
+            }
+            self.input_port.set_need_data();
+            return Ok(Event::NeedData);
+        }
+
+        let mut all_output_finished = true;
         let mut need_consume = false;
         for (index, output_port) in self.output_ports.iter().enumerate() {
             if output_port.is_finished() {
-                all_output_ports_finished = false;
                 continue;
             }
+            all_output_finished = false;
 
             if !output_port.can_push() {
                 need_consume = true;
+                continue;
             }
 
             if let Some(data_block) = self.output_data_blocks[index].pop_front() {
@@ -96,16 +131,11 @@ impl Processor for TransformWindowPartitionScatter {
         }
 
         if need_consume {
-            self.input_port.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
 
-        if all_output_ports_finished {
-            self.input_port.finish();
-            for output_port in &self.output_ports {
-                output_port.finish();
-            }
-            return Ok(Event::Finished);
+        if all_output_finished {
+            return self.finish();
         }
 
         if self.input_port.has_data() {
@@ -114,16 +144,12 @@ impl Processor for TransformWindowPartitionScatter {
             return Ok(Event::Sync);
         }
 
-        if !self.input_port.is_finished() {
-            self.input_port.set_need_data();
-            return Ok(Event::NeedData);
+        if self.input_port.is_finished() {
+            return self.finish();
         }
 
-        self.input_port.finish();
-        for output_port in &self.output_ports {
-            output_port.finish();
-        }
-        Ok(Event::Finished)
+        self.input_port.set_need_data();
+        Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {

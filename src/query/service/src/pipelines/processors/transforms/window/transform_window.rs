@@ -411,9 +411,9 @@ where T: Number + ResultTypeOfUnary
                     let mut all_input_ports_finished = true;
                     for input in self.inputs.iter() {
                         if input.is_finished() {
-                            all_input_ports_finished = false;
                             continue;
                         }
+                        all_input_ports_finished = false;
 
                         if input.has_data() {
                             Self::collect_data_block(
