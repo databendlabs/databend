@@ -41,7 +41,7 @@
 {'code': 5100, 'message': 'jwt auth not configured.'}
 ---- do_refresh(3,)
 401
-{'code': 5100, 'message': "unknown token type '120'"}
+{'code': 5100, 'message': "invalid token type 'x'"}
 ---- do_refresh(4,)
 401
 {'code': 5102, 'message': 'refresh token expired'}
