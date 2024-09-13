@@ -1105,11 +1105,18 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        unsafe {
+        let mut license = unsafe {
             self.get_settings()
                 .get_enterprise_license()
                 .unwrap_or_default()
+        };
+
+        // Try load license from embedded env if failed to load from settings.
+        if license.is_empty() {
+            license = env!("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").to_string();
         }
+
+        license
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
@@ -1371,11 +1378,7 @@ impl TableContext for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if tbl.engine() != "FUSE" || tbl.is_read_only() {
-            return Ok(None);
-        }
-
-        if tbl.is_temp() {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
         }
 

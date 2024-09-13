@@ -129,10 +129,15 @@ impl LockManager {
 
         loop {
             // List all revisions and check if the current is the minimum.
-            let reply = catalog
+            let mut rev_list = catalog
                 .list_lock_revisions(list_table_lock_req.clone())
-                .await?;
-            let rev_list = reply.into_iter().map(|(x, _)| x).collect::<Vec<_>>();
+                .await?
+                .into_iter()
+                .map(|(x, _)| x)
+                .collect::<Vec<_>>();
+            // list_lock_revisions are returned in big-endian order,
+            // we need to sort them in ascending numeric order.
+            rev_list.sort();
             let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
                 ErrorCode::TableLockExpired(format!(

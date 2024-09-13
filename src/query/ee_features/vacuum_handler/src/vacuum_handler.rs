@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,9 +23,15 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
-
 // (TableName, file, file size)
 pub type VacuumDropFileInfo = (String, String, u64);
+
+// (drop_files, failed_dbs, failed_tables)
+pub type VacuumDropTablesResult = Result<(
+    Option<Vec<VacuumDropFileInfo>>,
+    HashSet<String>,
+    HashSet<u64>,
+)>;
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
@@ -41,7 +48,7 @@ pub trait VacuumHandler: Sync + Send {
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<VacuumDropFileInfo>>>;
+    ) -> VacuumDropTablesResult;
 
     async fn do_vacuum_temporary_files(
         &self,
@@ -79,7 +86,7 @@ impl VacuumHandlerWrapper {
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
+    ) -> VacuumDropTablesResult {
         self.handler
             .do_vacuum_drop_tables(threads_nums, tables, dry_run_limit)
             .await
