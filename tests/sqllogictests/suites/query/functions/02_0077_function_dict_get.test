@@ -31,24 +31,51 @@ SELECT dict_get(d, 'value', 1)
 1_value
 
 statement ok
-CREATE OR REPLACE DICTIONARY dd3(id int, name string, age int, address string, salary float, b bool) PRIMARY KEY id SOURCE(mysql(host='localhost' port='3306' username='root' password='123456' db='test' table='user3'));
+create or replace table t2(id int, name string)
 
-query T
-select dict_get(dd3, 'name', 1)
-----
-andy
+statement ok
+insert into t2 values(1, 'Alice'),(2, 'Bob'),(3, 'Lily'),(4, 'Tom'),(5, 'Tim')
 
-query T
-select dict_get(dd3, 'age', 1)
-----
-10
+statement ok
+CREATE OR REPLACE DICTIONARY d2(id int, name string, age uint16, salary float, active bool) PRIMARY KEY id SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
 
-query T
-select dict_get(dd3, 'salary', 1)
+query TIFT
+select dict_get(d2, 'name', 1), dict_get(d2, 'age', 1), dict_get(d2, 'salary', 1), dict_get(d2, 'active', 1)
 ----
-1234.56
+Alice 24 100.0 1
 
-query T
-select dict_get(dd3, 'b', 1)
+query TIFT
+select dict_get(d2, 'name', 5), dict_get(d2, 'age', 5), dict_get(d2, 'salary', 5), dict_get(d2, 'active', 5)
 ----
-1
+NULL NULL NULL NULL
+
+query ITIFT
+select id, dict_get(d2, 'name', id), dict_get(d2, 'age', id), dict_get(d2, 'salary', id), dict_get(d2, 'active', id) from t2
+----
+1 Alice 24 100.0 1
+2 Bob 35 200.1 0
+3 Lily 41 1000.2 1
+4 Tom 55 3000.55 0
+5 NULL NULL NULL NULL
+
+statement ok
+CREATE OR REPLACE DICTIONARY d3(id int, name string, age uint16, salary float, active bool) PRIMARY KEY name SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
+
+query TIFT
+select dict_get(d3, 'id', 'Alice'), dict_get(d3, 'age', 'Alice'), dict_get(d3, 'salary', 'Alice'), dict_get(d3, 'active', 'Alice')
+----
+1 24 100.0 1
+
+query TIFT
+select dict_get(d3, 'id', 'Nancy'), dict_get(d3, 'age', 'Nancy'), dict_get(d3, 'salary', 'Nancy'), dict_get(d3, 'active', 'Nancy')
+----
+NULL NULL NULL NULL
+
+query ITIFT
+select name, dict_get(d3, 'id', name), dict_get(d3, 'age', name), dict_get(d3, 'salary', name), dict_get(d3, 'active', name) from t2
+----
+Alice 1 24 100.0 1
+Bob 2 35 200.1 0
+Lily 3 41 1000.2 1
+Tom 4 55 3000/55 0
+Tim NULL NULL NULL NULL
