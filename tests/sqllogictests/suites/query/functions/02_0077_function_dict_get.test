@@ -77,5 +77,5 @@ select name, dict_get(d3, 'id', name), dict_get(d3, 'age', name), dict_get(d3, '
 Alice 1 24 100.0 1
 Bob 2 35 200.1 0
 Lily 3 41 1000.2 1
-Tom 4 55 3000/55 0
+Tom 4 55 3000.55 0
 Tim NULL NULL NULL NULL

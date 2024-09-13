@@ -88,18 +88,18 @@ impl DictionaryOperator {
             }
             DictionaryOperator::Mysql((pool, sql)) => match data_type.remove_nullable() {
                 DataType::Boolean => {
-                    let value: Option<bool> = sqlx::query_scalar(&sql)
+                    let value: Option<bool> = sqlx::query_scalar(sql)
                         .bind(self.format_key(key))
                         .fetch_optional(pool)
                         .await?;
-                    Ok(value.map(|v| Scalar::Boolean(v)))
+                    Ok(value.map(Scalar::Boolean))
                 }
                 DataType::String => {
-                    let value: Option<String> = sqlx::query_scalar(&sql)
+                    let value: Option<String> = sqlx::query_scalar(sql)
                         .bind(self.format_key(key))
                         .fetch_optional(pool)
                         .await?;
-                    Ok(value.map(|v| Scalar::String(v)))
+                    Ok(value.map(Scalar::String))
                 }
                 DataType::Number(num_ty) => {
                     with_integer_mapped_type!(|NUM_TYPE| match num_ty {
@@ -111,14 +111,14 @@ impl DictionaryOperator {
                             Ok(value.map(|v| Scalar::Number(NUM_TYPE::upcast_scalar(v))))
                         }
                         NumberDataType::Float32 => {
-                            let value: Option<f32> = sqlx::query_scalar(&sql)
+                            let value: Option<f32> = sqlx::query_scalar(sql)
                                 .bind(self.format_key(key))
                                 .fetch_optional(pool)
                                 .await?;
                             Ok(value.map(|v| Scalar::Number(NumberScalar::Float32(v.into()))))
                         }
                         NumberDataType::Float64 => {
-                            let value: Option<f64> = sqlx::query_scalar(&sql)
+                            let value: Option<f64> = sqlx::query_scalar(sql)
                                 .bind(self.format_key(key))
                                 .fetch_optional(pool)
                                 .await?;
