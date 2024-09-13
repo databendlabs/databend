@@ -8,11 +8,21 @@
 ---- do_query('select 1',)
 200
 [['1']]
+False
+True
 ---- do_query('select count(*) from system.clusters',)
 200
 ---- do_query("select 'cluster'",)
 200
 [['cluster']]
+---- do_query('CREATE TEMP TABLE t(c1 int)',)
+200
+True
+True
+---- do_query('drop TABLE t',)
+200
+False
+True
 ---- do_query('select 2',)
 401
 {'code': 5100, 'message': 'jwt auth not configured.'}

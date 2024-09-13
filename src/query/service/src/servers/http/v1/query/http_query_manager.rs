@@ -230,4 +230,51 @@ impl HttpQueryManager {
             None
         }
     }
+
+    pub(crate) fn check_sticky_for_txn(&self, last_server_info: &Option<ServerInfo>) -> Result<()> {
+        if let Some(ServerInfo { id, start_time }) = last_server_info {
+            if self.server_info.id != *id {
+                return Err(ErrorCode::InvalidSessionState(format!(
+                    "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
+                    self.server_info.id, id
+                )));
+            }
+            if self.server_info.start_time != *start_time {
+                return Err(ErrorCode::CurrentTransactionIsAborted(format!(
+                    "transaction is aborted because server restarted at {}.",
+                    start_time
+                )));
+            }
+        } else {
+            return Err(ErrorCode::InvalidSessionState(
+                "transaction is active but missing server_info".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_sticky_for_temp_table(
+        &self,
+        last_server_info: &Option<ServerInfo>,
+    ) -> Result<()> {
+        if let Some(ServerInfo { id, start_time }) = last_server_info {
+            if self.server_info.id != *id {
+                return Err(ErrorCode::InvalidSessionState(format!(
+                    "there are temp tables in session, but the request routed to the wrong server: current server is {}, the last is {}.",
+                    self.server_info.id, id
+                )));
+            }
+            if self.server_info.start_time != *start_time {
+                return Err(ErrorCode::InvalidSessionState(format!(
+                    "temp table lost because server restarted at {}.",
+                    start_time
+                )));
+            }
+        } else {
+            return Err(ErrorCode::InvalidSessionState(
+                "there are temp tables in session, but missing field server_info".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }

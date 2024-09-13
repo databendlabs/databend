@@ -144,21 +144,6 @@ impl ClientSessionManager {
         }
     }
 
-    pub async fn new_session_id_for_jwt(&self, session: &Arc<Session>) -> Result<String> {
-        let client_session_id = uuid::Uuid::new_v4().to_string();
-        let tenant = session.get_current_tenant();
-        let user_name = session.get_current_user()?.name;
-        let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
-        client_session_api
-            .upsert_client_session_id(
-                &client_session_id,
-                ClientSession { user_name },
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
-            )
-            .await?;
-        Ok(client_session_id)
-    }
-
     pub async fn refresh_session_handle(
         &self,
         tenant: Tenant,
@@ -191,7 +176,7 @@ impl ClientSessionManager {
         let user = session.get_current_user()?.name;
         let auth_role = session.privilege_mgr().get_auth_role();
         let client_session_id = if let Some(old) = &old_refresh_token {
-            let (claim, _) = SessionClaim::decode(&old)?;
+            let (claim, _) = SessionClaim::decode(old)?;
             assert_eq!(tenant_name, claim.tenant);
             assert_eq!(user, claim.user);
             assert_eq!(auth_role, claim.auth_role);
@@ -229,7 +214,7 @@ impl ClientSessionManager {
             client_session_api
                 .upsert_token(&old, token_info, TOMBSTONE_TTL, true)
                 .await?;
-            self.refresh_in_memory_states(&client_session_id, session);
+            self.refresh_in_memory_states(&client_session_id);
         };
         self.refresh_tokens
             .write()
@@ -358,11 +343,10 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    pub fn refresh_in_memory_states(&self, client_session_id: &str, session: &Arc<Session>) {
+    pub fn refresh_in_memory_states(&self, client_session_id: &str) {
         let mut guard = self.session_state.lock();
         guard.entry(client_session_id.to_string()).and_modify(|e| {
             e.query_state = QueryState::InUse;
-            session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone())
         });
     }
 
@@ -375,9 +359,13 @@ impl ClientSessionManager {
             }
         });
     }
-    pub fn on_query_finish(&self, client_session_id: &str, session: &Arc<Session>) {
-        let temp_tbl_mgr = session.temp_tbl_mgr();
-        let (is_empty, just_changed) = temp_tbl_mgr.lock().is_empty();
+    pub fn on_query_finish(
+        &self,
+        client_session_id: &str,
+        temp_tbl_mgr: TempTblMgrRef,
+        is_empty: bool,
+        just_changed: bool,
+    ) {
         if !is_empty || just_changed {
             let mut guard = self.session_state.lock();
             match guard.entry(client_session_id.to_string()) {

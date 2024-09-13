@@ -131,6 +131,9 @@ def main():
     # ok
     query_resp = do_query("select 1", session_token)
     pprint(query_resp.get("data"))
+    pprint(query_resp.get("session").get("need_sticky"))
+    pprint(query_resp.get("session").get("need_refresh"))
+
 
     # cluster
     query_resp = do_query("select count(*) from system.clusters", session_token)
@@ -140,6 +143,15 @@ def main():
         url = query_url2
     query_resp = do_query("select 'cluster'", session_token, url)
     pprint(query_resp.get("data"))
+
+    # temp table
+    query_resp = do_query("CREATE TEMP TABLE t(c1 int)", session_token)
+    pprint(query_resp.get("session").get("need_sticky"))
+    pprint(query_resp.get("session").get("need_refresh"))
+
+    query_resp = do_query("drop TABLE t", session_token)
+    pprint(query_resp.get("session").get("need_sticky"))
+    pprint(query_resp.get("session").get("need_refresh"))
 
     # errors
     do_query("select 2", "xxx")

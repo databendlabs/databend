@@ -89,10 +89,7 @@ pub async fn login_handler(
 
     match ctx.credential {
         Credential::Jwt { .. } => {
-            let session_id = ClientSessionManager::instance()
-                .new_session_id_for_jwt(&ctx.session)
-                .await
-                .map_err(HttpErrorCode::server_error)?;
+            let session_id = uuid::Uuid::new_v4().to_string();
             Ok(Json(LoginResponse {
                 version,
                 session_id,

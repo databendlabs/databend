@@ -323,6 +323,15 @@ async fn query_page_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                if query.user_name != ctx.user_name {
+                    return Err(poem::error::Error::from_string(
+                        format!(
+                            "wrong user, query {} expect {}, got {}",
+                            query_id, query.user_name, ctx.user_name
+                        ),
+                        StatusCode::UNAUTHORIZED,
+                    ));
+                }
                 query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
