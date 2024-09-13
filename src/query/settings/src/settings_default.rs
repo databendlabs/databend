@@ -593,7 +593,7 @@ impl DefaultSettings {
                 (
                     "enable_compact_after_multi_table_insert",
                     DefaultSettingValue {
-                        value: UserSettingValue::UInt64(1),
+                        value: UserSettingValue::UInt64(0),
                         desc: "Enables recluster and compact after multi-table insert.",
                         mode: SettingMode::Both,
                         range: Some(SettingRange::Numeric(0..=1)),

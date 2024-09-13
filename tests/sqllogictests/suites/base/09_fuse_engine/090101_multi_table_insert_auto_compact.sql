@@ -1,4 +1,7 @@
 statement ok
+set enable_compact_after_multi_table_insert = 1;
+
+statement ok
 create or replace database multi_table_insert_auto_compact;
 
 statement ok
