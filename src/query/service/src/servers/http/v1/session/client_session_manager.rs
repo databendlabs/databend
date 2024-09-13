@@ -161,11 +161,10 @@ impl ClientSessionManager {
 
     pub async fn refresh_session_handle(
         &self,
-        session: &Arc<Session>,
+        tenant: Tenant,
+        user_name: String,
         client_session_id: &str,
     ) -> Result<()> {
-        let tenant = session.get_current_tenant();
-        let user_name = session.get_current_user()?.name;
         let client_session_api = UserApiProvider::instance().client_session_api(&tenant);
         client_session_api
             .upsert_client_session_id(

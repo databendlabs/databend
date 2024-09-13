@@ -54,7 +54,9 @@ pub async fn refresh_handler(
                         "JWT session should provide session_id when refresh session",
                     )))?;
             mgr.refresh_in_memory_states(&session_id, &ctx.session);
-            mgr.refresh_session_handle(&ctx.session, &session_id)
+
+            let tenant = ctx.session.get_current_tenant();
+            mgr.refresh_session_handle(tenant, ctx.user_name.clone(), &session_id)
                 .await
                 .map_err(HttpErrorCode::server_error)?;
             Ok(Json(RefreshResponse {

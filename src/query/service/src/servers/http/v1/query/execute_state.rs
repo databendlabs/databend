@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
+use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
 use log::debug;
@@ -153,6 +154,7 @@ pub struct ExecutorSessionState {
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Arc<Settings>,
     pub txn_manager: TxnManagerRef,
+    pub temp_tbl_mgr: TempTblMgrRef,
     pub variables: HashMap<String, Scalar>,
 }
 
@@ -164,6 +166,7 @@ impl ExecutorSessionState {
             secondary_roles: session.get_secondary_roles(),
             settings: session.get_settings(),
             txn_manager: session.txn_mgr(),
+            temp_tbl_mgr: session.temp_tbl_mgr(),
             variables: session.get_all_variables(),
         }
     }

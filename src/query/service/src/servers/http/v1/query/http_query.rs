@@ -33,6 +33,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_session::TxnState;
@@ -63,6 +64,7 @@ use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
@@ -272,6 +274,10 @@ pub struct HttpSessionConf {
     pub settings: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub txn_state: Option<TxnState>,
+    #[serde(default)]
+    pub need_sticky: bool,
+    #[serde(default)]
+    pub need_refresh: bool,
     // used to check if the session is still on the same server
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_server_info: Option<ServerInfo>,
@@ -336,6 +342,8 @@ pub enum ExpireResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) tenant: Tenant,
+    pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
     pub(crate) session_id: String,
     pub(crate) node_id: String,
@@ -348,6 +356,7 @@ pub struct HttpQuery {
     /// exceed this result_timeout_secs.
     pub(crate) result_timeout_secs: u64,
     pub(crate) is_txn_mgr_saved: AtomicBool,
+    pub(crate) is_session_handle_refreshed: AtomicBool,
 }
 
 fn try_set_txn(
@@ -523,6 +532,8 @@ impl HttpQuery {
         };
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
         let format_settings_clone = format_settings.clone();
+        let tenant = session.get_current_tenant();
+        let user_name = session.get_current_user()?.name;
         http_query_runtime_instance.runtime().try_spawn(
             async move {
                 let state = state_clone.clone();
@@ -565,6 +576,8 @@ impl HttpQuery {
 
         let query = HttpQuery {
             id: query_id,
+            tenant,
+            user_name,
             client_session_id: http_ctx.client_session_id.clone(),
             session_id,
             node_id,
@@ -574,6 +587,7 @@ impl HttpQuery {
             result_timeout_secs,
             expire_state: Arc::new(parking_lot::Mutex::new(ExpireState::Working)),
             is_txn_mgr_saved: AtomicBool::new(false),
+            is_session_handle_refreshed: AtomicBool::new(false),
         };
 
         Ok(Arc::new(query))
@@ -584,7 +598,7 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session = self.get_response_session().await;
+        let session = self.get_response_session().await?;
 
         Ok(HttpQueryResponseInternal {
             data,
@@ -596,17 +610,17 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
+    pub async fn get_response_state_only(&self) -> Result<HttpQueryResponseInternal> {
         let state = self.get_state().await;
-        let session = self.get_response_session().await;
+        let session = self.get_response_session().await?;
 
-        HttpQueryResponseInternal {
+        Ok(HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
             node_id: self.node_id.clone(),
             state,
             session: Some(session),
-        }
+        })
     }
 
     #[async_backtrace::framed]
@@ -616,7 +630,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    async fn get_response_session(&self) -> HttpSessionConf {
+    async fn get_response_session(&self) -> Result<HttpSessionConf> {
         let keep_server_session_secs = self
             .request
             .session
@@ -648,6 +662,21 @@ impl HttpQuery {
         } else {
             None
         };
+        let mut need_sticky = false;
+        let (need_refresh, just_changed) = session_state.temp_tbl_mgr.lock().is_empty();
+        if let Some(cid) = &self.client_session_id {
+            if just_changed
+                && self
+                    .is_session_handle_refreshed
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+                    .is_ok()
+            {
+                ClientSessionManager::instance()
+                    .refresh_session_handle(self.tenant.clone(), self.user_name.to_string(), cid)
+                    .await?;
+            }
+        }
+
         if txn_state != TxnState::AutoCommit
             && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && matches!(executor.state, ExecuteState::Stopped(_))
@@ -656,6 +685,7 @@ impl HttpQuery {
                 .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
                 .is_ok()
         {
+            need_sticky = true;
             let timeout = session_state
                 .settings
                 .get_idle_transaction_timeout_secs()
@@ -664,17 +694,19 @@ impl HttpQuery {
                 .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
                 .await;
         }
-        HttpSessionConf {
+        Ok(HttpSessionConf {
             database: Some(database),
             role,
             secondary_roles,
             keep_server_session_secs,
             settings: Some(settings),
             txn_state: Some(txn_state),
+            need_sticky,
+            need_refresh,
             last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
             last_query_ids: vec![self.id.clone()],
             internal,
-        }
+        })
     }
 
     #[async_backtrace::framed]

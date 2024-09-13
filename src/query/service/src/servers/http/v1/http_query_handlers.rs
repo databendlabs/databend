@@ -43,6 +43,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
@@ -230,7 +231,10 @@ async fn query_final_handler(
             .await?
         {
             Some(query) => {
-                let mut response = query.get_response_state_only().await;
+                let mut response = query
+                    .get_response_state_only()
+                    .await
+                    .map_err(HttpErrorCode::server_error)?;
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
@@ -292,7 +296,10 @@ async fn query_state_handler(
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
-                    let response = query.get_response_state_only().await;
+                    let response = query
+                        .get_response_state_only()
+                        .await
+                        .map_err(HttpErrorCode::server_error)?;
                     Ok(QueryResponse::from_internal(query_id, response, false))
                 }
             }
