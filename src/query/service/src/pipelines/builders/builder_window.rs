@@ -186,14 +186,12 @@ impl PipelineBuilder {
         let location_prefix =
             query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
 
-        let disk_spill = match TempDirManager::instance().get_disk_spill_config() {
-            None => None,
-            Some(cfg) => {
+        let disk_spill = TempDirManager::instance()
+            .get_disk_spill_config()
+            .map(|cfg| {
                 let root = cfg.path.join(self.ctx.get_id());
-                std::fs::create_dir(&root)?;
-                Some(DiskSpill::new(root, 5 << 20)) // todo
-            }
-        };
+                DiskSpill::new(root, 5 << 20) // todo
+            });
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(

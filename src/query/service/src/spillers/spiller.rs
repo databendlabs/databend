@@ -16,9 +16,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fs::create_dir;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::Once;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
@@ -255,21 +258,22 @@ pub fn deserialize_block(columns_layout: &[usize], mut data: &[u8]) -> DataBlock
     DataBlock::new_from_columns(columns)
 }
 
-#[derive(Clone)]
 pub struct DiskSpill {
     pub root: PathBuf,
-    pub bytes_limit: Arc<Mutex<isize>>,
+    pub bytes_limit: Mutex<isize>,
+    inited: Once,
 }
 
 impl DiskSpill {
-    pub fn new(root: PathBuf, limit: isize) -> DiskSpill {
-        DiskSpill {
+    pub fn new(root: PathBuf, limit: isize) -> Arc<DiskSpill> {
+        Arc::new(DiskSpill {
             root,
-            bytes_limit: Arc::new(Mutex::new(limit)),
-        }
+            bytes_limit: Mutex::new(limit),
+            inited: Once::new(),
+        })
     }
 
-    pub fn try_write(&mut self, size: isize) -> bool {
+    pub fn try_write(&self, size: isize) -> bool {
         let mut guard = self.bytes_limit.lock().unwrap();
         if *guard > size {
             *guard -= size;
@@ -277,5 +281,17 @@ impl DiskSpill {
         } else {
             false
         }
+    }
+
+    pub fn init(&self) -> Result<()> {
+        let mut rt = Ok(());
+        self.inited.call_once(|| {
+            if let Err(e) = create_dir(&self.root) {
+                if !matches!(e.kind(), ErrorKind::AlreadyExists) {
+                    rt = Err(e);
+                }
+            }
+        });
+        Ok(rt?)
     }
 }

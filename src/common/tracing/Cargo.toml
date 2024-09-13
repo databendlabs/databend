@@ -21,7 +21,7 @@ fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
 fern = "0.6.2"
 itertools = { workspace = true }
-libc = "0.2.153"
+libc = { workspace = true }
 log = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }

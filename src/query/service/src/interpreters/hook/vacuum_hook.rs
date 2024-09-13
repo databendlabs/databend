@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::remove_dir_all;
+use std::io::ErrorKind;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -70,11 +72,13 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    Ok(TempDirManager::instance()
-        .get_disk_spill_config()
-        .map(|cfg| {
-            let root = cfg.path.join(query_ctx.get_id());
-            std::fs::remove_dir_all(root)
-        })
-        .unwrap_or(Ok(()))?)
+    if let Some(cfg) = TempDirManager::instance().get_disk_spill_config() {
+        let root = cfg.path.join(query_ctx.get_id());
+        if let Err(e) = remove_dir_all(root) {
+            if !matches!(e.kind(), ErrorKind::NotFound) {
+                return Err(e.into());
+            }
+        }
+    }
+    Ok(())
 }
