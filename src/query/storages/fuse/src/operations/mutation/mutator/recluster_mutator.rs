@@ -39,7 +39,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::future::FutureExt;
 use fastrace::Span;
 use indexmap::IndexSet;
@@ -523,7 +523,7 @@ impl ReclusterMutator {
                     v.block_metas()
                         .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
                 }
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                .in_span(Span::enter_with_local_parent(func_path!()))
             })
         });
 

@@ -457,7 +457,7 @@ pub struct RaftConfig {
     #[clap(long, default_value_t = get_default_raft_advertise_host())]
     pub raft_advertise_host: String,
 
-    /// The listening port for metadata communication.
+    /// The listening port for raft communication.
     #[clap(long, default_value = "28004")]
     pub raft_api_port: u16,
 

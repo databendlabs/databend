@@ -80,6 +80,7 @@ number_of_segments	BIGINT UNSIGNED	YES		NULL	NULL
 owner	VARCHAR	YES		NULL	NULL
 table_id	BIGINT UNSIGNED	NO		NULL	NULL
 table_type	VARCHAR	NO		NULL	NULL
+total_columns	BIGINT UNSIGNED	NO		NULL	NULL
 updated_on	TIMESTAMP	NO		NULL	NULL
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1

@@ -26,14 +26,20 @@ use crate::optimizer::SExpr;
 
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
-        RuleID::NormalizeScalarFilter,
-        RuleID::EliminateFilter,
         RuleID::EliminateSort,
-        RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
+        // Filter
+        RuleID::EliminateFilter,
+        RuleID::MergeFilter,
+        RuleID::NormalizeScalarFilter,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
+        RuleID::PushDownFilterSort,
+        RuleID::PushDownFilterEvalScalar,
+        // Limit
+        RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterProjectSet,
         RuleID::PushDownLimit,
         RuleID::PushDownLimitUnion,
         RuleID::PushDownLimitEvalScalar,
@@ -42,10 +48,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
-        RuleID::PushDownFilterSort,
-        RuleID::PushDownFilterEvalScalar,
-        RuleID::PushDownFilterJoin,
-        RuleID::PushDownFilterProjectSet,
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,

@@ -25,6 +25,7 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
@@ -201,6 +202,20 @@ pub struct TableInfo {
     pub db_type: DatabaseType,
 }
 
+impl TableInfo {
+    pub fn database_name(&self) -> Result<&str> {
+        if self.engine() != "FUSE" {
+            return Err(ErrorCode::Internal(format!(
+                "Invalid engine: {}",
+                self.engine()
+            )));
+        }
+        let database_name = self.desc.split('.').next().unwrap();
+        let database_name = &database_name[1..database_name.len() - 1];
+        Ok(database_name)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableStatistics {
     /// Number of rows
@@ -360,7 +375,7 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(TableSchema::empty()),
-            engine: "".to_string(),
+            engine: "FUSE".to_string(),
             engine_options: BTreeMap::new(),
             storage_params: None,
             part_prefix: "".to_string(),
@@ -639,9 +654,6 @@ impl Display for UndropTableReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropTableReply {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub name_ident: TableNameIdent,
@@ -885,16 +897,20 @@ impl ListTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TableInfoFilter {
-    // if datatime is some, filter only dropped tables which drop time before that,
-    // else filter all dropped tables
-    Dropped(Option<DateTime<Utc>>),
-    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
-    // in this case, `ListTableReq`.db_name will be ignored
-    // return Tables in two cases:
-    //  1) if database drop before date time, then all table in this db will be return;
-    //  2) else, return all the tables drop before data time.
-    AllDroppedTables(Option<DateTime<Utc>>),
-    // return all tables, ignore drop on time.
+    /// Choose only dropped tables.
+    ///
+    /// If the arg `retention_boundary` time is Some, choose only tables dropped before this boundary time.
+    DroppedTables(Option<DateTime<Utc>>),
+    /// Choose dropped table or all table in dropped databases.
+    ///
+    /// In this case, `ListTableReq`.db_name will be ignored.
+    ///
+    /// If the `retention_boundary` time is Some,
+    /// choose the table dropped before this time
+    /// or choose the database before this time.
+    DroppedTableOrDroppedDatabase(Option<DateTime<Utc>>),
+
+    /// return all tables, ignore drop on time.
     All,
 }
 
@@ -907,8 +923,11 @@ pub struct ListDroppedTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    // db id, db name
-    Db(u64, String),
+    Db {
+        db_id: u64,
+        db_name: String,
+        tables: Vec<(u64, String)>,
+    },
     // db id, table id, table name
     Table(u64, u64, String),
 }

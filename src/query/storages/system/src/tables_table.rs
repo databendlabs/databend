@@ -146,6 +146,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 TableField::new("database", TableDataType::String),
                 TableField::new("name", TableDataType::String),
                 TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new(
+                    "total_columns",
+                    TableDataType::Number(NumberDataType::UInt64),
+                ),
                 TableField::new("engine", TableDataType::String),
                 TableField::new("engine_full", TableDataType::String),
                 TableField::new("cluster_by", TableDataType::String),
@@ -587,6 +591,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .iter()
             .map(|v| v.get_table_info().ident.table_id)
             .collect();
+        let total_columns: Vec<u64> = database_tables
+            .iter()
+            .map(|v| v.get_table_info().schema().fields().len() as u64)
+            .collect();
         let engines: Vec<String> = database_tables
             .iter()
             .map(|v| v.engine().to_string())
@@ -678,6 +686,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 StringType::from_data(databases),
                 StringType::from_data(names),
                 UInt64Type::from_data(table_id),
+                UInt64Type::from_data(total_columns),
                 StringType::from_data(engines),
                 StringType::from_data(engines_full),
                 StringType::from_data(cluster_bys),

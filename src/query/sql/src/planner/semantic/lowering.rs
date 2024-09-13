@@ -24,6 +24,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::DummyColumnType;
 use crate::plans::ScalarExpr;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -198,6 +199,7 @@ impl ScalarExpr {
                 id: ColumnBinding::new_dummy_column(
                     win.display_name.clone(),
                     Box::new(win.func.return_type()),
+                    DummyColumnType::WindowFunction,
                 ),
                 data_type: win.func.return_type(),
                 display_name: win.display_name.clone(),
@@ -207,6 +209,7 @@ impl ScalarExpr {
                 id: ColumnBinding::new_dummy_column(
                     agg.display_name.clone(),
                     Box::new((*agg.return_type).clone()),
+                    DummyColumnType::AggregateFunction,
                 ),
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
@@ -234,17 +237,19 @@ impl ScalarExpr {
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: subquery.span,
                 id: ColumnBinding::new_dummy_column(
-                    "DUMMY".to_string(),
+                    "DUMMY_SUBQUERY".to_string(),
                     Box::new(subquery.data_type()),
+                    DummyColumnType::Subquery,
                 ),
                 data_type: subquery.data_type(),
-                display_name: "DUMMY".to_string(),
+                display_name: "DUMMY_SUBQUERY".to_string(),
             },
             ScalarExpr::UDFCall(udf) => RawExpr::ColumnRef {
                 span: None,
                 id: ColumnBinding::new_dummy_column(
                     udf.display_name.clone(),
                     Box::new((*udf.return_type).clone()),
+                    DummyColumnType::UDF,
                 ),
                 data_type: (*udf.return_type).clone(),
                 display_name: udf.display_name.clone(),
@@ -260,6 +265,7 @@ impl ScalarExpr {
                 id: ColumnBinding::new_dummy_column(
                     async_func.display_name.clone(),
                     Box::new(async_func.return_type.as_ref().clone()),
+                    DummyColumnType::AsyncFunction,
                 ),
                 data_type: async_func.return_type.as_ref().clone(),
                 display_name: async_func.display_name.clone(),
