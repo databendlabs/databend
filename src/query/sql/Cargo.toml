@@ -70,8 +70,6 @@ roaring = "0.10.1"
 serde = { workspace = true }
 sha2 = { workspace = true }
 simsearch = "0.2"
-sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls" ] }
-sqlx-mysql = "0.8.2"
 time = "0.3.14"
 tokio = "1.39.2"
 url = "2.3.1"
