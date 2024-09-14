@@ -234,7 +234,7 @@ impl PipelineBuilder {
                 let req = UpsertTableCopiedFileReq {
                     file_info: copied_file_tree,
                     ttl: Some(Duration::from_hours(expire_hours)),
-                    fail_if_duplicated: !force,
+                    insert_if_not_exists: !force,
                 };
                 Some(req)
             }
