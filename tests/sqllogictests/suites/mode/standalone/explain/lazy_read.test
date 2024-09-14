@@ -134,7 +134,7 @@ Limit
         ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
+        ├── push downs: [filters: [], limit: 2]
         └── estimated rows: 0.00
 
 query T
