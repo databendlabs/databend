@@ -35,10 +35,10 @@ pub struct TransformWindowPartitionScatter {
     output_ports: Vec<Arc<OutputPort>>,
     input_data_blocks: VecDeque<DataBlock>,
     output_data_blocks: Vec<VecDeque<DataBlock>>,
+    is_initialized: bool,
+    hash_keys: Vec<usize>,
     num_processors: usize,
     num_partitions: usize,
-    hash_keys: Vec<usize>,
-    is_initialized: bool,
 }
 
 impl TransformWindowPartitionScatter {
@@ -56,10 +56,10 @@ impl TransformWindowPartitionScatter {
             output_ports,
             input_data_blocks: VecDeque::new(),
             output_data_blocks: vec![VecDeque::new(); num_processors],
+            is_initialized: false,
+            hash_keys,
             num_processors,
             num_partitions,
-            hash_keys,
-            is_initialized: false,
         })
     }
 
@@ -72,16 +72,16 @@ impl TransformWindowPartitionScatter {
     }
 
     pub fn into_pipe_item(self) -> PipeItem {
-        let input_port = self.input_port.clone();
-        let output_ports = self.output_ports.clone();
+        let inputs = vec![self.input_port.clone()];
+        let outputs = self.output_ports.clone();
         let processor_ptr = ProcessorPtr::create(Box::new(self));
-        PipeItem::create(processor_ptr, vec![input_port], output_ports)
+        PipeItem::create(processor_ptr, inputs, outputs)
     }
 }
 
 impl Processor for TransformWindowPartitionScatter {
     fn name(&self) -> String {
-        "WindowPartitionScatter".to_string()
+        "TransformWindowPartitionScatter".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -92,7 +92,7 @@ impl Processor for TransformWindowPartitionScatter {
         if !self.is_initialized {
             let mut all_output_finished = true;
             let mut all_output_can_push = true;
-            for (index, output_port) in self.output_ports.iter().enumerate() {
+            for output_port in self.output_ports.iter() {
                 if output_port.is_finished() {
                     continue;
                 }
@@ -132,12 +132,12 @@ impl Processor for TransformWindowPartitionScatter {
             }
         }
 
-        if need_consume {
-            return Ok(Event::NeedConsume);
-        }
-
         if all_output_finished {
             return self.finish();
+        }
+
+        if need_consume {
+            return Ok(Event::NeedConsume);
         }
 
         if self.input_port.has_data() {
@@ -158,6 +158,7 @@ impl Processor for TransformWindowPartitionScatter {
         if let Some(data_block) = self.input_data_blocks.pop_front() {
             let num_rows = data_block.num_rows();
 
+            // Extract the columns used for hash computation.
             let hash_cols = self
                 .hash_keys
                 .iter()
@@ -172,25 +173,29 @@ impl Processor for TransformWindowPartitionScatter {
                 })
                 .collect::<Vec<_>>();
 
+            // Compute the hash value for each row.
             let mut hashes = vec![0u64; num_rows];
             group_hash_columns_slice(&hash_cols, &mut hashes);
 
+            // Scatter the data block to different partitions.
             let indices = hashes
                 .iter()
                 .map(|&hash| (hash % self.num_partitions as u64) as u8)
                 .collect::<Vec<_>>();
             let scatter_blocks = DataBlock::scatter(&data_block, &indices, self.num_partitions)?;
 
+            // Partition the data blocks to different processors.
             let mut output_data_blocks = vec![vec![]; self.num_processors];
             for (partition_id, data_block) in scatter_blocks.into_iter().enumerate() {
-                let output_index = partition_id % self.num_processors;
-                output_data_blocks[output_index].push((partition_id, data_block));
+                output_data_blocks[partition_id % self.num_processors]
+                    .push((partition_id, data_block));
             }
 
-            for (output_index, partitioned_data) in output_data_blocks.into_iter().enumerate() {
+            // Union data blocks for each processor.
+            for (partition_id, partitioned_data) in output_data_blocks.into_iter().enumerate() {
                 let meta = WindowPartitionMeta::create(partitioned_data);
                 let data_block = DataBlock::empty_with_meta(meta);
-                self.output_data_blocks[output_index].push_back(data_block);
+                self.output_data_blocks[partition_id].push_back(data_block);
             }
         }
         Ok(())

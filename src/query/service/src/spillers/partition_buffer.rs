@@ -67,8 +67,7 @@ impl PartitionBuffer {
             }
             PartitionBufferFetchOption::PickPartitionWithThreshold(threshold) => {
                 if self.partition_size[partition_id] >= *threshold {
-                    let data_blocks = self.partition_data[partition_id].clone();
-                    self.partition_data[partition_id].clear();
+                    let data_blocks = std::mem::take(&mut self.partition_data[partition_id]);
                     self.memory_size -= self.partition_size[partition_id];
                     self.partition_size[partition_id] = 0;
                     Some(data_blocks)

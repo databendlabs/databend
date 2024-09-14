@@ -346,6 +346,7 @@ impl ExecutingGraph {
         for sink_index in locker.graph.externals(Direction::Outgoing) {
             ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
         }
+
         Ok(schedule_queue)
     }
 

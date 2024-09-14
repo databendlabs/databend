@@ -29,16 +29,17 @@ use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
-/// The `WindowBuffer` is used to control memory usage of Window operator.
-pub struct WindowBuffer {
+/// The `WindowPartitionBuffer` is used to control memory usage of Window operator.
+pub struct WindowPartitionBuffer {
     spiller: Spiller,
     spill_settings: WindowSpillSettings,
     partition_buffer: PartitionBuffer,
-    next_to_restore_partition_id: usize,
     num_partitions: usize,
+    can_spill: bool,
+    next_to_restore_partition_id: usize,
 }
 
-impl WindowBuffer {
+impl WindowPartitionBuffer {
     pub fn new(
         ctx: Arc<QueryContext>,
         num_partitions: usize,
@@ -58,13 +59,14 @@ impl WindowBuffer {
             spiller,
             spill_settings,
             partition_buffer,
-            next_to_restore_partition_id: 0,
             num_partitions,
+            can_spill: false,
+            next_to_restore_partition_id: 0,
         })
     }
 
     pub fn need_spill(&mut self) -> bool {
-        if !self.spill_settings.enable_spill {
+        if !self.spill_settings.enable_spill || !self.can_spill {
             return false;
         }
 
@@ -84,6 +86,7 @@ impl WindowBuffer {
         }
         self.partition_buffer
             .add_data_block(partition_id, data_block);
+        self.can_spill = true;
     }
 
     // Get the next data block to spill.
@@ -114,6 +117,7 @@ impl WindowBuffer {
             }
         }
 
+        self.can_spill = false;
         Ok(None)
     }
 
@@ -183,7 +187,7 @@ impl WindowSpillSettings {
         };
 
         Ok(WindowSpillSettings {
-            enable_spill: true,
+            enable_spill: false,
             global_memory_threshold,
             processor_memory_threshold,
         })

@@ -167,7 +167,9 @@ impl PipelineBuilder {
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Window(window) => self.build_window(window),
-            PhysicalPlan::WindowPartition(_) => unreachable!(),
+            PhysicalPlan::WindowPartition(window_partition) => {
+                self.build_window_partition(window_partition)
+            }
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
