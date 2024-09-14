@@ -25,7 +25,6 @@ use crate::optimizer::hyper_dp::join_node::JoinNode;
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
 use crate::optimizer::hyper_dp::join_relation::RelationSetTree;
 use crate::optimizer::hyper_dp::query_graph::QueryGraph;
-use crate::optimizer::hyper_dp::util::contain_subquery;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
@@ -174,10 +173,30 @@ impl DPhpy {
                 }
                 let mut left_is_subquery = false;
                 let mut right_is_subquery = false;
-                if contain_subquery(s_expr.child(0)?) {
+                let left_op = s_expr.child(0)?.plan.as_ref();
+                let right_op = s_expr.child(1)?.plan.as_ref();
+                if matches!(
+                    left_op,
+                    RelOperator::EvalScalar(_)
+                        | RelOperator::Aggregate(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Limit(_)
+                        | RelOperator::ProjectSet(_)
+                        | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
+                ) {
                     left_is_subquery = true;
                 }
-                if contain_subquery(s_expr.child(1)?) {
+                if matches!(
+                    right_op,
+                    RelOperator::EvalScalar(_)
+                        | RelOperator::Aggregate(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Limit(_)
+                        | RelOperator::ProjectSet(_)
+                        | RelOperator::Window(_)
+                        | RelOperator::Udf(_)
+                ) {
                     right_is_subquery = true;
                 }
                 // Add join conditions
