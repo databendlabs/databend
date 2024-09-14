@@ -863,7 +863,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=30)),
                 }),
                 ("flight_connection_retry_interval", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(5),
+                    value: UserSettingValue::UInt64(3),
                     desc: "The retry interval of cluster flight is in seconds.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=900)),

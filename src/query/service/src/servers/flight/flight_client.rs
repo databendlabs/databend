@@ -215,12 +215,10 @@ impl FlightClient {
 
                 loop {
                     match futures::future::select(notified, streaming_next).await {
-                        Either::Left((_, _)) => {
+                        Either::Left((_, _)) | Either::Right((None, _)) => {
                             break;
                         }
-                        Either::Right((None, _)) => {
-                            break;
-                        }
+
                         Either::Right((Some(message), next_notified)) => {
                             notified = next_notified;
                             streaming_next = streaming.next();
@@ -332,11 +330,11 @@ impl FlightRxInner {
     }
 
     pub fn stop_cluster(&mut self) {
+        // ignore the error, because we cannot determine the state of server side
         let _ = self.server_tx.try_send(
             FlightData::try_from(DataPacket::FlightControl(FlightControlCommand::Close))
                 .expect("convert to flight data error"),
         );
-        // ignore the error, because we cannot determine the state of server side
     }
 }
 
@@ -682,7 +680,6 @@ impl FlightDataAckStream {
                             let packet = DataPacket::try_from(flight_data).unwrap();
                             if let DataPacket::FlightControl(FlightControlCommand::Close) = packet {
                                 state.lock().finish = true;
-                                info!("Receive close command from remote, close the flight data ack stream.");
                             }
                         }
                     }
