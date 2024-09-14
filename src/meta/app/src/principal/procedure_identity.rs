@@ -33,7 +33,7 @@ impl ProcedureIdentity {
     pub fn new(name: impl ToString, args: impl ToString) -> Self {
         Self {
             name: name.to_string(),
-            args: args.to_string(),
+            args: args.to_string().to_lowercase(),
         }
     }
 }

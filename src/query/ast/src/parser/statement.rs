@@ -2076,7 +2076,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 name: name.to_string(),
                 args_type: if let Some(args) = &args {
                     args.iter()
-                        .map(|arg| arg.data_type.to_string())
+                        .map(|arg| arg.data_type.to_string().to_lowercase())
                         .collect::<Vec<String>>()
                         .join(",")
                 } else {
@@ -2125,12 +2125,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let call_procedure = map(
         rule! {
-            CALL ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+            CALL ~ PROCEDURE ~ #ident ~ "(" ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
-        |(_, _, name, _, _)| {
+        |(_, _, name, _, opt_args, _)| {
             Statement::CallProcedure(CallProcedureStmt {
                 name: name.to_string(),
-                args: vec![],
+                args: opt_args.unwrap_or_default(),
             })
         },
     );
@@ -2147,7 +2147,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         "".to_string()
                     } else {
                         args.iter()
-                            .map(|arg| arg.to_string())
+                            .map(|arg| arg.to_string().to_lowercase())
                             .collect::<Vec<String>>()
                             .join(",")
                     },

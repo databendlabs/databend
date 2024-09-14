@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::Expr;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -84,5 +85,19 @@ impl From<&DropProcedurePlan> for DropProcedureReq {
             if_exists: p.if_exists,
             name_ident: p.name.clone(),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallProcedurePlan {
+    pub script: String,
+    pub arg_names: Vec<String>,
+    pub args: Vec<Expr>,
+}
+
+impl CallProcedurePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        // TODO: schema genreated by plan.arg_names
+        DataSchemaRefExt::create(vec![DataField::new("Result", DataType::String)])
     }
 }

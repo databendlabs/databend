@@ -37,6 +37,7 @@ message ProcedureMeta {
 
   // Procedure return type
   repeated DataType return_types = 4;
+  repeated string arg_names = 5;
 
   // The time database created.
   string created_on = 10;
