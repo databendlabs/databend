@@ -39,7 +39,6 @@ impl PipelineBuilder {
         self.build_pipeline(&window.input)?;
 
         let input_schema = window.input.output_schema()?;
-
         let partition_by = window
             .partition_by
             .iter()
@@ -48,7 +47,6 @@ impl PipelineBuilder {
                 Ok(offset)
             })
             .collect::<Result<Vec<_>>>()?;
-
         let order_by = window
             .order_by
             .iter()
@@ -170,7 +168,7 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
 
-        // Build window partition scatter processors.
+        // 1. Build window partition scatter processors.
         let mut pipe_items = Vec::with_capacity(num_processors);
         for _ in 0..num_processors {
             let processor = TransformWindowPartitionScatter::new(
@@ -186,7 +184,7 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        // Build shuffle processor.
+        // 2. Build shuffle processor.
         let mut rule = Vec::with_capacity(num_processors * num_processors);
         for i in 0..num_processors * num_processors {
             rule.push(
@@ -195,7 +193,7 @@ impl PipelineBuilder {
         }
         self.main_pipeline.reorder_inputs(rule);
 
-        // Build window partition collect processors.
+        // 3. Build window partition collect processors.
         let processor_id = AtomicUsize::new(0);
         let mut pipe_items = Vec::with_capacity(num_processors);
         for _ in 0..num_processors {
