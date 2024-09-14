@@ -130,19 +130,24 @@ impl WindowPartitionBuffer {
 
     // Restore data blocks from buffer and spilled files.
     pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
-        let partition_id = self.next_to_restore_partition_id;
-        let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
-        if !self.partition_buffer.is_partition_empty(partition_id) {
-            let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
-            if let Some(data_blocks) = self
-                .partition_buffer
-                .fetch_data_blocks(partition_id, &option)?
-            {
-                result.extend(data_blocks);
+        while self.next_to_restore_partition_id < self.num_partitions {
+            let partition_id = self.next_to_restore_partition_id;
+            let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
+            if !self.partition_buffer.is_partition_empty(partition_id) {
+                let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
+                if let Some(data_blocks) = self
+                    .partition_buffer
+                    .fetch_data_blocks(partition_id, &option)?
+                {
+                    result.extend(data_blocks);
+                }
+            }
+            self.next_to_restore_partition_id += 1;
+            if !result.is_empty() {
+                return Ok(result);
             }
         }
-        self.next_to_restore_partition_id += 1;
-        Ok(result)
+        Ok(vec![])
     }
 
     pub fn is_empty(&self) -> bool {
@@ -187,7 +192,7 @@ impl WindowSpillSettings {
         };
 
         Ok(WindowSpillSettings {
-            enable_spill: false,
+            enable_spill: true,
             global_memory_threshold,
             processor_memory_threshold,
         })

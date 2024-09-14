@@ -201,7 +201,7 @@ impl TransformWindowPartitionCollect {
             return self.next_step(Step::Async(AsyncStep::Spill));
         }
 
-        if let Some(data_block) = self.output_data_blocks.pop_back() {
+        if let Some(data_block) = self.output_data_blocks.pop_front() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -240,7 +240,13 @@ impl Processor for TransformWindowPartitionCollect {
                         self.output()
                     }
                 }
-                AsyncStep::Restore => self.next_step(Step::Sync(SyncStep::Sort)),
+                AsyncStep::Restore => {
+                    if !self.restored_data_blocks.is_empty() {
+                        self.next_step(Step::Sync(SyncStep::Sort))
+                    } else {
+                        self.next_step(Step::Finish)
+                    }
+                }
             },
             Step::Finish => Ok(Event::Finished),
         }
@@ -284,8 +290,7 @@ impl Processor for TransformWindowPartitionCollect {
                 }
             }
             Step::Async(AsyncStep::Restore) => {
-                let data_blocks = self.buffer.restore().await?;
-                self.restored_data_blocks.extend(data_blocks);
+                self.restored_data_blocks = self.buffer.restore().await?;
             }
             _ => unreachable!(),
         }
