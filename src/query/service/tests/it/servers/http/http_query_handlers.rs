@@ -285,7 +285,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 21, "{:?}", result);
+    assert_eq!(result.schema.len(), 22, "{:?}", result);
 
     // get state
     let uri = result.stats_uri.unwrap();
@@ -1391,6 +1391,8 @@ async fn test_affect() -> Result<()> {
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
                 ])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_refresh: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1414,6 +1416,8 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_refresh: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1432,6 +1436,8 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_refresh: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1452,6 +1458,8 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_refresh: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1474,6 +1482,8 @@ async fn test_affect() -> Result<()> {
                     "Asia/Shanghai".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_refresh: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,

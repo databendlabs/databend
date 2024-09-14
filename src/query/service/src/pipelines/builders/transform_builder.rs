@@ -25,9 +25,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use databend_common_pipeline_transforms::processors::BlockCompactor;
-use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -89,16 +91,28 @@ impl PipelineBuilder {
         Ok(|input, output| Ok(TransformDummy::create(input, output)))
     }
 
-    pub(crate) fn block_compact_transform_builder(
+    pub(crate) fn block_compact_task_builder(
         &self,
         block_thresholds: BlockThresholds,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |transform_input_port, transform_output_port| {
-            Ok(ProcessorPtr::create(TransformCompact::try_create(
+            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(block_thresholds),
-            )?))
+                BlockCompactBuilder::new(block_thresholds),
+            )))
+        })
+    }
+
+    pub(crate) fn block_compact_transform_builder(
+        &self,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        Ok(move |transform_input_port, transform_output_port| {
+            Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+                transform_input_port,
+                transform_output_port,
+                TransformCompactBlock::default(),
+            )))
         })
     }
 

@@ -197,14 +197,10 @@ fn validate_mysql_fields(schema: &TableSchema) -> Result<()> {
     for field in schema.fields() {
         if !matches!(
             field.data_type().remove_nullable(),
-            TableDataType::Boolean
-                | TableDataType::String
-                | TableDataType::Number(_)
-                | TableDataType::Date
-                | TableDataType::Timestamp
+            TableDataType::Boolean | TableDataType::String | TableDataType::Number(_)
         ) {
             return Err(ErrorCode::BadArguments(
-                "The type of Mysql field must be in [`boolean`, `string`, `number`, `timestamp`, `date`]",
+                "The type of Mysql field must be in [`boolean`, `string`, `number`]",
             ));
         }
     }
