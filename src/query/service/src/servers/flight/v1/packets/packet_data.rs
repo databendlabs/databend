@@ -68,7 +68,6 @@ pub enum DataPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum FlightControlCommand {
-    Ack(usize),
     Close,
 }
 
