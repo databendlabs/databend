@@ -50,18 +50,18 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         let order_by = window
-                .order_by
-                .iter()
-                .map(|o| {
-                    let offset = input_schema.index_of(&o.order_by.to_string())?;
-                    Ok(SortColumnDescription {
-                        offset,
-                        asc: o.asc,
-                        nulls_first: o.nulls_first,
-                        is_nullable: input_schema.field(offset).is_nullable(), // Used for check null frame.
-                    })
+            .order_by
+            .iter()
+            .map(|o| {
+                let offset = input_schema.index_of(&o.order_by.to_string())?;
+                Ok(SortColumnDescription {
+                    offset,
+                    asc: o.asc,
+                    nulls_first: o.nulls_first,
+                    is_nullable: input_schema.field(offset).is_nullable(), // Used for check null frame.
                 })
-                .collect::<Result<Vec<_>>>()?;
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let old_output_len = self.main_pipeline.output_len();
         // `TransformWindow` is a pipeline breaker.
