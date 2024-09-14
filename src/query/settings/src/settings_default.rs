@@ -590,6 +590,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                (
+                    "enable_compact_after_multi_table_insert",
+                    DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables recluster and compact after multi-table insert.",
+                        mode: SettingMode::Both,
+                        range: Some(SettingRange::Numeric(0..=1)),
+                    }
+                ),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",

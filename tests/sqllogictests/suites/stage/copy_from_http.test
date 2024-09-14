@@ -2,7 +2,7 @@ statement ok
 truncate table ontime
 
 query 
-copy into ontime from 'https://ci.databend.org/dataset/stateful/ontime_2006_200.csv' FILE_FORMAT = (type = CSV skip_header = 1)
+copy into ontime from 'https://ci.databend.com/dataset/stateful/ontime_2006_200.csv' FILE_FORMAT = (type = CSV skip_header = 1)
 ----
 dataset/stateful/ontime_2006_200.csv 199 0 NULL NULL
 
@@ -15,7 +15,7 @@ statement ok
 truncate table ontime
 
 query 
-copy into ontime from 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv' FILE_FORMAT = (type = CSV  skip_header = 1)
+copy into ontime from 'https://ci.databend.com/dataset/stateful/ontime_200{6,7,8}_200.csv' FILE_FORMAT = (type = CSV  skip_header = 1)
 ----
 dataset/stateful/ontime_2006_200.csv 199 0 NULL NULL
 dataset/stateful/ontime_2007_200.csv 199 0 NULL NULL
@@ -31,7 +31,7 @@ truncate table ontime
 
 
 query 
-copy into ontime from 'https://ci.databend.org/dataset/stateful/ontime_200[6-8]_200.csv' FILE_FORMAT = (type = CSV  skip_header = 1)
+copy into ontime from 'https://ci.databend.com/dataset/stateful/ontime_200[6-8]_200.csv' FILE_FORMAT = (type = CSV  skip_header = 1)
 ----
 dataset/stateful/ontime_2006_200.csv 199 0 NULL NULL
 dataset/stateful/ontime_2007_200.csv 199 0 NULL NULL

@@ -9,7 +9,7 @@ cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $BENDSQL_CLI
 
 ontime_statements=(
   ## Load data
-  "COPY INTO ontime_mini FROM 'https://ci.databend.org/dataset/stateful/ontime_2006_100000.csv' FILE_FORMAT = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
+  "COPY INTO ontime_mini FROM 'https://ci.databend.com/dataset/stateful/ontime_2006_100000.csv' FILE_FORMAT = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 );"
   ## run test
   "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"
   "SELECT DayOfWeek, count(*) AS c FROM ontime_mini WHERE (DepDelay > 10) AND (Year >= 2000) AND (Year <= 2008) GROUP BY DayOfWeek ORDER BY c DESC;"

@@ -39,7 +39,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::future::FutureExt;
 use fastrace::Span;
 use indexmap::IndexSet;
@@ -523,7 +523,7 @@ impl ReclusterMutator {
                     v.block_metas()
                         .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
                 }
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                .in_span(Span::enter_with_local_parent(func_path!()))
             })
         });
 
@@ -555,7 +555,7 @@ impl ReclusterMutator {
         let mut max_point = 0;
         let mut interval_depths = HashMap::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
-        let mut unfinished_intervals = HashMap::new();
+        let mut unfinished_intervals = BTreeMap::new();
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let indices = compare_scalars(keys, &self.cluster_key_types)?;
         for (i, idx) in indices.into_iter().enumerate() {

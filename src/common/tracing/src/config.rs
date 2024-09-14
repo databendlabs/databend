@@ -246,7 +246,7 @@ impl Default for TracingConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OTLPProtocol {
     Http,
     Grpc,
@@ -288,6 +288,17 @@ impl<'de> serde::Deserialize<'de> for OTLPProtocol {
                 "unknown protocol: {}",
                 protocol
             ))),
+        }
+    }
+}
+
+impl From<OTLPProtocol> for logforth::append::opentelemetry::OpentelemetryWireProtocol {
+    fn from(protocol: OTLPProtocol) -> Self {
+        match protocol {
+            OTLPProtocol::Http => {
+                logforth::append::opentelemetry::OpentelemetryWireProtocol::HttpBinary
+            }
+            OTLPProtocol::Grpc => logforth::append::opentelemetry::OpentelemetryWireProtocol::Grpc,
         }
     }
 }
