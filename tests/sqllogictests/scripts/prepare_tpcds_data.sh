@@ -49,7 +49,7 @@ cat ${target_dir}/scripts/tpcds.sql | $BENDSQL_CLIENT_CONNECT
 # download data
 mkdir -p ${target_dir}/data/
 if [ ! -d ${target_dir}/data/tpcds.tar.gz ]; then
-    curl -s -o ${target_dir}/data/tpcds.tar.gz https://ci.databend.org/dataset/stateful/tpcds.tar.gz
+    curl -s -o ${target_dir}/data/tpcds.tar.gz https://ci.databend.com/dataset/stateful/tpcds.tar.gz
 fi
 
 tar -zxf ${target_dir}/data/tpcds.tar.gz -C ${target_dir}/data

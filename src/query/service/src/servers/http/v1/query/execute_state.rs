@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
+use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
 use log::debug;
@@ -43,7 +44,6 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::http_query::ResponseState;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
-use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
@@ -153,6 +153,7 @@ pub struct ExecutorSessionState {
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Arc<Settings>,
     pub txn_manager: TxnManagerRef,
+    pub temp_tbl_mgr: TempTblMgrRef,
     pub variables: HashMap<String, Scalar>,
 }
 
@@ -164,6 +165,7 @@ impl ExecutorSessionState {
             secondary_roles: session.get_secondary_roles(),
             settings: session.get_settings(),
             txn_manager: session.txn_mgr(),
+            temp_tbl_mgr: session.temp_tbl_mgr(),
             variables: session.get_all_variables(),
         }
     }
@@ -258,26 +260,14 @@ impl Executor {
     #[async_backtrace::framed]
     pub async fn stop<C>(this: &Arc<RwLock<Executor>>, reason: Result<(), C>) {
         let reason = reason.with_context(|| "execution stopped");
+        let mut guard = this.write().await;
 
-        {
-            let guard = this.read().await;
-            if let Stopped(s) = &guard.state {
-                debug!(
-                    "{}: http query already stopped, reason {:?}, new reason {:?}",
-                    &guard.query_id, s.reason, reason
-                );
-                return;
-            } else {
+        let state = match &guard.state {
+            Starting(s) => {
                 info!(
-                    "{}: http query change state to Stopped, reason {:?}",
+                    "{}: http query begin changing state from Staring to Stopped, reason {:?}",
                     &guard.query_id, reason
                 );
-            }
-        }
-
-        let mut guard = this.write().await;
-        match &guard.state {
-            Starting(s) => {
                 if let Err(e) = &reason {
                     InterpreterQueryLog::log_finish(
                         &s.ctx,
@@ -292,38 +282,52 @@ impl Executor {
                         s.ctx.get_current_session().txn_mgr().lock().set_fail();
                     }
                 }
-                guard.state = Stopped(Box::new(ExecuteStopped {
+                ExecuteStopped {
                     stats: Default::default(),
                     schema: vec![],
                     has_result_set: None,
-                    reason,
+                    reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
                     warnings: s.ctx.pop_warnings(),
                     affect: Default::default(),
-                }))
+                }
             }
             Running(r) => {
+                info!(
+                    "{}: http query changing state from Running to Stopped, reason {:?}",
+                    &guard.query_id, reason
+                );
                 if let Err(e) = &reason {
                     if e.code() != ErrorCode::CLOSED_QUERY {
                         r.session.txn_mgr().lock().set_fail();
                     }
                     r.session.force_kill_query(e.clone());
                 }
-
-                guard.state = Stopped(Box::new(ExecuteStopped {
+                ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
                     has_result_set: Some(r.has_result_set),
-                    reason,
+                    reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
                     warnings: r.ctx.pop_warnings(),
                     affect: r.ctx.get_affect(),
-                }))
+                }
             }
-            Stopped(_) => {}
-        }
+            Stopped(s) => {
+                debug!(
+                    "{}: http query already stopped, reason {:?}, new reason {:?}",
+                    &guard.query_id, s.reason, reason
+                );
+                return;
+            }
+        };
+        info!(
+            "{}: http query has change state to Stopped, reason {:?}",
+            &guard.query_id, reason
+        );
+        guard.state = Stopped(Box::new(state));
     }
 }
 
@@ -340,9 +344,6 @@ impl ExecuteState {
         let make_error = || format!("failed to start query: {sql}");
 
         info!("http query prepare to plan sql");
-        if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &session)
-        }
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
