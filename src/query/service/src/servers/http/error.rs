@@ -56,11 +56,42 @@ pub struct JsonErrorOnly {
 
 // todo(youngsofun): use this in more place
 /// turn internal ErrorCode to Http Response with Json Body and proper StatusCode
-pub struct JsonErrorCode(pub ErrorCode);
+#[derive(Debug)]
+pub struct HttpErrorCode {
+    error_code: ErrorCode,
+    status_code: Option<StatusCode>,
+}
 
-impl ResponseError for JsonErrorCode {
+impl HttpErrorCode {
+    pub fn new(error_code: ErrorCode, status_code: StatusCode) -> Self {
+        Self {
+            error_code,
+            status_code: Some(status_code),
+        }
+    }
+
+    pub fn error_code(error_code: ErrorCode) -> Self {
+        Self {
+            error_code,
+            status_code: None,
+        }
+    }
+
+    pub fn bad_request(error_code: ErrorCode) -> Self {
+        Self::new(error_code, StatusCode::BAD_REQUEST)
+    }
+
+    pub fn server_error(error_code: ErrorCode) -> Self {
+        Self::new(error_code, StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+impl ResponseError for HttpErrorCode {
     fn status(&self) -> StatusCode {
-        match self.0.code() {
+        if let Some(s) = self.status_code {
+            return s;
+        }
+        match self.error_code.code() {
             ErrorCode::AUTHENTICATE_FAILURE
             | ErrorCode::SESSION_TOKEN_EXPIRED
             | ErrorCode::SESSION_TOKEN_NOT_FOUND
@@ -76,23 +107,17 @@ impl ResponseError for JsonErrorCode {
         (
             self.status(),
             Json(JsonErrorOnly {
-                error: QueryError::from_error_code(self.0.clone()),
+                error: QueryError::from_error_code(self.error_code.clone()),
             }),
         )
             .into_response()
     }
 }
 
-impl Debug for JsonErrorCode {
+impl Display for HttpErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{:?} {}", self.status_code, self.error_code)
     }
 }
 
-impl Display for JsonErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for JsonErrorCode {}
+impl std::error::Error for HttpErrorCode {}
