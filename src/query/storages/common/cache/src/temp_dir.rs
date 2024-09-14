@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::create_dir_all;
+use std::fs::remove_dir_all;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -55,7 +58,12 @@ pub struct TempDir {
 
 impl TempDir {
     fn init(&self) -> Result<()> {
-        let _ = std::fs::remove_dir_all(&self.path);
-        Ok(std::fs::create_dir_all(&self.path)?)
+        if let Err(e) = remove_dir_all(&self.path) {
+            if !matches!(e.kind(), ErrorKind::NotFound) {
+                Err(e)?;
+            }
+        }
+
+        Ok(create_dir_all(&self.path)?)
     }
 }

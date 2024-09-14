@@ -17,13 +17,15 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::create_dir;
-use std::io::ErrorKind;
+use std::io;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
 use std::time::Instant;
 
+use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -144,28 +146,14 @@ impl Spiller {
 
         let encoded = EncodedBlock::from_block(&block);
         let columns_layout = encoded.columns_layout();
-        let write_bytes = encoded.size();
 
         self.columns_layout
             .insert(location.to_string(), columns_layout);
 
-        let mut writer = self
-            .operator
-            .writer_with(&location)
-            .chunk(8 * 1024 * 1024)
-            .await?;
+        let write_bytes =
+            write_encodes_to_storage(&self.operator, &location, vec![encoded]).await?;
 
-        for data in encoded.0.into_iter() {
-            writer.write(data).await?;
-        }
-        writer.close().await?;
-
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::SpillWriteTime,
-            instant.elapsed().as_millis() as usize,
-        );
+        record_write_profile(&instant, write_bytes);
 
         Ok(location)
     }
@@ -287,11 +275,50 @@ impl DiskSpill {
         let mut rt = Ok(());
         self.inited.call_once(|| {
             if let Err(e) = create_dir(&self.root) {
-                if !matches!(e.kind(), ErrorKind::AlreadyExists) {
+                if !matches!(e.kind(), io::ErrorKind::AlreadyExists) {
                     rt = Err(e);
                 }
             }
         });
         Ok(rt?)
     }
+}
+
+pub async fn write_encodes_to_storage(
+    operator: &Operator,
+    path: &str,
+    write_data: Vec<EncodedBlock>,
+) -> Result<usize> {
+    let mut writer = operator.writer_with(path).chunk(8 * 1024 * 1024).await?;
+
+    let mut written = 0;
+    for data in write_data.into_iter().flat_map(|x| x.0) {
+        written += data.len();
+        writer.write(data).await?;
+    }
+
+    writer.close().await?;
+    Ok(written)
+}
+
+pub async fn write_encodeds_to_disk(
+    path: impl AsRef<Path>,
+    write_data: Vec<EncodedBlock>,
+) -> io::Result<usize> {
+    let bufs = write_data
+        .iter()
+        .flat_map(|x| &x.0)
+        .map(|data| io::IoSlice::new(data))
+        .collect::<Vec<_>>();
+
+    dma_write_file_vectored(path, &bufs).await
+}
+
+pub fn record_write_profile(start: &Instant, write_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::SpillWriteTime,
+        start.elapsed().as_millis() as usize,
+    );
 }

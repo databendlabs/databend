@@ -395,6 +395,10 @@ impl Settings {
         Ok(self.try_get_u64("window_partition_spilling_bytes_threshold_per_proc")? as usize)
     }
 
+    pub fn get_window_partition_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_to_disk_bytes_limit")? as usize)
+    }
+
     pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
     }

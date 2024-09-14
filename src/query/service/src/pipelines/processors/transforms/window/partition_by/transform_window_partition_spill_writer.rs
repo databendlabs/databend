@@ -13,16 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -43,6 +38,9 @@ use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::window::partition_by::SpillingWindowPayloads;
 use crate::pipelines::processors::transforms::window::partition_by::PARTITION_COUNT;
 use crate::sessions::QueryContext;
+use crate::spillers::record_write_profile;
+use crate::spillers::write_encodeds_to_disk;
+use crate::spillers::write_encodes_to_storage;
 use crate::spillers::DiskSpill;
 use crate::spillers::EncodedBlock;
 
@@ -253,20 +251,14 @@ pub fn spilling_window_payload(
             0
         } else {
             match &location {
-                Location::Storage(path) => write_to_storage(&operator, path, write_data).await?,
-                Location::Disk(path) => write_to_disk(path, write_data).await?,
+                Location::Storage(path) => {
+                    write_encodes_to_storage(&operator, path, write_data).await?
+                }
+                Location::Disk(path) => write_encodeds_to_disk(path, write_data).await?,
             }
         };
 
-        // perf
-        {
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::SpillWriteTime,
-                instant.elapsed().as_millis() as usize,
-            );
-        }
+        record_write_profile(&instant, write_bytes);
 
         {
             let progress_val = ProgressValues {
@@ -287,31 +279,4 @@ pub fn spilling_window_payload(
         ))
     });
     Ok(future)
-}
-
-async fn write_to_storage(
-    operator: &Operator,
-    path: &str,
-    write_data: Vec<EncodedBlock>,
-) -> Result<usize> {
-    let mut writer = operator.writer_with(path).chunk(8 * 1024 * 1024).await?;
-
-    let mut written = 0;
-    for data in write_data.into_iter().flat_map(|x| x.0) {
-        written += data.len();
-        writer.write(data).await?;
-    }
-
-    writer.close().await?;
-    Ok(written)
-}
-
-async fn write_to_disk(path: impl AsRef<Path>, write_data: Vec<EncodedBlock>) -> io::Result<usize> {
-    let bufs = write_data
-        .iter()
-        .flat_map(|x| &x.0)
-        .map(|data| io::IoSlice::new(data))
-        .collect::<Vec<_>>();
-
-    dma_write_file_vectored(path, &bufs).await
 }

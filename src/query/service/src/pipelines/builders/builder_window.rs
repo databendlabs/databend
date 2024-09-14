@@ -186,11 +186,14 @@ impl PipelineBuilder {
         let location_prefix =
             query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
 
+        let disk_bytes_limit = self
+            .settings
+            .get_window_partition_spilling_to_disk_bytes_limit()?;
         let disk_spill = TempDirManager::instance()
             .get_disk_spill_config()
             .map(|cfg| {
                 let root = cfg.path.join(self.ctx.get_id());
-                DiskSpill::new(root, 5 << 20) // todo
+                DiskSpill::new(root, disk_bytes_limit as isize)
             });
 
         self.main_pipeline.add_transform(|input, output| {
@@ -220,8 +223,8 @@ impl PipelineBuilder {
         })?;
 
         let block_size = self.settings.get_max_block_size()? as usize;
-        let sort_spilling_batch_bytes = self.ctx.get_settings().get_sort_spilling_batch_bytes()?;
-        let enable_loser_tree = self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
+        let sort_spilling_batch_bytes = self.settings.get_sort_spilling_batch_bytes()?;
+        let enable_loser_tree = self.settings.get_enable_loser_tree_merge_sort()?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
 
         self.main_pipeline.add_transform(|input, output| {
