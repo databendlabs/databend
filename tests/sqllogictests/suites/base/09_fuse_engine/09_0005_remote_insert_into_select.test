@@ -69,6 +69,26 @@ select sum(business_id) from t
 NULL
 
 statement ok
+create table t1(a string) block_size_threshold=1024;
+
+statement ok
+create table t2 like t1 engine = Random;
+
+statement ok
+insert into t1 select repeat(a,500) from t2 limit 4;
+
+query I
+select count() from fuse_block('db_09_0005', 't1');
+----
+4
+
+statement ok
+DROP TABLE t1 ALL
+
+statement ok
+DROP TABLE t2
+
+statement ok
 DROP TABLE t
 
 statement ok

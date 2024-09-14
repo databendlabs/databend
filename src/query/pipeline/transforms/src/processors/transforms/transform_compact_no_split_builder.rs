@@ -15,13 +15,26 @@
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_transforms::processors::AccumulatingTransform;
-use databend_common_pipeline_transforms::processors::BlockMetaTransform;
-use databend_common_pipeline_transforms::processors::UnknownMode;
+use databend_common_pipeline_core::Pipeline;
 
-use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
+use crate::processors::AccumulatingTransform;
+use crate::processors::BlockCompactMeta;
+use crate::processors::TransformCompactBlock;
+use crate::processors::TransformPipelineHelper;
 
-pub struct BlockCompactBuilder {
+pub fn build_compact_block_no_split_pipeline(
+    pipeline: &mut Pipeline,
+    thresholds: BlockThresholds,
+    max_threads: usize,
+) -> Result<()> {
+    // has been resize 1.
+    pipeline.add_accumulating_transformer(|| BlockCompactNoSplitBuilder::new(thresholds));
+    pipeline.try_resize(max_threads)?;
+    pipeline.add_block_meta_transformer(TransformCompactBlock::default);
+    Ok(())
+}
+
+pub struct BlockCompactNoSplitBuilder {
     thresholds: BlockThresholds,
     // Holds blocks that exceeded the threshold and are waiting to be compacted.
     staged_blocks: Vec<DataBlock>,
@@ -31,7 +44,7 @@ pub struct BlockCompactBuilder {
     accumulated_bytes: usize,
 }
 
-impl BlockCompactBuilder {
+impl BlockCompactNoSplitBuilder {
     pub fn new(thresholds: BlockThresholds) -> Self {
         Self {
             thresholds,
@@ -43,12 +56,11 @@ impl BlockCompactBuilder {
     }
 
     fn create_output_data(blocks: &mut Vec<DataBlock>) -> DataBlock {
-        // This function creates a DataBlock with ExchangeShuffleMeta,
-        // but the metadata is only used internally and is not intended
-        // for inter-node communication. The ExchangeShuffleMeta is simply
-        // being reused here for its structure, and no data will be transferred
-        // between nodes.
-        DataBlock::empty_with_meta(ExchangeShuffleMeta::create(std::mem::take(blocks)))
+        if blocks.len() > 1 {
+            DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Concat(std::mem::take(blocks))))
+        } else {
+            DataBlock::empty_with_meta(Box::new(BlockCompactMeta::NoChange(std::mem::take(blocks))))
+        }
     }
 
     fn reset_accumulated(&mut self) {
@@ -62,8 +74,8 @@ impl BlockCompactBuilder {
     }
 }
 
-impl AccumulatingTransform for BlockCompactBuilder {
-    const NAME: &'static str = "BlockCompactBuilder";
+impl AccumulatingTransform for BlockCompactNoSplitBuilder {
+    const NAME: &'static str = "BlockCompactNoSplitBuilder";
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         self.accumulated_rows += data.num_rows();
@@ -118,22 +130,6 @@ impl AccumulatingTransform for BlockCompactBuilder {
                     ])
                 }
             }
-        }
-    }
-}
-
-pub struct TransformBlockConcat;
-
-#[async_trait::async_trait]
-impl BlockMetaTransform<ExchangeShuffleMeta> for TransformBlockConcat {
-    const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
-    const NAME: &'static str = "TransformBlockConcat";
-
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
-        if meta.blocks.len() > 1 {
-            Ok(vec![DataBlock::concat(&meta.blocks)?])
-        } else {
-            Ok(meta.blocks)
         }
     }
 }

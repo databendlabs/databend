@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -180,7 +179,6 @@ impl PipelineBuilder {
                     main_pipeline,
                     to_table.clone(),
                     plan_required_values_schema.clone(),
-                    AppendMode::Copy,
                 )?
             }
             CopyIntoTableMode::Replace => {}
@@ -189,7 +187,6 @@ impl PipelineBuilder {
                 main_pipeline,
                 to_table.clone(),
                 plan_required_values_schema.clone(),
-                AppendMode::Copy,
             )?,
         }
         Ok(())
