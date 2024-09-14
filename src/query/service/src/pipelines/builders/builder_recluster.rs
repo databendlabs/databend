@@ -24,6 +24,7 @@ use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::processors::build_compact_block_no_split_pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -35,9 +36,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::builders::SortPipelineBuilder;
-use crate::pipelines::processors::BlockCompactBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
-use crate::pipelines::processors::TransformBlockConcat;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -84,7 +83,6 @@ impl PipelineBuilder {
 
                 self.ctx.set_partitions(plan.parts.clone())?;
 
-                // ReadDataKind to avoid OOM.
                 table.read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
 
                 let num_input_columns = schema.fields().len();
@@ -153,12 +151,12 @@ impl PipelineBuilder {
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 
                 // Compact after merge sort.
-                self.main_pipeline
-                    .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
                 let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-                self.main_pipeline.try_resize(max_threads)?;
-                self.main_pipeline
-                    .add_block_meta_transformer(|| TransformBlockConcat {});
+                build_compact_block_no_split_pipeline(
+                    &mut self.main_pipeline,
+                    block_thresholds,
+                    max_threads,
+                )?;
 
                 self.main_pipeline
                     .add_transform(|transform_input_port, transform_output_port| {

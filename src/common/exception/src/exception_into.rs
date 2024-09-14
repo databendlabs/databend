@@ -448,3 +448,9 @@ impl From<ErrorCode> for tonic::Status {
         }
     }
 }
+
+impl From<sqlx::Error> for ErrorCode {
+    fn from(error: sqlx::Error) -> Self {
+        ErrorCode::DictionarySourceError(format!("Dictionary Sqlx Error, cause: {}", error))
+    }
+}

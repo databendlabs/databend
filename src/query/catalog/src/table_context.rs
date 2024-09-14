@@ -176,8 +176,12 @@ pub trait TableContext: Send + Sync {
     fn set_can_scan_from_agg_index(&self, enable: bool);
     fn get_enable_sort_spill(&self) -> bool;
     fn set_enable_sort_spill(&self, enable: bool);
-    fn set_compaction_num_block_hint(&self, hint: u64);
-    fn get_compaction_num_block_hint(&self) -> u64;
+    fn set_compaction_num_block_hint(&self, _table_name: &str, _hint: u64) {
+        unimplemented!()
+    }
+    fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
+        unimplemented!()
+    }
     fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
     fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
     fn set_lazy_mutation_delete(&self, lazy: bool);
