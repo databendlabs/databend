@@ -23041,13 +23041,13 @@ DropProcedure(
 ---------- Input ----------
 drop PROCEDURE p1(int, string)
 ---------- Output ---------
-DROP PROCEDURE p1(Int32,STRING)
+DROP PROCEDURE p1(int32,string)
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
         name: ProcedureIdentity {
             name: "p1",
-            args_type: "Int32,STRING",
+            args_type: "int32,string",
         },
     },
 )
@@ -23062,6 +23062,51 @@ CallProcedure(
     CallProcedureStmt {
         name: "p1",
         args: [],
+    },
+)
+
+
+---------- Input ----------
+call PROCEDURE p1(1, 'x', '2022-02-02'::Date)
+---------- Output ---------
+CALL PROCEDURE p1(1, 'x', '2022-02-02'::DATE)
+---------- AST ------------
+CallProcedure(
+    CallProcedureStmt {
+        name: "p1",
+        args: [
+            Literal {
+                span: Some(
+                    18..19,
+                ),
+                value: UInt64(
+                    1,
+                ),
+            },
+            Literal {
+                span: Some(
+                    21..24,
+                ),
+                value: String(
+                    "x",
+                ),
+            },
+            Cast {
+                span: Some(
+                    38..44,
+                ),
+                expr: Literal {
+                    span: Some(
+                        26..38,
+                    ),
+                    value: String(
+                        "2022-02-02",
+                    ),
+                },
+                target_type: Date,
+                pg_style: true,
+            },
+        ],
     },
 )
 
@@ -23157,7 +23202,7 @@ CreateProcedure(
         create_option: Create,
         name: ProcedureIdentity {
             name: "p1",
-            args_type: "Int32,STRING",
+            args_type: "int32,string",
         },
         language: SQL,
         args: Some(

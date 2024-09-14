@@ -51,6 +51,7 @@ use crate::interpreters::interpreter_notification_create::CreateNotificationInte
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
 use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
@@ -593,6 +594,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DropProcedure(p) => Ok(Arc::new(DropProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

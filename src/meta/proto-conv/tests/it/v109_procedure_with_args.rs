@@ -21,17 +21,17 @@ use fastrace::func_name;
 use crate::common;
 
 #[test]
-fn v108_procedure_meta() -> anyhow::Result<()> {
-    let procedure_meta_v108 = vec![
-        34, 9, 146, 2, 0, 160, 6, 109, 168, 6, 24, 82, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56,
-        32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 90, 23, 50, 48, 49, 52, 45, 49, 49, 45,
-        50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 98, 7, 102, 111, 111, 32, 98,
-        97, 114, 114, 3, 83, 81, 76, 160, 6, 109, 168, 6, 24,
+fn v109_procedure_meta() -> anyhow::Result<()> {
+    let procedure_meta_v109 = vec![
+        34, 9, 146, 2, 0, 160, 6, 109, 168, 6, 24, 42, 7, 109, 101, 115, 115, 97, 103, 101, 82, 23,
+        50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67,
+        90, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85,
+        84, 67, 98, 7, 102, 111, 111, 32, 98, 97, 114, 114, 3, 83, 81, 76, 160, 6, 109, 168, 6, 24,
     ];
 
     let want = || mt::ProcedureMeta {
         return_types: vec![DataType::String],
-        arg_names: vec![],
+        arg_names: vec!["message".to_string()],
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         script: "".to_string(),
@@ -40,26 +40,5 @@ fn v108_procedure_meta() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), procedure_meta_v108.as_slice(), 109, want())
-}
-
-#[test]
-fn v108_procedure_identity() -> anyhow::Result<()> {
-    let procedure_identity_v108 = vec![
-        10, 2, 112, 49, 18, 10, 115, 116, 114, 105, 110, 103, 44, 105, 110, 116, 160, 6, 108, 168,
-        6, 24,
-    ];
-
-    let want = || mt::ProcedureIdentity {
-        name: "p1".to_string(),
-        args: "string,int".to_string(),
-    };
-
-    common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(
-        func_name!(),
-        procedure_identity_v108.as_slice(),
-        108,
-        want(),
-    )
+    common::test_load_old(func_name!(), procedure_meta_v109.as_slice(), 109, want())
 }
