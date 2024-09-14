@@ -2599,7 +2599,7 @@ impl SchemaApiTestSuite {
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
                     ttl: None,
-                    fail_if_duplicated: true,
+                    insert_if_not_exists: true,
                 };
 
                 let req = UpdateTableMetaReq {
@@ -2649,7 +2649,7 @@ impl SchemaApiTestSuite {
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
                     ttl: None,
-                    fail_if_duplicated: true,
+                    insert_if_not_exists: true,
                 };
                 let req = UpdateTableMetaReq {
                     table_id,
@@ -2698,7 +2698,7 @@ impl SchemaApiTestSuite {
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
                     ttl: None,
-                    fail_if_duplicated: true,
+                    insert_if_not_exists: true,
                 };
                 let req = UpdateTableMetaReq {
                     table_id,
@@ -3558,7 +3558,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -3722,7 +3722,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -5734,7 +5734,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -5784,7 +5784,7 @@ impl SchemaApiTestSuite {
                 file_info: file_info.clone(),
                 // Make it expire at once.
                 ttl: Some(std::time::Duration::from_secs(0)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -7213,7 +7213,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -7271,7 +7271,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -7326,7 +7326,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: false,
+                insert_if_not_exists: false,
             };
 
             let req = UpdateTableMetaReq {
@@ -7687,7 +7687,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
         let copied_file_req = UpsertTableCopiedFileReq {
             file_info: file_infos.clone(),
             ttl: Some(std::time::Duration::from_secs(86400)),
-            fail_if_duplicated: true,
+            insert_if_not_exists: true,
         };
 
         let req = UpdateTableMetaReq {
