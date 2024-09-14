@@ -30,7 +30,7 @@ UnionAll
 ├── estimated rows: 0.80
 ├── Filter
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
-│   ├── filters: [is_true(v.a (#0) > v.b (#1))]
+│   ├── filters: [is_true(t1.a (#0) > t1.b (#1))]
 │   ├── estimated rows: 0.40
 │   └── TableScan
 │       ├── table: default.default.t1
@@ -44,7 +44,7 @@ UnionAll
 │       └── estimated rows: 2.00
 └── Filter
     ├── output columns: [t2.a (#2), t2.b (#3)]
-    ├── filters: [is_true(a (#2) > b (#3))]
+    ├── filters: [is_true(t2.a (#2) > t2.b (#3))]
     ├── estimated rows: 0.40
     └── TableScan
         ├── table: default.default.t2
@@ -65,7 +65,7 @@ UnionAll
 ├── estimated rows: 2.00
 ├── Filter
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
-│   ├── filters: [is_true(v.a (#0) > 1)]
+│   ├── filters: [is_true(t1.a (#0) > 1)]
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.default.t1
@@ -79,7 +79,7 @@ UnionAll
 │       └── estimated rows: 2.00
 └── Filter
     ├── output columns: [t2.a (#2), t2.b (#3)]
-    ├── filters: [is_true(a (#2) > 1)]
+    ├── filters: [is_true(t2.a (#2) > 1)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.t2

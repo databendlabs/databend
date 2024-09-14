@@ -198,17 +198,8 @@ impl Binder {
 
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
-        let child_output_cols = &child
-            .plan()
-            .derive_relational_prop(&RelExpr::with_s_expr(&child))?
-            .output_columns;
-        let mut new_expr = child.clone();
-        for item in eval_scalar.items.iter() {
-            if !child_output_cols.contains(&item.index) {
-                new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
-                break;
-            }
-        }
+
+        let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
 
         // Set output columns
         bind_context.columns = columns.to_vec();

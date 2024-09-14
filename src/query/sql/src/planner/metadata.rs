@@ -325,6 +325,10 @@ impl Metadata {
         self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
+    pub fn has_agg_indexes(&self) -> bool {
+        !self.agg_indexes.is_empty()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn add_table(
         &mut self,

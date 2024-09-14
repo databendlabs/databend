@@ -16,25 +16,33 @@ insert into t select number, number + 1 from numbers(1000)
 query T
 explain(verbose, logical) select * from t where a = 1
 ----
-Filter
-├── filters: [eq(t.a (#0), 1)]
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
 ├── output columns: [testdb.t.a, testdb.t.b]
 ├── outer columns: []
 ├── used columns: [testdb.t.a, testdb.t.b]
 ├── cardinality: 0.000
 ├── precise cardinality: N/A
 ├── statistics
-└── Scan
-    ├── table: testdb.t
-    ├── filters: []
-    ├── order by: []
-    ├── limit: NONE
+└── Filter
+    ├── filters: [eq(t.a (#0), 1)]
     ├── output columns: [testdb.t.a, testdb.t.b]
     ├── outer columns: []
     ├── used columns: [testdb.t.a, testdb.t.b]
     ├── cardinality: 0.000
     ├── precise cardinality: N/A
-    └── statistics
+    ├── statistics
+    └── Scan
+        ├── table: testdb.t
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [testdb.t.a, testdb.t.b]
+        ├── outer columns: []
+        ├── used columns: [testdb.t.a, testdb.t.b]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
 
 query T
 explain(verbose, logical, optimized) select * from t where a = 1
