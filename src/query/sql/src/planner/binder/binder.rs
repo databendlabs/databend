@@ -95,6 +95,7 @@ pub struct Binder {
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
     /// Use `IndexMap` because need to keep the insertion order
     /// Then wrap materialized ctes to main plan.
     pub ctes_map: Box<IndexMap<String, CteInfo>>,
@@ -128,6 +129,7 @@ impl<'a> Binder {
             metadata,
             m_cte_bound_ctx: Default::default(),
             m_cte_bound_s_expr: Default::default(),
+            m_cte_materialized_indexes: Default::default(),
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
@@ -166,11 +168,11 @@ impl<'a> Binder {
                         continue;
                     }
                     let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-                    let left_output_columns = cte_info.columns.clone();
+                    let materialized_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx })),
-                        Arc::new(cte_s_expr.clone()),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: self.m_cte_materialized_indexes.clone() })),
                         Arc::new(s_expr),
+                        Arc::new(cte_s_expr.clone()),
                     );
                 }
 

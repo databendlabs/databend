@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -78,7 +79,6 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
@@ -89,6 +89,7 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -101,7 +102,6 @@ use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -1498,43 +1498,35 @@ impl SchemaApiTestSuite {
 
         info!("--- test lvt");
         {
-            let time = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
-            let req = SetLVTReq { table_id, time };
-            let get_req = GetLVTReq { table_id };
+            let time_small = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
+            let time_big = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
+            let time_bigger = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
 
-            let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert!(res.time.is_none());
+            let lvt_small = LeastVisibleTime::new(time_small);
+            let lvt_big = LeastVisibleTime::new(time_big);
+            let lvt_bigger = LeastVisibleTime::new(time_bigger);
 
-            let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
-            let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(
-                res.time.unwrap(),
-                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
-            );
+            let lvt_name_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
+
+            let res = mt.get(&lvt_name_ident).await?;
+            assert!(res.is_none());
+
+            let res = mt.set_table_lvt(&lvt_name_ident, &lvt_big).await?;
+            assert_eq!(res.time, time_big);
+            let res = mt.get(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().time, time_big);
 
             // test lvt never fall back
-            let time = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
-            let req = SetLVTReq { table_id, time };
 
-            let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1024, 0).unwrap());
-            let res = mt.get_table_lvt(get_req.clone()).await?;
-            assert_eq!(
-                res.time.unwrap(),
-                DateTime::<Utc>::from_timestamp(1024, 0).unwrap()
-            );
+            let res = mt.set_table_lvt(&lvt_name_ident, &lvt_small).await?;
+            assert_eq!(res.time, time_big);
+            let res = mt.get(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().time, time_big);
 
-            let time = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
-            let req = SetLVTReq { table_id, time };
-
-            let res = mt.set_table_lvt(req).await?;
-            assert_eq!(res.time, DateTime::<Utc>::from_timestamp(1025, 0).unwrap());
-            let res = mt.get_table_lvt(get_req).await?;
-            assert_eq!(
-                res.time.unwrap(),
-                DateTime::<Utc>::from_timestamp(1025, 0).unwrap()
-            );
+            let res = mt.set_table_lvt(&lvt_name_ident, &lvt_bigger).await?;
+            assert_eq!(res.time, time_bigger);
+            let res = mt.get(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().time, time_bigger);
         }
 
         Ok(())
@@ -3404,7 +3396,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -3614,7 +3606,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -3811,7 +3803,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4028,14 +4020,16 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await?;
-            drop_ids_1.push(DroppedId::Db(
-                *res.db_id,
-                db_name.database_name().to_string(),
-            ));
-            drop_ids_2.push(DroppedId::Db(
-                *res.db_id,
-                db_name.database_name().to_string(),
-            ));
+            drop_ids_1.push(DroppedId::Db {
+                db_id: *res.db_id,
+                db_name: db_name.database_name().to_string(),
+                tables: vec![],
+            });
+            drop_ids_2.push(DroppedId::Db {
+                db_id: *res.db_id,
+                db_name: db_name.database_name().to_string(),
+                tables: vec![],
+            });
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
@@ -4071,7 +4065,11 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_database(create_db_req.clone()).await?;
             let db_id = res.db_id;
-            drop_ids_2.push(DroppedId::Db(*db_id, "db2".to_string()));
+            drop_ids_2.push(DroppedId::Db {
+                db_id: *db_id,
+                db_name: "db2".to_string(),
+                tables: vec![],
+            });
 
             info!("--- create and drop db2.tb1");
             {
@@ -4270,15 +4268,47 @@ impl SchemaApiTestSuite {
                         left_table_id.cmp(right_table_id)
                     }
                 }
-                (DroppedId::Db(left_db_id, _), DroppedId::Db(right_db_id, _)) => {
-                    left_db_id.cmp(right_db_id)
-                }
-                (DroppedId::Db(left_db_id, _), DroppedId::Table(right_db_id, _, _)) => {
-                    left_db_id.cmp(right_db_id)
-                }
-                (DroppedId::Table(left_db_id, _, _), DroppedId::Db(right_db_id, _)) => {
-                    left_db_id.cmp(right_db_id)
-                }
+                (
+                    DroppedId::Db {
+                        db_id: left_db_id, ..
+                    },
+                    DroppedId::Db {
+                        db_id: right_db_id, ..
+                    },
+                ) => left_db_id.cmp(right_db_id),
+                (
+                    DroppedId::Db {
+                        db_id: left_db_id,
+                        db_name: _,
+                        tables: _,
+                    },
+                    DroppedId::Table(right_db_id, _, _),
+                ) => left_db_id.cmp(right_db_id),
+                (
+                    DroppedId::Table(left_db_id, _, _),
+                    DroppedId::Db {
+                        db_id: right_db_id,
+                        db_name: _,
+                        tables: _,
+                    },
+                ) => left_db_id.cmp(right_db_id),
+            }
+        }
+        fn is_dropped_id_eq(l: &DroppedId, r: &DroppedId) -> bool {
+            match (l, r) {
+                (
+                    DroppedId::Db {
+                        db_id: left_db_id,
+                        db_name: left_db_name,
+                        tables: _,
+                    },
+                    DroppedId::Db {
+                        db_id: right_db_id,
+                        db_name: right_db_name,
+                        tables: _,
+                    },
+                ) => left_db_id == right_db_id && left_db_name == right_db_name,
+                _ => l == r,
             }
         }
         // case 1: test AllDroppedTables with filter time
@@ -4286,14 +4316,17 @@ impl SchemaApiTestSuite {
             let now = Utc::now();
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(Some(now)),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(Some(now)),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
             // sort drop id by table id
             let mut sort_drop_ids = resp.drop_ids;
             sort_drop_ids.sort_by(cmp_dropped_id);
-            assert_eq!(sort_drop_ids, drop_ids_1);
+            assert_eq!(sort_drop_ids.len(), drop_ids_1.len());
+            for (id1, id2) in sort_drop_ids.iter().zip(drop_ids_1.iter()) {
+                assert!(is_dropped_id_eq(id1, id2));
+            }
 
             let expected: BTreeSet<String> = [
                 "'db1'.'tb1'".to_string(),
@@ -4315,14 +4348,17 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
             // sort drop id by table id
             let mut sort_drop_ids = resp.drop_ids;
             sort_drop_ids.sort_by(cmp_dropped_id);
-            assert_eq!(sort_drop_ids, drop_ids_2);
+            assert_eq!(sort_drop_ids.len(), drop_ids_2.len());
+            for (id1, id2) in sort_drop_ids.iter().zip(drop_ids_2.iter()) {
+                assert!(is_dropped_id_eq(id1, id2));
+            }
 
             let expected: BTreeSet<String> = [
                 "'db1'.'tb1'".to_string(),
@@ -4521,7 +4557,7 @@ impl SchemaApiTestSuite {
         for (limit, number, drop_ids) in limit_and_drop_ids {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -5198,7 +5234,7 @@ impl SchemaApiTestSuite {
             // vacuum drop table
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;

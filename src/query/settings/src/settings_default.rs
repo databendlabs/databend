@@ -116,6 +116,7 @@ impl DefaultSettings {
             let num_cpus = Self::num_cpus();
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
+            let default_max_spill_io_requests = Self::spill_io_requests(num_cpus);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
             let data_retention_time_in_days_max = Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
@@ -159,9 +160,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
+                ("max_spill_io_requests", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(default_max_spill_io_requests),
+                    desc: "Sets the maximum number of concurrent spill I/O requests.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
-                    desc: "Sets the maximum number of concurrent I/O requests.",
+                    desc: "Sets the maximum number of concurrent storage I/O requests.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
@@ -583,6 +590,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                (
+                    "enable_compact_after_multi_table_insert",
+                    DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables recluster and compact after multi-table insert.",
+                        mode: SettingMode::Both,
+                        range: Some(SettingRange::Numeric(0..=1)),
+                    }
+                ),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
@@ -877,6 +893,16 @@ impl DefaultSettings {
     }
 
     fn storage_io_requests(num_cpus: u64) -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => std::cmp::min(num_cpus, 64),
+            Some(conf) => match conf.storage.params.is_fs() {
+                true => 48,
+                false => std::cmp::min(num_cpus, 64),
+            },
+        }
+    }
+
+    fn spill_io_requests(num_cpus: u64) -> u64 {
         match GlobalConfig::try_get_instance() {
             None => std::cmp::min(num_cpus, 64),
             Some(conf) => match conf.storage.params.is_fs() {

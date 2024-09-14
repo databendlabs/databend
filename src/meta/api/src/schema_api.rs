@@ -19,6 +19,7 @@ use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -49,13 +50,12 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetLVTReply;
-use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -72,8 +72,6 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::SetLVTReply;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableId;
@@ -85,7 +83,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -95,10 +92,12 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
+use databend_common_proto_conv::FromToProto;
 
 use crate::kv_app_error::KVAppError;
 use crate::meta_txn_error::MetaTxnError;
@@ -189,12 +188,9 @@ pub trait SchemaApi: Send + Sync {
         req: CommitTableMetaReq,
     ) -> Result<CommitTableMetaReply, KVAppError>;
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<(), KVAppError>;
 
-    async fn undrop_table_by_id(
-        &self,
-        req: UndropTableByIdReq,
-    ) -> Result<UndropTableReply, KVAppError>;
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<(), KVAppError>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError>;
 
@@ -307,8 +303,23 @@ pub trait SchemaApi: Send + Sync {
     -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
 
     // least visible time
-    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError>;
-    async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError>;
+
+    /// Updates the table's least visible time (LVT) only if the new value is greater than the existing one.
+    ///
+    /// This function returns the updated LVT if changed, or the existing LVT if no update was necessary.
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime, KVAppError>;
+
+    #[deprecated(note = "use get::<K>() instead")]
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
+        Ok(self.get(name_ident).await?)
+    }
 
     fn name(&self) -> String;
 
@@ -337,4 +348,12 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
+
+    /// Generic get() implementation for any kvapi::Key.
+    ///
+    /// This method just return an `Option` of the value without seq number.
+    async fn get<K>(&self, name_ident: &K) -> Result<Option<K::ValueType>, MetaError>
+    where
+        K: kvapi::Key + Sync + 'static,
+        K::ValueType: FromToProto + 'static;
 }

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
+use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
@@ -22,13 +24,205 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::DictionaryMeta;
+use itertools::Itertools;
 
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
 use crate::plans::ShowCreateDictionaryPlan;
 use crate::Binder;
+
+pub const DICT_OPT_KEY_SQL_HOST: &str = "host";
+pub const DICT_OPT_KEY_SQL_PORT: &str = "port";
+pub const DICT_OPT_KEY_SQL_USERNAME: &str = "username";
+pub const DICT_OPT_KEY_SQL_PASSWORD: &str = "password";
+pub const DICT_OPT_KEY_SQL_DB: &str = "db";
+pub const DICT_OPT_KEY_SQL_TABLE: &str = "table";
+
+pub const DICT_OPT_KEY_REDIS_HOST: &str = "host";
+pub const DICT_OPT_KEY_REDIS_PORT: &str = "port";
+pub const DICT_OPT_KEY_REDIS_USERNAME: &str = "username";
+pub const DICT_OPT_KEY_REDIS_PASSWORD: &str = "password";
+pub const DICT_OPT_KEY_REDIS_DB_INDEX: &str = "db_index";
+
+static DICT_REQUIRED_SQL_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(DICT_OPT_KEY_SQL_HOST);
+    r.insert(DICT_OPT_KEY_SQL_PORT);
+    r.insert(DICT_OPT_KEY_SQL_USERNAME);
+    r.insert(DICT_OPT_KEY_SQL_PASSWORD);
+    r.insert(DICT_OPT_KEY_SQL_DB);
+    r.insert(DICT_OPT_KEY_SQL_TABLE);
+    r
+});
+
+static DICT_REQUIRED_REDIS_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(DICT_OPT_KEY_REDIS_HOST);
+    r.insert(DICT_OPT_KEY_REDIS_PORT);
+    r
+});
+
+static DICT_OPTIONAL_REDIS_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(DICT_OPT_KEY_REDIS_USERNAME);
+    r.insert(DICT_OPT_KEY_REDIS_PASSWORD);
+    r.insert(DICT_OPT_KEY_REDIS_DB_INDEX);
+    r
+});
+
+fn is_dict_required_sql_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
+    DICT_REQUIRED_SQL_OPTION_KEYS.contains(opt_key.as_ref())
+}
+
+fn is_dict_required_redis_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
+    DICT_REQUIRED_REDIS_OPTION_KEYS.contains(opt_key.as_ref())
+}
+
+fn is_dict_optional_redis_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
+    DICT_OPTIONAL_REDIS_OPTION_KEYS.contains(opt_key.as_ref())
+}
+
+fn insert_dictionary_sql_option_with_validation(
+    options: &mut BTreeMap<String, String>,
+    key: String,
+    value: String,
+) -> Result<()> {
+    if is_dict_required_sql_opt_key(&key) {
+        if key == DICT_OPT_KEY_SQL_PORT && value.parse::<u64>().is_err() {
+            return Err(ErrorCode::BadArguments(format!(
+                "dictionary option {key} must be a positive integer",
+            )));
+        }
+        if options.insert(key.clone(), value).is_some() {
+            return Err(ErrorCode::BadArguments(format!(
+                "dictionary option {key} duplicated",
+            )));
+        }
+    } else {
+        return Err(ErrorCode::BadArguments(format!(
+            "dictionary option {key} is not a valid option, required options are [`host`, `port`, `username`, `password`, `db`, `table`]",
+        )));
+    }
+    Ok(())
+}
+
+fn insert_dictionary_redis_option_with_validation(
+    options: &mut BTreeMap<String, String>,
+    key: String,
+    value: String,
+) -> Result<()> {
+    if is_dict_required_redis_opt_key(&key) || is_dict_optional_redis_opt_key(&key) {
+        if key == DICT_OPT_KEY_REDIS_PORT {
+            if value.parse::<u64>().is_err() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "dictionary option {key} must be a positive integer",
+                )));
+            }
+        } else if key == DICT_OPT_KEY_REDIS_DB_INDEX && !value.parse::<u8>().is_ok_and(|v| v <= 15)
+        {
+            return Err(ErrorCode::BadArguments(format!(
+                "dictionary option {key} must be between 0 to 15",
+            )));
+        }
+        if options.insert(key.clone(), value).is_some() {
+            return Err(ErrorCode::BadArguments(format!(
+                "dictionary option {key} duplicated",
+            )));
+        }
+    } else {
+        return Err(ErrorCode::BadArguments(format!(
+            "dictionary option {key} is not a valid option, required options are [`host`, `port`], optional options are [`username`, `password`, `db_index`]",
+        )));
+    }
+    Ok(())
+}
+
+fn validate_dictionary_options(
+    source: &str,
+    source_options: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>> {
+    let mut options: BTreeMap<String, String> = BTreeMap::new();
+    match source {
+        "mysql" => {
+            for (key, value) in source_options {
+                insert_dictionary_sql_option_with_validation(
+                    &mut options,
+                    key.to_lowercase(),
+                    value.to_string(),
+                )?;
+            }
+            let option_keys = options.keys().map(|k| k.as_str()).collect();
+            let diff_keys = DICT_REQUIRED_SQL_OPTION_KEYS
+                .difference(&option_keys)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .join(", ");
+            if !diff_keys.is_empty() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "dictionary miss options {diff_keys}, required options are [`host`, `port`, `username`, `password`, `db`, `table`]",
+                )));
+            }
+        }
+        "redis" => {
+            for (key, value) in source_options {
+                insert_dictionary_redis_option_with_validation(
+                    &mut options,
+                    key.to_lowercase(),
+                    value.to_string(),
+                )?;
+            }
+            let option_keys = options.keys().map(|k| k.as_str()).collect();
+            let diff_keys = DICT_REQUIRED_REDIS_OPTION_KEYS
+                .difference(&option_keys)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .join(", ");
+            if !diff_keys.is_empty() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "dictionary miss options {diff_keys}, required options are [`host`, `port`], optional options are [`username`, `password`, `db_index`]",
+                )));
+            }
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(options)
+}
+
+fn validate_mysql_fields(schema: &TableSchema) -> Result<()> {
+    for field in schema.fields() {
+        if !matches!(
+            field.data_type().remove_nullable(),
+            TableDataType::Boolean | TableDataType::String | TableDataType::Number(_)
+        ) {
+            return Err(ErrorCode::BadArguments(
+                "The type of Mysql field must be in [`boolean`, `string`, `number`]",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_redis_fields(schema: &TableSchema) -> Result<()> {
+    let fields_names: Vec<String> = schema.fields().iter().map(|f| f.name.clone()).collect();
+    if fields_names.len() != 2 {
+        return Err(ErrorCode::BadArguments(
+            "The number of Redis fields must be two",
+        ));
+    }
+    for field in schema.fields() {
+        if field.data_type().remove_nullable() != TableDataType::String {
+            return Err(ErrorCode::BadArguments(
+                "The type of Redis field must be `string`",
+            ));
+        }
+    }
+    Ok(())
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -59,59 +253,50 @@ impl Binder {
             database_id = db.get_db_info().database_id.db_id;
         }
 
-        let source = self.normalize_object_identifier(source_name);
+        let source = self.normalize_object_identifier(source_name).to_lowercase();
 
-        if source.to_lowercase() != *"mysql" {
-            return Err(ErrorCode::UnsupportedDictionarySource(format!(
-                "The specified source '{}' is not currently supported.",
-                source.to_lowercase(),
-            )));
-        }
-        // TODO: Authentication to connect to MySQL database will be implemented later
-
-        let options: BTreeMap<String, String> = source_options
-            .iter()
-            .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
-            .collect();
-        let required_options = ["host", "port", "username", "password", "db"];
-        for option in required_options {
-            if !options.contains_key(option) {
-                return Err(ErrorCode::MissingDictionaryOption(
-                    "The configuration is missing one or more required options. ".to_owned()
-                        + "Please ensure you have provided values for 'host', 'port', 'username', 'password', and 'db'.",
-                ));
-            }
-        }
-        if required_options.len() != options.len() {
-            return Err(ErrorCode::UnsupportedDictionaryOption(format!(
-                "The provided options are not recognized."
+        if source != "mysql" && source != "redis" {
+            return Err(ErrorCode::BadArguments(format!(
+                "The specified source '{}' is not currently supported",
+                source,
             )));
         }
 
-        let mut field_comments = BTreeMap::new();
-        let mut primary_column_ids = Vec::new();
+        // Check for options
+        let options = validate_dictionary_options(&source, source_options)?;
 
+        // Check for data source fields.
         let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
-        for table_field in schema.fields() {
-            if table_field.default_expr.is_some() || table_field.computed_expr.is_some() {
-                return Err(ErrorCode::WrongDictionaryFieldExpr(
-                    "The table field configuration is invalid. ".to_owned()
-                        + "Default expressions and computed expressions for the table fields should not be set.",
-                ));
-            }
+        match source.as_str() {
+            "redis" => validate_redis_fields(&schema)?,
+            "mysql" => validate_mysql_fields(&schema)?,
+            _ => unreachable!(),
         }
+
+        // Collect field_comments.
+        let mut field_comments = BTreeMap::new();
         for column in columns {
             if column.comment.is_some() {
                 let column_id = schema.column_id_of(column.name.name.as_str())?;
                 field_comments.insert(column_id, column.comment.clone().unwrap_or_default());
             }
         }
-        for primary_key in primary_keys {
-            let pk_id = schema.column_id_of(primary_key.name.as_str())?;
-            primary_column_ids.push(pk_id);
-        }
 
+        // Collect and check primary column.
+        let mut primary_column_ids = Vec::new();
+        if primary_keys.len() != 1 {
+            return Err(ErrorCode::BadArguments("Only support one primary key"));
+        }
+        let primary_key = match primary_keys.first() {
+            Some(pk) => pk.clone(),
+            None => return Err(ErrorCode::BadArguments("Miss primary key")),
+        };
+        let pk_id = schema.column_id_of(primary_key.name.as_str())?;
+        primary_column_ids.push(pk_id);
+
+        // Comment.
         let comment = comment.clone().unwrap_or("".to_string());
+
         let meta = DictionaryMeta {
             source,
             options,
@@ -121,7 +306,6 @@ impl Binder {
             comment,
             ..Default::default()
         };
-
         Ok(Plan::CreateDictionary(Box::new(CreateDictionaryPlan {
             create_option: create_option.clone(),
             tenant,

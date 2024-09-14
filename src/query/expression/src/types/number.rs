@@ -19,11 +19,12 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::base::OrderedFloat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
+use num_traits::float::FloatCore;
 use num_traits::NumCast;
-use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 

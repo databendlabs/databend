@@ -23,8 +23,13 @@ impl PipelineBuilder {
     pub(crate) fn build_async_function(&mut self, async_function: &AsyncFunction) -> Result<()> {
         self.build_pipeline(&async_function.input)?;
 
+        let operators = TransformAsyncFunction::init_operators(&async_function.async_func_descs)?;
         self.main_pipeline.add_async_transformer(|| {
-            TransformAsyncFunction::new(self.ctx.clone(), async_function.async_func_descs.clone())
+            TransformAsyncFunction::new(
+                self.ctx.clone(),
+                async_function.async_func_descs.clone(),
+                operators.clone(),
+            )
         });
 
         Ok(())

@@ -25,6 +25,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use iceberg::spec::DataFile;
 use iceberg::spec::Datum;
 use iceberg::spec::PrimitiveLiteral;
+use ordered_float::OrderedFloat;
 
 /// Try to convert statistics in [`DataFile`] to [`StatisticsOfColumns`].
 pub fn get_stats_of_data_file(schema: &TableSchema, df: &DataFile) -> Option<StatisticsOfColumns> {
@@ -74,8 +75,12 @@ fn parse_datum(data: &Datum) -> Option<Scalar> {
         PrimitiveLiteral::Boolean(v) => Some(Scalar::Boolean(*v)),
         PrimitiveLiteral::Int(v) => Some(Scalar::Number(i32::upcast_scalar(*v))),
         PrimitiveLiteral::Long(v) => Some(Scalar::Number(i64::upcast_scalar(*v))),
-        PrimitiveLiteral::Float(v) => Some(Scalar::Number(F32::upcast_scalar(F32::from(*v)))),
-        PrimitiveLiteral::Double(v) => Some(Scalar::Number(F64::upcast_scalar(F64::from(*v)))),
+        PrimitiveLiteral::Float(OrderedFloat(v)) => {
+            Some(Scalar::Number(F32::upcast_scalar(F32::from(*v))))
+        }
+        PrimitiveLiteral::Double(OrderedFloat(v)) => {
+            Some(Scalar::Number(F64::upcast_scalar(F64::from(*v))))
+        }
         PrimitiveLiteral::String(v) => Some(Scalar::String(v.clone())),
         _ => None,
     }

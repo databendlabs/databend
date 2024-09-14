@@ -215,13 +215,8 @@ pub trait Table: Sync + Send {
     }
 
     /// Assembly the pipeline of appending data to storage
-    fn append_data(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        append_mode: AppendMode,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, append_mode);
+    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let (_, _) = (ctx, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'append_data' operation is not available for the table '{}'. Current table engine: '{}'.",
@@ -537,13 +532,6 @@ pub enum CompactTarget {
     Blocks(Option<usize>),
     // compact segments
     Segments,
-}
-
-pub enum AppendMode {
-    // From INSERT and RECUSTER operation
-    Normal,
-    // From COPY, Streaming load operation
-    Copy,
 }
 
 pub trait ColumnStatisticsProvider: Send {

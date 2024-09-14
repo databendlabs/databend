@@ -46,6 +46,7 @@ pub struct AggregatorParams {
     pub max_block_size: usize,
     // Limit is push down to AggregatorTransform
     pub limit: Option<usize>,
+    pub max_spill_io_requests: usize,
 }
 
 impl AggregatorParams {
@@ -59,6 +60,7 @@ impl AggregatorParams {
         cluster_aggregator: bool,
         max_block_size: usize,
         limit: Option<usize>,
+        max_spill_io_requests: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
         let mut states_layout = None;
@@ -79,6 +81,7 @@ impl AggregatorParams {
             cluster_aggregator,
             max_block_size,
             limit,
+            max_spill_io_requests,
         }))
     }
 

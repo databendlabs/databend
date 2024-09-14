@@ -508,6 +508,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
 
+    pub fn get_enable_compact_after_multi_table_insert(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_compact_after_multi_table_insert")? != 0)
+    }
+
     pub fn get_auto_compaction_imperfect_blocks_threshold(&self) -> Result<u64> {
         self.try_get_u64("auto_compaction_imperfect_blocks_threshold")
     }
@@ -712,5 +716,9 @@ impl Settings {
 
     pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {
         self.try_get_u64("dynamic_sample_time_budget_ms")
+    }
+
+    pub fn get_max_spill_io_requests(&self) -> Result<u64> {
+        self.try_get_u64("max_spill_io_requests")
     }
 }

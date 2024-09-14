@@ -447,6 +447,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'task_type'                       | 'system'             | 'background_jobs'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'tenant_id'                       | 'system'             | 'query_log'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'time'                            | 'system'             | 'processes'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'total_columns'                   | 'system'             | 'tables'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'total_columns'                   | 'system'             | 'tables_with_history'  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'total_partitions'                | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'trigger'                         | 'system'             | 'background_tasks'     | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'type'                            | 'system'             | 'background_tasks'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

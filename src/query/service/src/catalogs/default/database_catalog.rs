@@ -25,6 +25,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -89,7 +90,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -338,6 +338,38 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let sys_dbs = self.immutable_catalog.list_databases(tenant).await?;
+        let sys_db_names: Vec<_> = sys_dbs
+            .iter()
+            .map(|sys_db| sys_db.get_db_info().name_ident.database_name())
+            .collect();
+
+        let mut mut_db_names: Vec<_> = Vec::new();
+        for db_name in db_names {
+            if !sys_db_names.contains(&db_name.database_name()) {
+                mut_db_names.push(db_name.clone());
+            }
+        }
+
+        let mut dbs = self
+            .immutable_catalog
+            .mget_databases(tenant, db_names)
+            .await?;
+
+        let other = self
+            .mutable_catalog
+            .mget_databases(tenant, &mut_db_names)
+            .await?;
+
+        dbs.extend(other);
+        Ok(dbs)
+    }
+
     #[async_backtrace::framed]
     async fn mget_database_names_by_ids(
         &self,
@@ -487,7 +519,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         info!("Undrop table from req:{:?}", req);
 
         if self
@@ -501,7 +533,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<()> {
         info!("Undrop table by id from req:{:?}", req);
 
         if self

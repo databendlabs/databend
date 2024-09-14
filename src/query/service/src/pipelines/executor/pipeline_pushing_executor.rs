@@ -27,7 +27,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use log::warn;
 use parking_lot::Mutex;
@@ -115,7 +115,7 @@ impl PipelinePushingExecutor {
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
-        let span = Span::enter_with_local_parent(full_name!());
+        let span = Span::enter_with_local_parent(func_path!());
         move || {
             let _g = span.set_local_parent();
             if let Err(cause) = executor.execute() {

@@ -673,5 +673,79 @@ Window
                             ├── push downs: [filters: [], limit: NONE]
                             └── estimated rows: 50.00
 
+query T
+explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number) a from numbers(50));
+----
+Window
+├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number ) (#2), sum_arg_0 (#3), rank_part_0 (#1), sum(number - 1) OVER ( PARTITION BY number % 3 ) (#4)]
+├── aggregate function: [sum(sum_arg_0)]
+├── partition by: [rank_part_0]
+├── order by: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── EvalScalar
+    ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number ) (#2), sum_arg_0 (#3), rank_part_0 (#1)]
+    ├── expressions: [numbers.number (#0) - 1, numbers.number (#0) % 3]
+    ├── estimated rows: 50.00
+    └── Window
+        ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number ) (#2)]
+        ├── aggregate function: [rank]
+        ├── partition by: [rank_part_0]
+        ├── order by: [number]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [numbers.number (#0), rank_part_0 (#1)]
+            ├── hash keys: [rank_part_0]
+            ├── estimated rows: 50.00
+            └── EvalScalar
+                ├── output columns: [numbers.number (#0), rank_part_0 (#1)]
+                ├── expressions: [numbers.number (#0) % 3]
+                ├── estimated rows: 50.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 50
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 50.00
+
+query T
+explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number) a from numbers(50)) t(number);
+----
+Window
+├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number ) (#2), sum_arg_0 (#3), rank_part_0 (#1), sum(number - 1) OVER ( PARTITION BY number % 3 ) (#4)]
+├── aggregate function: [sum(sum_arg_0)]
+├── partition by: [rank_part_0]
+├── order by: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── EvalScalar
+    ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number ) (#2), sum_arg_0 (#3), rank_part_0 (#1)]
+    ├── expressions: [t.number (#0) - 1, t.number (#0) % 3]
+    ├── estimated rows: 50.00
+    └── Window
+        ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER ( PARTITION BY number % 3 ORDER BY number ) (#2)]
+        ├── aggregate function: [rank]
+        ├── partition by: [rank_part_0]
+        ├── order by: [number]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [numbers.number (#0), rank_part_0 (#1)]
+            ├── hash keys: [rank_part_0]
+            ├── estimated rows: 50.00
+            └── EvalScalar
+                ├── output columns: [numbers.number (#0), rank_part_0 (#1)]
+                ├── expressions: [numbers.number (#0) % 3]
+                ├── estimated rows: 50.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 50
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 50.00
+
 statement ok
 DROP DATABASE test_explain_window;

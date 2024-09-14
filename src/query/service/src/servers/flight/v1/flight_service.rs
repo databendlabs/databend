@@ -30,7 +30,7 @@ use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
 use tokio_stream::Stream;
@@ -100,7 +100,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         let _guard = root.set_local_parent();
 
         match request.get_metadata("x-type")?.as_str() {
@@ -149,7 +149,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
         let secret = request.get_metadata("secret")?;
 

@@ -66,6 +66,7 @@ pub use binder::Binder;
 pub use builders::*;
 pub use column_binding::ColumnBinding;
 pub use column_binding::ColumnBindingBuilder;
+pub use column_binding::DummyColumnType;
 pub use copy_into_table::resolve_file_location;
 pub use copy_into_table::resolve_stage_location;
 pub use explain::ExplainConfig;
