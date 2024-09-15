@@ -37,30 +37,57 @@ pub struct SortCompare {
     equality_index: Vec<u8>,
 }
 
-macro_rules! generate_comparator {
-    ($value:expr, $validity:expr, $g:expr, $c:expr, $ordering_desc:expr) => {
-        |&a, &b| {
-            let ord = if let Some(valids) = &$validity {
-                match (valids.get_bit(a as _), valids.get_bit(b as _)) {
-                    (true, true) => {
+macro_rules! do_sorter {
+    ($self: expr, $value:expr, $validity:expr, $g:expr, $c:expr, $ordering_desc:expr, $range: expr) => {
+        if let Some(valids) = &$validity {
+            if $ordering_desc.asc {
+                $self.do_inner_sort(
+                    |&a, &b| match (valids.get_bit(a as _), valids.get_bit(b as _)) {
+                        (true, true) => {
+                            let left = $g($value, a);
+                            let right = $g($value, b);
+                            $c(left, right)
+                        }
+                        (true, false) => Ordering::Less,
+                        (false, true) => Ordering::Greater,
+                        (false, false) => Ordering::Equal,
+                    },
+                    $range,
+                );
+            } else {
+                $self.do_inner_sort(
+                    |&a, &b| match (valids.get_bit(a as _), valids.get_bit(b as _)) {
+                        (true, true) => {
+                            let left = $g($value, a);
+                            let right = $g($value, b);
+                            $c(right, left)
+                        }
+                        (true, false) => Ordering::Greater,
+                        (false, true) => Ordering::Less,
+                        (false, false) => Ordering::Equal,
+                    },
+                    $range,
+                );
+            }
+        } else {
+            if $ordering_desc.asc {
+                $self.do_inner_sort(
+                    |&a, &b| {
                         let left = $g($value, a);
                         let right = $g($value, b);
                         $c(left, right)
-                    }
-                    (true, false) => Ordering::Less,
-                    (false, true) => Ordering::Greater,
-                    (false, false) => Ordering::Equal,
-                }
+                    },
+                    $range,
+                );
             } else {
-                let left = $g($value, a);
-                let right = $g($value, b);
-                $c(left, right)
-            };
-
-            if $ordering_desc.asc {
-                ord
-            } else {
-                ord.reverse()
+                $self.do_inner_sort(
+                    |&a, &b| {
+                        let left = $g($value, a);
+                        let right = $g($value, b);
+                        $c(right, left)
+                    },
+                    $range,
+                );
             }
         }
     };
@@ -122,10 +149,7 @@ impl SortCompare {
 
         // faster path for only one sort column
         if self.ordering_descs.len() == 1 {
-            self.do_inner_sort(
-                generate_comparator!(value, validity, g, c, ordering_desc),
-                0..self.rows,
-            );
+            do_sorter!(self, value, validity, g, c, ordering_desc, 0..self.rows);
         } else {
             let mut current = 1;
             let len = self.rows;
@@ -152,7 +176,6 @@ impl SortCompare {
                 };
 
                 let range = start - 1..end;
-
                 if let Some(v) = validity.as_mut() {
                     v.slice(range.start, range.end - range.start);
                     if v.unset_bits() == 0 {
@@ -160,10 +183,7 @@ impl SortCompare {
                     }
                 }
                 // Perform the inner sort on the found range
-                self.do_inner_sort(
-                    generate_comparator!(value, validity, g, c, ordering_desc),
-                    range,
-                );
+                do_sorter!(self, value, validity, g, c, ordering_desc, range);
 
                 if need_update_equality_index {
                     // Update equality_index
@@ -207,7 +227,7 @@ impl ValueVisitor for SortCompare {
     fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
         self.common_sort(
             &col,
-            |c, idx| -> T::ScalarRef<'_> { unsafe { T::index_column_unchecked(&c, idx as _) } },
+            |c, idx| -> T::ScalarRef<'_> { unsafe { T::index_column_unchecked(c, idx as _) } },
             |a, b| T::compare(a, b),
         );
         Ok(())

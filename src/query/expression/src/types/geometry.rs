@@ -170,7 +170,7 @@ impl ValueType for GeometryType {
 
     #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
+        lhs.cmp(rhs)
     }
 }
 
