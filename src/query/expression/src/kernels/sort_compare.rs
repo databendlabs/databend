@@ -50,7 +50,7 @@ macro_rules! do_sorter {
                             if $ordering_desc.asc {
                                 $c(left, right)
                             } else {
-                                $c(left, right).reverse()
+                                $c(right, left)
                             }
                         }
                         (true, false) => {
