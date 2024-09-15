@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::vec;
 
 use databend_common_exception::Result;
+use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::StringType;
@@ -200,131 +201,11 @@ fn test_block_sort() -> Result<()> {
                 entry.value
             );
         }
-    }
 
-    Ok(())
-}
-
-#[test]
-fn test_blocks_merge_sort() -> Result<()> {
-    let blocks = vec![
-        new_block(&[
-            Int64Type::from_data(vec![4i64, 6]),
-            StringType::from_data(vec!["b2", "b1"]),
-        ]),
-        new_block(&[
-            Int64Type::from_data(vec![2i64, 3]),
-            StringType::from_data(vec!["b4", "b3"]),
-        ]),
-        new_block(&[
-            Int64Type::from_data(vec![1i64, 1]),
-            StringType::from_data(vec!["b6", "b5"]),
-        ]),
-    ];
-
-    // test cast:
-    // - name
-    // - sort descriptions
-    // - limit
-    // - expected cols
-    #[allow(clippy::type_complexity)]
-    let test_cases: Vec<(
-        String,
-        Vec<SortColumnDescription>,
-        Option<usize>,
-        Vec<Column>,
-    )> = vec![
-        (
-            "order by col1".to_string(),
-            vec![SortColumnDescription {
-                offset: 0,
-                asc: true,
-                nulls_first: false,
-                is_nullable: false,
-            }],
-            None,
-            vec![
-                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
-                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
-            ],
-        ),
-        (
-            "order by col1 limit 4".to_string(),
-            vec![SortColumnDescription {
-                offset: 0,
-                asc: true,
-                nulls_first: false,
-                is_nullable: false,
-            }],
-            Some(4),
-            vec![
-                Int64Type::from_data(vec![1_i64, 1, 2, 3]),
-                StringType::from_data(vec!["b6", "b5", "b4", "b3"]),
-            ],
-        ),
-        (
-            "order by col2 desc".to_string(),
-            vec![SortColumnDescription {
-                offset: 1,
-                asc: false,
-                nulls_first: false,
-                is_nullable: false,
-            }],
-            None,
-            vec![
-                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
-                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
-            ],
-        ),
-        (
-            "order by col1, col2 desc".to_string(),
-            vec![
-                SortColumnDescription {
-                    offset: 0,
-                    asc: true,
-                    nulls_first: false,
-                    is_nullable: false,
-                },
-                SortColumnDescription {
-                    offset: 1,
-                    asc: false,
-                    nulls_first: false,
-                    is_nullable: false,
-                },
-            ],
-            None,
-            vec![
-                Int64Type::from_data(vec![1_i64, 1, 2, 3, 4, 6]),
-                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1"]),
-            ],
-        ),
-    ];
-
-    struct NeverAbort;
-    impl CheckAbort for NeverAbort {
-        fn is_aborting(&self) -> bool {
-            false
-        }
-        fn try_check_aborting(&self) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    let aborting: AbortChecker = Arc::new(NeverAbort);
-
-    for (name, sort_descs, limit, expected) in test_cases {
-        let res = DataBlock::merge_sort(&blocks, &sort_descs, limit, aborting.clone())?;
-
-        for (entry, expect) in res.columns().iter().zip(expected.iter()) {
-            assert_eq!(
-                entry.value.as_column().unwrap(),
-                expect,
-                "{}: the column after sort is wrong, expect: {:?}, got: {:?}",
-                name,
-                expect,
-                entry.value
-            );
-        }
+        // test new sort algorithm
+        let res = DataBlock::sort_old(&decimal_block, &sort_descs, Some(decimal_block.num_rows()))?;
+        let res_new = DataBlock::sort(&decimal_block, &sort_descs, None)?;
+        assert_block_value_eq(&res, &res_new);
     }
 
     Ok(())
