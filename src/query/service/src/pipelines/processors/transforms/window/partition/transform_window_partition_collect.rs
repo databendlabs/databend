@@ -156,12 +156,12 @@ impl TransformWindowPartitionCollect {
     }
 
     fn collect(&mut self) -> Result<Event> {
-        let mut all_input_finished = true;
+        let mut finished_input = 0;
         for input in self.inputs.iter() {
             if input.is_finished() {
+                finished_input += 1;
                 continue;
             }
-            all_input_finished = false;
 
             if input.has_data() {
                 Self::collect_data_block(
@@ -170,10 +170,15 @@ impl TransformWindowPartitionCollect {
                     &mut self.buffer,
                 );
             }
-            input.set_need_data();
+
+            if input.is_finished() {
+                finished_input += 1;
+            } else {
+                input.set_need_data();
+            }
         }
 
-        if all_input_finished {
+        if finished_input == self.inputs.len() {
             self.is_collect_finished = true;
         }
 
