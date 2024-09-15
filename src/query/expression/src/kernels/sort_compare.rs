@@ -40,35 +40,38 @@ pub struct SortCompare {
 macro_rules! do_sorter {
     ($self: expr, $value:expr, $validity:expr, $g:expr, $c:expr, $ordering_desc:expr, $range: expr) => {
         if let Some(valids) = &$validity {
-            if $ordering_desc.asc {
-                $self.do_inner_sort(
-                    |&a, &b| match (valids.get_bit(a as _), valids.get_bit(b as _)) {
+            $self.do_inner_sort(
+                |&a, &b| {
+                    let order = match (valids.get_bit(a as _), valids.get_bit(b as _)) {
                         (true, true) => {
                             let left = $g($value, a);
                             let right = $g($value, b);
-                            $c(left, right)
+
+                            if $ordering_desc.asc {
+                                $c(left, right)
+                            } else {
+                                $c(left, right).reverse()
+                            }
                         }
-                        (true, false) => Ordering::Less,
-                        (false, true) => Ordering::Greater,
-                        (false, false) => Ordering::Equal,
-                    },
-                    $range,
-                );
-            } else {
-                $self.do_inner_sort(
-                    |&a, &b| match (valids.get_bit(a as _), valids.get_bit(b as _)) {
-                        (true, true) => {
-                            let left = $g($value, a);
-                            let right = $g($value, b);
-                            $c(right, left)
+                        (true, false) => {
+                            if $ordering_desc.nulls_first {
+                                Ordering::Greater
+                            } else {
+                                Ordering::Less
+                            }
                         }
-                        (true, false) => Ordering::Greater,
-                        (false, true) => Ordering::Less,
+                        (false, true) => {
+                            if $ordering_desc.nulls_first {
+                                Ordering::Less
+                            } else {
+                                Ordering::Greater
+                            }
+                        }
                         (false, false) => Ordering::Equal,
-                    },
-                    $range,
-                );
-            }
+                    };
+                },
+                $range,
+            );
         } else {
             if $ordering_desc.asc {
                 $self.do_inner_sort(
@@ -176,14 +179,19 @@ impl SortCompare {
                 };
 
                 let range = start - 1..end;
+
+                // If there are no unset bits, we don't need compare with nulls
+                let mut temp_v = None;
                 if let Some(v) = validity.as_mut() {
-                    v.slice(range.start, range.end - range.start);
-                    if v.unset_bits() == 0 {
-                        validity = None;
+                    let mut temp_v2 = v.clone();
+                    temp_v2.slice(range.start, range.end - range.start);
+                    if temp_v2.unset_bits() > 0 {
+                        temp_v = validity.clone();
                     }
                 }
+
                 // Perform the inner sort on the found range
-                do_sorter!(self, value, validity, g, c, ordering_desc, range);
+                do_sorter!(self, value, temp_v, g, c, ordering_desc, range);
 
                 if need_update_equality_index {
                     // Update equality_index
