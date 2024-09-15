@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::vec;
 
 use databend_common_exception::Result;
@@ -20,8 +19,6 @@ use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::StringType;
-use databend_common_expression::AbortChecker;
-use databend_common_expression::CheckAbort;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;

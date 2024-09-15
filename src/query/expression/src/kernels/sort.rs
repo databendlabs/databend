@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::iter::once;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::array::ord as arrow_ord;
