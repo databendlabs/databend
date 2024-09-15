@@ -23041,13 +23041,13 @@ DropProcedure(
 ---------- Input ----------
 drop PROCEDURE p1(int, string)
 ---------- Output ---------
-DROP PROCEDURE p1(int32,string)
+DROP PROCEDURE p1(Int32,STRING)
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
         name: ProcedureIdentity {
             name: "p1",
-            args_type: "int32,string",
+            args_type: "Int32,STRING",
         },
     },
 )
@@ -23202,7 +23202,7 @@ CreateProcedure(
         create_option: Create,
         name: ProcedureIdentity {
             name: "p1",
-            args_type: "int32,string",
+            args_type: "Int32,STRING",
         },
         language: SQL,
         args: Some(

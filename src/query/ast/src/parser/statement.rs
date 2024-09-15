@@ -2076,7 +2076,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 name: name.to_string(),
                 args_type: if let Some(args) = &args {
                     args.iter()
-                        .map(|arg| arg.data_type.to_string().to_lowercase())
+                        .map(|arg| arg.data_type.to_string())
                         .collect::<Vec<String>>()
                         .join(",")
                 } else {
@@ -2147,7 +2147,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         "".to_string()
                     } else {
                         args.iter()
-                            .map(|arg| arg.to_string().to_lowercase())
+                            .map(|arg| arg.to_string())
                             .collect::<Vec<String>>()
                             .join(",")
                     },
