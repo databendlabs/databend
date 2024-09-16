@@ -178,29 +178,29 @@ impl SortCompare {
 
                 let range = start - 1..end;
 
-                // If there are no unset bits, we don't need compare with nulls
-                let mut temp_v = None;
-                if let Some(v) = validity.as_mut() {
-                    let mut temp_v2 = v.clone();
-                    temp_v2.slice(range.start, range.end - range.start);
-                    if temp_v2.unset_bits() > 0 {
-                        temp_v = validity.clone();
-                    }
-                }
-
                 // Perform the inner sort on the found range
                 do_sorter!(self, value, temp_v, g, c, ordering_desc, range);
-
                 if need_update_equality_index {
                     // Update equality_index
                     for i in start..end {
-                        let is_equal = u8::from(
+                        let is_equal = if let Some(ref v) = validity {
+                            let va = v.get_bit(self.permutation[i] as _);
+                            let vb = v.get_bit(self.permutation[i - 1] as _);
+                            if va && vb {
+                                c(
+                                    g(value, self.permutation[i]),
+                                    g(value, self.permutation[i - 1]),
+                                ) == Ordering::Equal
+                            } else {
+                                !va && !vb
+                            }
+                        } else {
                             c(
                                 g(value, self.permutation[i]),
                                 g(value, self.permutation[i - 1]),
-                            ) == Ordering::Equal,
-                        );
-                        self.equality_index[i] &= is_equal;
+                            ) == Ordering::Equal
+                        };
+                        self.equality_index[i] &= u8::from(is_equal);
                     }
                 }
 
