@@ -289,7 +289,7 @@ impl InvertedIndexReader {
         }
 
         // 5. read postings and optional positions.
-        //    collect doc ids, term frequences and optional position readers.
+        //    collect doc ids, term frequencies and optional position readers.
         let mut slice_metas = Vec::with_capacity(term_values.len());
         let mut name_map = HashMap::new();
         for (term, term_value) in term_values.iter() {

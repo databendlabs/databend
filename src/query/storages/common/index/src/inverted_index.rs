@@ -364,7 +364,7 @@ pub struct TermValue {
     pub term_info: TermInfo,
     // term matched doc ids
     pub doc_ids: Vec<u32>,
-    // term frequences for each doc
+    // term frequencies for each doc
     pub term_freqs: Vec<u32>,
     // position reader is used to read positions in doc for phrase query
     pub position_reader: Option<PositionReader>,
