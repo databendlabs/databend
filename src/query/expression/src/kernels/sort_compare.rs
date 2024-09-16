@@ -179,7 +179,7 @@ impl SortCompare {
                 let range = start - 1..end;
 
                 // Perform the inner sort on the found range
-                do_sorter!(self, value, temp_v, g, c, ordering_desc, range);
+                do_sorter!(self, value, validity, g, c, ordering_desc, range);
                 if need_update_equality_index {
                     // Update equality_index
                     for i in start..end {
