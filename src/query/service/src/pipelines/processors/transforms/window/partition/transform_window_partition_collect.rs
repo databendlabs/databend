@@ -288,9 +288,7 @@ impl Processor for TransformWindowPartitionCollect {
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
             Step::Async(AsyncStep::Spill) => {
-                if let Some((partition_id, data_block)) =
-                    self.buffer.next_to_spill(64 * 1024 * 1024)?
-                {
+                if let Some((partition_id, data_block)) = self.buffer.next_to_spill()? {
                     self.buffer.spill(partition_id, data_block).await?;
                 }
             }

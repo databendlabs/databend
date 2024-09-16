@@ -462,7 +462,13 @@ impl DefaultSettings {
                 }),
                 ("window_num_partitions", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
-                    desc: "Set the number of window partitions.",
+                    desc: "Set the number of partitions for window operator.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("window_spill_unit_size_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256),
+                    desc: "Set the spill unit size (MB) for window operator.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),

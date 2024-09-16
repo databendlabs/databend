@@ -90,11 +90,12 @@ impl WindowPartitionBuffer {
     }
 
     // Get the next data block to spill.
-    pub fn next_to_spill(&mut self, spill_bytes: usize) -> Result<Option<(usize, DataBlock)>> {
-        let option = PartitionBufferFetchOption::PickPartitionBytes(spill_bytes);
+    pub fn next_to_spill(&mut self) -> Result<Option<(usize, DataBlock)>> {
+        let spill_unit_size = self.spill_settings.spill_unit_size;
+        let option = PartitionBufferFetchOption::PickPartitionBytes(spill_unit_size);
         for partition_id in (self.next_to_restore_partition_id + 1..self.num_partitions).rev() {
             if !self.partition_buffer.is_partition_empty(partition_id)
-                && self.partition_buffer.partition_memory_size(partition_id) > spill_bytes
+                && self.partition_buffer.partition_memory_size(partition_id) > spill_unit_size
             {
                 if let Some(data_blocks) = self
                     .partition_buffer
@@ -105,16 +106,29 @@ impl WindowPartitionBuffer {
             }
         }
 
+        let mut max_partition_memory_size = 0;
+        let mut partition_id_to_spill = 0;
         let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
         for partition_id in (self.next_to_restore_partition_id + 1..self.num_partitions).rev() {
             if !self.partition_buffer.is_partition_empty(partition_id) {
-                if let Some(data_blocks) = self
-                    .partition_buffer
-                    .fetch_data_blocks(partition_id, &option)?
-                {
-                    return Ok(Some((partition_id, DataBlock::concat(&data_blocks)?)));
+                let partition_memory_size =
+                    self.partition_buffer.partition_memory_size(partition_id);
+                if partition_memory_size > max_partition_memory_size {
+                    max_partition_memory_size = partition_memory_size;
+                    partition_id_to_spill = partition_id;
                 }
             }
+        }
+
+        if max_partition_memory_size > 0
+            && let Some(data_blocks) = self
+                .partition_buffer
+                .fetch_data_blocks(partition_id_to_spill, &option)?
+        {
+            return Ok(Some((
+                partition_id_to_spill,
+                DataBlock::concat(&data_blocks)?,
+            )));
         }
 
         self.can_spill = false;
@@ -160,6 +174,7 @@ pub struct WindowSpillSettings {
     enable_spill: bool,
     global_memory_threshold: usize,
     processor_memory_threshold: usize,
+    spill_unit_size: usize,
 }
 
 impl WindowSpillSettings {
@@ -173,6 +188,7 @@ impl WindowSpillSettings {
                 enable_spill: false,
                 global_memory_threshold: usize::MAX,
                 processor_memory_threshold: usize::MAX,
+                spill_unit_size: 0,
             });
         }
 
@@ -191,10 +207,13 @@ impl WindowSpillSettings {
             bytes => bytes,
         };
 
+        let spill_unit_size = settings.get_window_spill_unit_size_mb()? * 1024 * 1024;
+
         Ok(WindowSpillSettings {
             enable_spill: true,
             global_memory_threshold,
             processor_memory_threshold,
+            spill_unit_size,
         })
     }
 }
