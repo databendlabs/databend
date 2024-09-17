@@ -39,7 +39,7 @@ pub struct WindowPartitionBuffer {
     can_spill: bool,
     next_to_restore_partition_id: isize,
     spilled_small_partitions: Vec<Vec<usize>>,
-    spilled_merged_partitions: Vec<(SpilledData, bool)>,
+    spilled_merged_partitions: Vec<(SpilledData, bool, bool)>,
 }
 
 impl WindowPartitionBuffer {
@@ -164,7 +164,8 @@ impl WindowPartitionBuffer {
                         location,
                         partitions,
                     },
-                    true,
+                    false,
+                    false,
                 ));
                 return Ok(());
             }
@@ -188,8 +189,9 @@ impl WindowPartitionBuffer {
                 std::mem::take(&mut self.spilled_small_partitions[partition_id]);
             for index in spilled_small_partitions {
                 let out_of_memory_limit = self.out_of_memory_limit();
-                let (merged_partitions, valid) = &mut self.spilled_merged_partitions[index];
-                if !*valid {
+                let (merged_partitions, restored, partial_restored) =
+                    &mut self.spilled_merged_partitions[index];
+                if *restored {
                     continue;
                 }
                 if let SpilledData::MergedPartition {
@@ -197,7 +199,7 @@ impl WindowPartitionBuffer {
                     partitions,
                 } = merged_partitions
                 {
-                    if out_of_memory_limit {
+                    if out_of_memory_limit || *partial_restored {
                         if let Some(pos) = partitions.iter().position(|p| p.0 == partition_id) {
                             let data_range = &partitions[pos].1;
                             let columns_layout = &partitions[pos].2;
@@ -208,6 +210,7 @@ impl WindowPartitionBuffer {
                             self.partition_buffer
                                 .add_data_block(partition_id, data_block);
                             partitions.remove(pos);
+                            *partial_restored = true;
                         }
                     } else {
                         let partitioned_data = self
@@ -218,7 +221,7 @@ impl WindowPartitionBuffer {
                             self.partition_buffer
                                 .add_data_block(partition_id, data_block);
                         }
-                        *valid = false;
+                        *restored = true;
                     }
                 }
             }
