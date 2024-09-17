@@ -51,6 +51,7 @@ use databend_storages_common_table_meta::table::TableCompression;
 use log::info;
 use opendal::Operator;
 
+use crate::io::block_to_inverted_index;
 use crate::io::write::WriteSettings;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
@@ -298,12 +299,7 @@ impl InvertedIndexState {
         let (index_schema, index_block) = writer.finalize()?;
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
-            &index_schema,
-            vec![index_block],
-            &mut data,
-            TableCompression::None,
-        )?;
+        block_to_inverted_index(&index_schema, index_block, &mut data)?;
         let size = data.len() as u64;
 
         // Perf.

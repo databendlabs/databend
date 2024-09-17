@@ -16,9 +16,15 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 
+use arrow_ipc::writer::write_message;
+use arrow_ipc::writer::IpcDataGenerator;
+use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -341,6 +347,57 @@ impl InvertedIndexWriter {
         let len = writer.write(&buf)?;
         Ok(len)
     }
+}
+
+// inverted index block include 5 types of data,
+// and each of which may have multiple fields.
+// 1. `fst` used to check whether a term exist.
+//    for example: fst-0, fst-1, ..
+// 2. `term dict` records the idx and pos locations of each terms.
+//    for example: term-0, term-1, ..
+// 3. `idx` records the doc ids of each terms.
+//    for example: idx-0, idx-1, ..
+// 4. `pos` records the positions of each terms in doc.
+//    for example: pos-0, pos-1, ..
+// 5. `fieldnorms` records the number of tokens in each doc.
+//    for example: fieldnorms-0, fieldnorms-1, ..
+//
+// write the value of columns first,
+// and then the offsets of columns,
+// finally the number of columns.
+pub(crate) fn block_to_inverted_index(
+    table_schema: &TableSchema,
+    block: DataBlock,
+    write_buffer: &mut Vec<u8>,
+) -> Result<()> {
+    let mut offsets = Vec::with_capacity(block.num_columns());
+    for column in block.columns() {
+        let value: Value<BinaryType> = column.value.try_downcast().unwrap();
+        write_buffer.extend_from_slice(value.as_scalar().unwrap());
+        let offset = write_buffer.len() as u32;
+        offsets.push(offset);
+    }
+
+    // footer: schema + offsets + schema_len + meta_len
+    let arrow_schema = Arc::new(table_schema_to_arrow_schema(table_schema));
+    let generator = IpcDataGenerator {};
+    let write_options = IpcWriteOptions::default();
+    let encoded = generator.schema_to_bytes(&arrow_schema, &write_options);
+    let mut schema_buf = Vec::new();
+    let (schema_len, _) = write_message(&mut schema_buf, encoded, &write_options)?;
+    write_buffer.extend_from_slice(&schema_buf);
+
+    let schema_len = schema_len as u32;
+    let offset_len = (offsets.len() * 4) as u32;
+    for offset in offsets {
+        write_buffer.extend_from_slice(&offset.to_le_bytes());
+    }
+    let meta_len = schema_len + offset_len + 8;
+
+    write_buffer.extend_from_slice(&schema_len.to_le_bytes());
+    write_buffer.extend_from_slice(&meta_len.to_le_bytes());
+
+    Ok(())
 }
 
 // Create tokenizer can handle both Chinese and English

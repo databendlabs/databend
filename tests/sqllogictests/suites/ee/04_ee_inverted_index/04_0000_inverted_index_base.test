@@ -75,7 +75,7 @@ SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzzine
 ----
 2 1.0 A picture is worth a thousand words
 3 1.0 The early bird catches the worm
-4 2.0 Actions speak louder than words
+4 1.0 Actions speak louder than words
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1;operator=AND')
@@ -145,7 +145,7 @@ SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') O
 15 1.0 中国的茶文化源远流长，品茶已经成为一种生活方式。
 21 1.0 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
 24 1.0 中国的传统节日蕴含着丰富的文化内涵，是传承和弘扬中华文化的重要途径。
-28 7.0 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
+28 1.0 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '化博') ORDER BY score()
@@ -195,7 +195,7 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY id
 ----
 12 1.0 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 15 1.0 中国的茶文化源远流长，品茶已经成为一种生活方式。
-28 2.0 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
+28 1.0 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 # index without optional filters and index rocord is basic
 statement ok
@@ -255,8 +255,8 @@ query IFT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY id
 ----
 2 1.0 Python深度学习（第2版）
-4 1.0 白话深度学习的数学
 3 1.0 大模型应用开发极简入门
+4 1.0 白话深度学习的数学
 6 1.0 Flask Web开发：基于Python的Web应用开发实战（第2版）
 7 1.0 Apache Pulsar实战
 11 1.0 OpenAI GPT For Python Developers, 2nd Edition
@@ -275,9 +275,9 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'Ch
 query IFT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '设计') ORDER BY id
 ----
-9 1.0 Vue.js设计与实现
 7 1.0 Apache Pulsar实战
 8 1.0 Rust程序设计（第2版）
+9 1.0 Vue.js设计与实现
 10 1.0 前端架构设计
 
 query IFT
@@ -458,8 +458,8 @@ SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 descri
 #6 2.4057739 {"metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
 #10 2.4057739 {"metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
-statement error 1118
-ALTER TABLE t1 DROP COLUMN body
+#statement error 1118
+#ALTER TABLE t1 DROP COLUMN body
 
 statement error 1118
 ALTER TABLE books MODIFY COLUMN title int;

@@ -131,6 +131,7 @@ impl InvertedIndexReader {
         Ok(col_files)
     }
 
+    // first version search function, using tantivy searcher.
     async fn search_v0<'a>(
         &self,
         index_path: &'a str,
@@ -177,7 +178,20 @@ impl InvertedIndexReader {
         }
     }
 
-    // read fst first to check whether matched.
+    // Follow the process below to perform the query search:
+    // 1. Read the `fst` first, check if the term in the query matches,
+    //    return if it doesn't matched.
+    // 2. Read the `term dict` to get the `postings_range` in `idx`
+    //    and the `positions_range` in `pos` for each terms.
+    // 3. Read the `doc_ids` and `term_freqs` in `idx` for each terms
+    //    using `postings_range`.
+    // 4. If it's a phrase query, read the `position` of each terms in
+    //    `pos` using `positions_range`.
+    // 5. Collect matched doc ids using term-related informations.
+    //
+    // If the term does not match, only the `fst` file needs to be read.
+    // If the term matches, only the `idx` and `pos` data of the related terms
+    // need to be read instead of all the `idx` and `pos` data.
     #[allow(clippy::too_many_arguments)]
     async fn search<'a>(
         &self,
@@ -193,28 +207,17 @@ impl InvertedIndexReader {
         row_count: u32,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         // 1. read index meta
-        let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await;
-
-        if inverted_index_meta.is_err() {
-            return self
-                .search_v0(
-                    index_path,
-                    query,
-                    field_nums,
-                    has_score,
-                    tokenizer_manager,
-                    row_count,
-                )
-                .await;
-        }
+        let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
 
         let inverted_index_meta_map = inverted_index_meta
-            .unwrap()
             .columns
             .clone()
             .into_iter()
             .collect::<HashMap<_, _>>();
 
+        // if meta contains `meta.json` columns,
+        // the index file is the first version implementation
+        // use compatible search function to read.
         if inverted_index_meta_map.contains_key("meta.json") {
             return self
                 .search_v0(
@@ -279,6 +282,7 @@ impl InvertedIndexReader {
 
             let term_dict = term_dict_maps.get(&field_id).unwrap();
             let term_info = term_dict.get(*term_ord);
+
             let term_value = TermValue {
                 term_info,
                 doc_ids: vec![],
@@ -307,6 +311,7 @@ impl InvertedIndexReader {
                 len,
                 num_values: 1,
             };
+
             let idx_slice_name =
                 format!("{}-{}", idx_name, term_value.term_info.postings_range.start);
             slice_metas.push((idx_slice_name.clone(), idx_slice_meta));

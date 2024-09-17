@@ -61,7 +61,6 @@ use levenshtein_automata::Distance;
 use levenshtein_automata::LevenshteinAutomatonBuilder;
 use levenshtein_automata::DFA;
 use log::warn;
-use parquet::format::FileMetaData;
 use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::OpenReadError;
 use tantivy::directory::error::OpenWriteError;
@@ -143,7 +142,7 @@ impl Footer {
     }
 }
 
-fn extract_footer(data: FileSlice) -> Result<(usize, Vec<usize>)> {
+fn extract_footer(data: FileSlice) -> Result<(Vec<FileAddr>, Vec<usize>)> {
     // The following code is copied from tantivy `CompositeFile::open` function.
     // extract field number and offsets of each fields.
     let end = data.len();
@@ -156,29 +155,32 @@ fn extract_footer(data: FileSlice) -> Result<(usize, Vec<usize>)> {
     let mut footer_buffer = footer_data.as_slice();
     let num_fields = VInt::deserialize(&mut footer_buffer)?.0 as usize;
 
-    let mut offsets = vec![];
     let mut offset = 0;
+    let mut offsets = Vec::with_capacity(num_fields);
+    let mut file_addrs = Vec::with_capacity(num_fields);
     for _ in 0..num_fields {
         offset += VInt::deserialize(&mut footer_buffer)?.0 as usize;
-        let _file_addr = FileAddr::deserialize(&mut footer_buffer)?;
         offsets.push(offset);
+        let file_addr = FileAddr::deserialize(&mut footer_buffer)?;
+        file_addrs.push(file_addr);
     }
     offsets.push(footer_start);
 
-    Ok((num_fields, offsets))
+    Ok((file_addrs, offsets))
 }
 
-// Extract fsts from term dict file.
+// Extract fsts and term dicts into separate columns.
 pub fn extract_fsts(
     data: FileSlice,
     fields: &mut Vec<TableField>,
     values: &mut Vec<Scalar>,
 ) -> Result<()> {
-    let (num_fields, offsets) = extract_footer(data.clone())?;
+    let (file_addrs, offsets) = extract_footer(data.clone())?;
 
-    // The following code is copied from tantivy `TermDictionary::open` function.
-    // extract fst data from field.
-    for i in 0..num_fields {
+    let mut term_dict_fields = Vec::with_capacity(file_addrs.len());
+    let mut term_dict_values = Vec::with_capacity(file_addrs.len());
+    for (i, file_addr) in file_addrs.iter().enumerate() {
+        let field_id = file_addr.field.field_id();
         let start_offset = offsets[i];
         let end_offset = offsets[i + 1];
 
@@ -191,44 +193,48 @@ pub fn extract_fsts(
         let (fst_file_slice, term_dict_file_slice) =
             main_slice.split_from_end(footer_size as usize);
 
-        let fst_field_name = format!("fst-{}", i);
+        let fst_field_name = format!("fst-{}", field_id);
         let fst_field = TableField::new(&fst_field_name, TableDataType::Binary);
         fields.push(fst_field);
 
         let fst_bytes = fst_file_slice.read_bytes()?;
         values.push(Scalar::Binary(fst_bytes.as_slice().to_vec()));
 
-        let term_dict_field_name = format!("term-{}", i);
+        let term_dict_field_name = format!("term-{}", field_id);
         let term_dict_field = TableField::new(&term_dict_field_name, TableDataType::Binary);
-        fields.push(term_dict_field);
+        term_dict_fields.push(term_dict_field);
 
         let term_dict_bytes = term_dict_file_slice.read_bytes()?;
-        values.push(Scalar::Binary(term_dict_bytes.as_slice().to_vec()));
+        term_dict_values.push(Scalar::Binary(term_dict_bytes.as_slice().to_vec()));
     }
+
+    fields.append(&mut term_dict_fields);
+    values.append(&mut term_dict_values);
 
     Ok(())
 }
 
+// Extract component file into separate columns by fields.
 pub fn extract_component_fields(
     name: &str,
     data: FileSlice,
     fields: &mut Vec<TableField>,
     values: &mut Vec<Scalar>,
 ) -> Result<()> {
-    let (num_fields, offsets) = extract_footer(data.clone())?;
+    let (file_addrs, offsets) = extract_footer(data.clone())?;
 
-    for i in 0..num_fields {
+    for (i, file_addr) in file_addrs.iter().enumerate() {
+        let field_id = file_addr.field.field_id();
         let start_offset = offsets[i];
         let end_offset = offsets[i + 1];
 
+        let field_name = format!("{}-{}", name, field_id);
+        let field = TableField::new(&field_name, TableDataType::Binary);
+        fields.push(field);
+
         let field_slice = data.slice(start_offset..end_offset);
-
-        let fst_field_name = format!("{}-{}", name, i);
-        let fst_field = TableField::new(&fst_field_name, TableDataType::Binary);
-        fields.push(fst_field);
-
-        let idx_bytes = field_slice.read_bytes()?;
-        values.push(Scalar::Binary(idx_bytes.as_slice().to_vec()));
+        let field_bytes = field_slice.read_bytes()?;
+        values.push(Scalar::Binary(field_bytes.as_slice().to_vec()));
     }
 
     Ok(())
@@ -710,47 +716,6 @@ pub fn collect_matched_rows(
 #[derive(Clone)]
 pub struct InvertedIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
-}
-
-impl TryFrom<FileMetaData> for InvertedIndexMeta {
-    type Error = databend_common_exception::ErrorCode;
-
-    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
-        let rg = meta.row_groups.remove(0);
-        let mut col_metas = Vec::with_capacity(rg.columns.len());
-        for x in &rg.columns {
-            match &x.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = SingleColumnMeta {
-                        offset: (col_start + 23) as u64,
-                        len: (col_len - 23) as u64,
-                        num_values,
-                    };
-                    let column_name = chunk_meta.path_in_schema[0].to_owned();
-                    col_metas.push((column_name, res));
-                }
-                None => {
-                    panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to InvertedIndexMeta"
-                    )
-                }
-            }
-        }
-        col_metas.shrink_to_fit();
-        Ok(Self { columns: col_metas })
-    }
 }
 
 #[derive(Clone, Debug)]

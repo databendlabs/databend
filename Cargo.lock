@@ -4327,6 +4327,7 @@ dependencies = [
  "ahash 0.8.11",
  "arrow",
  "arrow-array",
+ "arrow-ipc",
  "async-backtrace",
  "async-channel 1.9.0",
  "async-trait",

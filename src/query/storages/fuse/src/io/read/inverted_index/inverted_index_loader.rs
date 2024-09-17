@@ -81,29 +81,6 @@ pub(crate) async fn load_inverted_index_meta(
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::inverted_index_meta_reader(dal);
-        let version = 1;
-
-        let load_params = LoadParams {
-            location: path_owned,
-            len_hint: None,
-            ver: version,
-            put_cache: true,
-        };
-
-        reader.read(&load_params).await
-    }
-    .execute_in_runtime(&GlobalIORuntime::instance())
-    .await?
-}
-
-#[fastrace::trace]
-pub(crate) async fn load_inverted_v0_index_meta(
-    dal: Operator,
-    path: &str,
-) -> Result<Arc<InvertedIndexMeta>> {
-    let path_owned = path.to_owned();
-    async move {
-        let reader = MetaReaders::inverted_index_meta_reader(dal);
         let version = 0;
 
         let load_params = LoadParams {
@@ -157,9 +134,8 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     field_nums: usize,
     index_path: &'a str,
 ) -> Result<InvertedIndexDirectory> {
-    let start = Instant::now();
     // load inverted index meta, contains the offsets of each files.
-    let inverted_index_meta = load_inverted_v0_index_meta(dal.clone(), index_path).await?;
+    let inverted_index_meta = load_inverted_index_meta(dal.clone(), index_path).await?;
 
     // load inverted index files, usually including following eight files:
     // 1. fast file
@@ -180,11 +156,6 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     // use those files to create inverted index directory
     let directory = InvertedIndexDirectory::try_create(field_nums, files)?;
 
-    // Perf.
-    {
-        metrics_inc_block_inverted_index_read_milliseconds(start.elapsed().as_millis() as u64);
-    }
-
     Ok(directory)
 }
 
@@ -203,7 +174,6 @@ impl InvertedIndexFileReader {
     ) -> Self {
         let cache_key = Self::cache_key_of_column(&index_path, &name);
 
-        // let loader = InvertedIndexSliceLoader {
         let loader = InvertedIndexFileLoader {
             offset: column_meta.offset,
             len: column_meta.len,
