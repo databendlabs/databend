@@ -269,7 +269,7 @@ where R: Rows + Sync + Send + 'static
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
         debug_assert!(self.num_merge >= 2 && self.batch_rows > 0);
 
-        let location = self.spiller.spill_block(block).await?;
+        let location = self.spiller.spill(block).await?;
 
         self.unmerged_blocks.push_back(vec![location].into());
         Ok(())
@@ -346,7 +346,7 @@ where R: Rows + Sync + Send + 'static
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.async_next_block().await? {
-            let location = self.spiller.spill_block(block).await?;
+            let location = self.spiller.spill(block).await?;
 
             spilled.push_back(location);
         }

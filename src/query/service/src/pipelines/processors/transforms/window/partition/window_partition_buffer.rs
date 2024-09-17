@@ -25,6 +25,7 @@ use databend_common_storages_fuse::TableContext;
 use crate::sessions::QueryContext;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
+use crate::spillers::SpilledData;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
@@ -37,6 +38,8 @@ pub struct WindowPartitionBuffer {
     num_partitions: usize,
     can_spill: bool,
     next_to_restore_partition_id: usize,
+    spilled_small_partitions: Vec<Vec<usize>>,
+    spilled_merged_partitions: Vec<(SpilledData, bool)>,
 }
 
 impl WindowPartitionBuffer {
@@ -62,6 +65,8 @@ impl WindowPartitionBuffer {
             num_partitions,
             can_spill: false,
             next_to_restore_partition_id: 0,
+            spilled_small_partitions: vec![Vec::new(); num_partitions],
+            spilled_merged_partitions: Vec::new(),
         })
     }
 
@@ -69,7 +74,10 @@ impl WindowPartitionBuffer {
         if !self.spill_settings.enable_spill || !self.can_spill {
             return false;
         }
+        self.out_of_memory_limit()
+    }
 
+    pub fn out_of_memory_limit(&mut self) -> bool {
         // Check if processor memory usage exceeds the threshold.
         if self.partition_buffer.memory_size() > self.spill_settings.processor_memory_threshold {
             return true;
@@ -89,10 +97,12 @@ impl WindowPartitionBuffer {
         self.can_spill = true;
     }
 
-    // Get the next data block to spill.
-    pub fn next_to_spill(&mut self) -> Result<Option<(usize, DataBlock)>> {
+    // Spill data blocks in the buffer.
+    pub async fn spill(&mut self) -> Result<()> {
         let spill_unit_size = self.spill_settings.spill_unit_size;
-        let option = PartitionBufferFetchOption::PickPartitionBytes(spill_unit_size);
+
+        // Pick one partition from the last to the first to spill.
+        let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
         for partition_id in (self.next_to_restore_partition_id + 1..self.num_partitions).rev() {
             if !self.partition_buffer.is_partition_empty(partition_id)
                 && self.partition_buffer.partition_memory_size(partition_id) > spill_unit_size
@@ -101,52 +111,112 @@ impl WindowPartitionBuffer {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &option)?
                 {
-                    return Ok(Some((partition_id, DataBlock::concat(&data_blocks)?)));
+                    return self
+                        .spiller
+                        .spill_with_partition(partition_id, DataBlock::concat(&data_blocks)?)
+                        .await;
                 }
             }
         }
 
-        let mut max_partition_memory_size = 0;
-        let mut partition_id_to_spill = 0;
-        let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
+        // If there is no partition with size greater than `spill_unit_size`, then merge partitions to spill.
+        let mut accumulated_bytes = 0;
+        let mut partitions_to_spill = Vec::new();
         for partition_id in (self.next_to_restore_partition_id + 1..self.num_partitions).rev() {
             if !self.partition_buffer.is_partition_empty(partition_id) {
                 let partition_memory_size =
                     self.partition_buffer.partition_memory_size(partition_id);
-                if partition_memory_size > max_partition_memory_size {
-                    max_partition_memory_size = partition_memory_size;
-                    partition_id_to_spill = partition_id;
+                if let Some(data_blocks) = self
+                    .partition_buffer
+                    .fetch_data_blocks(partition_id, &option)?
+                {
+                    let data_block = DataBlock::concat(&data_blocks)?;
+                    partitions_to_spill.push((partition_id, data_block));
+                    accumulated_bytes += partition_memory_size;
+                }
+                if accumulated_bytes >= spill_unit_size {
+                    break;
                 }
             }
         }
 
-        if max_partition_memory_size > 0
-            && let Some(data_blocks) = self
-                .partition_buffer
-                .fetch_data_blocks(partition_id_to_spill, &option)?
-        {
-            return Ok(Some((
-                partition_id_to_spill,
-                DataBlock::concat(&data_blocks)?,
-            )));
+        if accumulated_bytes > 0 {
+            let spilled_data = self
+                .spiller
+                .spill_with_merged_partitions(partitions_to_spill)
+                .await?;
+            if let SpilledData::MergedPartition {
+                location,
+                partitions,
+            } = spilled_data
+            {
+                let index = self.spilled_merged_partitions.len();
+                for partition in partitions.iter() {
+                    self.spilled_small_partitions[partition.0].push(index);
+                }
+                self.spilled_merged_partitions.push((
+                    SpilledData::MergedPartition {
+                        location,
+                        partitions,
+                    },
+                    true,
+                ));
+                return Ok(());
+            }
         }
 
         self.can_spill = false;
-        Ok(None)
-    }
 
-    // Spill data blocks.
-    pub async fn spill(&mut self, partition_id: usize, data_block: DataBlock) -> Result<()> {
-        self.spiller
-            .spill_with_partition(partition_id, data_block)
-            .await
+        Ok(())
     }
 
     // Restore data blocks from buffer and spilled files.
     pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
         while self.next_to_restore_partition_id < self.num_partitions {
             let partition_id = self.next_to_restore_partition_id;
+            // Restore large partitions from spilled files.
             let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
+
+            // Restore small merged partitions from spilled files.
+            let spilled_small_partitions =
+                std::mem::take(&mut self.spilled_small_partitions[partition_id]);
+            for index in spilled_small_partitions {
+                let out_of_memory_limit = self.out_of_memory_limit();
+                let (merged_partitions, valid) = &mut self.spilled_merged_partitions[index];
+                if !*valid {
+                    continue;
+                }
+                if let SpilledData::MergedPartition {
+                    location,
+                    partitions,
+                } = merged_partitions
+                {
+                    if out_of_memory_limit {
+                        if let Some(pos) = partitions.iter().position(|p| p.0 == partition_id) {
+                            let data_range = &partitions[pos].1;
+                            let columns_layout = &partitions[pos].2;
+                            let data_block = self
+                                .spiller
+                                .read_range(location, data_range.clone(), columns_layout)
+                                .await?;
+                            self.partition_buffer
+                                .add_data_block(partition_id, data_block);
+                            partitions.remove(pos);
+                        }
+                    } else {
+                        let partitioned_data = self
+                            .spiller
+                            .read_merged_partitions(merged_partitions)
+                            .await?;
+                        for (partiton_id, data_block) in partitioned_data.into_iter() {
+                            self.partition_buffer
+                                .add_data_block(partiton_id, data_block);
+                        }
+                        *valid = false;
+                    }
+                }
+            }
+
             if !self.partition_buffer.is_partition_empty(partition_id) {
                 let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
                 if let Some(data_blocks) = self
@@ -156,6 +226,7 @@ impl WindowPartitionBuffer {
                     result.extend(data_blocks);
                 }
             }
+
             self.next_to_restore_partition_id += 1;
             if !result.is_empty() {
                 return Ok(result);

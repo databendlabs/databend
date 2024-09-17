@@ -287,11 +287,7 @@ impl Processor for TransformWindowPartitionCollect {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
-            Step::Async(AsyncStep::Spill) => {
-                if let Some((partition_id, data_block)) = self.buffer.next_to_spill()? {
-                    self.buffer.spill(partition_id, data_block).await?;
-                }
-            }
+            Step::Async(AsyncStep::Spill) => self.buffer.spill().await?,
             Step::Async(AsyncStep::Restore) => {
                 self.restored_data_blocks = self.buffer.restore().await?;
             }
