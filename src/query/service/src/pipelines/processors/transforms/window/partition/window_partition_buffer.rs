@@ -35,6 +35,7 @@ pub struct WindowPartitionBuffer {
     spiller: Spiller,
     spill_settings: WindowSpillSettings,
     partition_buffer: PartitionBuffer,
+    restored_partition_buffer: PartitionBuffer,
     num_partitions: usize,
     can_spill: bool,
     next_to_restore_partition_id: isize,
@@ -58,10 +59,12 @@ impl WindowPartitionBuffer {
 
         // Create a `PartitionBuffer` to store partitioned data.
         let partition_buffer = PartitionBuffer::create(num_partitions);
+        let restored_partition_buffer = PartitionBuffer::create(num_partitions);
         Ok(Self {
             spiller,
             spill_settings,
             partition_buffer,
+            restored_partition_buffer,
             num_partitions,
             can_spill: false,
             next_to_restore_partition_id: -1,
@@ -79,7 +82,9 @@ impl WindowPartitionBuffer {
 
     pub fn out_of_memory_limit(&mut self) -> bool {
         // Check if processor memory usage exceeds the threshold.
-        if self.partition_buffer.memory_size() > self.spill_settings.processor_memory_threshold {
+        if self.partition_buffer.memory_size() + self.restored_partition_buffer.memory_size()
+            > self.spill_settings.processor_memory_threshold
+        {
             return true;
         }
 
@@ -207,7 +212,7 @@ impl WindowPartitionBuffer {
                                 .spiller
                                 .read_range(location, data_range.clone(), columns_layout)
                                 .await?;
-                            self.partition_buffer
+                            self.restored_partition_buffer
                                 .add_data_block(partition_id, data_block);
                             partitions.remove(pos);
                             *partial_restored = true;
@@ -218,7 +223,7 @@ impl WindowPartitionBuffer {
                             .read_merged_partitions(merged_partitions)
                             .await?;
                         for (partition_id, data_block) in partitioned_data.into_iter() {
-                            self.partition_buffer
+                            self.restored_partition_buffer
                                 .add_data_block(partition_id, data_block);
                         }
                         *restored = true;
@@ -230,6 +235,19 @@ impl WindowPartitionBuffer {
                 let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
                 if let Some(data_blocks) = self
                     .partition_buffer
+                    .fetch_data_blocks(partition_id, &option)?
+                {
+                    result.extend(data_blocks);
+                }
+            }
+
+            if !self
+                .restored_partition_buffer
+                .is_partition_empty(partition_id)
+            {
+                let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
+                if let Some(data_blocks) = self
+                    .restored_partition_buffer
                     .fetch_data_blocks(partition_id, &option)?
                 {
                     result.extend(data_blocks);
