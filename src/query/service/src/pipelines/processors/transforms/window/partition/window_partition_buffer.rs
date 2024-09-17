@@ -37,7 +37,7 @@ pub struct WindowPartitionBuffer {
     partition_buffer: PartitionBuffer,
     num_partitions: usize,
     can_spill: bool,
-    next_to_restore_partition_id: usize,
+    next_to_restore_partition_id: isize,
     spilled_small_partitions: Vec<Vec<usize>>,
     spilled_merged_partitions: Vec<(SpilledData, bool)>,
 }
@@ -64,7 +64,7 @@ impl WindowPartitionBuffer {
             partition_buffer,
             num_partitions,
             can_spill: false,
-            next_to_restore_partition_id: 0,
+            next_to_restore_partition_id: -1,
             spilled_small_partitions: vec![Vec::new(); num_partitions],
             spilled_merged_partitions: Vec::new(),
         })
@@ -88,6 +88,10 @@ impl WindowPartitionBuffer {
         global_memory_usage > self.spill_settings.global_memory_threshold
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.next_to_restore_partition_id + 1 >= self.num_partitions as isize
+    }
+
     pub fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
         if data_block.is_empty() {
             return;
@@ -103,7 +107,8 @@ impl WindowPartitionBuffer {
 
         // Pick one partition from the last to the first to spill.
         let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
-        for partition_id in (self.next_to_restore_partition_id + 1..self.num_partitions).rev() {
+        let next_to_restore_partition_id = (self.next_to_restore_partition_id + 1) as usize;
+        for partition_id in (next_to_restore_partition_id..self.num_partitions).rev() {
             if !self.partition_buffer.is_partition_empty(partition_id)
                 && self.partition_buffer.partition_memory_size(partition_id) > spill_unit_size
             {
@@ -122,7 +127,7 @@ impl WindowPartitionBuffer {
         // If there is no partition with size greater than `spill_unit_size`, then merge partitions to spill.
         let mut accumulated_bytes = 0;
         let mut partitions_to_spill = Vec::new();
-        for partition_id in (self.next_to_restore_partition_id + 1..self.num_partitions).rev() {
+        for partition_id in (next_to_restore_partition_id..self.num_partitions).rev() {
             if !self.partition_buffer.is_partition_empty(partition_id) {
                 let partition_memory_size =
                     self.partition_buffer.partition_memory_size(partition_id);
@@ -172,8 +177,9 @@ impl WindowPartitionBuffer {
 
     // Restore data blocks from buffer and spilled files.
     pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
-        while self.next_to_restore_partition_id < self.num_partitions {
-            let partition_id = self.next_to_restore_partition_id;
+        while self.next_to_restore_partition_id + 1 < self.num_partitions as isize {
+            self.next_to_restore_partition_id += 1;
+            let partition_id = self.next_to_restore_partition_id as usize;
             // Restore large partitions from spilled files.
             let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
 
@@ -227,16 +233,11 @@ impl WindowPartitionBuffer {
                 }
             }
 
-            self.next_to_restore_partition_id += 1;
             if !result.is_empty() {
                 return Ok(result);
             }
         }
         Ok(vec![])
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.next_to_restore_partition_id >= self.num_partitions
     }
 }
 
