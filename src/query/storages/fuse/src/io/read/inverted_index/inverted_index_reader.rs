@@ -187,7 +187,7 @@ impl InvertedIndexReader {
     //    using `postings_range`.
     // 4. If it's a phrase query, read the `position` of each terms in
     //    `pos` using `positions_range`.
-    // 5. Collect matched doc ids using term-related informations.
+    // 5. Collect matched doc ids using term-related information.
     //
     // If the term does not match, only the `fst` file needs to be read.
     // If the term matches, only the `idx` and `pos` data of the related terms
