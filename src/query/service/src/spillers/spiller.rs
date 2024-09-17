@@ -209,6 +209,7 @@ impl Spiller {
                 writer.write(data).await?;
             }
         }
+        writer.close().await?;
 
         // Record statistics.
         Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
