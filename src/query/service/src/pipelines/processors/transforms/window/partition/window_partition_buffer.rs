@@ -208,9 +208,9 @@ impl WindowPartitionBuffer {
                             .spiller
                             .read_merged_partitions(merged_partitions)
                             .await?;
-                        for (partiton_id, data_block) in partitioned_data.into_iter() {
+                        for (partition_id, data_block) in partitioned_data.into_iter() {
                             self.partition_buffer
-                                .add_data_block(partiton_id, data_block);
+                                .add_data_block(partition_id, data_block);
                         }
                         *valid = false;
                     }
