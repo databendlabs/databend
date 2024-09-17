@@ -53,6 +53,22 @@ pub struct SortColumnDescription {
     pub is_nullable: bool,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum LimitType {
+    None,
+    LimitRows(usize),
+    LimitRank(usize),
+}
+
+impl LimitType {
+    pub fn limit_rows(&self, rows: usize) -> usize {
+        match self {
+            LimitType::LimitRows(limit) => *limit,
+            _ => rows,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SortField {
     pub data_type: DataType,
@@ -78,7 +94,7 @@ impl DataBlock {
     pub fn sort(
         block: &DataBlock,
         descriptions: &[SortColumnDescription],
-        limit: Option<usize>,
+        limit: LimitType,
     ) -> Result<DataBlock> {
         let num_rows = block.num_rows();
         if num_rows <= 1 || block.num_columns() == 0 {
@@ -217,7 +233,7 @@ pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Resul
         })
         .collect::<Vec<_>>();
 
-    let mut sort_compare = SortCompare::new(descriptions, length, None);
+    let mut sort_compare = SortCompare::new(descriptions, length, LimitType::None);
 
     for array in order_columns {
         sort_compare.visit_value(Value::Column(array))?;

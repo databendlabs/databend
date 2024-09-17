@@ -25,11 +25,12 @@ use crate::types::NullableColumn;
 use crate::types::Number;
 use crate::types::ValueType;
 use crate::visitor::ValueVisitor;
+use crate::LimitType;
 use crate::SortColumnDescription;
 
 pub struct SortCompare {
     rows: usize,
-    limit: Option<usize>,
+    limit: LimitType,
     permutation: Vec<u32>,
     ordering_descs: Vec<SortColumnDescription>,
     current_column_index: usize,
@@ -95,16 +96,13 @@ macro_rules! do_sorter {
 }
 
 impl SortCompare {
-    pub fn new(
-        ordering_descs: Vec<SortColumnDescription>,
-        rows: usize,
-        limit: Option<usize>,
-    ) -> Self {
-        let equality_index = if ordering_descs.len() == 1 {
-            vec![]
-        } else {
-            vec![1; rows as _]
-        };
+    pub fn new(ordering_descs: Vec<SortColumnDescription>, rows: usize, limit: LimitType) -> Self {
+        let equality_index =
+            if ordering_descs.len() == 1 && matches!(limit, LimitType::LimitRank(_)) {
+                vec![]
+            } else {
+                vec![1; rows as _]
+            };
         Self {
             rows,
             limit,
@@ -121,16 +119,59 @@ impl SortCompare {
     }
 
     pub fn take_permutation(mut self) -> Vec<u32> {
-        let limit = self.limit.unwrap_or(self.rows);
-        self.permutation.truncate(limit);
-        self.permutation
+        match self.limit {
+            LimitType::None => self.permutation,
+            LimitType::LimitRows(rows) => {
+                self.permutation.truncate(rows);
+                return self.permutation;
+            }
+            LimitType::LimitRank(rank_number) => {
+                let mut unique_count = 0;
+
+                let mut start = 0;
+                // the index of last zero sign
+                let mut zero_index: isize = -1;
+                while start < self.rows {
+                    // Find the first occurrence of 1 in the equality_index using memchr
+                    if let Some(pos) = memchr(1, &self.equality_index[start..self.rows]) {
+                        start += pos;
+                    } else {
+                        start = self.rows;
+                    }
+                    unique_count += (start as isize - zero_index) as usize;
+
+                    if unique_count > rank_number {
+                        start -= unique_count - rank_number;
+                        break;
+                    }
+
+                    if start == self.rows {
+                        break;
+                    }
+
+                    // Find the first occurrence of 0 after the start position using memchr
+                    if let Some(pos) = memchr(0, &self.equality_index[start..self.rows]) {
+                        start += pos;
+                    } else {
+                        start = self.rows;
+                    }
+                    if unique_count == rank_number {
+                        break;
+                    }
+                    zero_index = start as _;
+                }
+
+                self.permutation.truncate(start);
+                self.permutation
+            }
+        }
     }
 
     fn do_inner_sort<C>(&mut self, c: C, range: Range<usize>)
     where C: FnMut(&u32, &u32) -> Ordering + Copy {
         let permutations = &mut self.permutation[range.start..range.end];
 
-        let limit = self.limit.unwrap_or(self.rows);
+        let limit = self.limit.limit_rows(self.rows);
         if limit > range.start && limit < range.end {
             let (p, _, _) = permutations.select_nth_unstable_by(limit - range.start, c);
             p.sort_unstable_by(c);
@@ -139,13 +180,14 @@ impl SortCompare {
         }
     }
 
-    fn common_sort<T, V, G, C>(&mut self, value: V, g: G, c: C)
+    // sort the value using generic G and C
+    fn generic_sort<T, V, G, C>(&mut self, value: V, g: G, c: C)
     where
         G: Fn(V, u32) -> T + Copy,
         V: Copy,
         C: Fn(T, T) -> Ordering + Copy,
     {
-        let mut validity = self.validity.take();
+        let validity = self.validity.take();
         let ordering_desc = self.ordering_descs[self.current_column_index].clone();
 
         // faster path for only one sort column
@@ -177,7 +219,6 @@ impl SortCompare {
                 };
 
                 let range = start - 1..end;
-
                 // Perform the inner sort on the found range
                 do_sorter!(self, value, validity, g, c, ordering_desc, range);
                 if need_update_equality_index {
@@ -218,7 +259,7 @@ impl ValueVisitor for SortCompare {
     // faster path for numeric
     fn visit_number<T: Number>(&mut self, column: Buffer<T>) -> Result<()> {
         let values = column.as_slice();
-        self.common_sort(values, |c, idx| c[idx as usize], |a: T, b: T| a.cmp(&b));
+        self.generic_sort(values, |c, idx| c[idx as usize], |a: T, b: T| a.cmp(&b));
         Ok(())
     }
 
@@ -231,7 +272,7 @@ impl ValueVisitor for SortCompare {
     }
 
     fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
-        self.common_sort(
+        self.generic_sort(
             &col,
             |c, idx| -> T::ScalarRef<'_> { unsafe { T::index_column_unchecked(c, idx as _) } },
             |a, b| T::compare(a, b),
@@ -244,5 +285,41 @@ impl ValueVisitor for SortCompare {
             self.validity = Some(column.validity.clone());
         }
         self.visit_column(column.column.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_take_permutation() {
+        let test_cases1 = vec![
+            (12, LimitType::None, 0..12),
+            (12, LimitType::LimitRows(5), 0..5),
+        ];
+
+        let test_cases2 = vec![
+            (12, LimitType::LimitRank(5), 0..11),
+            (12, LimitType::LimitRank(3), 0..6),
+            (12, LimitType::LimitRank(4), 0..7),
+            (12, LimitType::LimitRank(5), 0..11),
+        ];
+
+        for (c, limit, range) in test_cases1 {
+            let sort_compare = SortCompare::new(vec![], c, limit);
+
+            let permutation = sort_compare.take_permutation();
+            let result: Vec<u32> = range.map(|c| c as u32).collect();
+            assert_eq!(permutation, result);
+        }
+
+        for (c, limit, range) in test_cases2 {
+            let mut sort_compare = SortCompare::new(vec![], c, limit);
+            sort_compare.equality_index = vec![1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0];
+            let permutation = sort_compare.take_permutation();
+            let result: Vec<u32> = range.map(|c| c as u32).collect();
+            assert_eq!(permutation, result);
+        }
     }
 }
