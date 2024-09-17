@@ -229,11 +229,21 @@ impl Spiller {
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         debug_assert!(self.columns_layout.contains_key(file));
-        let data = self.operator.read(file).await?.to_bytes();
-        let bytes = data.len();
 
-        let mut begin = 0;
+        // Read spilled data from storage.
         let instant = Instant::now();
+        let data = self.operator.read(file).await?.to_bytes();
+
+        // Record statistics.
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, data.len());
+        Profile::record_usize_profile(
+            ProfileStatisticsName::SpillReadTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        // Deserialize data block.
+        let mut begin = 0;
         let mut columns = Vec::with_capacity(self.columns_layout.len());
         let columns_layout = self.columns_layout.get(file).unwrap();
         for column_layout in columns_layout.iter() {
@@ -243,16 +253,8 @@ impl Spiller {
             );
             begin += column_layout;
         }
-        let block = DataBlock::new_from_columns(columns);
 
-        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::SpillReadTime,
-            instant.elapsed().as_millis() as usize,
-        );
-
-        Ok(block)
+        Ok(DataBlock::new_from_columns(columns))
     }
 
     #[async_backtrace::framed]
@@ -281,7 +283,19 @@ impl Spiller {
             partitions,
         } = merged_partitions
         {
+            // Read spilled data from storage.
+            let instant = Instant::now();
             let data = self.operator.read(location).await?.to_bytes();
+
+            // Record statistics.
+            Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, data.len());
+            Profile::record_usize_profile(
+                ProfileStatisticsName::SpillReadTime,
+                instant.elapsed().as_millis() as usize,
+            );
+
+            // Deserialize partitioned data block.
             let mut partitioned_data = Vec::with_capacity(partitions.len());
             for (partition_id, range, columns_layout) in partitions.iter() {
                 let mut begin = range.start;
@@ -306,12 +320,24 @@ impl Spiller {
         data_range: Range<u64>,
         columns_layout: &[u64],
     ) -> Result<DataBlock> {
+        // Read spilled data from storage.
+        let instant = Instant::now();
         let data = self
             .operator
             .read_with(location)
             .range(data_range)
             .await?
             .to_vec();
+
+        // Record statistics.
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, data.len());
+        Profile::record_usize_profile(
+            ProfileStatisticsName::SpillReadTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        // Deserialize data block.
         let mut begin = 0;
         let mut columns = Vec::with_capacity(columns_layout.len());
         for column_layout in columns_layout.iter() {
@@ -321,8 +347,8 @@ impl Spiller {
             );
             begin += column_layout;
         }
-        let data_block = DataBlock::new_from_columns(columns);
-        Ok(data_block)
+
+        Ok(DataBlock::new_from_columns(columns))
     }
 
     pub(crate) fn spilled_files(&self) -> Vec<String> {
