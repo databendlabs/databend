@@ -37,7 +37,7 @@ pub struct WindowPartitionBuffer {
     partition_buffer: PartitionBuffer,
     restored_partition_buffer: PartitionBuffer,
     num_partitions: usize,
-    max_block_size: usize,
+    sort_block_size: usize,
     can_spill: bool,
     next_to_restore_partition_id: isize,
     spilled_small_partitions: Vec<Vec<usize>>,
@@ -48,7 +48,7 @@ impl WindowPartitionBuffer {
     pub fn new(
         ctx: Arc<QueryContext>,
         num_partitions: usize,
-        max_block_size: usize,
+        sort_block_size: usize,
         spill_settings: WindowSpillSettings,
     ) -> Result<Self> {
         // Create an inner `Spiller` to spill data.
@@ -68,7 +68,7 @@ impl WindowPartitionBuffer {
             partition_buffer,
             restored_partition_buffer,
             num_partitions,
-            max_block_size,
+            sort_block_size,
             can_spill: false,
             next_to_restore_partition_id: -1,
             spilled_small_partitions: vec![Vec::new(); num_partitions],
@@ -272,7 +272,7 @@ impl WindowPartitionBuffer {
         for data_block in data_blocks.into_iter() {
             num_rows += data_block.num_rows();
             current_blocks.push(data_block);
-            if num_rows >= self.max_block_size {
+            if num_rows >= self.sort_block_size {
                 result.push(DataBlock::concat(&current_blocks)?);
                 num_rows = 0;
                 current_blocks.clear();

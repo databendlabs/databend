@@ -143,6 +143,7 @@ impl PipelineBuilder {
         let settings = self.ctx.get_settings();
         let num_partitions = settings.get_window_num_partitions()?;
         let max_block_size = settings.get_max_block_size()? as usize;
+        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
         let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
         let window_spill_settings = WindowSpillSettings::new(settings.clone(), num_processors)?;
@@ -206,6 +207,7 @@ impl PipelineBuilder {
                 sort_desc.clone(),
                 plan_schema.clone(),
                 max_block_size,
+                sort_block_size,
                 sort_spilling_batch_bytes,
                 enable_loser_tree,
                 have_order_col,

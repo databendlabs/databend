@@ -93,6 +93,7 @@ impl TransformWindowPartitionCollect {
         sort_desc: Vec<SortColumnDescription>,
         schema: DataSchemaRef,
         max_block_size: usize,
+        sort_block_size: usize,
         sort_spilling_batch_bytes: usize,
         enable_loser_tree: bool,
         have_order_col: bool,
@@ -113,7 +114,7 @@ impl TransformWindowPartitionCollect {
 
         // Create the window partition buffer.
         let buffer =
-            WindowPartitionBuffer::new(ctx, partitions.len(), max_block_size, spill_settings)?;
+            WindowPartitionBuffer::new(ctx, partitions.len(), sort_block_size, spill_settings)?;
 
         Ok(Self {
             inputs,
