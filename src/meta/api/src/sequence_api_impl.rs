@@ -16,11 +16,8 @@ use std::fmt::Display;
 
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::CreateSequenceError;
 use databend_common_meta_app::app_error::OutofSequenceRange;
-use databend_common_meta_app::app_error::SequenceAlreadyExists;
 use databend_common_meta_app::app_error::SequenceError;
-use databend_common_meta_app::app_error::UnknownSequence;
 use databend_common_meta_app::app_error::WrongSequenceCount;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -62,7 +59,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<CreateSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let sequence_name = req.ident.name();
         let meta: SequenceMeta = req.clone().into();
 
         let seq = MatchSeq::from(req.create_option);
@@ -81,19 +77,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         if !reply.is_changed() {
             match req.create_option {
                 CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
-                    SequenceError::SequenceAlreadyExists(SequenceAlreadyExists::new(
-                        sequence_name,
-                        format!("create sequence: {:?}", sequence_name),
-                    )),
+                    SequenceError::SequenceAlreadyExists(req.ident.exist_error(func_name!())),
                 ))),
                 CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
                 CreateOption::CreateOrReplace => {
-                    Err(KVAppError::AppError(AppError::SequenceError(
-                        SequenceError::CreateSequenceError(CreateSequenceError::new(
-                            sequence_name,
-                            format!("replace sequence: {:?} fail", sequence_name),
-                        )),
-                    )))
+                    unreachable!("CreateOrReplace should always success")
                 }
             }
         } else {
@@ -219,10 +207,7 @@ async fn get_sequence_or_err(
         debug!(seq = sequence_seq, SequenceIdent :?= (key); "sequence does not exist");
 
         Err(KVAppError::AppError(AppError::SequenceError(
-            SequenceError::UnknownSequence(UnknownSequence::new(
-                key.name(),
-                format!("{}: {:?}", msg, key.name()),
-            )),
+            SequenceError::UnknownSequence(key.unknown_error(msg)),
         )))
     } else {
         Ok((sequence_seq, sequence_meta.unwrap()))

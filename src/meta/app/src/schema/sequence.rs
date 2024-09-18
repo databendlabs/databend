@@ -14,13 +14,13 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use kvapi_impl::Resource;
+pub use kvapi_impl::SequenceRsc;
 
 use super::CreateOption;
 use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for sequence.
-pub type SequenceIdent = TIdent<Resource>;
+pub type SequenceIdent = TIdent<SequenceRsc>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SequenceMeta {
@@ -99,8 +99,8 @@ mod kvapi_impl {
     use super::SequenceMeta;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct SequenceRsc;
+    impl TenantResource for SequenceRsc {
         const PREFIX: &'static str = "__fd_sequence";
         const HAS_TENANT: bool = true;
         type ValueType = SequenceMeta;
