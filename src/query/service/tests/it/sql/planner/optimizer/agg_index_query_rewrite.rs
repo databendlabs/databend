@@ -27,9 +27,9 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_sql::optimizer::agg_index;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::RecursiveOptimizer;
+use databend_common_sql::optimizer::RuleID;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::optimizer::DEFAULT_REWRITE_RULES;
 use databend_common_sql::plans::AggIndexInfo;
@@ -516,28 +516,32 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let _ = interpreter.execute(ctx.clone()).await?;
 
     let test_suites = get_test_suites();
-    for suite in test_suites {
-        let (query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
+    for suite in test_suites.into_iter() {
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
-        let meta = metadata.read();
-        let base_columns = meta.columns_by_table_index(0);
-        let result = agg_index::try_rewrite(0, "t", &base_columns, &query, &[(
-            0,
-            suite.index.to_string(),
-            index,
-        )])?;
+        let (mut query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
+        {
+            let mut metadata = metadata.write();
+            metadata.add_agg_indexes("default.default.t".to_string(), vec![(
+                0,
+                suite.index.to_string(),
+                index,
+            )]);
+        }
+        query.clear_applied_rules();
+        let result = RecursiveOptimizer::new(
+            &[RuleID::TryApplyAggIndex],
+            &OptimizerContext::new(ctx.clone(), metadata.clone()),
+        )
+        .run(&query)?;
+        let agg_index = find_push_down_index_info(&result)?;
         assert_eq!(
             suite.is_matched,
-            result.is_some(),
+            agg_index.is_some(),
             "query: {}, index: {}",
             suite.query,
             suite.index
         );
-        if let Some(result) = result {
-            let agg_index = find_push_down_index_info(&result)?;
-            assert!(agg_index.is_some());
-            let agg_index = agg_index.as_ref().unwrap();
-
+        if let Some(agg_index) = agg_index {
             let selection = format_selection(agg_index);
             assert_eq!(
                 suite.index_selection, selection,

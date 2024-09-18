@@ -365,7 +365,8 @@ impl Binder {
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+                .with_planning_agg_index();
             Ok(optimize(opt_ctx, select_plan).await?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))

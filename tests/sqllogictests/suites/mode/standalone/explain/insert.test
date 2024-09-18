@@ -25,15 +25,13 @@ InsertPlan (subquery):
 ├── table: default.default.t2
 ├── inserted columns: [t2.a (#0),t2.b (#1)]
 ├── overwrite: false
-└── EvalScalar
-    ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1)]
-    └── Filter
+└── Filter
+    ├── filters: [eq(t1.a (#0), 1)]
+    └── Scan
+        ├── table: default.t1
         ├── filters: [eq(t1.a (#0), 1)]
-        └── Scan
-            ├── table: default.t1
-            ├── filters: [eq(t1.a (#0), 1)]
-            ├── order by: []
-            └── limit: NONE
+        ├── order by: []
+        └── limit: NONE
 
 
 
