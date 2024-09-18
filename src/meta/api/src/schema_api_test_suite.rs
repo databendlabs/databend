@@ -80,7 +80,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
-use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -5598,12 +5597,11 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence");
         {
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
-            let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq".to_string()));
-            assert_eq!(resp.meta.current, 1);
+            let req = SequenceIdent::new(&tenant, sequence_name);
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 1);
         }
 
         info!("--- get sequence nextval");
@@ -5619,13 +5617,11 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence after nextval");
         {
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
-
-            let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq".to_string()));
-            assert_eq!(resp.meta.current, 11);
+            let req = SequenceIdent::new(&tenant, sequence_name);
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 11);
         }
 
         info!("--- replace sequence");
@@ -5639,13 +5635,12 @@ impl SchemaApiTestSuite {
 
             let _resp = mt.create_sequence(req).await?;
 
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
+            let req = SequenceIdent::new(&tenant, sequence_name);
 
-            let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq1".to_string()));
-            assert_eq!(resp.meta.current, 1);
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq1".to_string()));
+            assert_eq!(resp.current, 1);
         }
 
         {
@@ -5656,12 +5651,9 @@ impl SchemaApiTestSuite {
 
             let _resp = mt.drop_sequence(req).await?;
 
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
-
-            let resp = mt.get_sequence(req).await;
-            assert!(resp.is_err());
+            let req = SequenceIdent::new(&tenant, sequence_name);
+            let resp = mt.get_sequence(&req).await?;
+            assert!(resp.is_none());
         }
 
         Ok(())
