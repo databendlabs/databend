@@ -21,9 +21,11 @@ use std::io::SeekFrom;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
+use std::os::fd::BorrowedFd;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
+use rustix::fs::OFlags;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 
@@ -130,7 +132,7 @@ impl DmaFile {
     async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
         let file = File::options()
             .read(true)
-            .custom_flags(libc::O_DIRECT)
+            .custom_flags(OFlags::DIRECT.bits() as i32)
             .open(path)
             .await?;
 
@@ -143,7 +145,7 @@ impl DmaFile {
             .write(true)
             .create(true)
             .truncate(true)
-            .custom_flags(libc::O_DIRECT | libc::O_EXCL)
+            .custom_flags((OFlags::DIRECT | OFlags::EXCL).bits() as i32)
             .open(path)
             .await?;
 
@@ -182,34 +184,31 @@ impl DmaFile {
 
     fn write_direct(&mut self) -> io::Result<usize> {
         let buf = self.buffer();
-        let rt = unsafe { libc::write(self.fd.as_raw_fd(), buf.as_ptr().cast(), buf.len()) };
-        unsafe { self.mut_buffer().set_len(0) }
-        if rt >= 0 {
-            Ok(rt as usize)
-        } else {
-            Err(io::Error::last_os_error())
+        match rustix::io::write(&self.fd, &buf) {
+            Ok(n) => {
+                debug_assert_eq!(n, buf.len());
+                unsafe { self.mut_buffer().set_len(0) };
+                Ok(n)
+            }
+            Err(e) => Err(e.into()),
         }
     }
 
     fn read_direct(&mut self) -> io::Result<usize> {
-        let fd = self.fd.as_raw_fd();
-        let buf = self.mut_buffer();
-        let rt = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.capacity()) };
-        if rt >= 0 {
-            unsafe { buf.set_len(rt as usize) }
-            Ok(rt as usize)
-        } else {
-            Err(io::Error::last_os_error())
+        let Self { fd, buf, .. } = self;
+        let buf = buf.as_mut().unwrap();
+        unsafe { buf.set_len(buf.capacity()) };
+        match rustix::io::read(fd, buf) {
+            Ok(n) => {
+                unsafe { buf.set_len(n) };
+                Ok(n)
+            }
+            Err(e) => Err(e.into()),
         }
     }
 
-    fn truncate(&self, length: usize) -> io::Result<usize> {
-        let rt = unsafe { libc::ftruncate64(self.fd.as_raw_fd(), length as i64) };
-        if rt >= 0 {
-            Ok(rt as usize)
-        } else {
-            Err(io::Error::last_os_error())
-        }
+    fn truncate(&self, length: usize) -> io::Result<()> {
+        rustix::fs::ftruncate(&self.fd, length as u64).map_err(|e| e.into())
     }
 
     async fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
@@ -238,16 +237,11 @@ async fn open_dma(file: File) -> io::Result<DmaFile> {
     })
 }
 
-async fn fstatfs(file: &File) -> io::Result<libc::statfs> {
+async fn fstatfs(file: &File) -> io::Result<rustix::fs::StatFs> {
     let fd = file.as_raw_fd();
     asyncify(move || {
-        let mut statfs = std::mem::MaybeUninit::<libc::statfs>::uninit();
-        let ret = unsafe { libc::fstatfs(fd, statfs.as_mut_ptr()) };
-        if ret == -1 {
-            return Err(io::Error::last_os_error());
-        }
-
-        Ok(unsafe { statfs.assume_init() })
+        let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+        rustix::fs::fstatfs(fd).map_err(|e| e.into())
     })
     .await
 }
