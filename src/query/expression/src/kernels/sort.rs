@@ -94,6 +94,20 @@ impl DataBlock {
     pub fn sort(
         block: &DataBlock,
         descriptions: &[SortColumnDescription],
+        limit: Option<usize>,
+    ) -> Result<DataBlock> {
+        let limit = if let Some(l) = limit {
+            LimitType::LimitRows(l)
+        } else {
+            LimitType::None
+        };
+
+        Self::sort_with_type(block, descriptions, limit)
+    }
+
+    pub fn sort_with_type(
+        block: &DataBlock,
+        descriptions: &[SortColumnDescription],
         limit: LimitType,
     ) -> Result<DataBlock> {
         let num_rows = block.num_rows();

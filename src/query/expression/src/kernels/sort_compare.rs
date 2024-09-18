@@ -123,7 +123,7 @@ impl SortCompare {
             LimitType::None => self.permutation,
             LimitType::LimitRows(rows) => {
                 self.permutation.truncate(rows);
-                return self.permutation;
+                self.permutation
             }
             LimitType::LimitRank(rank_number) => {
                 let mut unique_count = 0;

@@ -22,7 +22,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 
 use crate::common::new_block;
@@ -102,11 +101,6 @@ fn test_block_sort() -> Result<()> {
     ];
 
     for (sort_descs, limit, expected) in test_cases {
-        let limit = if let Some(l) = limit {
-            LimitType::LimitRows(l)
-        } else {
-            LimitType::None
-        };
         let res = DataBlock::sort(&block, &sort_descs, limit)?;
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
@@ -193,11 +187,6 @@ fn test_block_sort() -> Result<()> {
     ];
 
     for (sort_descs, limit, expected) in test_cases {
-        let limit = if let Some(l) = limit {
-            LimitType::LimitRows(l)
-        } else {
-            LimitType::None
-        };
         let res = DataBlock::sort(&decimal_block, &sort_descs, limit)?;
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
@@ -212,7 +201,7 @@ fn test_block_sort() -> Result<()> {
 
         // test new sort algorithm
         let res = DataBlock::sort_old(&decimal_block, &sort_descs, Some(decimal_block.num_rows()))?;
-        let res_new = DataBlock::sort(&decimal_block, &sort_descs, LimitType::None)?;
+        let res_new = DataBlock::sort(&decimal_block, &sort_descs, None)?;
         assert_block_value_eq(&res, &res_new);
     }
 
