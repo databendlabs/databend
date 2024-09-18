@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::OutofSequenceRange;
@@ -27,10 +25,8 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReq;
-use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -39,15 +35,13 @@ use fastrace::func_name;
 use log::debug;
 
 use crate::databend_common_meta_types::With;
-use crate::get_pb_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::send_txn;
-use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_seq;
-use crate::txn_op_put;
+use crate::txn_cond_eq_seq;
+use crate::util::txn_op_put_pb;
 use crate::SequenceApi;
 
 #[async_trait::async_trait]
@@ -92,7 +86,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-    ) -> Result<Option<SeqV<SequenceMeta>>, KVAppError> {
+    ) -> Result<Option<SeqV<SequenceMeta>>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let seq_meta = self.get_pb(&req.ident).await?;
         Ok(seq_meta)
@@ -115,12 +109,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-            let (sequence_seq, mut sequence_meta) = get_sequence_or_err(
-                self,
-                &ident,
-                format!("get_sequence_next_values: {:?}", sequence_name),
-            )
-            .await?;
+            let seq_meta = self.get_pb(&ident).await?;
+            let Some(seq_meta) = seq_meta else {
+                return Err(AppError::SequenceError(SequenceError::UnknownSequence(
+                    ident.unknown_error(func_name!()),
+                ))
+                .into());
+            };
+            let sequence_seq = seq_meta.seq;
+            let mut sequence_meta = seq_meta.data;
 
             let start = sequence_meta.current;
             let count = req.count;
@@ -140,9 +137,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             sequence_meta.current += count;
             sequence_meta.update_on = Utc::now();
 
-            let condition = vec![txn_cond_seq(&ident, Eq, sequence_seq)];
+            let condition = vec![txn_cond_eq_seq(&ident, sequence_seq)];
             let if_then = vec![
-                txn_op_put(&ident, serialize_struct(&sequence_meta)?), // name -> meta
+                txn_op_put_pb(&ident, &sequence_meta, None)?, // name -> meta
             ];
 
             let txn_req = TxnRequest {
@@ -186,24 +183,5 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let prev = reply.prev.map(|prev| prev.seq);
 
         Ok(DropSequenceReply { prev })
-    }
-}
-
-/// Returns (seq, sequence_meta)
-async fn get_sequence_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &SequenceIdent,
-    msg: impl Display,
-) -> Result<(u64, SequenceMeta), KVAppError> {
-    let (sequence_seq, sequence_meta) = get_pb_value(kv_api, key).await?;
-
-    if sequence_seq == 0 {
-        debug!(seq = sequence_seq, SequenceIdent :?= (key); "sequence does not exist");
-
-        Err(KVAppError::AppError(AppError::SequenceError(
-            SequenceError::UnknownSequence(key.unknown_error(msg)),
-        )))
-    } else {
-        Ok((sequence_seq, sequence_meta.unwrap()))
     }
 }
