@@ -113,3 +113,34 @@ mod kvapi_impl {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_kvapi::kvapi::Key;
+
+    use crate::schema::SequenceIdent;
+    use crate::tenant::Tenant;
+
+    #[test]
+    fn test_sequence_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = SequenceIdent::new_generic(tenant, "3".to_string());
+
+        let key = ident.to_string_key();
+        assert_eq!(key, "__fd_sequence/dummy/3");
+
+        assert_eq!(ident, SequenceIdent::from_str_key(&key).unwrap());
+    }
+
+    #[test]
+    fn test_sequence_ident_with_key_space() {
+        // TODO(xp): implement this test
+        // let tenant = Tenant::new_literal("test");
+        // let ident = IndexIdIdent::new(tenant, 3);
+        //
+        // let key = ident.to_string_key();
+        // assert_eq!(key, "__fd_catalog_by_id/3");
+        //
+        // assert_eq!(ident, IndexIdIdent::from_str_key(&key).unwrap());
+    }
+}
