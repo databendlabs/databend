@@ -137,7 +137,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (105, "2024-08-05: Add: add Dictionary meta"),
     (106, "2024-08-08: Add: add QueryTokenInfo"),
     (107, "2024-08-09: Add: datatype.proto/DataType Geography type"),
-    (108, "2024-08-29: Add: procedure.proto: ProcedureMeta and ProcedureIdentity")
+    (108, "2024-08-29: Add: procedure.proto: ProcedureMeta and ProcedureIdentity"),
+    (109, "2024-09-18: Add: database.proto: DatabaseMeta.gc_in_progress"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

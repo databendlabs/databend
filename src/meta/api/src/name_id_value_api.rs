@@ -449,6 +449,7 @@ mod tests {
             updated_on: Default::default(),
             comment: "".to_string(),
             drop_on: None,
+            gc_in_progress: false,
         };
 
         let v = db_meta(1).to_pb()?.encode_to_vec();

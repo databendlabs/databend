@@ -70,6 +70,11 @@ message DatabaseMeta {
   // The time table dropped.
   optional string drop_on = 23;
 
+  // Indicates whether garbage collection is currently in progress for this dropped database.
+  //
+  // If it is in progress, the database should not be un-dropped, because the data may be incomplete.
+  bool gc_in_progress = 29;
+
   repeated uint64 shared_by = 24;
 
   optional TIdent from_share = 25;
