@@ -322,7 +322,7 @@ query T
 explain syntax with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
 ----
 WITH
-    cte(a, b) AS 
+    cte(a, b) AS
     (
         SELECT
             1,
@@ -341,7 +341,7 @@ query T
 explain syntax with cte (a, b) as (values(1,2),(3,4)) select a, b from cte
 ----
 WITH
-    cte(a, b) AS 
+    cte(a, b) AS
     (
         VALUES(1, 2), (3, 4)
     )
@@ -1037,7 +1037,7 @@ Sort
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
     ├── build keys: [b.register_at (#3), numbers.number (#2)]
-    ├── probe keys: [a.pt (#1), numbers.number (#0)]
+    ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
@@ -1266,21 +1266,19 @@ Sort
 query T
 EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
-EvalScalar
-├── scalars: [t1.i (#0) AS (#0), t1.j (#1) AS (#1), t2.k (#2) AS (#2), t2.l (#3) AS (#3)]
-└── Sort
-    ├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
-    ├── limit: [NONE]
-    └── Join(Left)
-        ├── build keys: [t2.k (#2)]
-        ├── probe keys: [t1.i (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EmptyResultScan
+Sort
+├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
+├── limit: [NONE]
+└── Join(Left)
+    ├── build keys: [t2.k (#2)]
+    ├── probe keys: [t1.i (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t1
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EmptyResultScan
 
 
 statement ok
@@ -1621,13 +1619,11 @@ InsertPlan (subquery):
 ├── table: default.default.t2
 ├── inserted columns: [t2.a (#0),t2.b (#1),t2.c (#2)]
 ├── overwrite: false
-└── EvalScalar
-    ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t1.c (#2) AS (#2)]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── Scan
+    ├── table: default.t1
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
 
 
 statement ok

@@ -25,6 +25,7 @@ use super::rewrite::RulePushDownFilterWindow;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitEvalScalar;
 use super::rewrite::RulePushDownPrewhere;
+use super::rewrite::RulePushDownSortEvalScalar;
 use super::rewrite::RuleTryApplyAggIndex;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleEliminateSort;
@@ -57,7 +58,7 @@ pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
 impl RuleFactory {
     pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
         match id {
-            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
+            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(metadata))),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),
@@ -68,6 +69,9 @@ impl RuleFactory {
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
+            RuleID::PushDownSortEvalScalar => {
+                Ok(Box::new(RulePushDownSortEvalScalar::new(metadata)))
+            }
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
             RuleID::PushDownLimitSort => {
