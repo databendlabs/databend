@@ -408,7 +408,7 @@ impl Settings {
     }
 
     pub fn get_window_partition_sort_block_size(&self) -> Result<u64> {
-        Ok(self.try_get_u64("window_partition_sort_block_size")?)
+        self.try_get_u64("window_partition_sort_block_size")
     }
 
     pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
