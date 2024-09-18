@@ -24,7 +24,7 @@ use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
-use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MatchSeq;
@@ -85,10 +85,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
     async fn get_sequence(
         &self,
-        req: GetSequenceReq,
+        name_ident: &SequenceIdent,
     ) -> Result<Option<SeqV<SequenceMeta>>, MetaError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let seq_meta = self.get_pb(&req.ident).await?;
+        debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
+        let seq_meta = self.get_pb(name_ident).await?;
         Ok(seq_meta)
     }
 

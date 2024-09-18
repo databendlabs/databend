@@ -18,7 +18,7 @@ use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
-use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -34,7 +34,7 @@ pub trait SequenceApi: Send + Sync {
 
     async fn get_sequence(
         &self,
-        req: GetSequenceReq,
+        req: &SequenceIdent,
     ) -> Result<Option<SeqV<SequenceMeta>>, MetaError>;
 
     async fn get_sequence_next_value(
