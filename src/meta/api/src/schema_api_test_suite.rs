@@ -5602,8 +5602,9 @@ impl SchemaApiTestSuite {
                 ident: SequenceIdent::new(&tenant, sequence_name),
             };
             let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq".to_string()));
-            assert_eq!(resp.meta.current, 1);
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 1);
         }
 
         info!("--- get sequence nextval");
@@ -5624,8 +5625,9 @@ impl SchemaApiTestSuite {
             };
 
             let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq".to_string()));
-            assert_eq!(resp.meta.current, 11);
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 11);
         }
 
         info!("--- replace sequence");
@@ -5644,8 +5646,9 @@ impl SchemaApiTestSuite {
             };
 
             let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq1".to_string()));
-            assert_eq!(resp.meta.current, 1);
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq1".to_string()));
+            assert_eq!(resp.current, 1);
         }
 
         {
@@ -5660,8 +5663,8 @@ impl SchemaApiTestSuite {
                 ident: SequenceIdent::new(&tenant, sequence_name),
             };
 
-            let resp = mt.get_sequence(req).await;
-            assert!(resp.is_err());
+            let resp = mt.get_sequence(req).await?;
+            assert!(resp.is_none());
         }
 
         Ok(())

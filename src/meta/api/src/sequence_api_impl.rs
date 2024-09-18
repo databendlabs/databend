@@ -26,7 +26,6 @@ use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
-use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
@@ -34,6 +33,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
@@ -89,19 +89,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         }
     }
 
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply, KVAppError> {
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+    ) -> Result<Option<SeqV<SequenceMeta>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let sequence_name = req.ident.name();
-        let (_sequence_seq, sequence_meta) = get_sequence_or_err(
-            self,
-            &req.ident,
-            format!("get_sequence_next_values: {:?}", sequence_name),
-        )
-        .await?;
-
-        Ok(GetSequenceReply {
-            meta: sequence_meta,
-        })
+        let seq_meta = self.get_pb(&req.ident).await?;
+        Ok(seq_meta)
     }
 
     async fn get_sequence_next_value(

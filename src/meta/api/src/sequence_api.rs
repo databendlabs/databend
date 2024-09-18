@@ -18,8 +18,9 @@ use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
-use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 
@@ -30,7 +31,10 @@ pub trait SequenceApi: Send + Sync {
         req: CreateSequenceReq,
     ) -> Result<CreateSequenceReply, KVAppError>;
 
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply, KVAppError>;
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+    ) -> Result<Option<SeqV<SequenceMeta>>, KVAppError>;
 
     async fn get_sequence_next_value(
         &self,

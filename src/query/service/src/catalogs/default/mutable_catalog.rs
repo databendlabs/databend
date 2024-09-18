@@ -687,7 +687,17 @@ impl Catalog for MutableCatalog {
     }
 
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
-        Ok(self.ctx.meta.get_sequence(req).await?)
+        let seq_meta = self.ctx.meta.get_sequence(req).await?;
+
+        let Some(seq_meta) = seq_meta else {
+            return Err(KVAppError::AppError(AppError::SequenceError(
+                req.ident.unknown_error(func_name!()).into(),
+            ))
+            .into());
+        };
+        Ok(GetSequenceReply {
+            meta: seq_meta.data,
+        })
     }
 
     async fn get_sequence_next_value(
