@@ -90,26 +90,7 @@ impl Processor for TransformWindowPartitionScatter {
 
     fn event(&mut self) -> Result<Event> {
         if !self.is_initialized {
-            let mut all_output_finished = true;
-            let mut all_output_can_push = true;
-            for (index, output_port) in self.output_ports.iter().enumerate() {
-                if output_port.is_finished() {
-                    self.output_data_blocks[index].clear();
-                    continue;
-                }
-                all_output_finished = false;
-
-                if !output_port.can_push() {
-                    all_output_can_push = false;
-                    continue;
-                }
-            }
-            if all_output_finished {
-                return self.finish();
-            }
-            if all_output_can_push {
-                self.is_initialized = true;
-            }
+            self.is_initialized = true;
             self.input_port.set_need_data();
             return Ok(Event::NeedData);
         }
