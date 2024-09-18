@@ -92,8 +92,9 @@ impl Processor for TransformWindowPartitionScatter {
         if !self.is_initialized {
             let mut all_output_finished = true;
             let mut all_output_can_push = true;
-            for output_port in self.output_ports.iter() {
+            for (index, output_port) in self.output_ports.iter().enumerate() {
                 if output_port.is_finished() {
+                    self.output_data_blocks[index].clear();
                     continue;
                 }
                 all_output_finished = false;

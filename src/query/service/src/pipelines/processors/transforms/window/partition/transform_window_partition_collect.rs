@@ -112,7 +112,8 @@ impl TransformWindowPartitionCollect {
         }
 
         // Create the window partition buffer.
-        let buffer = WindowPartitionBuffer::new(ctx, partitions.len(), spill_settings)?;
+        let buffer =
+            WindowPartitionBuffer::new(ctx, partitions.len(), max_block_size, spill_settings)?;
 
         Ok(Self {
             inputs,
