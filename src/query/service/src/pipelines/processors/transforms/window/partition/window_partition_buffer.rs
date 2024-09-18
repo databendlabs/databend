@@ -37,6 +37,7 @@ pub struct WindowPartitionBuffer {
     partition_buffer: PartitionBuffer,
     restored_partition_buffer: PartitionBuffer,
     num_partitions: usize,
+    max_block_size: usize,
     can_spill: bool,
     next_to_restore_partition_id: isize,
     spilled_small_partitions: Vec<Vec<usize>>,
@@ -47,6 +48,7 @@ impl WindowPartitionBuffer {
     pub fn new(
         ctx: Arc<QueryContext>,
         num_partitions: usize,
+        max_block_size: usize,
         spill_settings: WindowSpillSettings,
     ) -> Result<Self> {
         // Create an inner `Spiller` to spill data.
@@ -66,6 +68,7 @@ impl WindowPartitionBuffer {
             partition_buffer,
             restored_partition_buffer,
             num_partitions,
+            max_block_size,
             can_spill: false,
             next_to_restore_partition_id: -1,
             spilled_small_partitions: vec![Vec::new(); num_partitions],
@@ -237,7 +240,7 @@ impl WindowPartitionBuffer {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &option)?
                 {
-                    result.extend(data_blocks);
+                    result.extend(self.concat_data_blocks(data_blocks)?);
                 }
             }
 
@@ -250,7 +253,7 @@ impl WindowPartitionBuffer {
                     .restored_partition_buffer
                     .fetch_data_blocks(partition_id, &option)?
                 {
-                    result.extend(data_blocks);
+                    result.extend(self.concat_data_blocks(data_blocks)?);
                 }
             }
 
@@ -259,6 +262,28 @@ impl WindowPartitionBuffer {
             }
         }
         Ok(vec![])
+    }
+
+    fn concat_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        let mut num_rows = 0;
+        let mut result = Vec::new();
+        let mut current_blocks = Vec::new();
+
+        for data_block in data_blocks.into_iter() {
+            num_rows += data_block.num_rows();
+            current_blocks.push(data_block);
+            if num_rows >= self.max_block_size {
+                result.push(DataBlock::concat(&current_blocks)?);
+                num_rows = 0;
+                current_blocks.clear();
+            }
+        }
+
+        if !current_blocks.is_empty() {
+            result.push(DataBlock::concat(&current_blocks)?);
+        }
+
+        Ok(result)
     }
 }
 
