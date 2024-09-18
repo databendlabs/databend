@@ -19,6 +19,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_expression::types::DataType;
 
 use crate::principal::procedure_id_ident::ProcedureIdIdent;
@@ -71,10 +72,10 @@ impl Display for ProcedureMeta {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "Lanuage: {:?}, args {:?} return_type: {:?}, CreatedOn: {:?}, Script: {:?}, Comment: {:?}",
+            "Lanuage: {:?}, args {} return_type: {}, CreatedOn: {:?}, Script: {}, Comment: {:?}",
             self.procedure_language,
-            self.arg_names,
-            self.return_types,
+            self.arg_names.display_n::<1000>(),
+            self.return_types.display_n::<1000>(),
             self.created_on,
             self.script,
             self.comment

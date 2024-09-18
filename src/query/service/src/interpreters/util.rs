@@ -368,7 +368,7 @@ impl Client for ScriptClient {
         Ok(cell)
     }
 
-    fn set_len(&self, set: &Self::Set) -> usize {
+    fn num_rows(&self, set: &Self::Set) -> usize {
         set.block.num_rows()
     }
 

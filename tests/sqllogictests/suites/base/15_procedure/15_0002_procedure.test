@@ -58,7 +58,7 @@ query T
 select name, arguments from system.procedures where name = 'p1';
 ----
 p1 p1() RETURN (Int32)
-p1 p1(uint8,uint8) RETURN (Int32)
+p1 p1(UInt8,UInt8) RETURN (Int32)
 
 statement ok
 drop procedure p1();

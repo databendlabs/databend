@@ -137,7 +137,7 @@ impl Binder {
                     arg_type = arg_type.wrap_nullable();
                 }
             }
-            arg_types.push(arg_type.to_string().to_lowercase());
+            arg_types.push(arg_type.to_string());
         }
         let req = GetProcedureReq {
             inner: ProcedureNameIdent::new(

@@ -3680,6 +3680,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "cron",
  "databend-common-ast",
+ "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
  "databend-common-expression",
