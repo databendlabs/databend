@@ -54,6 +54,7 @@ Limit
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
             ├── estimated rows: 0.00
+            ├── rank limit: 1
             └── Filter
                 ├── output columns: [numbers.number (#0)]
                 ├── filters: [numbers.number (#0) > 1]
