@@ -20,6 +20,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::PhysicalPlan;
@@ -35,6 +36,8 @@ pub struct AggregatePartial {
     pub enable_experimental_aggregate_hashtable: bool,
     pub group_by_display: Vec<String>,
 
+    // Order by keys if keys are subset of group by key, then we can use rank to filter data in previous
+    pub rank_limit: Option<(Vec<SortDesc>, usize)>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }

@@ -94,6 +94,7 @@ Limit
             ├── group by: [number]
             ├── aggregate functions: []
             ├── estimated rows: 0.20
+            ├── rank limit: 3
             └── Filter
                 ├── output columns: [t.number (#0)]
                 ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(true, TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0))]

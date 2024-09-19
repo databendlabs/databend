@@ -119,7 +119,7 @@ impl RuleNormalizeAggregateOptimizer {
             group_items: aggregate.group_items,
             aggregate_functions: new_aggregate_functions,
             from_distinct: aggregate.from_distinct,
-            limit: aggregate.limit,
+            rank_limit: aggregate.rank_limit,
             grouping_sets: aggregate.grouping_sets,
         };
 
