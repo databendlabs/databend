@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Range;
@@ -63,7 +64,7 @@ impl Geography {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GeographyRef<'a>(pub &'a [u8]);
 
 impl<'a> GeographyRef<'a> {
@@ -233,8 +234,9 @@ impl ValueType for GeographyType {
         col.memory_size()
     }
 
-    fn compare(a: Self::ScalarRef<'_>, b: Self::ScalarRef<'_>) -> Option<std::cmp::Ordering> {
-        a.partial_cmp(&b)
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 }
 

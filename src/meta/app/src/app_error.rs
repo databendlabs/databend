@@ -26,6 +26,7 @@ use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
 use crate::schema::virtual_column_ident;
 use crate::schema::DictionaryIdentity;
+use crate::schema::SequenceRsc;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::ident::TIdent;
@@ -866,54 +867,6 @@ impl IndexColumnIdNotFound {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("CreateSequenceError: `{name}` while `{context}`")]
-pub struct CreateSequenceError {
-    name: String,
-    context: String,
-}
-
-impl CreateSequenceError {
-    pub fn new(name: impl ToString, context: impl ToString) -> Self {
-        Self {
-            name: name.to_string(),
-            context: context.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("SequenceAlreadyExists: `{name}` while `{context}`")]
-pub struct SequenceAlreadyExists {
-    name: String,
-    context: String,
-}
-
-impl SequenceAlreadyExists {
-    pub fn new(name: impl ToString, context: impl ToString) -> Self {
-        Self {
-            name: name.to_string(),
-            context: context.to_string(),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("UnknownSequence: `{name}` while `{context}`")]
-pub struct UnknownSequence {
-    name: String,
-    context: String,
-}
-
-impl UnknownSequence {
-    pub fn new(name: impl ToString, context: impl ToString) -> Self {
-        Self {
-            name: name.to_string(),
-            context: context.to_string(),
-        }
-    }
-}
-
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("OutofSequenceRange: `{name}` while `{context}`")]
 pub struct OutofSequenceRange {
@@ -1175,13 +1128,10 @@ impl AppError {
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum SequenceError {
     #[error(transparent)]
-    CreateSequenceError(#[from] CreateSequenceError),
+    SequenceAlreadyExists(#[from] ExistError<SequenceRsc>),
 
     #[error(transparent)]
-    SequenceAlreadyExists(#[from] SequenceAlreadyExists),
-
-    #[error(transparent)]
-    UnknownSequence(#[from] UnknownSequence),
+    UnknownSequence(#[from] UnknownError<SequenceRsc>),
 
     #[error(transparent)]
     OutofSequenceRange(#[from] OutofSequenceRange),
@@ -1500,24 +1450,6 @@ impl AppErrorMessage for UnmatchMaskPolicyReturnType {
     }
 }
 
-impl AppErrorMessage for CreateSequenceError {
-    fn message(&self) -> String {
-        format!("Create Sequence {} Error", self.name)
-    }
-}
-
-impl AppErrorMessage for SequenceAlreadyExists {
-    fn message(&self) -> String {
-        format!("Sequence '{}' already exists", self.name)
-    }
-}
-
-impl AppErrorMessage for UnknownSequence {
-    fn message(&self) -> String {
-        format!("Sequence '{}' does not exists", self.name)
-    }
-}
-
 impl AppErrorMessage for OutofSequenceRange {
     fn message(&self) -> String {
         format!("Sequence '{}' out of range", self.name)
@@ -1533,9 +1465,6 @@ impl AppErrorMessage for WrongSequenceCount {
 impl AppErrorMessage for SequenceError {
     fn message(&self) -> String {
         match self {
-            SequenceError::CreateSequenceError(e) => {
-                format!("CreateSequenceError: '{}'", e.message())
-            }
             SequenceError::SequenceAlreadyExists(e) => {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
@@ -1675,7 +1604,6 @@ impl From<AppError> for ErrorCode {
 impl From<SequenceError> for ErrorCode {
     fn from(app_err: SequenceError) -> Self {
         match app_err {
-            SequenceError::CreateSequenceError(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::SequenceAlreadyExists(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::UnknownSequence(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::OutofSequenceRange(err) => ErrorCode::SequenceError(err.message()),

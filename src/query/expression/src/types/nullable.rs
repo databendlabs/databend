@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::ops::Range;
 
@@ -221,6 +222,17 @@ impl<T: ValueType> ValueType for NullableType<T> {
 
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
+    }
+
+    // Null default lastly
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        match (lhs, rhs) {
+            (Some(lhs), Some(rhs)) => T::compare(lhs, rhs),
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => Ordering::Equal,
+        }
     }
 }
 

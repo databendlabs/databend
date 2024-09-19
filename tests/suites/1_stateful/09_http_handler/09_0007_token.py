@@ -53,7 +53,7 @@ def do_logout(_case_id, session_token):
 
 
 def do_verify(session_token):
-    for token in [session_token, 'xxx']:
+    for token in [session_token, "xxx"]:
         print("---- verify token ", token)
         response = requests.get(
             verify_url,
@@ -62,7 +62,7 @@ def do_verify(session_token):
         print(response.status_code)
         print(response.text)
 
-    for a in [auth, ('u', 'p')]:
+    for a in [auth, ("u", "p")]:
         print("---- verify password: ", a)
         response = requests.post(
             verify_url,
@@ -116,9 +116,12 @@ def fake_expired_token(ty):
         "nonce": "",
         "sid": "",
     }
-    return "bend-v1-" + ty + '-' + base64.b64encode(
-        json.dumps(expired_claim).encode("utf-8")
-    ).decode("utf-8")
+    return (
+        "bend-v1-"
+        + ty
+        + "-"
+        + base64.b64encode(json.dumps(expired_claim).encode("utf-8")).decode("utf-8")
+    )
 
 
 def main():
@@ -133,7 +136,6 @@ def main():
     pprint(query_resp.get("data"))
     pprint(query_resp.get("session").get("need_sticky"))
     pprint(query_resp.get("session").get("need_refresh"))
-
 
     # cluster
     query_resp = do_query("select count(*) from system.clusters", session_token)
@@ -156,7 +158,7 @@ def main():
     # errors
     do_query("select 2", "xxx")
     do_query("select 3", "bend-v1-s-xxx")
-    do_query("select 4", fake_expired_token('s'))
+    do_query("select 4", fake_expired_token("s"))
     do_query("select 5", refresh_token)
 
     renew_resp = do_refresh(1, refresh_token, session_token)
@@ -174,7 +176,7 @@ def main():
     # errors
     do_refresh(2, "xxx", session_token)
     do_refresh(3, "bend-v1-xxx", session_token)
-    do_refresh(4, fake_expired_token('r'), session_token)
+    do_refresh(4, fake_expired_token("r"), session_token)
     do_refresh(5, session_token, session_token)
 
     # test new_refresh_token works

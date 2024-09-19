@@ -70,6 +70,7 @@ impl FromToProto for mt::principal::ProcedureMeta {
 
         let v = Self {
             return_types,
+            arg_names: p.arg_names.clone(),
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             script: p.script,
@@ -94,6 +95,7 @@ impl FromToProto for mt::principal::ProcedureMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             return_types,
+            arg_names: self.arg_names.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             script: self.script.to_string(),

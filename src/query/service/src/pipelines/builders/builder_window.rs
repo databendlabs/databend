@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -22,21 +22,15 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
-use databend_common_storage::DataOperator;
-use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::FrameBound;
-use crate::pipelines::processors::transforms::TransformWindowPartitionBucket;
+use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::TransformWindowPartitionScatter;
-use crate::pipelines::processors::transforms::TransformWindowPartitionSort;
-use crate::pipelines::processors::transforms::TransformWindowPartitionSpillReader;
-use crate::pipelines::processors::transforms::TransformWindowPartitionSpillWriter;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
+use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
 
@@ -45,7 +39,6 @@ impl PipelineBuilder {
         self.build_pipeline(&window.input)?;
 
         let input_schema = window.input.output_schema()?;
-
         let partition_by = window
             .partition_by
             .iter()
@@ -54,7 +47,6 @@ impl PipelineBuilder {
                 Ok(offset)
             })
             .collect::<Result<Vec<_>>>()?;
-
         let order_by = window
             .order_by
             .iter()
@@ -139,20 +131,29 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_window_partition_pipeline(
+    pub(crate) fn build_window_partition(
         &mut self,
         window_partition: &WindowPartition,
     ) -> Result<()> {
         self.build_pipeline(&window_partition.input)?;
 
-        let plan_schema = window_partition.output_schema()?;
+        let num_processors = self.main_pipeline.output_len();
 
+        // Settings.
+        let settings = self.ctx.get_settings();
+        let num_partitions = settings.get_window_num_partitions()?;
+        let max_block_size = settings.get_max_block_size()? as usize;
+        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
+        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
+        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+        let window_spill_settings = WindowSpillSettings::new(settings.clone(), num_processors)?;
+
+        let plan_schema = window_partition.output_schema()?;
         let partition_by = window_partition
             .partition_by
             .iter()
             .map(|index| plan_schema.index_of(&index.to_string()))
             .collect::<Result<Vec<_>>>()?;
-
         let sort_desc = window_partition
             .order_by
             .iter()
@@ -166,78 +167,58 @@ impl PipelineBuilder {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformWindowPartitionScatter::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    partition_by.clone(),
-                )?,
-            ))
-        })?;
-
-        let operator = DataOperator::instance().operator();
-        let location_prefix =
-            query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformWindowPartitionSpillWriter::create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    operator.clone(),
-                    location_prefix.clone(),
-                ),
-            ))
-        })?;
-
-        let input_nums = self.main_pipeline.output_len();
-        let transform = TransformWindowPartitionBucket::create(input_nums)?;
-
-        let inputs = transform.get_inputs();
-        let output = transform.get_output();
-
-        self.main_pipeline
-            .add_pipe(Pipe::create(inputs.len(), 1, vec![PipeItem::create(
-                ProcessorPtr::create(Box::new(transform)),
-                inputs,
-                vec![output],
-            )]));
-
-        self.main_pipeline.try_resize(input_nums)?;
-
-        let max_spill_io_requests = self.settings.get_max_spill_io_requests()? as usize;
-        let semaphore = Arc::new(Semaphore::new(max_spill_io_requests));
-        self.main_pipeline.add_transform(|input, output| {
-            TransformWindowPartitionSpillReader::create(
-                input,
-                output,
-                operator.clone(),
-                semaphore.clone(),
-            )
-        })?;
-
-        let block_size = self.settings.get_max_block_size()? as usize;
-        let sort_spilling_batch_bytes = self.ctx.get_settings().get_sort_spilling_batch_bytes()?;
-        let enable_loser_tree = self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformWindowPartitionSort::try_create(
-                    input,
-                    output,
-                    sort_desc.clone(),
-                    plan_schema.clone(),
-                    block_size,
-                    sort_spilling_batch_bytes,
-                    enable_loser_tree,
-                    have_order_col,
-                )?,
-            ))
-        })?;
+        // 1. Build window partition scatter processors.
+        let mut pipe_items = Vec::with_capacity(num_processors);
+        for _ in 0..num_processors {
+            let processor = TransformWindowPartitionScatter::new(
+                num_processors,
+                num_partitions,
+                partition_by.clone(),
+            )?;
+            pipe_items.push(processor.into_pipe_item());
+        }
+        self.main_pipeline.add_pipe(Pipe::create(
+            num_processors,
+            num_processors * num_processors,
+            pipe_items,
+        ));
+
+        // 2. Build shuffle processor.
+        let mut rule = Vec::with_capacity(num_processors * num_processors);
+        for i in 0..num_processors * num_processors {
+            rule.push(
+                (i * num_processors + i / num_processors) % (num_processors * num_processors),
+            );
+        }
+        self.main_pipeline.reorder_inputs(rule);
+
+        // 3. Build window partition collect processors.
+        let processor_id = AtomicUsize::new(0);
+        let mut pipe_items = Vec::with_capacity(num_processors);
+        for _ in 0..num_processors {
+            let processor = TransformWindowPartitionCollect::new(
+                self.ctx.clone(),
+                processor_id.fetch_add(1, std::sync::atomic::Ordering::AcqRel),
+                num_processors,
+                num_partitions,
+                window_spill_settings.clone(),
+                sort_desc.clone(),
+                plan_schema.clone(),
+                max_block_size,
+                sort_block_size,
+                sort_spilling_batch_bytes,
+                enable_loser_tree,
+                have_order_col,
+            )?;
+            pipe_items.push(processor.into_pipe_item());
+        }
+        self.main_pipeline.add_pipe(Pipe::create(
+            num_processors * num_processors,
+            num_processors,
+            pipe_items,
+        ));
 
         Ok(())
     }
