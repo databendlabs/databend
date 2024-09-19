@@ -33,8 +33,11 @@ use crate::finished_chain::FinishedCallbackChain;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::DuplicateProcessor;
+use crate::processors::Exchange;
 use crate::processors::InputPort;
+use crate::processors::MergePartitionProcessor;
 use crate::processors::OutputPort;
+use crate::processors::PartitionProcessor;
 use crate::processors::PlanScope;
 use crate::processors::PlanScopeGuard;
 use crate::processors::ProcessorPtr;
@@ -441,6 +444,55 @@ impl Pipeline {
                 ]));
             }
             _ => {}
+        }
+    }
+
+    pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) {
+        if let Some(pipe) = self.pipes.last() {
+            if pipe.output_length < 1 {
+                return;
+            }
+
+            let input_len = pipe.output_length;
+            let mut items = Vec::with_capacity(input_len);
+
+            for _index in 0..input_len {
+                let input = InputPort::create();
+                let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
+                items.push(PipeItem::create(
+                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+                    vec![input],
+                    outputs,
+                ));
+            }
+
+            // partition data block
+            self.add_pipe(Pipe::create(input_len, input_len * n, items));
+
+            let mut reorder_edges = Vec::with_capacity(input_len * n);
+            for index in 0..input_len * n {
+                reorder_edges.push((index % n) * input_len + (index / n));
+            }
+
+            self.reorder_inputs(reorder_edges);
+
+            let mut items = Vec::with_capacity(input_len);
+            for _index in 0..n {
+                let output = OutputPort::create();
+                let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
+                items.push(PipeItem::create(
+                    MergePartitionProcessor::create(
+                        inputs.clone(),
+                        output.clone(),
+                        exchange.clone(),
+                    ),
+                    inputs,
+                    vec![output],
+                ));
+            }
+
+            // merge partition
+            self.add_pipe(Pipe::create(input_len * n, n, items))
         }
     }
 
