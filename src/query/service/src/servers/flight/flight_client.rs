@@ -679,7 +679,10 @@ impl FlightDataAckStream {
                         if let Ok(flight_data) = message {
                             let packet = DataPacket::try_from(flight_data).unwrap();
                             if let DataPacket::FlightControl(FlightControlCommand::Close) = packet {
-                                state.lock().finish = true;
+                                let mut state_guard = state.lock();
+                                state_guard.finish = true;
+                                state_guard.receiver.close();
+                                drop(state_guard);
                             }
                         }
                     }
