@@ -1763,6 +1763,7 @@ impl<'a> TypeChecker<'a> {
 
         let display_name = format!("{:#}", expr);
         let new_agg_func = AggregateFunction {
+            span,
             display_name,
             func_name,
             distinct: false,
