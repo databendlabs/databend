@@ -225,10 +225,8 @@ pub fn align_down(alignment: usize, value: usize) -> usize {
 }
 
 async fn open_dma(file: File) -> io::Result<DmaFile> {
-    let statfs = fstatfs(&file).await?;
-    // TODO: the actual alignment may differ from the optimal io size? we should probably get
-    // this information from the the device the file lives on.
-    let alignment = statfs.f_bsize.max(512) as usize;
+    let stat = fstatvfs(&file).await?;
+    let alignment = stat.f_bsize.max(512) as usize;
 
     Ok(DmaFile {
         fd: file,
@@ -237,11 +235,11 @@ async fn open_dma(file: File) -> io::Result<DmaFile> {
     })
 }
 
-async fn fstatfs(file: &File) -> io::Result<rustix::fs::StatFs> {
+async fn fstatvfs(file: &File) -> io::Result<rustix::fs::StatVfs> {
     let fd = file.as_raw_fd();
     asyncify(move || {
         let fd = unsafe { BorrowedFd::borrow_raw(fd) };
-        rustix::fs::fstatfs(fd).map_err(|e| e.into())
+        rustix::fs::fstatvfs(fd).map_err(|e| e.into())
     })
     .await
 }

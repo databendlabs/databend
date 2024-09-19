@@ -5321,6 +5321,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.3",
  "rayon",
+ "rustix 0.38.37",
  "siphasher",
  "tempfile",
 ]
