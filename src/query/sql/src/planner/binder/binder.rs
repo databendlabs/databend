@@ -617,9 +617,9 @@ impl<'a> Binder {
             }  }
             Statement::CallProcedure(stmt) => {
                 if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                    self.bind_call_procedure(stmt).await?
+                    self.bind_call_procedure(bind_context, stmt).await?
                 } else {
-                    return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+                    return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
                 }
                 }
         };

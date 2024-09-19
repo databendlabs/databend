@@ -1222,7 +1222,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                     &req.name_ident.tenant,
                                     *id.data,
                                     *seq_db_id.data,
-                                    false,
+                                    true,
                                     false,
                                     &mut txn,
                                 )
@@ -3373,9 +3373,9 @@ async fn construct_drop_table_txn_operations(
         return if if_exists {
             Ok((0, 0))
         } else {
-            return Err(KVAppError::AppError(AppError::UnknownTable(
+            Err(KVAppError::AppError(AppError::UnknownTable(
                 UnknownTable::new(tbname, "drop_table_by_id"),
-            )));
+            )))
         };
     }
 
@@ -3390,9 +3390,13 @@ async fn construct_drop_table_txn_operations(
     let mut tb_meta = tb_meta.unwrap();
     // drop a table with drop_on time
     if tb_meta.drop_on.is_some() {
-        return Err(KVAppError::AppError(AppError::DropTableWithDropTime(
-            DropTableWithDropTime::new(&dbid_tbname.table_name),
-        )));
+        return if if_exists {
+            Ok((0, 0))
+        } else {
+            Err(KVAppError::AppError(AppError::DropTableWithDropTime(
+                DropTableWithDropTime::new(&dbid_tbname.table_name),
+            )))
+        };
     }
 
     tb_meta.drop_on = Some(Utc::now());
