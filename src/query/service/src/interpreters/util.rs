@@ -15,15 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FunctionCall;
-use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::TypeName;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -34,7 +29,6 @@ use databend_common_script::Client;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
-use serde_json::Value as JsonValue;
 
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
@@ -123,199 +117,8 @@ impl Client for ScriptClient {
     }
 
     fn var_to_ast(&self, scalar: &Self::Var) -> databend_common_exception::Result<Expr> {
-        let ast = match scalar {
-            Scalar::Number(v) => with_integer_mapped_type!(|NUM_TYPE| match v {
-                NumberScalar::NUM_TYPE(v) => Expr::Literal {
-                    span: None,
-                    value: Literal::Decimal256 {
-                        value: (*v).into(),
-                        precision: MAX_DECIMAL256_PRECISION,
-                        scale: 0,
-                    },
-                },
-                NumberScalar::Float32(v) => Expr::Literal {
-                    span: None,
-                    value: Literal::Float64(v.into_inner() as f64),
-                },
-                NumberScalar::Float64(v) => Expr::Literal {
-                    span: None,
-                    value: Literal::Float64(v.into_inner()),
-                },
-            }),
-            Scalar::Boolean(v) => Expr::Literal {
-                span: None,
-                value: Literal::Boolean(*v),
-            },
-            Scalar::String(v) => Expr::Literal {
-                span: None,
-                value: Literal::String(v.clone()),
-            },
-            Scalar::Tuple(v) => Expr::FunctionCall {
-                span: None,
-                func: FunctionCall {
-                    distinct: false,
-                    name: Identifier::from_name(None, "tuple"),
-                    args: v
-                        .iter()
-                        .map(|x| self.var_to_ast(&x.to_owned()))
-                        .collect::<databend_common_exception::Result<Vec<_>>>()?,
-                    params: vec![],
-                    window: None,
-                    lambda: None,
-                },
-            },
-            Scalar::Array(v) => Expr::FunctionCall {
-                span: None,
-                func: FunctionCall {
-                    distinct: false,
-                    name: Identifier::from_name(None, "array"),
-                    args: v
-                        .iter()
-                        .map(|x| self.var_to_ast(&x.to_owned()))
-                        .collect::<databend_common_exception::Result<Vec<_>>>()?,
-                    params: vec![],
-                    window: None,
-                    lambda: None,
-                },
-            },
-            Scalar::Decimal(DecimalScalar::Decimal128(v, size)) => Expr::Literal {
-                span: None,
-                value: Literal::Decimal256 {
-                    value: (*v).into(),
-                    precision: size.precision,
-                    scale: size.scale,
-                },
-            },
-            Scalar::Decimal(DecimalScalar::Decimal256(v, size)) => Expr::Literal {
-                span: None,
-                value: Literal::Decimal256 {
-                    value: *v,
-                    precision: size.precision,
-                    scale: size.scale,
-                },
-            },
-            Scalar::Map(v) => {
-                let col = v.as_tuple().unwrap();
-                let keys = col[0]
-                    .iter()
-                    .map(|x| self.var_to_ast(&x.to_owned()))
-                    .collect::<databend_common_exception::Result<Vec<_>>>()?;
-                let vals = col[1]
-                    .iter()
-                    .map(|x| self.var_to_ast(&x.to_owned()))
-                    .collect::<databend_common_exception::Result<Vec<_>>>()?;
-                Expr::FunctionCall {
-                    span: None,
-                    func: FunctionCall {
-                        distinct: false,
-                        name: Identifier::from_name(None, "map"),
-                        args: vec![
-                            Expr::FunctionCall {
-                                span: None,
-                                func: FunctionCall {
-                                    distinct: false,
-                                    name: Identifier::from_name(None, "array"),
-                                    args: keys,
-                                    params: vec![],
-                                    window: None,
-                                    lambda: None,
-                                },
-                            },
-                            Expr::FunctionCall {
-                                span: None,
-                                func: FunctionCall {
-                                    distinct: false,
-                                    name: Identifier::from_name(None, "array"),
-                                    args: vals,
-                                    params: vec![],
-                                    window: None,
-                                    lambda: None,
-                                },
-                            },
-                        ],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
-                    },
-                }
-            }
-            Scalar::Variant(v) => {
-                let value = jsonb::from_slice(v).unwrap();
-                let json = JsonValue::from(value).to_string();
-                Expr::FunctionCall {
-                    span: None,
-                    func: FunctionCall {
-                        distinct: false,
-                        name: Identifier::from_name(None, "parse_json"),
-                        args: vec![Expr::Literal {
-                            span: None,
-                            value: Literal::String(json),
-                        }],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
-                    },
-                }
-            }
-            Scalar::EmptyArray => Expr::FunctionCall {
-                span: None,
-                func: FunctionCall {
-                    distinct: false,
-                    name: Identifier::from_name(None, "array"),
-                    args: vec![],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
-                },
-            },
-            Scalar::EmptyMap => Expr::FunctionCall {
-                span: None,
-                func: FunctionCall {
-                    distinct: false,
-                    name: Identifier::from_name(None, "map"),
-                    args: vec![],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
-                },
-            },
-            Scalar::Date(v) => Expr::Cast {
-                span: None,
-                expr: Box::new(Expr::Literal {
-                    span: None,
-                    value: Literal::Decimal256 {
-                        value: (*v).into(),
-                        precision: MAX_DECIMAL256_PRECISION,
-                        scale: 0,
-                    },
-                }),
-                target_type: TypeName::Date,
-                pg_style: false,
-            },
-            Scalar::Timestamp(v) => Expr::Cast {
-                span: None,
-                expr: Box::new(Expr::Literal {
-                    span: None,
-                    value: Literal::Decimal256 {
-                        value: (*v).into(),
-                        precision: MAX_DECIMAL256_PRECISION,
-                        scale: 0,
-                    },
-                }),
-                target_type: TypeName::Timestamp,
-                pg_style: false,
-            },
-            Scalar::Null => Expr::Literal {
-                span: None,
-                value: Literal::Null,
-            },
-            Scalar::Bitmap(_) | Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "variable of type {} is not supported yet",
-                    scalar.as_ref().infer_data_type()
-                )));
-            }
-        };
+        let scalar = scalar.to_string();
+        let ast = parse_expr(&tokenize_sql(&scalar)?, Dialect::PostgreSQL)?;
 
         Ok(ast)
     }
