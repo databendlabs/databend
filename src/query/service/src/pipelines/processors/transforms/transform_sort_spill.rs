@@ -43,6 +43,7 @@ use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 
+use crate::spillers::Location;
 use crate::spillers::Spiller;
 
 enum State {
@@ -77,7 +78,7 @@ pub struct TransformSortSpill<R: Rows> {
     /// Blocks to merge one time.
     num_merge: usize,
     /// Unmerged list of blocks. Each list are sorted.
-    unmerged_blocks: VecDeque<VecDeque<String>>,
+    unmerged_blocks: VecDeque<VecDeque<Location>>,
 
     /// If `ummerged_blocks.len()` < `num_merge`,
     /// we can use a final merger to merge the last few sorted streams to reduce IO.
@@ -359,7 +360,7 @@ where R: Rows + Sync + Send + 'static
 }
 
 enum BlockStream {
-    Spilled((VecDeque<String>, Arc<Spiller>)),
+    Spilled((VecDeque<Location>, Arc<Spiller>)),
     Block(Option<DataBlock>),
 }
 
