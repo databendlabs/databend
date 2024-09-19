@@ -20,6 +20,7 @@ mod caches;
 mod manager;
 mod providers;
 mod read;
+mod temp;
 mod temp_dir;
 
 pub use cache::CacheAccessor;
