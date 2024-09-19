@@ -30,13 +30,20 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::sort_merge;
+use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::TableContext;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use super::WindowSpillSettings;
 use crate::sessions::QueryContext;
+use crate::spillers::DiskSpill;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerType;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Step {
@@ -90,6 +97,7 @@ impl TransformWindowPartitionCollect {
         num_processors: usize,
         num_partitions: usize,
         spill_settings: WindowSpillSettings,
+        disk_spill: Option<Arc<DiskSpill>>,
         sort_desc: Vec<SortColumnDescription>,
         schema: DataSchemaRef,
         max_block_size: usize,
@@ -112,9 +120,24 @@ impl TransformWindowPartitionCollect {
             partition_id[*partition] = new_partition_id;
         }
 
+        let spill_config = SpillerConfig::create(query_spill_prefix(
+            ctx.get_tenant().tenant_name(),
+            &ctx.get_id(),
+        ));
+
+        // Create an inner `Spiller` to spill data.
+        let operator = DataOperator::instance().operator();
+        let spiller = Spiller::create(
+            ctx.clone(),
+            operator,
+            spill_config,
+            disk_spill,
+            SpillerType::Window,
+        )?;
+
         // Create the window partition buffer.
         let buffer =
-            WindowPartitionBuffer::new(ctx, partitions.len(), sort_block_size, spill_settings)?;
+            WindowPartitionBuffer::new(spiller, num_partitions, sort_block_size, spill_settings)?;
 
         Ok(Self {
             inputs,

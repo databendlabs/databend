@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::assert_matches::assert_matches;
+
 use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -24,6 +26,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_storage::DataOperator;
+use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerType;
@@ -39,7 +42,13 @@ async fn test_spill_with_partition() -> Result<()> {
         SpillerConfig::create(query_spill_prefix(tenant.tenant_name(), &ctx.get_id()));
     let operator = DataOperator::instance().operator();
 
-    let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild)?;
+    let mut spiller = Spiller::create(
+        ctx,
+        operator,
+        spiller_config,
+        None,
+        SpillerType::HashJoinBuild,
+    )?;
 
     // Generate data block: two columns, type is i32, 100 rows
     let data = DataBlock::new_from_columns(vec![
@@ -50,7 +59,8 @@ async fn test_spill_with_partition() -> Result<()> {
     let res = spiller.spill_with_partition(0, data).await;
 
     assert!(res.is_ok());
-    assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
+    let location = &spiller.partition_location.get(&0).unwrap()[0];
+    assert_matches!(location, Location::Storage(_));
 
     // Test read spilled data
     let block = DataBlock::concat(&spiller.read_spilled_partition(&(0)).await?)?;

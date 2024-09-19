@@ -490,6 +490,7 @@ mod tests {
             ctx.clone(),
             op,
             SpillerConfig::create("_spill_test".to_string()),
+            None,
             SpillerType::OrderBy,
         )?;
 

@@ -72,7 +72,7 @@ impl HashJoinSpiller {
         } else {
             SpillerType::HashJoinProbe
         };
-        let spiller = Spiller::create(ctx.clone(), operator, spill_config, spiller_type)?;
+        let spiller = Spiller::create(ctx.clone(), operator, spill_config, None, spiller_type)?;
 
         let num_partitions = (1 << spill_partition_bits) as usize;
         // The memory threshold of each partition, we will spill the partition data

@@ -86,6 +86,7 @@ pub struct Spiller {
     ctx: Arc<QueryContext>,
     operator: Operator,
     config: SpillerConfig,
+    disk_spill: Option<Arc<DiskSpill>>,
     _spiller_type: SpillerType,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
@@ -102,6 +103,7 @@ impl Spiller {
         ctx: Arc<QueryContext>,
         operator: Operator,
         config: SpillerConfig,
+        disk_spill: Option<Arc<DiskSpill>>,
         spiller_type: SpillerType,
     ) -> Result<Self> {
         let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
@@ -109,6 +111,7 @@ impl Spiller {
             ctx: ctx.clone(),
             operator,
             config,
+            disk_spill,
             _spiller_type: spiller_type,
             join_spilling_partition_bits,
             partition_location: Default::default(),
@@ -126,12 +129,10 @@ impl Spiller {
         let instant = Instant::now();
 
         // Spill data to storage.
-        let unique_name = GlobalUniqName::unique();
-        let location = format!("{}/{unique_name}", self.config.location_prefix);
         let encoded = EncodedBlock::from_block(&data_block);
         let columns_layout = encoded.columns_layout();
-        let data_size = write_encodes_to_storage(&self.operator, &location, vec![encoded]).await?;
-        let location = Location::Storage(location);
+        let data_size = encoded.size();
+        let location = self.write_encodes(data_size, vec![encoded]).await?;
 
         // Record statistics.
         record_write_profile(&instant, data_size);
@@ -195,16 +196,13 @@ impl Spiller {
 
         // Spill data to storage.
         let instant = Instant::now();
-        let unique_name = GlobalUniqName::unique();
-        let location = format!("{}/{unique_name}", self.config.location_prefix);
-
-        write_encodes_to_storage(&self.operator, &location, write_data).await?;
+        let location = self.write_encodes(write_bytes, write_data).await?;
 
         // Record statistics.
         record_write_profile(&instant, write_bytes);
 
         Ok(SpilledData::MergedPartition {
-            location: Location::Storage(location),
+            location,
             partitions: spilled_partitions,
         })
     }
@@ -324,13 +322,64 @@ impl Spiller {
         Ok(deserialize_block(columns_layout, &data))
     }
 
+    async fn write_encodes(&mut self, size: usize, blocks: Vec<EncodedBlock>) -> Result<Location> {
+        let unique_name = GlobalUniqName::unique();
+        let location = match &self.disk_spill {
+            None => None,
+            Some(disk) => {
+                if disk.can_write(size as isize) {
+                    disk.init()?;
+                    Some(Location::Disk(
+                        disk.root.join(unique_name.clone()).into_boxed_path(),
+                    ))
+                } else {
+                    None
+                }
+            }
+        }
+        .unwrap_or(Location::Storage(format!(
+            "{}/{unique_name}",
+            self.config.location_prefix
+        )));
+
+        let written = match &location {
+            Location::Storage(loc) => {
+                let mut writer = self
+                    .operator
+                    .writer_with(loc)
+                    .chunk(8 * 1024 * 1024)
+                    .await?;
+
+                let mut written = 0;
+                for data in blocks.into_iter().flat_map(|x| x.0) {
+                    written += data.len();
+                    writer.write(data).await?;
+                }
+
+                writer.close().await?;
+                written
+            }
+            Location::Disk(path) => {
+                let bufs = blocks
+                    .iter()
+                    .flat_map(|x| &x.0)
+                    .map(|data| io::IoSlice::new(data))
+                    .collect::<Vec<_>>();
+
+                dma_write_file_vectored(path, &bufs).await?
+            }
+        };
+        debug_assert_eq!(size, written);
+        Ok(location)
+    }
+
     pub(crate) fn spilled_files(&self) -> Vec<Location> {
         self.columns_layout.keys().cloned().collect()
     }
 }
 
 pub enum SpilledData {
-    Partition(String),
+    Partition(Location),
     MergedPartition {
         location: Location,
         partitions: Vec<(usize, Range<usize>, Vec<usize>)>,
@@ -397,7 +446,7 @@ impl DiskSpill {
         })
     }
 
-    pub fn try_write(&self, size: isize) -> bool {
+    pub fn can_write(&self, size: isize) -> bool {
         let mut guard = self.bytes_limit.lock().unwrap();
         if *guard > size {
             *guard -= size;
@@ -418,36 +467,6 @@ impl DiskSpill {
         });
         Ok(rt?)
     }
-}
-
-pub async fn write_encodes_to_storage(
-    operator: &Operator,
-    path: &str,
-    write_data: Vec<EncodedBlock>,
-) -> Result<usize> {
-    let mut writer = operator.writer_with(path).chunk(8 * 1024 * 1024).await?;
-
-    let mut written = 0;
-    for data in write_data.into_iter().flat_map(|x| x.0) {
-        written += data.len();
-        writer.write(data).await?;
-    }
-
-    writer.close().await?;
-    Ok(written)
-}
-
-pub async fn write_encodeds_to_disk(
-    path: impl AsRef<Path>,
-    write_data: Vec<EncodedBlock>,
-) -> io::Result<usize> {
-    let bufs = write_data
-        .iter()
-        .flat_map(|x| &x.0)
-        .map(|data| io::IoSlice::new(data))
-        .collect::<Vec<_>>();
-
-    dma_write_file_vectored(path, &bufs).await
 }
 
 pub fn record_write_profile(start: &Instant, write_bytes: usize) {
