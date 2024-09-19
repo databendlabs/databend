@@ -608,7 +608,7 @@ version = "0.2.6"
 source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "async-backtrace-attributes",
- "dashmap",
+ "dashmap 5.5.3",
  "futures",
  "itertools 0.10.5",
  "loom",
@@ -812,7 +812,7 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-lite 1.13.0",
- "gloo-timers",
+ "gloo-timers 0.2.6",
  "kv-log-macro",
  "log",
  "memchr",
@@ -1361,6 +1361,17 @@ dependencies = [
  "fastrand 2.1.0",
  "futures-core",
  "pin-project",
+ "tokio",
+]
+
+[[package]]
+name = "backon"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4fa97bb310c33c811334143cf64c5bb2b7b3c06e453db6b095d7061eff8f113"
+dependencies = [
+ "fastrand 2.1.0",
+ "gloo-timers 0.3.0",
  "tokio",
 ]
 
@@ -3021,6 +3032,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.10",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3045,7 +3070,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "serde",
  "serde_json",
  "serfig",
@@ -3116,7 +3141,7 @@ dependencies = [
  "lz4",
  "num",
  "num-traits",
- "opendal",
+ "opendal 0.50.0",
  "ordered-float 4.2.2",
  "proptest",
  "quanta 0.11.1",
@@ -3142,7 +3167,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum",
  "fast-float",
- "fastrace",
+ "fastrace 0.6.8",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -3191,7 +3216,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-exception",
  "enquote",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "libc",
  "log",
@@ -3249,7 +3274,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -3361,7 +3386,7 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
- "opendal",
+ "opendal 0.50.0",
  "parquet",
  "paste",
  "prost 0.12.6",
@@ -3389,7 +3414,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "comfy-table 6.2.0",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -3630,7 +3655,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-storage",
  "enumflags2",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "log",
  "mockall",
@@ -3656,7 +3681,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "log",
  "logcall",
@@ -3693,7 +3718,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal",
+ "opendal 0.50.0",
  "paste",
  "prost 0.12.6",
  "serde",
@@ -3722,7 +3747,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-tracing",
  "derive_more",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "itertools 0.10.5",
  "log",
@@ -3751,7 +3776,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-tracing",
- "fastrace",
+ "fastrace 0.6.8",
  "log",
  "tempfile",
  "test-harness",
@@ -3764,7 +3789,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "databend-common-meta-types",
- "fastrace",
+ "fastrace 0.6.8",
  "futures-util",
  "log",
  "serde",
@@ -3811,7 +3836,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "derive_more",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "futures-async-stream",
  "futures-util",
@@ -3845,7 +3870,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-tracing",
- "fastrace",
+ "fastrace 0.6.8",
  "log",
  "openraft",
  "pretty_assertions",
@@ -3946,7 +3971,7 @@ dependencies = [
  "flate2",
  "futures",
  "lz4",
- "opendal",
+ "opendal 0.50.0",
  "parquet-format-safe",
  "rand 0.8.5",
  "seq-macro",
@@ -3967,7 +3992,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "log",
  "petgraph",
@@ -4040,7 +4065,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
- "fastrace",
+ "fastrace 0.6.8",
  "maplit",
  "num",
  "pretty_assertions",
@@ -4069,7 +4094,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-exception",
  "derive-visitor",
- "fastrace",
+ "fastrace 0.6.8",
  "goldenfile",
  "tokio",
  "unindent",
@@ -4081,7 +4106,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "chrono-tz 0.8.6",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",
@@ -4114,7 +4139,7 @@ dependencies = [
  "cidr",
  "cron",
  "ctor 0.2.8",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
@@ -4140,7 +4165,7 @@ dependencies = [
  "derive-visitor",
  "educe 0.4.23",
  "enum-as-inner 0.5.1",
- "fastrace",
+ "fastrace 0.6.8",
  "globiter",
  "indexmap 2.4.0",
  "itertools 0.10.5",
@@ -4148,7 +4173,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal",
+ "opendal 0.50.0",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prqlc",
@@ -4172,7 +4197,7 @@ dependencies = [
  "arrow-schema",
  "async-backtrace",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-auth",
  "databend-common-base",
@@ -4183,7 +4208,7 @@ dependencies = [
  "flagset",
  "futures",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4210,7 +4235,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
  "deltalake",
- "fastrace",
+ "fastrace 0.6.8",
  "maplit",
  "match-template",
  "object_store_opendal",
@@ -4227,7 +4252,7 @@ name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
@@ -4286,14 +4311,14 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.5.1",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "futures-util",
  "indexmap 2.4.0",
  "itertools 0.10.5",
  "jsonb",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4334,12 +4359,12 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
- "fastrace",
+ "fastrace 0.6.8",
  "faststr",
  "futures",
  "hive_metastore",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "recursive",
  "serde",
  "typetag",
@@ -4368,7 +4393,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
- "fastrace",
+ "fastrace 0.6.8",
  "iceberg",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
@@ -4440,7 +4465,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4455,7 +4480,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4491,7 +4516,7 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4538,7 +4563,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal",
+ "opendal 0.50.0",
  "parquet",
  "serde",
  "serde_json",
@@ -4579,7 +4604,7 @@ dependencies = [
  "enum-as-inner 0.6.0",
  "futures",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "parquet",
  "serde",
  "serde_json",
@@ -4603,7 +4628,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "log",
 ]
@@ -4644,7 +4669,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal",
+ "opendal 0.50.0",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4675,7 +4700,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "defer",
- "fastrace",
+ "fastrace 0.6.8",
  "fastrace-opentelemetry",
  "fern",
  "itertools 0.10.5",
@@ -4856,7 +4881,7 @@ dependencies = [
  "aws-sdk-s3",
  "chrono",
  "chrono-tz 0.8.6",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
@@ -4898,7 +4923,7 @@ dependencies = [
  "jsonb",
  "jwt-simple 0.11.9",
  "log",
- "opendal",
+ "opendal 0.50.0",
  "tantivy",
  "tempfile",
 ]
@@ -4969,7 +4994,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
- "backon",
+ "backon 0.4.4",
  "clap",
  "databend-common-arrow",
  "databend-common-base",
@@ -4988,7 +5013,7 @@ dependencies = [
  "deepsize",
  "derive_more",
  "env_logger",
- "fastrace",
+ "fastrace 0.6.8",
  "feature-set",
  "futures",
  "futures-async-stream",
@@ -5037,7 +5062,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "log",
  "rand 0.8.5",
@@ -5067,7 +5092,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
- "backon",
+ "backon 0.4.4",
  "base64 0.21.7",
  "bumpalo",
  "byte-unit",
@@ -5077,7 +5102,7 @@ dependencies = [
  "config",
  "criterion",
  "ctor 0.2.8",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -5145,7 +5170,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "derive-visitor",
  "ethnum",
- "fastrace",
+ "fastrace 0.6.8",
  "flatbuffers",
  "futures",
  "futures-util",
@@ -5170,7 +5195,7 @@ dependencies = [
  "num",
  "num_cpus",
  "once_cell",
- "opendal",
+ "opendal 0.50.0",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5338,7 +5363,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
- "fastrace",
+ "fastrace 0.6.8",
  "jsonb",
  "log",
  "match-template",
@@ -5360,9 +5385,9 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "fastrace",
+ "fastrace 0.6.8",
  "log",
- "opendal",
+ "opendal 0.50.0",
 ]
 
 [[package]]
@@ -5448,7 +5473,7 @@ dependencies = [
  "bytes",
  "bzip2",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "datafusion-common",
  "datafusion-common-runtime",
  "datafusion-execution",
@@ -5470,7 +5495,7 @@ dependencies = [
  "itertools 0.12.1",
  "log",
  "num_cpus",
- "object_store",
+ "object_store 0.10.2",
  "parking_lot 0.12.3",
  "parquet",
  "paste",
@@ -5503,7 +5528,7 @@ dependencies = [
  "instant",
  "libc",
  "num_cpus",
- "object_store",
+ "object_store 0.10.2",
  "parquet",
  "sqlparser 0.47.0",
 ]
@@ -5525,13 +5550,13 @@ checksum = "8385aba84fc4a06d3ebccfbcbf9b4f985e80c762fac634b49079f7cc14933fb1"
 dependencies = [
  "arrow",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "datafusion-common",
  "datafusion-expr",
  "futures",
  "hashbrown 0.14.5",
  "log",
- "object_store",
+ "object_store 0.10.2",
  "parking_lot 0.12.3",
  "rand 0.8.5",
  "tempfile",
@@ -5809,12 +5834,13 @@ checksum = "da692b8d1080ea3045efaab14434d40468c3d8657e42abddfffca87b428f4c1b"
 
 [[package]]
 name = "delta_kernel"
-version = "0.1.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1ddfe35af3696786ab5f23cd995df33a66f6cff272ac1f85e09c1a6316acd4c"
+checksum = "fa08a82239f51e6d3d249c38f0f5bf7c8a78b28587e1b466893c9eac84d252d8"
 dependencies = [
  "arrow-arith",
  "arrow-array",
+ "arrow-cast",
  "arrow-json",
  "arrow-ord",
  "arrow-schema",
@@ -5832,6 +5858,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_json",
+ "strum 0.26.3",
  "thiserror",
  "tracing",
  "url",
@@ -5842,9 +5869,9 @@ dependencies = [
 
 [[package]]
 name = "delta_kernel_derive"
-version = "0.1.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4d2127a34b12919a6bce08225f0ca6fde8a19342a32675370edfc8795e7c38a"
+checksum = "ec5c4fb5b59b1bd55ed8ebcf941f27a327d600c19a4a4103546846c358be93ff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5853,16 +5880,18 @@ dependencies = [
 
 [[package]]
 name = "deltalake"
-version = "0.18.0"
-source = "git+https://github.com/delta-io/delta-rs?rev=57795da#57795da9d9cc86a460a5888713adfb3d0584b4cc"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb19a9a5ef642da82a32eed2c85a3b1c66dd3ecdc7cc0d986ed5e484d9d17396"
 dependencies = [
  "deltalake-core",
 ]
 
 [[package]]
 name = "deltalake-core"
-version = "0.18.0"
-source = "git+https://github.com/delta-io/delta-rs?rev=57795da#57795da9d9cc86a460a5888713adfb3d0584b4cc"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "052397afa413dfcf60b040c715a955caf25d69555c7566cc447665590f73eda7"
 dependencies = [
  "arrow",
  "arrow-arith",
@@ -5879,7 +5908,7 @@ dependencies = [
  "bytes",
  "cfg-if 1.0.0",
  "chrono",
- "dashmap",
+ "dashmap 6.1.0",
  "delta_kernel",
  "either",
  "errno",
@@ -5894,7 +5923,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "num_cpus",
- "object_store",
+ "object_store 0.10.2",
  "once_cell",
  "parking_lot 0.12.3",
  "parquet",
@@ -5905,10 +5934,12 @@ dependencies = [
  "roaring",
  "serde",
  "serde_json",
+ "sqlparser 0.51.0",
  "thiserror",
  "tokio",
  "tracing",
  "url",
+ "urlencoding",
  "uuid",
  "z85",
 ]
@@ -6530,13 +6561,28 @@ version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfd798348670042f0628810b10bc11b767c1f42aafbd3b1ae31f282740c549fe"
 dependencies = [
- "fastrace-macro",
+ "fastrace-macro 0.6.8",
  "minstant",
  "once_cell",
  "parking_lot 0.12.3",
  "pin-project",
  "rand 0.8.5",
- "rtrb",
+ "rtrb 0.2.3",
+]
+
+[[package]]
+name = "fastrace"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25767929385a5128ff5a58c77d5fef43779bb580656801f72d4d32f7a97fea28"
+dependencies = [
+ "fastrace-macro 0.7.2",
+ "minstant",
+ "once_cell",
+ "parking_lot 0.12.3",
+ "pin-project",
+ "rand 0.8.5",
+ "rtrb 0.3.1",
 ]
 
 [[package]]
@@ -6552,12 +6598,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastrace-macro"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d11870c0168b3d10fc7a7f0b6f9319fd7244d4caacc669ae86b3ecc5b6ca1b8c"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
 name = "fastrace-opentelemetry"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05895fbf0eba689978865a110fcead4a5c04724322dc6bd73ff55fe06e39ba66"
 dependencies = [
- "fastrace",
+ "fastrace 0.6.8",
  "futures",
  "log",
  "opentelemetry",
@@ -8020,7 +8078,7 @@ version = "14.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "006acf5a613e0b5cf095d8e4b3f48c12a60d9062aa2b2dd105afaf8344a5600c"
 dependencies = [
- "dashmap",
+ "dashmap 5.5.3",
  "gix-fs",
  "libc",
  "once_cell",
@@ -8166,6 +8224,18 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -8846,7 +8916,7 @@ dependencies = [
  "itertools 0.13.0",
  "murmur3",
  "once_cell",
- "opendal",
+ "opendal 0.49.0",
  "ordered-float 4.2.2",
  "parquet",
  "reqwest 0.12.5",
@@ -9681,7 +9751,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -10735,18 +10805,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "object_store_opendal"
-version = "0.46.0"
+name = "object_store"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7e5902fc99e9fb9e32c93f6a67dc5cc0772dc0fb348e2ef4ce258b03666d034"
+checksum = "25a0c4b3a0e31f8b66f71ad8064521efa773910196e2cde791436f13409f3b45"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "chrono",
+ "futures",
+ "humantime",
+ "itertools 0.13.0",
+ "parking_lot 0.12.3",
+ "percent-encoding",
+ "snafu 0.8.4",
+ "tokio",
+ "tracing",
+ "url",
+ "walkdir",
+]
+
+[[package]]
+name = "object_store_opendal"
+version = "0.47.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7a27272d45c2d9d60c780f5d4d48b50f0d692e82de25835cde38bdf0e2b2a9c"
 dependencies = [
  "async-trait",
  "bytes",
  "flagset",
  "futures",
  "futures-util",
- "object_store",
- "opendal",
+ "object_store 0.11.0",
+ "opendal 0.49.0",
  "pin-project",
  "tokio",
 ]
@@ -10787,14 +10878,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39d516adf7db912c38af382c3e92c27cd62fbbc240e630920555d784c2ab1494"
 dependencies = [
  "anyhow",
- "async-backtrace",
  "async-trait",
- "backon",
+ "backon 0.4.4",
  "base64 0.22.1",
  "bytes",
  "chrono",
  "crc32c",
- "fastrace",
+ "flagset",
+ "futures",
+ "getrandom 0.2.15",
+ "http 1.1.0",
+ "log",
+ "md-5",
+ "once_cell",
+ "percent-encoding",
+ "quick-xml 0.36.1",
+ "reqsign",
+ "reqwest 0.12.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "opendal"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36e44fc43be9ffe18dad3e3ef9d61c1ae01991ee6f1c8c026978c35777a711bf"
+dependencies = [
+ "anyhow",
+ "async-backtrace",
+ "async-trait",
+ "backon 1.2.0",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "crc32c",
+ "fastrace 0.7.2",
  "flagset",
  "futures",
  "getrandom 0.2.15",
@@ -11024,7 +11145,7 @@ dependencies = [
  "lz4_flex",
  "lzokay-native",
  "num",
- "object_store",
+ "object_store 0.10.2",
  "prost 0.12.6",
  "snafu 0.8.4",
  "snap",
@@ -11233,7 +11354,7 @@ dependencies = [
  "lz4_flex",
  "num",
  "num-bigint",
- "object_store",
+ "object_store 0.10.2",
  "paste",
  "seq-macro",
  "snap",
@@ -13165,6 +13286,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtrb"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3f94e84c073f3b85d4012b44722fa8842b9986d741590d4f2636ad0a5b14143"
+
+[[package]]
 name = "rust-ini"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14208,6 +14335,15 @@ checksum = "295e9930cd7a97e58ca2a070541a3ca502b17f5d1fa7157376d0fabd85324f25"
 dependencies = [
  "log",
  "sqlparser_derive",
+]
+
+[[package]]
+name = "sqlparser"
+version = "0.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fe11944a61da0da3f592e19a45ebe5ab92dc14a779907ff1f08fbb797bfefc7"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -15424,8 +15560,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.7.3",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -15781,7 +15917,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71bc0fbf23ebdfc8718d40ba5f31a520376767edd6ebb9fe06c27eb977379796"
 dependencies = [
  "async-broadcast",
- "dashmap",
+ "dashmap 5.5.3",
  "faststr",
  "futures",
  "lazy_static",
@@ -17036,3 +17172,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "deltalake"
+version = "0.18.0"
+source = "git+https://github.com/delta-io/delta-rs?rev=57795da#57795da9d9cc86a460a5888713adfb3d0584b4cc"
