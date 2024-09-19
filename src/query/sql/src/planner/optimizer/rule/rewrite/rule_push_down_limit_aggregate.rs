@@ -140,9 +140,13 @@ impl RulePushDownLimitAggregate {
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
+        let mut has_eval_scalar = false;
         let agg = match s_expr.child(0)?.plan().rel_op() {
             RelOp::Aggregate => s_expr.child(0)?,
-            RelOp::EvalScalar => s_expr.child(0)?.child(0)?,
+            RelOp::EvalScalar => {
+                has_eval_scalar = true;
+                s_expr.child(0)?.child(0)?
+            }
             _ => return Ok(()),
         };
 
@@ -190,7 +194,12 @@ impl RulePushDownLimitAggregate {
             );
 
             let agg = agg.replace_children(vec![Arc::new(agg_partial)]);
-            let mut result = s_expr.replace_children(vec![Arc::new(agg)]);
+            let mut result = if has_eval_scalar {
+                let eval_scalar = s_expr.child(0)?.replace_children(vec![Arc::new(agg)]);
+                s_expr.replace_children(vec![Arc::new(eval_scalar)])
+            } else {
+                s_expr.replace_children(vec![Arc::new(agg)])
+            };
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }
