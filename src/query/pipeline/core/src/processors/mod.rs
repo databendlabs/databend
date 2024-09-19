@@ -37,4 +37,7 @@ pub use profile::PlanScope;
 pub use profile::PlanScopeGuard;
 pub use resize_processor::create_resize_item;
 pub use resize_processor::ResizeProcessor;
+pub use shuffle_processor::Exchange;
+pub use shuffle_processor::MergePartitionProcessor;
+pub use shuffle_processor::PartitionProcessor;
 pub use shuffle_processor::ShuffleProcessor;
