@@ -1681,6 +1681,14 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "50")]
     pub max_cached_queries_profiles: usize,
 
+    /// The maximum retry count for cluster flight. Disable if 0.
+    #[clap(long, value_name = "VALUE", default_value = "3")]
+    pub max_flight_connection_retry_times: u64,
+
+    /// The retry interval of cluster flight is in seconds.
+    #[clap(long, value_name = "VALUE", default_value = "3")]
+    pub flight_connection_retry_interval: u64,
+
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
 }
@@ -1770,6 +1778,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             max_cached_queries_profiles: self.max_cached_queries_profiles,
+            max_flight_connection_retry_times: self.max_flight_connection_retry_times,
+            flight_connection_retry_interval: self.flight_connection_retry_interval,
             settings: self
                 .settings
                 .into_iter()
@@ -1872,6 +1882,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
+            max_flight_connection_retry_times: inner.max_flight_connection_retry_times,
+            flight_connection_retry_interval: inner.flight_connection_retry_interval,
             settings: HashMap::new(),
         }
     }

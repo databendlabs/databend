@@ -148,7 +148,8 @@ impl ClusterHelper for Cluster {
 
                 async move {
                     let mut attempt = 0;
-                    let max_attempts = 2;
+                    let max_attempts = config.query.max_flight_connection_retry_times;
+                    let retry_interval = config.query.flight_connection_retry_interval;
 
                     loop {
                         let mut conn = create_client(&config, &flight_address).await?;
@@ -169,7 +170,7 @@ impl ClusterHelper for Cluster {
                                 // only retry when error is network problem
                                 info!("retry do_action, attempt: {}", attempt);
                                 attempt += 1;
-                                sleep(Duration::from_secs(1)).await;
+                                sleep(Duration::from_secs(retry_interval)).await;
                             }
                             Err(e) => return Err(e),
                         }

@@ -131,8 +131,8 @@ impl DataExchangeManager {
         let config = GlobalConfig::instance();
         let with_cur_rt = env.create_rpc_clint_with_current_rt;
 
-        let flight_retry_times = env.settings.get_max_flight_retry_times()?;
-        let flight_retry_interval = env.settings.get_flight_retry_interval()?;
+        let flight_retry_times = config.query.max_flight_connection_retry_times as usize;
+        let flight_retry_interval = config.query.flight_connection_retry_interval as usize;
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
@@ -673,7 +673,7 @@ impl QueryCoordinator {
         begin: usize,
         client_stream: Streaming<FlightData>,
     ) -> Result<FlightDataAckStream> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::Statistics(target);
 
         match self.exchanges.entry(identifier) {
@@ -716,7 +716,7 @@ impl QueryCoordinator {
         begin: usize,
         client_stream: Streaming<FlightData>,
     ) -> Result<FlightDataAckStream> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
 
         match self.exchanges.entry(identifier) {

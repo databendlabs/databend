@@ -708,9 +708,9 @@ impl Drop for FlightDataAckStream {
         let notify = Arc::downgrade(&self.notify);
         let handle = GlobalIORuntime::instance().spawn(async move {
             tokio::time::sleep(Duration::from_secs(60)).await;
-            if let Some(ss) = weak_state.upgrade() {
-                let ss = ss.lock();
-                ss.receiver.close();
+            if let Some(state) = weak_state.upgrade() {
+                let state_guard = state.lock();
+                state_guard.receiver.close();
             }
             if let Some(notify) = notify.upgrade() {
                 notify.notify_waiters();
