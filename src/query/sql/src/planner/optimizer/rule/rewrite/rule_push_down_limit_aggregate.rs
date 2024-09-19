@@ -39,15 +39,15 @@ use crate::plans::SortItem;
 ///          Aggregate(padding limit | rank_limit)
 ///             \
 ///               *
-pub struct RulePushDownLimitAggregate {
+pub struct RulePushDownRankLimitAggregate {
     id: RuleID,
     matchers: Vec<Matcher>,
 }
 
-impl RulePushDownLimitAggregate {
+impl RulePushDownRankLimitAggregate {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownLimitAggregate,
+            id: RuleID::RulePushDownRankLimitAggregate,
             matchers: vec![
                 Matcher::MatchOp {
                     op_type: RelOp::Limit,
@@ -207,7 +207,7 @@ impl RulePushDownLimitAggregate {
     }
 }
 
-impl Rule for RulePushDownLimitAggregate {
+impl Rule for RulePushDownRankLimitAggregate {
     fn id(&self) -> RuleID {
         self.id
     }
@@ -219,8 +219,7 @@ impl Rule for RulePushDownLimitAggregate {
     ) -> databend_common_exception::Result<()> {
         match s_expr.plan().rel_op() {
             RelOp::Limit => self.apply_limit(s_expr, state),
-            RelOp::Sort => self.apply_sort(s_expr, state),
-            RelOp::EvalScalar => self.apply_sort(s_expr, state),
+            RelOp::Sort | RelOp::EvalScalar => self.apply_sort(s_expr, state),
             _ => Ok(()),
         }
     }
