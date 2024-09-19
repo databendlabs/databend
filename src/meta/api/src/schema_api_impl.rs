@@ -2069,7 +2069,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get tb_meta of the last table id
             let tbid = TableId { table_id };
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+            let (tb_meta_seq, tb_meta) = self.get_pb_seq_and_value(&tbid).await?;
 
             debug!(
                 ident :% =(&tbid),
@@ -4374,46 +4374,6 @@ async fn handle_undrop_table(
             }
         }
     }
-}
-
-#[fastrace::trace]
-async fn append_update_stream_meta_requests(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    txn_req: &mut TxnRequest,
-    update_stream_meta: &[UpdateStreamMetaReq],
-    context_msg: impl Into<String>,
-) -> Result<(), KVAppError> {
-    for req in update_stream_meta {
-        let stream_id = TableId {
-            table_id: req.stream_id,
-        };
-        let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
-            get_pb_value(kv_api, &stream_id).await?;
-
-        if stream_meta_seq == 0 || stream_meta.is_none() {
-            return Err(KVAppError::AppError(AppError::UnknownStreamId(
-                UnknownStreamId::new(req.stream_id, context_msg),
-            )));
-        }
-
-        if req.seq.match_seq(stream_meta_seq).is_err() {
-            return Err(KVAppError::AppError(AppError::from(
-                StreamVersionMismatched::new(req.stream_id, req.seq, stream_meta_seq, context_msg),
-            )));
-        }
-
-        let mut new_stream_meta = stream_meta.unwrap();
-        new_stream_meta.options = req.options.clone();
-        new_stream_meta.updated_on = Utc::now();
-
-        txn_req
-            .condition
-            .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
-        txn_req
-            .if_then
-            .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
-    }
-    Ok(())
 }
 
 fn typ<K>() -> &'static str {
