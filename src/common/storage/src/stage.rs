@@ -266,7 +266,7 @@ impl StageFilesInfo {
         let file_exact: Option<Result<StageFileInfo>> = match prefix_meta {
             Ok(meta) if meta.is_file() => {
                 let f = StageFileInfo::new(path.to_string(), &meta);
-                if max_files == Some(1) || pattern.is_none() {
+                if max_files == Some(1) {
                     return Ok(Box::pin(stream::once(async { Ok(f) })));
                 }
                 Some(Ok(f))

@@ -43,3 +43,19 @@ select id from view_parquet where tinyint_col = 0 order by timestamp_col limit 5
 2
 4
 6
+
+query
+select line_item_usage_start_date from @data/parquet/no-stats.parquet (pattern => '') order by line_item_usage_start_date limit 2
+----
+2024-09-11 06:00:00
+2024-09-11 06:00:00
+
+query I
+select count() from @data/parquet/no-stats.parquet (pattern => '') where line_item_usage_start_date >= '2024-09-11 06:00:00'
+----
+25825
+
+query I
+select count() from @data/parquet/no-stats.parquet (pattern => '') where line_item_usage_start_date < '2024-09-11 06:00:00'
+----
+0
