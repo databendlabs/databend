@@ -2656,18 +2656,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
+            let seq_meta = self.get_pb(&tbid).await?.ok_or_else(|| {
+                AppError::UnknownTableId(UnknownTableId::new(req.table_id, "create_table_index"))
+            })?;
 
             debug!(ident :% =(&tbid); "create_table_index");
 
-            if tb_meta_seq == 0 || table_meta.is_none() {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "create_table_index"),
-                )));
-            }
+            let tb_meta_seq = seq_meta.seq;
+            let mut table_meta = seq_meta.data;
 
-            let mut table_meta = table_meta.unwrap();
             // update table indexes
             let indexes = &mut table_meta.indexes;
             if indexes.contains_key(&req.name) {
@@ -2727,12 +2724,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             indexes.insert(req.name.clone(), index);
 
             let txn_req = TxnRequest {
-                condition: vec![
-                    // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                ],
+                condition: vec![txn_cond_eq_seq(&tbid, tb_meta_seq)],
                 if_then: vec![
-                    txn_op_put(&tbid, serialize_struct(&table_meta)?), // tb_id -> tb_meta
+                    txn_op_put_pb(&tbid, &table_meta, None)?, // tb_id -> tb_meta
                 ],
                 else_then: vec![],
             };
