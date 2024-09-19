@@ -28,26 +28,34 @@ explain select * from v where a > b
 UnionAll
 ├── output columns: [t1.a (#0), t1.b (#1)]
 ├── estimated rows: 0.80
-├── TableScan
-│   ├── table: default.default.t1
-│   ├── output columns: [a (#0), b (#1)]
-│   ├── read rows: 0
-│   ├── read size: 0
-│   ├── partitions total: 1
-│   ├── partitions scanned: 0
-│   ├── pruning stats: [segments: <range pruning: 1 to 0>]
-│   ├── push downs: [filters: [is_true(t1.a (#0) > t1.b (#1))], limit: NONE]
-│   └── estimated rows: 0.40
-└── TableScan
-    ├── table: default.default.t2
-    ├── output columns: [a (#2), b (#3)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0>]
-    ├── push downs: [filters: [is_true(t2.a (#2) > t2.b (#3))], limit: NONE]
-    └── estimated rows: 0.40
+├── Filter
+│   ├── output columns: [t1.a (#0), t1.b (#1)]
+│   ├── filters: [is_true(t1.a (#0) > t1.b (#1))]
+│   ├── estimated rows: 0.40
+│   └── TableScan
+│       ├── table: default.default.t1
+│       ├── output columns: [a (#0), b (#1)]
+│       ├── read rows: 0
+│       ├── read size: 0
+│       ├── partitions total: 1
+│       ├── partitions scanned: 0
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>]
+│       ├── push downs: [filters: [is_true(t1.a (#0) > t1.b (#1))], limit: NONE]
+│       └── estimated rows: 2.00
+└── Filter
+    ├── output columns: [t2.a (#2), t2.b (#3)]
+    ├── filters: [is_true(t2.a (#2) > t2.b (#3))]
+    ├── estimated rows: 0.40
+    └── TableScan
+        ├── table: default.default.t2
+        ├── output columns: [a (#2), b (#3)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 1
+        ├── partitions scanned: 0
+        ├── pruning stats: [segments: <range pruning: 1 to 0>]
+        ├── push downs: [filters: [is_true(t2.a (#2) > t2.b (#3))], limit: NONE]
+        └── estimated rows: 2.00
 
 query T
 explain select * from v where a > 1
@@ -55,26 +63,34 @@ explain select * from v where a > 1
 UnionAll
 ├── output columns: [t1.a (#0), t1.b (#1)]
 ├── estimated rows: 2.00
-├── TableScan
-│   ├── table: default.default.t1
-│   ├── output columns: [a (#0), b (#1)]
-│   ├── read rows: 2
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.t2
-    ├── output columns: [a (#2), b (#3)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(t2.a (#2) > 1)], limit: NONE]
-    └── estimated rows: 1.00
+├── Filter
+│   ├── output columns: [t1.a (#0), t1.b (#1)]
+│   ├── filters: [is_true(t1.a (#0) > 1)]
+│   ├── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.default.t1
+│       ├── output columns: [a (#0), b (#1)]
+│       ├── read rows: 2
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
+│       └── estimated rows: 2.00
+└── Filter
+    ├── output columns: [t2.a (#2), t2.b (#3)]
+    ├── filters: [is_true(t2.a (#2) > 1)]
+    ├── estimated rows: 1.00
+    └── TableScan
+        ├── table: default.default.t2
+        ├── output columns: [a (#2), b (#3)]
+        ├── read rows: 2
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [is_true(t2.a (#2) > 1)], limit: NONE]
+        └── estimated rows: 2.00
 
 query T
 explain select * from v limit 3
@@ -243,7 +259,7 @@ TableScan
 ├── table: default.default.t1
 ├── output columns: [a (#0)]
 ├── read rows: 10000
-├── read size: 39.15 KiB
+├── read size: 10.59 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
