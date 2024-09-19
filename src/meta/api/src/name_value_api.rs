@@ -19,11 +19,13 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
+use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KeyCodec;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
@@ -96,41 +98,6 @@ where
             }
         }
         Ok(Ok(()))
-    }
-
-    /// Update or insert a `name -> value` mapping.
-    ///
-    /// The `update` function is called with the previous value and should output the updated to write back.
-    /// If it outputs `None`, nothing is written back.
-    async fn upsert_name_value_with(
-        &self,
-        name_ident: &TIdent<R, N>,
-        update: impl Fn(Option<R::ValueType>) -> Option<R::ValueType> + Send,
-    ) -> Result<Change<R::ValueType>, MetaTxnError> {
-        debug!(name_ident :? =name_ident; "NameValueApi: {}", func_name!());
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let seq_meta = self.get_pb(name_ident).await?;
-            let seq = seq_meta.seq();
-
-            let updated = match update(seq_meta.clone().into_value()) {
-                Some(x) => x,
-                None => return Ok(Change::new(seq_meta.clone(), seq_meta)),
-            };
-
-            let transition = self
-                .upsert_pb(
-                    &UpsertPB::insert(name_ident.clone(), updated).with(MatchSeq::Exact(seq)),
-                )
-                .await?;
-
-            if transition.is_changed() {
-                return Ok(transition);
-            }
-        }
     }
 
     /// Update an existent `name -> value` mapping.

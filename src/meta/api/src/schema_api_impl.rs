@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
@@ -201,6 +202,7 @@ use crate::get_pb_value;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
@@ -1633,7 +1635,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
         let table_name = &table_id_history.table_name;
 
-        let (_seq, table_id_list) = self.get_pb_seq_and_value(&table_id_history).await?;
+        let (_seq, table_id_list) = self.get_pb_seq_and_value(table_id_history).await?;
 
         let table_id_list = table_id_list.ok_or_else(|| {
             AppError::from(UnknownTable::new(
@@ -2304,66 +2306,42 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let tbid = TableId {
             table_id: req.table_id,
         };
-        let req_seq = req.seq;
 
-        loop {
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
+        self.upsert_with(&tbid, |seq_meta: Option<SeqV<TableMeta>>| {
+            let Some(seq_meta) = seq_meta else {
+                return Err(AppError::UnknownTableId(UnknownTableId::new(
+                    req.table_id,
+                    "upsert_table_option",
+                )));
+            };
 
-            debug!(ident :% =(&tbid); "upsert_table_option");
-
-            if tb_meta_seq == 0 || table_meta.is_none() {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "upsert_table_option"),
+            if req.seq.match_seq(&seq_meta).is_err() {
+                return Err(AppError::from(TableVersionMismatched::new(
+                    req.table_id,
+                    req.seq,
+                    seq_meta.seq(),
+                    "upsert_table_option",
                 )));
             }
-            if req_seq.match_seq(tb_meta_seq).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.table_id,
-                        req.seq,
-                        tb_meta_seq,
-                        "upsert_table_option",
-                    ),
-                )));
-            }
-            let mut table_meta = table_meta.unwrap();
-            // update table options
-            let opts = &mut table_meta.options;
+
+            let mut table_meta = seq_meta.data;
 
             for (k, opt_v) in &req.options {
                 match opt_v {
                     None => {
-                        opts.remove(k);
+                        table_meta.options.remove(k);
                     }
                     Some(v) => {
-                        opts.insert(k.to_string(), v.to_string());
+                        table_meta.options.insert(k.to_string(), v.to_string());
                     }
                 }
             }
-            let txn_req = TxnRequest {
-                condition: vec![
-                    // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                ],
-                if_then: vec![
-                    txn_op_put(&tbid, serialize_struct(&table_meta)?), // tb_id -> tb_meta
-                ],
-                else_then: vec![],
-            };
 
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+            Ok(Some(table_meta))
+        })
+        .await??;
 
-            debug!(
-                id :? =(&tbid),
-                succ = succ;
-                "upsert_table_option"
-            );
-
-            if succ {
-                return Ok(UpsertTableOptionReply {});
-            }
-        }
+        Ok(UpsertTableOptionReply {})
     }
 
     async fn update_multi_table_meta(
@@ -3153,17 +3131,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&name_ident, &value); "SchemaApi: {}", func_name!());
 
         let transition = self
-            .upsert_name_value_with(name_ident, |t: Option<LeastVisibleTime>| {
-                let curr = t.unwrap_or_default();
+            .upsert_with::<Infallible>(name_ident, |t: Option<SeqV<LeastVisibleTime>>| {
+                let curr = t.into_value().unwrap_or_default();
                 if curr.time >= value.time {
-                    None
+                    Ok(None)
                 } else {
-                    Some(value.clone())
+                    Ok(Some(value.clone()))
                 }
             })
             .await?;
 
-        return Ok(transition.result.into_value().unwrap_or_default());
+        return Ok(transition.unwrap().result.into_value().unwrap_or_default());
     }
 
     #[logcall::logcall]
@@ -3275,10 +3253,14 @@ async fn get_table_meta_history(
 ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
     let mut tb_metas = vec![];
 
-    let inner_keys = tb_id_list.id_list.into_iter().map(TableId::new);
+    let inner_keys = tb_id_list
+        .id_list
+        .into_iter()
+        .map(TableId::new)
+        .collect::<Vec<_>>();
 
     for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
-        let kvs = kv_api.get_pb_vec(c).await?;
+        let kvs = kv_api.get_pb_vec(c.into_iter().cloned()).await?;
 
         for (k, table_meta) in kvs {
             let Some(table_meta) = table_meta else {

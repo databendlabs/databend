@@ -131,7 +131,7 @@ pub trait KVPbApi: KVApi {
         key: &K,
     ) -> impl Future<Output = Result<(u64, Option<K::ValueType>), Self::Error>> + Send
     where
-        K: kvapi::Key,
+        K: kvapi::Key + Send + Sync,
         K::ValueType: FromToProto,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
@@ -227,9 +227,9 @@ pub trait KVPbApi: KVApi {
         keys: I,
     ) -> impl Future<Output = Result<Vec<(K, Option<SeqV<K::ValueType>>)>, Self::Error>> + Send
     where
-        K: kvapi::Key + 'static,
+        K: kvapi::Key + Send + 'static,
         K::ValueType: FromToProto + Send + 'static,
-        I: IntoIterator<Item = K>,
+        I: IntoIterator<Item = K> + Send,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
         async move {
