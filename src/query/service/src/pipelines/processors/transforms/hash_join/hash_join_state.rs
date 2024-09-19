@@ -16,7 +16,6 @@ use std::cell::SyncUnsafeCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -108,13 +107,13 @@ pub struct HashJoinState {
     /// It record whether spill has happened.
     pub(crate) is_spill_happened: AtomicBool,
     /// Spilled partition set, it contains all spilled partition sets from all build processors.
-    pub(crate) spilled_partitions: RwLock<HashSet<u8>>,
+    pub(crate) spilled_partitions: RwLock<HashSet<usize>>,
     /// Spill partition bits, it is used to calculate the number of partitions.
     pub(crate) spill_partition_bits: usize,
     /// Spill buffer size threshold.
     pub(crate) spill_buffer_threshold: usize,
     /// The next partition id to be restored.
-    pub(crate) partition_id: AtomicU8,
+    pub(crate) partition_id: AtomicUsize,
     /// Whether need next round, if it is true, restore data from spilled data and start next round.
     pub(crate) need_next_round: AtomicBool,
     /// Send message to notify all build processors to next round.
@@ -176,7 +175,7 @@ impl HashJoinState {
             spilled_partitions: Default::default(),
             continue_build_watcher,
             _continue_build_dummy_receiver,
-            partition_id: AtomicU8::new(0),
+            partition_id: AtomicUsize::new(0),
             need_next_round: AtomicBool::new(false),
             is_spill_happened: AtomicBool::new(false),
             enable_spill,
@@ -234,7 +233,7 @@ impl HashJoinState {
         self.need_outer_scan() || self.need_mark_scan()
     }
 
-    pub fn add_spilled_partitions(&self, partitions: &HashSet<u8>) {
+    pub fn add_spilled_partitions(&self, partitions: &HashSet<usize>) {
         let mut spilled_partitions = self.spilled_partitions.write();
         spilled_partitions.extend(partitions);
     }

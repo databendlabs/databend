@@ -34,6 +34,9 @@
 // IN THE SOFTWARE.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::io;
 use std::io::BufWriter;
 use std::io::Cursor;
@@ -48,9 +51,15 @@ use std::sync::Arc;
 use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_storages_common_table_meta::meta::testify_version;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Versioned;
+use levenshtein_automata::Distance;
+use levenshtein_automata::LevenshteinAutomatonBuilder;
+use levenshtein_automata::DFA;
 use log::warn;
 use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::OpenReadError;
@@ -63,9 +72,23 @@ use tantivy::directory::TerminatingWrite;
 use tantivy::directory::WatchCallback;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::WritePtr;
+use tantivy::positions::PositionReader;
+use tantivy::postings::TermInfo;
+use tantivy::query::BooleanQuery;
+use tantivy::query::FuzzyTermQuery;
+use tantivy::query::Occur;
+use tantivy::query::PhraseQuery;
+use tantivy::query::Query;
+use tantivy::query::QueryClone;
+use tantivy::query::TermQuery;
 use tantivy::Directory;
+use tantivy::Term;
 use tantivy_common::BinarySerializable;
+use tantivy_common::HasLen;
 use tantivy_common::VInt;
+use tantivy_fst::Automaton;
+use tantivy_fst::IntoStreamer;
+use tantivy_fst::Streamer;
 
 // tantivy version is used to generate the footer data
 
@@ -117,6 +140,104 @@ impl Footer {
         BinarySerializable::serialize(&FOOTER_MAGIC_NUMBER, write)?;
         Ok(())
     }
+}
+
+fn extract_footer(data: FileSlice) -> Result<(Vec<FileAddr>, Vec<usize>)> {
+    // The following code is copied from tantivy `CompositeFile::open` function.
+    // extract field number and offsets of each fields.
+    let end = data.len();
+    let footer_len_data = data.slice_from(end - 4).read_bytes()?;
+    let footer_len = u32::deserialize(&mut footer_len_data.as_slice())? as usize;
+    let footer_start = end - 4 - footer_len;
+    let footer_data = data
+        .slice(footer_start..footer_start + footer_len)
+        .read_bytes()?;
+    let mut footer_buffer = footer_data.as_slice();
+    let num_fields = VInt::deserialize(&mut footer_buffer)?.0 as usize;
+
+    let mut offset = 0;
+    let mut offsets = Vec::with_capacity(num_fields);
+    let mut file_addrs = Vec::with_capacity(num_fields);
+    for _ in 0..num_fields {
+        offset += VInt::deserialize(&mut footer_buffer)?.0 as usize;
+        offsets.push(offset);
+        let file_addr = FileAddr::deserialize(&mut footer_buffer)?;
+        file_addrs.push(file_addr);
+    }
+    offsets.push(footer_start);
+
+    Ok((file_addrs, offsets))
+}
+
+// Extract fsts and term dicts into separate columns.
+pub fn extract_fsts(
+    data: FileSlice,
+    fields: &mut Vec<TableField>,
+    values: &mut Vec<Scalar>,
+) -> Result<()> {
+    let (file_addrs, offsets) = extract_footer(data.clone())?;
+
+    let mut term_dict_fields = Vec::with_capacity(file_addrs.len());
+    let mut term_dict_values = Vec::with_capacity(file_addrs.len());
+    for (i, file_addr) in file_addrs.iter().enumerate() {
+        let field_id = file_addr.field.field_id();
+        let start_offset = offsets[i];
+        let end_offset = offsets[i + 1];
+
+        let field_slice = data.slice(start_offset..end_offset);
+
+        let (main_slice, footer_len_slice) = field_slice.split_from_end(16);
+        let mut footer_len_bytes = footer_len_slice.read_bytes()?;
+        let footer_size = u64::deserialize(&mut footer_len_bytes)?;
+
+        let (fst_file_slice, term_dict_file_slice) =
+            main_slice.split_from_end(footer_size as usize);
+
+        let fst_field_name = format!("fst-{}", field_id);
+        let fst_field = TableField::new(&fst_field_name, TableDataType::Binary);
+        fields.push(fst_field);
+
+        let fst_bytes = fst_file_slice.read_bytes()?;
+        values.push(Scalar::Binary(fst_bytes.as_slice().to_vec()));
+
+        let term_dict_field_name = format!("term-{}", field_id);
+        let term_dict_field = TableField::new(&term_dict_field_name, TableDataType::Binary);
+        term_dict_fields.push(term_dict_field);
+
+        let term_dict_bytes = term_dict_file_slice.read_bytes()?;
+        term_dict_values.push(Scalar::Binary(term_dict_bytes.as_slice().to_vec()));
+    }
+
+    fields.append(&mut term_dict_fields);
+    values.append(&mut term_dict_values);
+
+    Ok(())
+}
+
+// Extract component file into separate columns by fields.
+pub fn extract_component_fields(
+    name: &str,
+    data: FileSlice,
+    fields: &mut Vec<TableField>,
+    values: &mut Vec<Scalar>,
+) -> Result<()> {
+    let (file_addrs, offsets) = extract_footer(data.clone())?;
+
+    for (i, file_addr) in file_addrs.iter().enumerate() {
+        let field_id = file_addr.field.field_id();
+        let start_offset = offsets[i];
+        let end_offset = offsets[i + 1];
+
+        let field_name = format!("{}-{}", name, field_id);
+        let field = TableField::new(&field_name, TableDataType::Binary);
+        fields.push(field);
+
+        let field_slice = data.slice(start_offset..end_offset);
+        let field_bytes = field_slice.read_bytes()?;
+        values.push(Scalar::Binary(field_bytes.as_slice().to_vec()));
+    }
+
+    Ok(())
 }
 
 // Build footer for tantivy files.
@@ -214,6 +335,382 @@ fn build_empty_position_data(field_nums: usize) -> Result<OwnedBytes> {
     buf.append(&mut footer);
 
     Ok(OwnedBytes::new(buf))
+}
+
+struct DfaWrapper(pub DFA);
+
+impl Automaton for DfaWrapper {
+    type State = u32;
+
+    fn start(&self) -> Self::State {
+        self.0.initial_state()
+    }
+
+    fn is_match(&self, state: &Self::State) -> bool {
+        match self.0.distance(*state) {
+            Distance::Exact(_) => true,
+            Distance::AtLeast(_) => false,
+        }
+    }
+
+    fn can_match(&self, state: &u32) -> bool {
+        *state != levenshtein_automata::SINK_STATE
+    }
+
+    fn accept(&self, state: &Self::State, byte: u8) -> Self::State {
+        self.0.transition(*state, byte)
+    }
+}
+
+// Term value contains values associated with a Term
+// used to match query and collect matched doc ids.
+#[derive(Clone)]
+pub struct TermValue {
+    // term info
+    pub term_info: TermInfo,
+    // term matched doc ids
+    pub doc_ids: Vec<u32>,
+    // term frequencies for each doc
+    pub term_freqs: Vec<u32>,
+    // position reader is used to read positions in doc for phrase query
+    pub position_reader: Option<PositionReader>,
+}
+
+// Check if fst contains terms in query.
+// If not, we can skip read other parts of inverted index.
+pub fn check_term_fsts_match(
+    query: Box<dyn Query>,
+    fst_maps: &HashMap<usize, tantivy_fst::Map<OwnedBytes>>,
+    fuzziness: &Option<u8>,
+    matched_terms: &mut HashMap<Term, u64>,
+    fuzziness_terms: &mut HashMap<Term, Vec<Term>>,
+) -> bool {
+    if let Some(term_query) = query.downcast_ref::<TermQuery>() {
+        let term = term_query.term();
+        let field = term.field();
+        let field_id = field.field_id() as usize;
+        if let Some(fst_map) = fst_maps.get(&field_id) {
+            if let Some(idx) = fst_map.get(term.serialized_value_bytes()) {
+                matched_terms.insert(term.clone(), idx);
+                return true;
+            }
+        }
+        false
+    } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
+        let mut matched_num = 0;
+        for (occur, sub_query) in bool_query.clauses() {
+            let matched = check_term_fsts_match(
+                sub_query.box_clone(),
+                fst_maps,
+                fuzziness,
+                matched_terms,
+                fuzziness_terms,
+            );
+            if matched {
+                matched_num += 1;
+            }
+            match occur {
+                Occur::Should => {}
+                Occur::Must => {
+                    if !matched {
+                        return false;
+                    }
+                }
+                Occur::MustNot => {}
+            }
+        }
+        matched_num > 0
+    } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
+        // PhraseQuery must match all terms.
+        let field = phrase_query.field();
+        let field_id = field.field_id() as usize;
+        if let Some(fst_map) = fst_maps.get(&field_id) {
+            let mut matched_all = true;
+            for term in phrase_query.phrase_terms() {
+                let matched = if let Some(idx) = fst_map.get(term.serialized_value_bytes()) {
+                    matched_terms.insert(term.clone(), idx);
+                    true
+                } else {
+                    false
+                };
+                if !matched {
+                    matched_all = false;
+                    break;
+                }
+            }
+            matched_all
+        } else {
+            false
+        }
+    } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
+        // FuzzyTermQuery match terms by levenshtein distance.
+        let fuzziness = fuzziness.unwrap();
+
+        let term = fuzzy_term_query.term();
+        let field = term.field();
+        let field_id = field.field_id() as usize;
+        if let Some(fst_map) = fst_maps.get(&field_id) {
+            // build levenshtein automaton
+            let lev_automaton_builder = LevenshteinAutomatonBuilder::new(fuzziness, true);
+            let term_str = String::from_utf8_lossy(term.serialized_value_bytes());
+            let automaton = DfaWrapper(lev_automaton_builder.build_dfa(&term_str));
+
+            let mut fuzz_term_values = vec![];
+            let mut stream = fst_map.search(automaton).into_stream();
+            while let Some((key, idx)) = stream.next() {
+                let key_str = unsafe { std::str::from_utf8_unchecked(key) };
+                let fuzz_term = Term::from_field_text(field, key_str);
+                matched_terms.insert(fuzz_term.clone(), idx);
+                fuzz_term_values.push(fuzz_term);
+            }
+            let matched = !fuzz_term_values.is_empty();
+            fuzziness_terms.insert(term.clone(), fuzz_term_values);
+            matched
+        } else {
+            false
+        }
+    } else {
+        // TODO: handle other Query types
+        let mut matched = false;
+        query.query_terms(&mut |term, _| {
+            let field = term.field();
+            let field_id = field.field_id() as usize;
+            if let Some(fst_map) = fst_maps.get(&field_id) {
+                if let Some(idx) = fst_map.get(term.serialized_value_bytes()) {
+                    matched_terms.insert(term.clone(), idx);
+                    matched = true;
+                }
+            }
+        });
+
+        matched
+    }
+}
+
+// collect matched rows by term value
+pub fn collect_matched_rows(
+    query: Box<dyn Query>,
+    row_count: u32,
+    fuzziness_terms: &HashMap<Term, Vec<Term>>,
+    term_values: &mut HashMap<Term, TermValue>,
+) -> Vec<u32> {
+    if let Some(term_query) = query.downcast_ref::<TermQuery>() {
+        let term = term_query.term();
+        if let Some(term_value) = term_values.get(term) {
+            term_value.doc_ids.clone()
+        } else {
+            vec![]
+        }
+    } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
+        let mut should_doc_ids_opt = None;
+        let mut must_doc_ids_opt = None;
+        let mut must_not_doc_ids_opt = None;
+        for (occur, sub_query) in bool_query.clauses() {
+            let doc_ids = collect_matched_rows(
+                sub_query.box_clone(),
+                row_count,
+                fuzziness_terms,
+                term_values,
+            );
+            let doc_id_set = HashSet::from_iter(doc_ids.into_iter());
+            match occur {
+                Occur::Should => {
+                    if should_doc_ids_opt.is_none() {
+                        should_doc_ids_opt = Some(doc_id_set);
+                    } else {
+                        let should_doc_ids = should_doc_ids_opt.unwrap();
+                        should_doc_ids_opt =
+                            Some(should_doc_ids.union(&doc_id_set).copied().collect())
+                    }
+                }
+                Occur::Must => {
+                    if must_doc_ids_opt.is_none() {
+                        must_doc_ids_opt = Some(doc_id_set);
+                    } else {
+                        let must_doc_ids = must_doc_ids_opt.unwrap();
+                        must_doc_ids_opt =
+                            Some(must_doc_ids.intersection(&doc_id_set).copied().collect())
+                    }
+                }
+                Occur::MustNot => {
+                    if must_not_doc_ids_opt.is_none() {
+                        must_not_doc_ids_opt = Some(doc_id_set);
+                    } else {
+                        let must_not_doc_ids = must_not_doc_ids_opt.unwrap();
+                        must_not_doc_ids_opt =
+                            Some(must_not_doc_ids.union(&doc_id_set).copied().collect())
+                    }
+                }
+            }
+        }
+
+        let doc_ids = if let Some(mut should_doc_ids) = should_doc_ids_opt {
+            if let Some(must_doc_ids) = must_doc_ids_opt {
+                should_doc_ids = should_doc_ids
+                    .intersection(&must_doc_ids)
+                    .copied()
+                    .collect()
+            }
+            if let Some(must_not_doc_ids) = must_not_doc_ids_opt {
+                should_doc_ids = should_doc_ids
+                    .difference(&must_not_doc_ids)
+                    .copied()
+                    .collect()
+            }
+            should_doc_ids
+        } else if let Some(mut must_doc_ids) = must_doc_ids_opt {
+            if let Some(must_not_doc_ids) = must_not_doc_ids_opt {
+                must_doc_ids = must_doc_ids
+                    .difference(&must_not_doc_ids)
+                    .copied()
+                    .collect()
+            }
+            must_doc_ids
+        } else if let Some(must_not_doc_ids) = must_not_doc_ids_opt {
+            let all_doc_ids = HashSet::from_iter(0..row_count);
+            let doc_ids = all_doc_ids.difference(&must_not_doc_ids).copied().collect();
+            doc_ids
+        } else {
+            HashSet::new()
+        };
+
+        let mut doc_ids = Vec::from_iter(doc_ids);
+        doc_ids.sort();
+        doc_ids
+    } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
+        let mut union_doc_ids = HashSet::new();
+        let mut intersection_doc_ids_opt = None;
+
+        for term in phrase_query.phrase_terms() {
+            if let Some(term_value) = term_values.get(&term) {
+                let doc_id_set = HashSet::from_iter(term_value.doc_ids.clone());
+                union_doc_ids = union_doc_ids.union(&doc_id_set).copied().collect();
+                if intersection_doc_ids_opt.is_none() {
+                    intersection_doc_ids_opt = Some(doc_id_set);
+                } else {
+                    let intersection_doc_ids = intersection_doc_ids_opt.unwrap();
+                    intersection_doc_ids_opt = Some(
+                        intersection_doc_ids
+                            .intersection(&doc_id_set)
+                            .copied()
+                            .collect(),
+                    );
+                }
+            }
+        }
+
+        let intersection_doc_ids = intersection_doc_ids_opt.unwrap_or_default();
+        if intersection_doc_ids.is_empty() {
+            return vec![];
+        }
+        let mut union_doc_ids = Vec::from_iter(union_doc_ids);
+        union_doc_ids.sort();
+
+        // check each docs
+        let mut matched_doc_ids = vec![];
+        for doc_id in union_doc_ids {
+            if !intersection_doc_ids.contains(&doc_id) {
+                continue;
+            }
+
+            let mut term_pos_map = HashMap::new();
+            for term in phrase_query.phrase_terms() {
+                let mut offset = 0;
+                let mut term_freq = 0;
+                if let Some(term_value) = term_values.get_mut(&term) {
+                    for i in 0..term_value.doc_ids.len() {
+                        if term_value.doc_ids[i] < doc_id {
+                            offset += term_value.term_freqs[i] as u64;
+                        } else {
+                            term_freq = term_value.term_freqs[i] as usize;
+                            break;
+                        }
+                    }
+                    // collect positions in the docs
+                    if let Some(position_reader) = term_value.position_reader.as_mut() {
+                        let mut pos_output = vec![0; term_freq];
+                        position_reader.read(offset, &mut pos_output[..]);
+                        for i in 1..pos_output.len() {
+                            pos_output[i] += pos_output[i - 1];
+                        }
+                        let positions = VecDeque::from_iter(pos_output);
+                        term_pos_map.insert(term.clone(), positions);
+                    }
+                }
+            }
+
+            let mut is_first = true;
+            let mut distance = 0;
+            let mut matched = true;
+            let mut last_position = 0;
+            for (query_position, term) in phrase_query.phrase_terms_with_offsets() {
+                if let Some(positions) = term_pos_map.get_mut(&term) {
+                    let mut find_position = false;
+                    while let Some(doc_position) = positions.pop_front() {
+                        // skip previous positions.
+                        if doc_position < last_position {
+                            continue;
+                        }
+                        last_position = doc_position;
+                        let doc_distance = doc_position - (query_position as u32);
+                        if is_first {
+                            is_first = false;
+                            distance = doc_distance;
+                        } else {
+                            // distance must same as first term.
+                            if doc_distance != distance {
+                                matched = false;
+                            }
+                        }
+                        find_position = true;
+                        break;
+                    }
+                    if !find_position {
+                        matched = false;
+                    }
+                } else {
+                    matched = false;
+                }
+                if !matched {
+                    break;
+                }
+            }
+            if matched {
+                matched_doc_ids.push(doc_id);
+            }
+        }
+        matched_doc_ids
+    } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
+        let mut fuzz_doc_ids = HashSet::new();
+        let term = fuzzy_term_query.term();
+
+        // collect related terms of the original term.
+        if let Some(related_terms) = fuzziness_terms.get(term) {
+            for term in related_terms {
+                if let Some(term_value) = term_values.get(term) {
+                    let doc_id_set: HashSet<u32> = HashSet::from_iter(term_value.doc_ids.clone());
+                    fuzz_doc_ids = fuzz_doc_ids.union(&doc_id_set).copied().collect();
+                }
+            }
+            let mut doc_ids = Vec::from_iter(fuzz_doc_ids);
+            doc_ids.sort();
+            doc_ids
+        } else {
+            vec![]
+        }
+    } else {
+        let mut union_doc_ids = HashSet::new();
+        query.query_terms(&mut |term, _| {
+            if let Some(term_value) = term_values.get(term) {
+                let doc_id_set: HashSet<u32> = HashSet::from_iter(term_value.doc_ids.clone());
+                union_doc_ids = union_doc_ids.union(&doc_id_set).copied().collect();
+            }
+        });
+
+        let mut doc_ids = Vec::from_iter(union_doc_ids);
+        doc_ids.sort();
+        doc_ids
+    }
 }
 
 #[derive(Clone)]

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use super::nullable::NullableDomain;
@@ -166,6 +167,11 @@ impl ValueType for NullType {
 
     fn column_memory_size(_: &Self::Column) -> usize {
         std::mem::size_of::<usize>()
+    }
+
+    #[inline(always)]
+    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Ordering {
+        Ordering::Equal
     }
 }
 

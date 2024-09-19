@@ -65,7 +65,7 @@ pub use rule_push_down_filter_sort::RulePushDownFilterSort;
 pub use rule_push_down_filter_union::RulePushDownFilterUnion;
 pub use rule_push_down_filter_window::RulePushDownFilterWindow;
 pub use rule_push_down_limit::RulePushDownLimit;
-pub use rule_push_down_limit_aggregate::RulePushDownLimitAggregate;
+pub use rule_push_down_limit_aggregate::RulePushDownRankLimitAggregate;
 pub use rule_push_down_limit_expression::RulePushDownLimitEvalScalar;
 pub use rule_push_down_limit_join::RulePushDownLimitOuterJoin;
 pub use rule_push_down_limit_scan::RulePushDownLimitScan;

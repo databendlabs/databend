@@ -377,7 +377,6 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // After join reorder, Convert some single join to inner join.
     s_expr = SingleToInnerOptimizer::new().run(&s_expr)?;
-
     // Deduplicate join conditions.
     s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
 

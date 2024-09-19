@@ -18,6 +18,7 @@ mod group_by;
 mod group_by_hash;
 mod scatter;
 mod sort;
+mod sort_compare;
 mod take;
 mod take_chunks;
 mod take_compact;
@@ -27,6 +28,7 @@ mod utils;
 
 pub use group_by_hash::*;
 pub use sort::*;
+pub use sort_compare::*;
 pub use take_chunks::*;
 pub use topk::*;
 pub use utils::*;

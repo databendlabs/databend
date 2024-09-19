@@ -99,7 +99,8 @@ async fn load_bloom_filter_by_columns<'a>(
     for column_name in column_needed {
         for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
             if name == column_name {
-                col_metas.push((idx as ColumnId, (name, column_meta)))
+                col_metas.push((idx as ColumnId, (name, column_meta)));
+                break;
             }
         }
     }

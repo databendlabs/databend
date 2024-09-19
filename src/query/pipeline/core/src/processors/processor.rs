@@ -34,7 +34,7 @@ pub enum Event {
     Finished,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum EventCause {
     Other,
     // Which input of the processor triggers the event

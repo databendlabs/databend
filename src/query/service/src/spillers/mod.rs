@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod partition_buffer;
 mod spiller;
-mod spiller_buffer;
 
+pub use partition_buffer::PartitionBuffer;
+pub use partition_buffer::PartitionBufferFetchOption;
+pub use spiller::SpilledData;
 pub use spiller::Spiller;
 pub use spiller::SpillerConfig;
 pub use spiller::SpillerType;
-pub use spiller_buffer::SpillBuffer;

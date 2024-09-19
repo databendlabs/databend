@@ -831,6 +831,7 @@ fn test_statement() {
         r#"drop PROCEDURE p1()"#,
         r#"drop PROCEDURE p1(int, string)"#,
         r#"call PROCEDURE p1()"#,
+        r#"call PROCEDURE p1(1, 'x', '2022-02-02'::Date)"#,
         r#"show PROCEDURES like 'p1%'"#,
         r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
             BEGIN

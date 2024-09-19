@@ -4337,10 +4337,7 @@ impl<'a> TypeChecker<'a> {
                         }),
                         index: self.metadata.read().columns().len() - 1,
                     }],
-                    aggregate_functions: vec![],
-                    from_distinct: false,
-                    limit: None,
-                    grouping_sets: None,
+                    ..Default::default()
                 }
                 .into(),
             ),

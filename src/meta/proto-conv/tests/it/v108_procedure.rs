@@ -22,15 +22,16 @@ use crate::common;
 
 #[test]
 fn v108_procedure_meta() -> anyhow::Result<()> {
-    let procedure_meta_v108: Vec<u8> = vec![
-        34, 9, 146, 2, 0, 160, 6, 108, 168, 6, 24, 82, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56,
+    let procedure_meta_v108 = vec![
+        34, 9, 146, 2, 0, 160, 6, 109, 168, 6, 24, 82, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56,
         32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 90, 23, 50, 48, 49, 52, 45, 49, 49, 45,
         50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 98, 7, 102, 111, 111, 32, 98,
-        97, 114, 114, 3, 83, 81, 76, 160, 6, 108, 168, 6, 24,
+        97, 114, 114, 3, 83, 81, 76, 160, 6, 109, 168, 6, 24,
     ];
 
     let want = || mt::ProcedureMeta {
         return_types: vec![DataType::String],
+        arg_names: vec![],
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         script: "".to_string(),
@@ -39,7 +40,7 @@ fn v108_procedure_meta() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), procedure_meta_v108.as_slice(), 108, want())
+    common::test_load_old(func_name!(), procedure_meta_v108.as_slice(), 109, want())
 }
 
 #[test]

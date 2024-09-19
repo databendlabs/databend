@@ -19,6 +19,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_expression::types::DataType;
 
 use crate::principal::procedure_id_ident::ProcedureIdIdent;
@@ -45,6 +46,7 @@ pub struct ProcedureIdent {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcedureMeta {
     pub return_types: Vec<DataType>,
+    pub arg_names: Vec<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub script: String,
@@ -56,6 +58,7 @@ impl Default for ProcedureMeta {
     fn default() -> Self {
         ProcedureMeta {
             return_types: vec![],
+            arg_names: vec![],
             created_on: Utc::now(),
             updated_on: Utc::now(),
             script: "".to_string(),
@@ -69,8 +72,13 @@ impl Display for ProcedureMeta {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "Lanuage: {:?}, return_type: {:?}, CreatedOn: {:?}, Script: {:?}, Comment: {:?}",
-            self.procedure_language, self.return_types, self.created_on, self.script, self.comment
+            "Lanuage: {:?}, args {} return_type: {}, CreatedOn: {:?}, Script: {}, Comment: {:?}",
+            self.procedure_language,
+            self.arg_names.display_n::<1000>(),
+            self.return_types.display_n::<1000>(),
+            self.created_on,
+            self.script,
+            self.comment
         )
     }
 }
