@@ -121,16 +121,23 @@ impl Binder {
             self.ctes_map.clone(),
         );
         let mut order_by_items = Vec::with_capacity(query.order_by.len());
+
+        let dialect = self.ctx.get_settings().get_sql_dialect().unwrap();
+        let default_nulls_first = |asc: bool| !dialect.is_null_biggest(asc);
+
         for order in query.order_by.iter() {
             match order.expr {
                 Expr::ColumnRef { .. } => {
                     let scalar = scalar_binder.bind(&order.expr)?.0;
                     match scalar {
                         ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) => {
+                            let asc = order.asc.unwrap_or(true);
                             let order_by_item = SortItem {
                                 index: column.index,
-                                asc: order.asc.unwrap_or(true),
-                                nulls_first: order.nulls_first.unwrap_or(false),
+                                asc,
+                                nulls_first: order
+                                    .nulls_first
+                                    .unwrap_or_else(|| default_nulls_first(asc)),
                             };
                             order_by_items.push(order_by_item);
                         }

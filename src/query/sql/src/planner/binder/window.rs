@@ -89,12 +89,8 @@ impl Binder {
             child
         };
 
-        let default_nulls_first = !self
-            .ctx
-            .get_settings()
-            .get_sql_dialect()
-            .unwrap()
-            .is_null_biggest();
+        let dialect = self.ctx.get_settings().get_sql_dialect().unwrap();
+        let default_nulls_first = |asc: bool| !dialect.is_null_biggest(asc);
 
         let mut sort_items: Vec<SortItem> = vec![];
         if !window_plan.partition_by.is_empty() {
@@ -102,16 +98,19 @@ impl Binder {
                 sort_items.push(SortItem {
                     index: part.index,
                     asc: true,
-                    nulls_first: default_nulls_first,
+                    nulls_first: default_nulls_first(true),
                 });
             }
         }
 
         for order in window_plan.order_by.iter() {
+            let asc = order.asc.unwrap_or(true);
             sort_items.push(SortItem {
                 index: order.order_by_item.index,
-                asc: order.asc.unwrap_or(true),
-                nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                asc,
+                nulls_first: order
+                    .nulls_first
+                    .unwrap_or_else(|| default_nulls_first(asc)),
             });
         }
 

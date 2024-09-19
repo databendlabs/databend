@@ -129,11 +129,11 @@ impl Dialect {
         }
     }
 
-    pub fn is_null_biggest(&self) -> bool {
+    pub fn is_null_biggest(&self, asc: bool) -> bool {
         match self {
             Dialect::MySQL => false,
             Dialect::Hive => false,
-            Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => true,
+            Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => asc,
         }
     }
 

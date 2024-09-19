@@ -17,9 +17,9 @@ NULL
 query I
 select * from order_test order by a desc
 ----
+NULL
 2
 1
-NULL
 
 query I
 select * from order_test order by a nulls first
@@ -27,6 +27,13 @@ select * from order_test order by a nulls first
 NULL
 1
 2
+
+query I
+select * from order_test order by a nulls last
+----
+1
+2
+NULL
 
 query II
 select number  d , max(1-number) c from numbers(4) group by 1  order by 2;
