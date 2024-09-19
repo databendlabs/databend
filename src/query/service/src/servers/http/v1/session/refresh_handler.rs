@@ -48,11 +48,11 @@ pub async fn refresh_handler(
     let mgr = ClientSessionManager::instance();
     match &ctx.credential {
         Credential::Jwt { .. } => {
-            let session_id =
-                req.session_id
-                    .ok_or(HttpErrorCode::bad_request(ErrorCode::BadArguments(
-                        "JWT session should provide session_id when refresh session",
-                    )))?;
+            let session_id = req.session_id.ok_or_else(|| {
+                HttpErrorCode::bad_request(ErrorCode::BadArguments(
+                    "JWT session should provide session_id when refresh session",
+                ))
+            })?;
             mgr.refresh_in_memory_states(&session_id);
 
             let tenant = ctx.session.get_current_tenant();

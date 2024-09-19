@@ -36,19 +36,20 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::io;
 use std::io::BufWriter;
 use std::io::Cursor;
 use std::io::Read;
 use std::io::Write;
 use std::marker::PhantomData;
+use std::ops::BitAndAssign;
+use std::ops::BitOrAssign;
+use std::ops::SubAssign;
 use std::path::Path;
 use std::path::PathBuf;
 use std::result;
 use std::sync::Arc;
 
-use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -61,6 +62,7 @@ use levenshtein_automata::Distance;
 use levenshtein_automata::LevenshteinAutomatonBuilder;
 use levenshtein_automata::DFA;
 use log::warn;
+use roaring::RoaringTreemap;
 use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::OpenReadError;
 use tantivy::directory::error::OpenWriteError;
@@ -73,14 +75,21 @@ use tantivy::directory::WatchCallback;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::WritePtr;
 use tantivy::positions::PositionReader;
+use tantivy::postings::BlockSegmentPostings;
 use tantivy::postings::TermInfo;
+use tantivy::query::AllQuery;
 use tantivy::query::BooleanQuery;
+use tantivy::query::BoostQuery;
+use tantivy::query::ConstScoreQuery;
+use tantivy::query::EmptyQuery;
 use tantivy::query::FuzzyTermQuery;
 use tantivy::query::Occur;
+use tantivy::query::PhrasePrefixQuery;
 use tantivy::query::PhraseQuery;
 use tantivy::query::Query;
 use tantivy::query::QueryClone;
 use tantivy::query::TermQuery;
+use tantivy::schema::Field;
 use tantivy::Directory;
 use tantivy::Term;
 use tantivy_common::BinarySerializable;
@@ -88,59 +97,8 @@ use tantivy_common::HasLen;
 use tantivy_common::VInt;
 use tantivy_fst::Automaton;
 use tantivy_fst::IntoStreamer;
+use tantivy_fst::Regex;
 use tantivy_fst::Streamer;
-
-// tantivy version is used to generate the footer data
-
-// Index major version.
-const INDEX_MAJOR_VERSION: u32 = 0;
-// Index minor version.
-const INDEX_MINOR_VERSION: u32 = 22;
-// Index patch version.
-const INDEX_PATCH_VERSION: u32 = 0;
-// Index format version.
-const INDEX_FORMAT_VERSION: u32 = 6;
-
-// The magic byte of the footer to identify corruption
-// or an old version of the footer.
-const FOOTER_MAGIC_NUMBER: u32 = 1337;
-
-type CrcHashU32 = u32;
-
-/// Structure version for the index.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Version {
-    major: u32,
-    minor: u32,
-    patch: u32,
-    index_format_version: u32,
-}
-
-/// A Footer is appended every part of data, like tantivy file.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-struct Footer {
-    version: Version,
-    crc: CrcHashU32,
-}
-
-impl Footer {
-    fn new(crc: CrcHashU32) -> Self {
-        let version = Version {
-            major: INDEX_MAJOR_VERSION,
-            minor: INDEX_MINOR_VERSION,
-            patch: INDEX_PATCH_VERSION,
-            index_format_version: INDEX_FORMAT_VERSION,
-        };
-        Footer { version, crc }
-    }
-
-    fn append_footer<W: std::io::Write>(&self, write: &mut W) -> Result<()> {
-        let footer_payload_len = write.write(serde_json::to_string(&self)?.as_ref())?;
-        BinarySerializable::serialize(&(footer_payload_len as u32), write)?;
-        BinarySerializable::serialize(&FOOTER_MAGIC_NUMBER, write)?;
-        Ok(())
-    }
-}
 
 fn extract_footer(data: FileSlice) -> Result<(Vec<FileAddr>, Vec<usize>)> {
     // The following code is copied from tantivy `CompositeFile::open` function.
@@ -240,57 +198,10 @@ pub fn extract_component_fields(
     Ok(())
 }
 
-// Build footer for tantivy files.
-// Footer is used to check whether the data is valid when open a file.
-pub fn build_tantivy_footer(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut hasher = Hasher::new();
-    hasher.update(bytes);
-    let crc = hasher.finalize();
-
-    let footer = Footer::new(crc);
-    let mut buf = Vec::new();
-    footer.append_footer(&mut buf)?;
-    Ok(buf)
-}
-
-#[derive(
-    Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, serde::Serialize, serde::Deserialize,
-)]
-struct Field(u32);
-
-impl Field {
-    /// Create a new field object for the given FieldId.
-    const fn from_field_id(field_id: u32) -> Field {
-        Field(field_id)
-    }
-
-    /// Returns a u32 identifying uniquely a field within a schema.
-    #[allow(dead_code)]
-    const fn field_id(self) -> u32 {
-        self.0
-    }
-}
-
-impl BinarySerializable for Field {
-    fn serialize<W: Write + ?Sized>(&self, writer: &mut W) -> io::Result<()> {
-        self.0.serialize(writer)
-    }
-
-    fn deserialize<R: Read>(reader: &mut R) -> io::Result<Field> {
-        u32::deserialize(reader).map(Field)
-    }
-}
-
 #[derive(Eq, PartialEq, Hash, Copy, Ord, PartialOrd, Clone, Debug)]
 struct FileAddr {
     field: Field,
     idx: usize,
-}
-
-impl FileAddr {
-    fn new(field: Field, idx: usize) -> FileAddr {
-        FileAddr { field, idx }
-    }
 }
 
 impl BinarySerializable for FileAddr {
@@ -305,36 +216,6 @@ impl BinarySerializable for FileAddr {
         let idx = VInt::deserialize(reader)?.0 as usize;
         Ok(FileAddr { field, idx })
     }
-}
-
-// Build empty position data to be used when there are no phrase terms in the query.
-// This can reduce data reading and speed up the query
-fn build_empty_position_data(field_nums: usize) -> Result<OwnedBytes> {
-    let offsets: Vec<_> = (0..field_nums)
-        .map(|i| {
-            let field = Field::from_field_id(i as u32);
-            let file_addr = FileAddr::new(field, 0);
-            (file_addr, 0)
-        })
-        .collect();
-
-    let mut buf = Vec::new();
-    VInt(offsets.len() as u64).serialize(&mut buf)?;
-
-    let mut prev_offset = 0;
-    for (file_addr, offset) in offsets {
-        VInt(offset - prev_offset).serialize(&mut buf)?;
-        file_addr.serialize(&mut buf)?;
-        prev_offset = offset;
-    }
-
-    let footer_len = buf.len() as u32;
-    footer_len.serialize(&mut buf)?;
-
-    let mut footer = build_tantivy_footer(&buf)?;
-    buf.append(&mut footer);
-
-    Ok(OwnedBytes::new(buf))
 }
 
 struct DfaWrapper(pub DFA);
@@ -362,354 +243,704 @@ impl Automaton for DfaWrapper {
     }
 }
 
-// Term value contains values associated with a Term
-// used to match query and collect matched doc ids.
+// Collect matched `doc_ids` for a Query.
 #[derive(Clone)]
-pub struct TermValue {
-    // term info
-    pub term_info: TermInfo,
-    // term matched doc ids
-    pub doc_ids: Vec<u32>,
-    // term frequencies for each doc
-    pub term_freqs: Vec<u32>,
-    // position reader is used to read positions in doc for phrase query
-    pub position_reader: Option<PositionReader>,
+pub struct DocIdsCollector {
+    row_count: u64,
+    need_position: bool,
+    // key is `term`, value is `term_id`,
+    // These terms are in `fst`, means that those terms exist in the block,
+    // we need to use related term infos to determine the matched `doc_ids`.
+    // Use `term_id` as key to get related information and avoid copy `term`.
+    term_map: HashMap<Term, u64>,
+    // key is `term_id`, value is `field_id` and `term_info`.
+    term_infos: HashMap<u64, (u32, TermInfo)>,
+    // key is `term_id`, value is related `BlockSegmentPostings`,
+    // used to read `doc_ids` and `term_freqs`.
+    block_postings_map: HashMap<u64, BlockSegmentPostings>,
+    // key is `term_id`, value is related `PositionReader`,
+    // used to read `positions` in each docs.
+    position_reader_map: HashMap<u64, PositionReader>,
+    // key is `term_id`, value is related `doc_ids`.
+    // `doc_ids` is lazy loaded when used.
+    doc_ids: HashMap<u64, RoaringTreemap>,
+    // key is `term_id`, value is related `term_freqs`.
+    // `term_freqs` is lazy loaded when used.
+    term_freqs: HashMap<u64, Vec<u32>>,
 }
 
-// Check if fst contains terms in query.
-// If not, we can skip read other parts of inverted index.
-pub fn check_term_fsts_match(
-    query: Box<dyn Query>,
-    fst_maps: &HashMap<usize, tantivy_fst::Map<OwnedBytes>>,
-    fuzziness: &Option<u8>,
-    matched_terms: &mut HashMap<Term, u64>,
-    fuzziness_terms: &mut HashMap<Term, Vec<Term>>,
-) -> bool {
-    if let Some(term_query) = query.downcast_ref::<TermQuery>() {
-        let term = term_query.term();
-        let field = term.field();
-        let field_id = field.field_id() as usize;
-        if let Some(fst_map) = fst_maps.get(&field_id) {
-            if let Some(idx) = fst_map.get(term.serialized_value_bytes()) {
-                matched_terms.insert(term.clone(), idx);
-                return true;
-            }
+impl DocIdsCollector {
+    pub fn create(
+        row_count: u64,
+        need_position: bool,
+        terms: HashMap<Term, (u32, u64)>,
+        term_infos: HashMap<u64, (u32, TermInfo)>,
+        block_postings_map: HashMap<u64, BlockSegmentPostings>,
+        position_reader_map: HashMap<u64, PositionReader>,
+    ) -> Self {
+        let term_len = terms.len();
+        let term_map = terms
+            .into_iter()
+            .map(|(term, (_, term_id))| (term, term_id))
+            .collect::<HashMap<Term, u64>>();
+
+        Self {
+            row_count,
+            need_position,
+            term_map,
+            term_infos,
+            block_postings_map,
+            position_reader_map,
+            doc_ids: HashMap::with_capacity(term_len),
+            term_freqs: HashMap::with_capacity(term_len),
         }
-        false
-    } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
-        let mut matched_num = 0;
-        for (occur, sub_query) in bool_query.clauses() {
-            let matched = check_term_fsts_match(
-                sub_query.box_clone(),
-                fst_maps,
-                fuzziness,
-                matched_terms,
-                fuzziness_terms,
-            );
-            if matched {
-                matched_num += 1;
-            }
-            match occur {
-                Occur::Should => {}
-                Occur::Must => {
-                    if !matched {
-                        return false;
+    }
+
+    fn check_term_match(
+        fst_map: &tantivy_fst::Map<OwnedBytes>,
+        field_id: u32,
+        term: &Term,
+        matched_terms: &mut HashMap<Term, (u32, u64)>,
+    ) -> bool {
+        if let Some(term_id) = fst_map.get(term.serialized_value_bytes()) {
+            matched_terms.insert(term.clone(), (field_id, term_id));
+            true
+        } else {
+            false
+        }
+    }
+
+    fn get_fst_map(
+        field_id: u32,
+        fst_maps: &HashMap<u32, tantivy_fst::Map<OwnedBytes>>,
+    ) -> Result<&tantivy_fst::Map<OwnedBytes>> {
+        let fst_map = fst_maps.get(&field_id).ok_or_else(|| {
+            ErrorCode::TantivyError(format!(
+                "inverted index fst field `{}` does not exist",
+                field_id
+            ))
+        })?;
+
+        Ok(fst_map)
+    }
+
+    // Check if fst contains terms in query.
+    // If not, we can skip read other parts of inverted index.
+    pub fn check_term_fsts_match(
+        query: Box<dyn Query>,
+        fst_maps: &HashMap<u32, tantivy_fst::Map<OwnedBytes>>,
+        fuzziness: &Option<u8>,
+        matched_terms: &mut HashMap<Term, (u32, u64)>,
+        prefix_terms: &mut HashMap<Term, Vec<u64>>,
+        fuzziness_terms: &mut HashMap<Term, Vec<u64>>,
+    ) -> Result<bool> {
+        if let Some(term_query) = query.downcast_ref::<TermQuery>() {
+            let term = term_query.term();
+            let field = term.field();
+            let field_id = field.field_id();
+            let fst_map = Self::get_fst_map(field_id, fst_maps)?;
+            let matched = Self::check_term_match(fst_map, field_id, term, matched_terms);
+            Ok(matched)
+        } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
+            let mut matched_any = false;
+            for (occur, sub_query) in bool_query.clauses() {
+                let matched = Self::check_term_fsts_match(
+                    sub_query.box_clone(),
+                    fst_maps,
+                    fuzziness,
+                    matched_terms,
+                    prefix_terms,
+                    fuzziness_terms,
+                )?;
+                match occur {
+                    Occur::Should => {
+                        if matched {
+                            matched_any = true;
+                        }
+                    }
+                    Occur::Must => {
+                        if matched {
+                            matched_any = true;
+                        } else {
+                            return Ok(false);
+                        }
+                    }
+                    Occur::MustNot => {
+                        // Matched means that the block contains the term,
+                        // but we still need to filter out the `doc_ids`.
+                        matched_any = true;
                     }
                 }
-                Occur::MustNot => {}
             }
-        }
-        matched_num > 0
-    } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
-        // PhraseQuery must match all terms.
-        let field = phrase_query.field();
-        let field_id = field.field_id() as usize;
-        if let Some(fst_map) = fst_maps.get(&field_id) {
+            Ok(matched_any)
+        } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
+            // PhraseQuery must match all terms.
+            let field = phrase_query.field();
+            let field_id = field.field_id();
+            let fst_map = Self::get_fst_map(field_id, fst_maps)?;
+
             let mut matched_all = true;
             for term in phrase_query.phrase_terms() {
-                let matched = if let Some(idx) = fst_map.get(term.serialized_value_bytes()) {
-                    matched_terms.insert(term.clone(), idx);
-                    true
-                } else {
-                    false
-                };
+                let matched = Self::check_term_match(fst_map, field_id, &term, matched_terms);
                 if !matched {
                     matched_all = false;
                     break;
                 }
             }
-            matched_all
-        } else {
-            false
-        }
-    } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
-        // FuzzyTermQuery match terms by levenshtein distance.
-        let fuzziness = fuzziness.unwrap();
+            Ok(matched_all)
+        } else if let Some(phrase_prefix_query) = query.downcast_ref::<PhrasePrefixQuery>() {
+            // PhrasePrefixQuery must match all terms.
+            let field = phrase_prefix_query.field();
+            let field_id = field.field_id();
+            let fst_map = Self::get_fst_map(field_id, fst_maps)?;
 
-        let term = fuzzy_term_query.term();
-        let field = term.field();
-        let field_id = field.field_id() as usize;
-        if let Some(fst_map) = fst_maps.get(&field_id) {
-            // build levenshtein automaton
+            let mut matched_all = true;
+            for term in phrase_prefix_query.phrase_terms() {
+                let matched = Self::check_term_match(fst_map, field_id, &term, matched_terms);
+                if !matched {
+                    matched_all = false;
+                    break;
+                }
+            }
+            if !matched_all {
+                return Ok(false);
+            }
+
+            // using regex to check prefix term, get related term ids.
+            let (_, prefix_term) = phrase_prefix_query.prefix_term_with_offset();
+            let term_str = String::from_utf8_lossy(prefix_term.serialized_value_bytes());
+            let key = format!("{}.*", term_str);
+            let re = Regex::new(&key).map_err(|_| {
+                ErrorCode::TantivyError(format!("inverted index create regex `{}` failed", key))
+            })?;
+
+            let mut prefix_term_ids = vec![];
+            let mut stream = fst_map.search(&re).into_stream();
+            while let Some((key, term_id)) = stream.next() {
+                let key_str = unsafe { std::str::from_utf8_unchecked(key) };
+                let prefix_term = Term::from_field_text(field, key_str);
+                matched_terms.insert(prefix_term.clone(), (field_id, term_id));
+                prefix_term_ids.push(term_id);
+            }
+            let matched = !prefix_term_ids.is_empty();
+            if matched {
+                prefix_terms.insert(prefix_term.clone(), prefix_term_ids);
+            }
+            Ok(matched)
+        } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
+            // FuzzyTermQuery match terms by levenshtein distance.
+            let fuzziness = fuzziness.unwrap();
+            let term = fuzzy_term_query.term();
+            let field = term.field();
+            let field_id = field.field_id();
+            let fst_map = Self::get_fst_map(field_id, fst_maps)?;
+
+            // build levenshtein automaton to check fuzziness term, get related term ids.
             let lev_automaton_builder = LevenshteinAutomatonBuilder::new(fuzziness, true);
             let term_str = String::from_utf8_lossy(term.serialized_value_bytes());
             let automaton = DfaWrapper(lev_automaton_builder.build_dfa(&term_str));
 
-            let mut fuzz_term_values = vec![];
+            let mut fuzz_term_ids = vec![];
             let mut stream = fst_map.search(automaton).into_stream();
-            while let Some((key, idx)) = stream.next() {
+            while let Some((key, term_id)) = stream.next() {
                 let key_str = unsafe { std::str::from_utf8_unchecked(key) };
                 let fuzz_term = Term::from_field_text(field, key_str);
-                matched_terms.insert(fuzz_term.clone(), idx);
-                fuzz_term_values.push(fuzz_term);
+                matched_terms.insert(fuzz_term.clone(), (field_id, term_id));
+                fuzz_term_ids.push(term_id);
             }
-            let matched = !fuzz_term_values.is_empty();
-            fuzziness_terms.insert(term.clone(), fuzz_term_values);
-            matched
-        } else {
-            false
-        }
-    } else {
-        // TODO: handle other Query types
-        let mut matched = false;
-        query.query_terms(&mut |term, _| {
-            let field = term.field();
-            let field_id = field.field_id() as usize;
-            if let Some(fst_map) = fst_maps.get(&field_id) {
-                if let Some(idx) = fst_map.get(term.serialized_value_bytes()) {
-                    matched_terms.insert(term.clone(), idx);
-                    matched = true;
-                }
+            let matched = !fuzz_term_ids.is_empty();
+            if matched {
+                fuzziness_terms.insert(term.clone(), fuzz_term_ids);
             }
-        });
-
-        matched
-    }
-}
-
-// collect matched rows by term value
-pub fn collect_matched_rows(
-    query: Box<dyn Query>,
-    row_count: u32,
-    fuzziness_terms: &HashMap<Term, Vec<Term>>,
-    term_values: &mut HashMap<Term, TermValue>,
-) -> Vec<u32> {
-    if let Some(term_query) = query.downcast_ref::<TermQuery>() {
-        let term = term_query.term();
-        if let Some(term_value) = term_values.get(term) {
-            term_value.doc_ids.clone()
-        } else {
-            vec![]
-        }
-    } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
-        let mut should_doc_ids_opt = None;
-        let mut must_doc_ids_opt = None;
-        let mut must_not_doc_ids_opt = None;
-        for (occur, sub_query) in bool_query.clauses() {
-            let doc_ids = collect_matched_rows(
-                sub_query.box_clone(),
-                row_count,
+            Ok(matched)
+        } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
+            Self::check_term_fsts_match(
+                boost_query.query(),
+                fst_maps,
+                fuzziness,
+                matched_terms,
+                prefix_terms,
                 fuzziness_terms,
-                term_values,
-            );
-            let doc_id_set = HashSet::from_iter(doc_ids.into_iter());
-            match occur {
-                Occur::Should => {
-                    if should_doc_ids_opt.is_none() {
-                        should_doc_ids_opt = Some(doc_id_set);
-                    } else {
-                        let should_doc_ids = should_doc_ids_opt.unwrap();
-                        should_doc_ids_opt =
-                            Some(should_doc_ids.union(&doc_id_set).copied().collect())
-                    }
-                }
-                Occur::Must => {
-                    if must_doc_ids_opt.is_none() {
-                        must_doc_ids_opt = Some(doc_id_set);
-                    } else {
-                        let must_doc_ids = must_doc_ids_opt.unwrap();
-                        must_doc_ids_opt =
-                            Some(must_doc_ids.intersection(&doc_id_set).copied().collect())
-                    }
-                }
-                Occur::MustNot => {
-                    if must_not_doc_ids_opt.is_none() {
-                        must_not_doc_ids_opt = Some(doc_id_set);
-                    } else {
-                        let must_not_doc_ids = must_not_doc_ids_opt.unwrap();
-                        must_not_doc_ids_opt =
-                            Some(must_not_doc_ids.union(&doc_id_set).copied().collect())
-                    }
-                }
-            }
-        }
-
-        let doc_ids = if let Some(mut should_doc_ids) = should_doc_ids_opt {
-            if let Some(must_doc_ids) = must_doc_ids_opt {
-                should_doc_ids = should_doc_ids
-                    .intersection(&must_doc_ids)
-                    .copied()
-                    .collect()
-            }
-            if let Some(must_not_doc_ids) = must_not_doc_ids_opt {
-                should_doc_ids = should_doc_ids
-                    .difference(&must_not_doc_ids)
-                    .copied()
-                    .collect()
-            }
-            should_doc_ids
-        } else if let Some(mut must_doc_ids) = must_doc_ids_opt {
-            if let Some(must_not_doc_ids) = must_not_doc_ids_opt {
-                must_doc_ids = must_doc_ids
-                    .difference(&must_not_doc_ids)
-                    .copied()
-                    .collect()
-            }
-            must_doc_ids
-        } else if let Some(must_not_doc_ids) = must_not_doc_ids_opt {
-            let all_doc_ids = HashSet::from_iter(0..row_count);
-            let doc_ids = all_doc_ids.difference(&must_not_doc_ids).copied().collect();
-            doc_ids
+            )
+        } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
+            Self::check_term_fsts_match(
+                const_query.query(),
+                fst_maps,
+                fuzziness,
+                matched_terms,
+                prefix_terms,
+                fuzziness_terms,
+            )
+        } else if let Some(_empty_query) = query.downcast_ref::<EmptyQuery>() {
+            Ok(false)
+        } else if let Some(_all_query) = query.downcast_ref::<AllQuery>() {
+            Ok(true)
         } else {
-            HashSet::new()
-        };
+            Err(ErrorCode::TantivyError(format!(
+                "inverted index unsupported query `{:?}`",
+                query
+            )))
+        }
+    }
 
-        let mut doc_ids = Vec::from_iter(doc_ids);
-        doc_ids.sort();
-        doc_ids
-    } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
-        let mut union_doc_ids = HashSet::new();
-        let mut intersection_doc_ids_opt = None;
+    // get `doc_ids` of a `term_id`,
+    fn get_doc_ids(&mut self, term_id: u64) -> Result<&RoaringTreemap> {
+        if let std::collections::hash_map::Entry::Vacant(doc_ids_entry) =
+            self.doc_ids.entry(term_id)
+        {
+            // `doc_ids` are lazy loaded when used.
+            let block_postings = self.block_postings_map.get_mut(&term_id).ok_or_else(|| {
+                ErrorCode::TantivyError(format!(
+                    "inverted index block postings `{}` does not exist",
+                    term_id
+                ))
+            })?;
 
-        for term in phrase_query.phrase_terms() {
-            if let Some(term_value) = term_values.get(&term) {
-                let doc_id_set = HashSet::from_iter(term_value.doc_ids.clone());
-                union_doc_ids = union_doc_ids.union(&doc_id_set).copied().collect();
-                if intersection_doc_ids_opt.is_none() {
-                    intersection_doc_ids_opt = Some(doc_id_set);
-                } else {
-                    let intersection_doc_ids = intersection_doc_ids_opt.unwrap();
-                    intersection_doc_ids_opt = Some(
-                        intersection_doc_ids
-                            .intersection(&doc_id_set)
-                            .copied()
-                            .collect(),
-                    );
+            let term_freqs_len = if self.need_position {
+                let (_, term_info) = self.term_infos.get(&term_id).ok_or_else(|| {
+                    ErrorCode::TantivyError(format!(
+                        "inverted index term info `{}` does not exist",
+                        term_id
+                    ))
+                })?;
+                term_info.doc_freq as usize
+            } else {
+                0
+            };
+            let mut doc_ids = RoaringTreemap::new();
+            let mut term_freqs = Vec::with_capacity(term_freqs_len);
+            // `doc_ids` are stored in multiple blocks and need to be decode sequentially.
+            // TODO: We can skip some blocks by checking related `doc_ids`.
+            loop {
+                let block_doc_ids = block_postings.docs();
+                if block_doc_ids.is_empty() {
+                    break;
                 }
+                doc_ids
+                    .append(block_doc_ids.iter().map(|id| *id as u64))
+                    .unwrap();
+
+                // `term_freqs` is only used if the query need position.
+                if self.need_position {
+                    let block_term_freqs = block_postings.freqs();
+                    term_freqs.extend_from_slice(block_term_freqs);
+                }
+                block_postings.advance();
             }
+            doc_ids_entry.insert(doc_ids);
+            self.term_freqs.insert(term_id, term_freqs);
         }
 
-        let intersection_doc_ids = intersection_doc_ids_opt.unwrap_or_default();
-        if intersection_doc_ids.is_empty() {
-            return vec![];
-        }
-        let mut union_doc_ids = Vec::from_iter(union_doc_ids);
-        union_doc_ids.sort();
+        let doc_ids = self.doc_ids.get(&term_id).unwrap();
+        Ok(doc_ids)
+    }
 
-        // check each docs
-        let mut matched_doc_ids = vec![];
-        for doc_id in union_doc_ids {
-            if !intersection_doc_ids.contains(&doc_id) {
+    // get the position `offsets` and `term_freqs` of a `term_id` in each `docs`,
+    // which is used to read `positions`.
+    fn get_position_offsets(
+        &mut self,
+        term_id: u64,
+        all_doc_ids: &RoaringTreemap,
+    ) -> Result<HashMap<u64, (u64, u32)>> {
+        let doc_ids = self.doc_ids.get(&term_id).unwrap();
+        let term_freqs = self.term_freqs.get(&term_id).unwrap();
+
+        let mut doc_offset = 0;
+        let mut offset_and_term_freqs = HashMap::with_capacity(all_doc_ids.len() as usize);
+        for (doc_id, term_freq) in doc_ids.iter().zip(term_freqs.iter()) {
+            if all_doc_ids.len() as usize == offset_and_term_freqs.len() {
+                break;
+            }
+            if !all_doc_ids.contains(doc_id) {
+                doc_offset += *term_freq as u64;
                 continue;
             }
 
-            let mut term_pos_map = HashMap::new();
-            for term in phrase_query.phrase_terms() {
-                let mut offset = 0;
-                let mut term_freq = 0;
-                if let Some(term_value) = term_values.get_mut(&term) {
-                    for i in 0..term_value.doc_ids.len() {
-                        if term_value.doc_ids[i] < doc_id {
-                            offset += term_value.term_freqs[i] as u64;
-                        } else {
-                            term_freq = term_value.term_freqs[i] as usize;
-                            break;
-                        }
-                    }
-                    // collect positions in the docs
-                    if let Some(position_reader) = term_value.position_reader.as_mut() {
-                        let mut pos_output = vec![0; term_freq];
-                        position_reader.read(offset, &mut pos_output[..]);
-                        for i in 1..pos_output.len() {
-                            pos_output[i] += pos_output[i - 1];
-                        }
-                        let positions = VecDeque::from_iter(pos_output);
-                        term_pos_map.insert(term.clone(), positions);
-                    }
+            offset_and_term_freqs.insert(doc_id, (doc_offset, *term_freq));
+            doc_offset += *term_freq as u64;
+        }
+
+        Ok(offset_and_term_freqs)
+    }
+
+    // get `positions` of a `term_id` in a `doc`.
+    fn get_positions(
+        &mut self,
+        term_id: u64,
+        doc_offset: u64,
+        term_freq: u32,
+    ) -> Result<RoaringTreemap> {
+        let position_reader = self.position_reader_map.get_mut(&term_id).ok_or_else(|| {
+            ErrorCode::TantivyError(format!(
+                "inverted index position reader `{}` does not exist",
+                term_id
+            ))
+        })?;
+
+        let mut positions = vec![0; term_freq as usize];
+        position_reader.read(doc_offset, &mut positions[..]);
+        for i in 1..positions.len() {
+            positions[i] += positions[i - 1];
+        }
+        let term_poses =
+            RoaringTreemap::from_sorted_iter(positions.into_iter().map(|i| i as u64)).unwrap();
+        Ok(term_poses)
+    }
+
+    // The phrase query matches `doc_ids` as follows:
+    //
+    // 1. Collect the position for each term in the query.
+    // 2. Collect the `doc_ids` of each term and take
+    //    the intersection to get the candidate `doc_ids`.
+    // 3. Iterate over the candidate `doc_ids` to check whether
+    //    the position of terms matches the position of terms in query.
+    // 4. Each position in the first term is a possible query phrase beginning.
+    //    Verify that the beginning is valid by checking whether corresponding
+    //    positions in other terms exist. If not, delete the possible position
+    //    in the first term. After traversing all terms, determine if there are
+    //    any positions left in the first term. If there are, then the `doc_id`
+    //    is matched.
+    //
+    // If the query is a prefix phrase query, also check if any prefix terms
+    // match the positions.
+    pub fn collect_phrase_matched_rows(
+        &mut self,
+        phrase_terms: Vec<(usize, Term)>,
+        prefix_term: Option<(usize, &Vec<u64>)>,
+    ) -> Result<Option<RoaringTreemap>> {
+        let mut query_term_poses = Vec::with_capacity(phrase_terms.len());
+        for (term_pos, term) in &phrase_terms {
+            // term not exist means this phrase in not matched.
+            let Some(term_id) = self.term_map.get(term) else {
+                return Ok(None);
+            };
+            query_term_poses.push((*term_pos, *term_id));
+        }
+        if query_term_poses.is_empty() {
+            return Ok(None);
+        }
+
+        let first_term_pos = &query_term_poses[0].0;
+        let first_term_id = &query_term_poses[0].1;
+
+        let mut term_ids = HashSet::with_capacity(phrase_terms.len() + 1);
+        term_ids.insert(*first_term_id);
+
+        let first_doc_ids = self.get_doc_ids(*first_term_id)?;
+        let mut candidate_doc_ids = RoaringTreemap::new();
+        candidate_doc_ids.bitor_assign(first_doc_ids);
+
+        // Collect the `doc_ids` of other terms in the query, and take the intersection,
+        // obtains the candidate `doc_ids` containing all terms.
+        let mut query_term_offsets = Vec::with_capacity(query_term_poses.len() - 1);
+        for (term_pos, term_id) in query_term_poses.iter().skip(1) {
+            if !term_ids.contains(term_id) {
+                let doc_ids = self.get_doc_ids(*term_id)?;
+
+                candidate_doc_ids.bitand_assign(doc_ids);
+                if candidate_doc_ids.is_empty() {
+                    break;
                 }
+                term_ids.insert(*term_id);
+            }
+            let term_pos_offset = (term_pos - first_term_pos) as u64;
+            query_term_offsets.push((*term_id, term_pos_offset));
+        }
+        // If the candidate `doc_ids` is empty, all docs are not matched.
+        if candidate_doc_ids.is_empty() {
+            return Ok(None);
+        }
+
+        // If the query is a prefix phrase query,
+        // also need to collect `doc_ids` of prefix terms.
+        if let Some((_, prefix_term_ids)) = prefix_term {
+            let mut all_prefix_doc_ids = RoaringTreemap::new();
+            for prefix_term_id in prefix_term_ids {
+                let prefix_doc_ids = self.get_doc_ids(*prefix_term_id)?;
+                // If the `doc_ids` does not intersect at all, this prefix can be ignored.
+                if candidate_doc_ids.is_disjoint(prefix_doc_ids) {
+                    continue;
+                }
+
+                all_prefix_doc_ids.bitor_assign(prefix_doc_ids);
+                term_ids.insert(*prefix_term_id);
+            }
+            // If there is no matched prefix `doc_ids`, the prefix term does not matched.
+            if all_prefix_doc_ids.is_empty() {
+                return Ok(None);
             }
 
-            let mut is_first = true;
-            let mut distance = 0;
-            let mut matched = true;
-            let mut last_position = 0;
-            for (query_position, term) in phrase_query.phrase_terms_with_offsets() {
-                if let Some(positions) = term_pos_map.get_mut(&term) {
-                    let mut find_position = false;
-                    while let Some(doc_position) = positions.pop_front() {
-                        // skip previous positions.
-                        if doc_position < last_position {
-                            continue;
-                        }
-                        last_position = doc_position;
-                        let doc_distance = doc_position - (query_position as u32);
-                        if is_first {
-                            is_first = false;
-                            distance = doc_distance;
-                        } else {
-                            // distance must same as first term.
-                            if doc_distance != distance {
-                                matched = false;
-                            }
-                        }
-                        find_position = true;
-                        break;
-                    }
-                    if !find_position {
-                        matched = false;
-                    }
-                } else {
-                    matched = false;
+            // Get the intersection of phrase `doc_ids` and prefix `doc_ids`
+            candidate_doc_ids.bitand_assign(all_prefix_doc_ids);
+        }
+
+        // Collect the postion `offset` and `term_freqs` for each terms,
+        // which can be used to read positons.
+        let mut offset_and_term_freqs_map = HashMap::new();
+        for term_id in term_ids.into_iter() {
+            let offset_and_term_freqs = self.get_position_offsets(term_id, &candidate_doc_ids)?;
+            offset_and_term_freqs_map.insert(term_id, offset_and_term_freqs);
+        }
+
+        let first_offset_and_term_freqs = offset_and_term_freqs_map.get(first_term_id).unwrap();
+
+        // Check every candidate `doc_ids` if the position of each terms match the query.
+        let mut all_doc_ids = RoaringTreemap::new();
+        let mut offset_poses = RoaringTreemap::new();
+        let mut term_poses_map = HashMap::new();
+        for (doc_id, (first_doc_offset, first_term_freq)) in first_offset_and_term_freqs.iter() {
+            let mut first_term_poses =
+                self.get_positions(*first_term_id, *first_doc_offset, *first_term_freq)?;
+
+            term_poses_map.clear();
+            term_poses_map.insert(first_term_id, first_term_poses.clone());
+
+            for (term_id, term_pos_offset) in &query_term_offsets {
+                if !term_poses_map.contains_key(term_id) {
+                    let offset_and_term_freqs = offset_and_term_freqs_map.get(term_id).unwrap();
+                    let (doc_offset, term_freq) = offset_and_term_freqs.get(doc_id).unwrap();
+
+                    let term_poses = self.get_positions(*term_id, *doc_offset, *term_freq)?;
+                    term_poses_map.insert(term_id, term_poses);
                 }
-                if !matched {
+                let term_poses = term_poses_map.get(term_id).unwrap();
+
+                // Using the position of the first term and the offset of this term with the first term,
+                // calculate all possible positions for this term.
+                offset_poses.clear();
+                offset_poses
+                    .append(first_term_poses.iter().map(|pos| pos + term_pos_offset))
+                    .unwrap();
+
+                // Term possible positions subtract term actual positions,
+                // remaining positions are not matched and need to be removed in the first term.
+                offset_poses.sub_assign(term_poses);
+                for offset_pos in &offset_poses {
+                    first_term_poses.remove(offset_pos - term_pos_offset);
+                }
+                if first_term_poses.is_empty() {
                     break;
                 }
             }
-            if matched {
-                matched_doc_ids.push(doc_id);
-            }
-        }
-        matched_doc_ids
-    } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
-        let mut fuzz_doc_ids = HashSet::new();
-        let term = fuzzy_term_query.term();
 
-        // collect related terms of the original term.
-        if let Some(related_terms) = fuzziness_terms.get(term) {
-            for term in related_terms {
-                if let Some(term_value) = term_values.get(term) {
-                    let doc_id_set: HashSet<u32> = HashSet::from_iter(term_value.doc_ids.clone());
-                    fuzz_doc_ids = fuzz_doc_ids.union(&doc_id_set).copied().collect();
+            // If the query is a prefix phrase query,
+            // also need to check if any prefix term match.
+            if let Some((prefix_term_pos, prefix_term_ids)) = prefix_term {
+                if !first_term_poses.is_empty() {
+                    let mut prefix_matched = false;
+                    let prefix_term_pos_offset = (prefix_term_pos - first_term_pos) as u64;
+                    for prefix_term_id in prefix_term_ids {
+                        if !term_poses_map.contains_key(prefix_term_id) {
+                            if let Some(offset_and_term_freqs) =
+                                offset_and_term_freqs_map.get(prefix_term_id)
+                            {
+                                if let Some((doc_offset, term_freq)) =
+                                    offset_and_term_freqs.get(doc_id)
+                                {
+                                    let term_poses = self.get_positions(
+                                        *prefix_term_id,
+                                        *doc_offset,
+                                        *term_freq,
+                                    )?;
+                                    term_poses_map.insert(prefix_term_id, term_poses);
+                                }
+                            }
+                        }
+                        if let Some(term_poses) = term_poses_map.get(prefix_term_id) {
+                            offset_poses.clear();
+                            offset_poses
+                                .append(
+                                    first_term_poses
+                                        .iter()
+                                        .map(|pos| pos + prefix_term_pos_offset),
+                                )
+                                .unwrap();
+
+                            offset_poses.bitand_assign(term_poses);
+                            // If any of the possible prefix term positions exist,
+                            // the prefix phrase query is matched.
+                            if !offset_poses.is_empty() {
+                                prefix_matched = true;
+                                break;
+                            }
+                        }
+                    }
+                    if prefix_matched {
+                        all_doc_ids.insert(*doc_id);
+                    }
+                }
+            } else {
+                let matched = !first_term_poses.is_empty();
+                if matched {
+                    all_doc_ids.insert(*doc_id);
                 }
             }
-            let mut doc_ids = Vec::from_iter(fuzz_doc_ids);
-            doc_ids.sort();
-            doc_ids
-        } else {
-            vec![]
         }
-    } else {
-        let mut union_doc_ids = HashSet::new();
-        query.query_terms(&mut |term, _| {
-            if let Some(term_value) = term_values.get(term) {
-                let doc_id_set: HashSet<u32> = HashSet::from_iter(term_value.doc_ids.clone());
-                union_doc_ids = union_doc_ids.union(&doc_id_set).copied().collect();
-            }
-        });
 
-        let mut doc_ids = Vec::from_iter(union_doc_ids);
-        doc_ids.sort();
-        doc_ids
+        if !all_doc_ids.is_empty() {
+            Ok(Some(all_doc_ids))
+        } else {
+            Ok(None)
+        }
+    }
+
+    // collect matched rows by term value
+    pub fn collect_matched_rows(
+        &mut self,
+        query: Box<dyn Query>,
+        prefix_terms: &HashMap<Term, Vec<u64>>,
+        fuzziness_terms: &HashMap<Term, Vec<u64>>,
+    ) -> Result<Option<RoaringTreemap>> {
+        if let Some(term_query) = query.downcast_ref::<TermQuery>() {
+            let term = term_query.term();
+            if let Some(term_id) = self.term_map.get(term) {
+                let doc_ids = self.get_doc_ids(*term_id)?;
+                Ok(Some(doc_ids.clone()))
+            } else {
+                Ok(None)
+            }
+        } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
+            let mut should_doc_ids: Option<RoaringTreemap> = None;
+            let mut must_doc_ids: Option<RoaringTreemap> = None;
+            let mut must_not_doc_ids: Option<RoaringTreemap> = None;
+            for (occur, sub_query) in bool_query.clauses() {
+                let doc_ids = self.collect_matched_rows(
+                    sub_query.box_clone(),
+                    prefix_terms,
+                    fuzziness_terms,
+                )?;
+                if doc_ids.is_none() {
+                    match occur {
+                        Occur::Should => {
+                            continue;
+                        }
+                        Occur::Must => {
+                            if must_doc_ids.is_none() {
+                                must_doc_ids = Some(RoaringTreemap::new());
+                            }
+                            continue;
+                        }
+                        Occur::MustNot => {
+                            if must_not_doc_ids.is_none() {
+                                must_not_doc_ids = Some(RoaringTreemap::new());
+                            }
+                            continue;
+                        }
+                    }
+                }
+                let doc_ids = doc_ids.unwrap();
+                match occur {
+                    Occur::Should => {
+                        if let Some(ref mut should_doc_ids) = should_doc_ids {
+                            should_doc_ids.bitor_assign(&doc_ids);
+                        } else {
+                            should_doc_ids = Some(doc_ids);
+                        }
+                    }
+                    Occur::Must => {
+                        if let Some(ref mut must_doc_ids) = must_doc_ids {
+                            must_doc_ids.bitand_assign(&doc_ids);
+                        } else {
+                            must_doc_ids = Some(doc_ids);
+                        }
+                    }
+                    Occur::MustNot => {
+                        if let Some(ref mut must_not_doc_ids) = must_not_doc_ids {
+                            must_not_doc_ids.bitor_assign(&doc_ids);
+                        } else {
+                            must_not_doc_ids = Some(doc_ids);
+                        }
+                    }
+                }
+            }
+
+            let all_doc_ids = match (should_doc_ids, must_doc_ids, must_not_doc_ids) {
+                // only should
+                (Some(should_doc_ids), None, None) => should_doc_ids,
+                // only must
+                (None, Some(must_doc_ids), None) => must_doc_ids,
+                // only must not
+                (None, None, Some(must_not_doc_ids)) => {
+                    let mut all_doc_ids = RoaringTreemap::from_iter(0..self.row_count);
+                    all_doc_ids.sub_assign(must_not_doc_ids);
+                    all_doc_ids
+                }
+                // should and must
+                (Some(mut should_doc_ids), Some(must_doc_ids), None) => {
+                    should_doc_ids.bitor_assign(must_doc_ids);
+                    should_doc_ids
+                }
+                // should and must not
+                (Some(mut should_doc_ids), None, Some(must_not_doc_ids)) => {
+                    should_doc_ids.sub_assign(must_not_doc_ids);
+                    should_doc_ids
+                }
+                // must and must not
+                (None, Some(mut must_doc_ids), Some(must_not_doc_ids)) => {
+                    must_doc_ids.sub_assign(must_not_doc_ids);
+                    must_doc_ids
+                }
+                // should, must and must not
+                (Some(mut should_doc_ids), Some(must_doc_ids), Some(must_not_doc_ids)) => {
+                    should_doc_ids.bitor_assign(must_doc_ids);
+                    should_doc_ids.sub_assign(must_not_doc_ids);
+                    should_doc_ids
+                }
+                (None, None, None) => {
+                    return Ok(None);
+                }
+            };
+
+            if !all_doc_ids.is_empty() {
+                Ok(Some(all_doc_ids))
+            } else {
+                Ok(None)
+            }
+        } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
+            let phrase_terms = phrase_query.phrase_terms_with_offsets();
+            self.collect_phrase_matched_rows(phrase_terms, None)
+        } else if let Some(phrase_prefix_query) = query.downcast_ref::<PhrasePrefixQuery>() {
+            let phrase_terms = phrase_prefix_query.phrase_terms_with_offsets();
+            let (prefix_term_pos, prefix_term) = phrase_prefix_query.prefix_term_with_offset();
+
+            let Some(prefix_term_ids) = prefix_terms.get(&prefix_term) else {
+                return Ok(None);
+            };
+            let prefix_term = Some((prefix_term_pos, prefix_term_ids));
+
+            self.collect_phrase_matched_rows(phrase_terms, prefix_term)
+        } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
+            let mut all_doc_ids = RoaringTreemap::new();
+            let term = fuzzy_term_query.term();
+
+            let Some(fuzz_term_ids) = fuzziness_terms.get(term) else {
+                return Ok(None);
+            };
+            // collect related terms of the original term.
+            for term_id in fuzz_term_ids {
+                let doc_ids = self.get_doc_ids(*term_id)?;
+                all_doc_ids.bitor_assign(doc_ids);
+            }
+            if !all_doc_ids.is_empty() {
+                Ok(Some(all_doc_ids))
+            } else {
+                Ok(None)
+            }
+        } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
+            self.collect_matched_rows(boost_query.query(), prefix_terms, fuzziness_terms)
+        } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
+            self.collect_matched_rows(const_query.query(), prefix_terms, fuzziness_terms)
+        } else if let Some(_empty_query) = query.downcast_ref::<EmptyQuery>() {
+            Ok(None)
+        } else if let Some(_all_query) = query.downcast_ref::<AllQuery>() {
+            let all_doc_ids = RoaringTreemap::from_iter(0..self.row_count);
+            Ok(Some(all_doc_ids))
+        } else {
+            Err(ErrorCode::TantivyError(format!(
+                "inverted index unsupported query `{:?}`",
+                query
+            )))
+        }
     }
 }
 
@@ -798,7 +1029,7 @@ pub struct InvertedIndexDirectory {
 }
 
 impl InvertedIndexDirectory {
-    pub fn try_create(field_nums: usize, files: Vec<Arc<InvertedIndexFile>>) -> Result<Self> {
+    pub fn try_create(files: Vec<Arc<InvertedIndexFile>>) -> Result<Self> {
         let mut file_map = BTreeMap::<String, OwnedBytes>::new();
 
         for file in files.into_iter() {
@@ -812,12 +1043,7 @@ impl InvertedIndexDirectory {
         let fast_data = file_map.remove("fast").unwrap();
         let store_data = file_map.remove("store").unwrap();
         let fieldnorm_data = file_map.remove("fieldnorm").unwrap();
-        // If there are no phrase terms in the query,
-        // we can use empty position data instead.
-        let pos_data = match file_map.remove("pos") {
-            Some(pos_data) => pos_data,
-            None => build_empty_position_data(field_nums)?,
-        };
+        let pos_data = file_map.remove("pos").unwrap();
         let idx_data = file_map.remove("idx").unwrap();
         let term_data = file_map.remove("term").unwrap();
         let meta_data = file_map.remove("meta.json").unwrap();

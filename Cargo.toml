@@ -408,7 +408,7 @@ openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev =
 orc-rust = { git = "https://github.com/datafuse-extras/datafusion-orc", rev = "03372b97" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "37aeac0" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "37aeac0", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "124a8fc" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
