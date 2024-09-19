@@ -122,8 +122,7 @@ impl Binder {
         );
         let mut order_by_items = Vec::with_capacity(query.order_by.len());
 
-        let dialect = self.ctx.get_settings().get_sql_dialect().unwrap();
-        let default_nulls_first = |asc: bool| !dialect.is_null_biggest(asc);
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         for order in query.order_by.iter() {
             match order.expr {

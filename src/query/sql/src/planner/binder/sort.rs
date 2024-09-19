@@ -67,8 +67,7 @@ impl Binder {
         distinct: bool,
     ) -> Result<OrderItems> {
         bind_context.set_expr_context(ExprContext::OrderByClause);
-        let dialect = self.ctx.get_settings().get_sql_dialect().unwrap();
-        let default_nulls_first = |asc: bool| !dialect.is_null_biggest(asc);
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {

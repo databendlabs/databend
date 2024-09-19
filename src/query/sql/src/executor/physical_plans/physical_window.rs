@@ -241,8 +241,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let dialect = self.ctx.get_settings().get_sql_dialect().unwrap();
-        let default_nulls_first = |asc: bool| !dialect.is_null_biggest(asc);
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         let order_by_items = w
             .order_by
