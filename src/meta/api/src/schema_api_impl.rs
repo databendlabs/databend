@@ -1423,52 +1423,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 database_id: *seq_db_id.data,
                 table_name: req.name_ident.table_name.clone(),
             };
-            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
-                get_pb_value(self, &dbid_tbname_idlist).await?;
 
-            let mut tb_id_list: TableIdList;
-            if tb_id_list_seq == 0 {
-                // may the table is created before add db_id_list, so we just add the id into the list.
-                tb_id_list = TableIdList::new();
-                tb_id_list.append(table_id);
-            } else {
-                match tb_id_list_opt {
-                    Some(list) => tb_id_list = list,
-                    None => {
-                        // may the table is created before add db_id_list, so we just add the id into the list.
-                        tb_id_list = TableIdList::new();
-                        tb_id_list.append(table_id);
-                    }
-                }
-            };
+            let seq_table_history = self.get_pb(&dbid_tbname_idlist).await?;
 
-            if let Some(last_table_id) = tb_id_list.last() {
-                if *last_table_id != table_id {
-                    error!(
-                        "rename_table {:?} but last table id confilct, id list last: {}, current: {}",
-                        req.name_ident, last_table_id, table_id
+            let tb_id_list_seq = seq_table_history.seq();
+            // may the table is created before add db_id_list,
+            // so we just add the id into the list.
+            let mut tb_id_list = seq_table_history
+                .into_value()
+                .unwrap_or_else(|| TableIdList::new_with_ids([table_id]));
+
+            {
+                let last = tb_id_list.last().copied();
+                if Some(table_id) != last {
+                    let err_message = format!(
+                        "rename_table {:?} but last table id conflict, id list last: {:?}, current: {}",
+                        req.name_ident, last, table_id
                     );
+                    error!("{}", err_message);
+
                     return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(
-                            &req.name_ident.table_name,
-                            format!("{}: {}", "rename table", tenant_dbname_tbname),
-                        ),
+                        UnknownTable::new(&req.name_ident.table_name, err_message),
                     )));
                 }
-            } else {
-                return Err(KVAppError::AppError(AppError::UnknownTable(
-                    UnknownTable::new(
-                        &req.name_ident.table_name,
-                        format!("{}: {}", "rename table", tenant_dbname_tbname),
-                    ),
-                )));
             }
 
             // Get the renaming target db to ensure presence.
 
-            let tenant_newdbname = DatabaseNameIdent::new(tenant_dbname.tenant(), &req.new_db_name);
+            let tenant_new_dbname =
+                DatabaseNameIdent::new(tenant_dbname.tenant(), &req.new_db_name);
             let (new_seq_db_id, new_db_meta) =
-                get_db_or_err(self, &tenant_newdbname, "rename_table: new db").await?;
+                get_db_or_err(self, &tenant_new_dbname, "rename_table: new db").await?;
 
             // Get the renaming target table to ensure absence
 
