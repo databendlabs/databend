@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 
 use super::rewrite::RuleCommuteJoin;
 use super::rewrite::RuleEliminateEvalScalar;
+use super::rewrite::RuleEliminateUnion;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterAggregate;
@@ -58,6 +59,7 @@ pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
 impl RuleFactory {
     pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
         match id {
+            RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(metadata))),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(metadata))),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
