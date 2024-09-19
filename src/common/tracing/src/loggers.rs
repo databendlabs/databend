@@ -71,7 +71,7 @@ fn text_layout() -> Layout {
                         record.line().unwrap_or(0),
                         record.args(),
                         KvDisplay::new(record.key_values()),
-                    ));
+                    ))?;
                 }
                 Some(query_id) => {
                     f(format_args!(
@@ -87,7 +87,7 @@ fn text_layout() -> Layout {
                         record.line().unwrap_or(0),
                         record.args(),
                         KvDisplay::new(record.key_values()),
-                    ));
+                    ))?;
                 }
             }
 
@@ -113,7 +113,7 @@ fn json_layout() -> Layout {
                         chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                         record.level(),
                         serde_json::to_string(&fields).unwrap_or_default(),
-                    ));
+                    ))?;
                 }
                 Some(query_id) => {
                     f(format_args!(
@@ -122,7 +122,7 @@ fn json_layout() -> Layout {
                         record.level(),
                         query_id,
                         serde_json::to_string(&fields).unwrap_or_default(),
-                    ));
+                    ))?;
                 }
             }
 

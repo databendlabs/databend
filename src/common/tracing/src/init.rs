@@ -224,15 +224,19 @@ pub fn init_logging(
         let labels = labels
             .iter()
             .chain(&cfg.otlp.endpoint.labels)
-            .map(|(k, v)| (k.clone().into(), v.clone().into()))
-            .chain([("category".into(), "system".into())]);
-        let otel = logforth::append::OpentelemetryLog::new(
+            .map(|(k, v)| (Cow::from(k.clone()), Cow::from(v.clone())))
+            .chain([(Cow::from("category"), Cow::from("system"))]);
+        let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
             log_name,
             &cfg.otlp.endpoint.endpoint,
-            cfg.otlp.endpoint.protocol.into(),
-            labels,
         )
-        .expect("initialize opentelemetry logger");
+        .with_protocol(cfg.otlp.endpoint.protocol.into());
+        for (k, v) in labels {
+            otel_builder = otel_builder.add_label(k, v);
+        }
+        let otel = otel_builder
+            .build()
+            .expect("initialize opentelemetry logger");
         let dispatch = Dispatch::new()
             .filter(TargetFilter::level_for(
                 "databend::log::query",
@@ -298,15 +302,19 @@ pub fn init_logging(
             let labels = labels
                 .iter()
                 .chain(&endpoint.labels)
-                .map(|(k, v)| (k.clone().into(), v.clone().into()))
-                .chain([("category".into(), "query".into())]);
-            let otel = logforth::append::OpentelemetryLog::new(
+                .map(|(k, v)| (Cow::from(k.clone()), Cow::from(v.clone())))
+                .chain([(Cow::from("category"), Cow::from("query"))]);
+            let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
-                &endpoint.endpoint,
-                endpoint.protocol.into(),
-                labels,
+                &cfg.otlp.endpoint.endpoint,
             )
-            .expect("initialize opentelemetry logger");
+            .with_protocol(cfg.otlp.endpoint.protocol.into());
+            for (k, v) in labels {
+                otel_builder = otel_builder.add_label(k, v);
+            }
+            let otel = otel_builder
+                .build()
+                .expect("initialize opentelemetry logger");
             let dispatch = Dispatch::new()
                 .filter(TargetFilter::level_for_not(
                     "databend::log::query",
@@ -337,15 +345,19 @@ pub fn init_logging(
             let labels = labels
                 .iter()
                 .chain(&endpoint.labels)
-                .map(|(k, v)| (k.clone().into(), v.clone().into()))
-                .chain([("category".into(), "profile".into())]);
-            let otel = logforth::append::OpentelemetryLog::new(
+                .map(|(k, v)| (Cow::from(k.clone()), Cow::from(v.clone())))
+                .chain([(Cow::from("category"), Cow::from("profile"))]);
+            let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
-                &endpoint.endpoint,
-                endpoint.protocol.into(),
-                labels,
+                &cfg.otlp.endpoint.endpoint,
             )
-            .expect("initialize opentelemetry logger");
+            .with_protocol(cfg.otlp.endpoint.protocol.into());
+            for (k, v) in labels {
+                otel_builder = otel_builder.add_label(k, v);
+            }
+            let otel = otel_builder
+                .build()
+                .expect("initialize opentelemetry logger");
             let dispatch = Dispatch::new()
                 .filter(TargetFilter::level_for_not(
                     "databend::log::profile",
