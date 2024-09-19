@@ -78,7 +78,7 @@ ALTER TABLE t3 RECLUSTER
 query FFT
 select average_overlaps, average_depth, block_depth_histogram from clustering_information('db_09_0016','t3')
 ----
-0.0 1.0 {"00001":2}
+0.0 1.0 {"00001":1}
 
 # test trim string
 statement ok
