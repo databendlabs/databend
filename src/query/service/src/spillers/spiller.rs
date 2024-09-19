@@ -27,6 +27,7 @@ use std::sync::Once;
 use std::time::Instant;
 
 use databend_common_base::base::dma_read_file;
+use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
@@ -301,25 +302,26 @@ impl Spiller {
     ) -> Result<DataBlock> {
         // Read spilled data from storage.
         let instant = Instant::now();
+        let data_range = data_range.start as u64..data_range.end as u64;
 
-        let data = match location {
+        match location {
             Location::Storage(loc) => {
-                let range = data_range.start as u64..data_range.end as u64;
-                self.operator.read_with(loc).range(range).await?.to_bytes()
+                let data = self
+                    .operator
+                    .read_with(loc)
+                    .range(data_range)
+                    .await?
+                    .to_bytes();
+                record_read_profile(&instant, data.len());
+                Ok(deserialize_block(columns_layout, &data))
             }
             Location::Disk(path) => {
-                let cap = columns_layout.iter().sum();
-                let mut data = Vec::with_capacity(cap);
-                dma_read_file(path, &mut data).await?;
-                data.into()
+                let (buf, range) = dma_read_file_range(path, data_range).await?;
+                let data = &buf[range];
+                record_read_profile(&instant, data.len());
+                Ok(deserialize_block(columns_layout, &data))
             }
-        };
-
-        // Record statistics.
-        record_read_profile(&instant, data.len());
-
-        // Deserialize data block.
-        Ok(deserialize_block(columns_layout, &data))
+        }
     }
 
     async fn write_encodes(&mut self, size: usize, blocks: Vec<EncodedBlock>) -> Result<Location> {
