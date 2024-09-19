@@ -68,12 +68,8 @@ impl Display for SpillerType {
 #[derive(Clone)]
 pub struct SpillerConfig {
     pub location_prefix: String,
-}
-
-impl SpillerConfig {
-    pub fn create(location_prefix: String) -> Self {
-        Self { location_prefix }
-    }
+    pub disk_spill: Option<Arc<DiskSpill>>,
+    pub spiller_type: SpillerType,
 }
 
 /// Spiller is a unified framework for operators which need to spill data from memory.
@@ -86,7 +82,7 @@ impl SpillerConfig {
 pub struct Spiller {
     ctx: Arc<QueryContext>,
     operator: Operator,
-    config: SpillerConfig,
+    location_prefix: String,
     disk_spill: Option<Arc<DiskSpill>>,
     _spiller_type: SpillerType,
     pub join_spilling_partition_bits: usize,
@@ -104,14 +100,17 @@ impl Spiller {
         ctx: Arc<QueryContext>,
         operator: Operator,
         config: SpillerConfig,
-        disk_spill: Option<Arc<DiskSpill>>,
-        spiller_type: SpillerType,
     ) -> Result<Self> {
         let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
+        let SpillerConfig {
+            location_prefix,
+            disk_spill,
+            spiller_type,
+        } = config;
         Ok(Self {
-            ctx: ctx.clone(),
+            ctx,
             operator,
-            config,
+            location_prefix,
             disk_spill,
             _spiller_type: spiller_type,
             join_spilling_partition_bits,
@@ -319,7 +318,7 @@ impl Spiller {
                 let (buf, range) = dma_read_file_range(path, data_range).await?;
                 let data = &buf[range];
                 record_read_profile(&instant, data.len());
-                Ok(deserialize_block(columns_layout, &data))
+                Ok(deserialize_block(columns_layout, data))
             }
         }
     }
@@ -341,7 +340,7 @@ impl Spiller {
         }
         .unwrap_or(Location::Storage(format!(
             "{}/{unique_name}",
-            self.config.location_prefix
+            self.location_prefix
         )));
 
         let written = match &location {

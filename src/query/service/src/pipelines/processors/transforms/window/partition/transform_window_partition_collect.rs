@@ -120,20 +120,15 @@ impl TransformWindowPartitionCollect {
             partition_id[*partition] = new_partition_id;
         }
 
-        let spill_config = SpillerConfig::create(query_spill_prefix(
-            ctx.get_tenant().tenant_name(),
-            &ctx.get_id(),
-        ));
+        let spill_config = SpillerConfig {
+            location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
+            disk_spill,
+            spiller_type: SpillerType::Window,
+        };
 
         // Create an inner `Spiller` to spill data.
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(
-            ctx.clone(),
-            operator,
-            spill_config,
-            disk_spill,
-            SpillerType::Window,
-        )?;
+        let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;
 
         // Create the window partition buffer.
         let buffer =

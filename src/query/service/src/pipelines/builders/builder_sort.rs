@@ -285,19 +285,17 @@ impl SortPipelineBuilder {
 
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
-            let config = SpillerConfig::create(query_spill_prefix(
-                self.ctx.get_tenant().tenant_name(),
-                &self.ctx.get_id(),
-            ));
+            let config = SpillerConfig {
+                location_prefix: query_spill_prefix(
+                    self.ctx.get_tenant().tenant_name(),
+                    &self.ctx.get_id(),
+                ),
+                disk_spill: None,
+                spiller_type: SpillerType::OrderBy,
+            };
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
-                let spiller = Spiller::create(
-                    self.ctx.clone(),
-                    op,
-                    config.clone(),
-                    None,
-                    SpillerType::OrderBy,
-                )?;
+                let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
                 Ok(ProcessorPtr::create(create_transform_sort_spill(
                     input,
                     output,

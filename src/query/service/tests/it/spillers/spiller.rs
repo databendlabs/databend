@@ -38,17 +38,14 @@ async fn test_spill_with_partition() -> Result<()> {
 
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
-    let spiller_config =
-        SpillerConfig::create(query_spill_prefix(tenant.tenant_name(), &ctx.get_id()));
+    let spiller_config = SpillerConfig {
+        location_prefix: query_spill_prefix(tenant.tenant_name(), &ctx.get_id()),
+        disk_spill: None,
+        spiller_type: SpillerType::HashJoinBuild,
+    };
     let operator = DataOperator::instance().operator();
 
-    let mut spiller = Spiller::create(
-        ctx,
-        operator,
-        spiller_config,
-        None,
-        SpillerType::HashJoinBuild,
-    )?;
+    let mut spiller = Spiller::create(ctx, operator, spiller_config)?;
 
     // Generate data block: two columns, type is i32, 100 rows
     let data = DataBlock::new_from_columns(vec![

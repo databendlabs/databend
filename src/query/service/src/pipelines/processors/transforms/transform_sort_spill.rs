@@ -486,13 +486,13 @@ mod tests {
         limit: Option<usize>,
     ) -> Result<TransformSortSpill<SimpleRowsAsc<Int32Type>>> {
         let op = DataOperator::instance().operator();
-        let spiller = Spiller::create(
-            ctx.clone(),
-            op,
-            SpillerConfig::create("_spill_test".to_string()),
-            None,
-            SpillerType::OrderBy,
-        )?;
+        let spill_config = SpillerConfig {
+            location_prefix: "_spill_test".to_string(),
+            disk_spill: None,
+            spiller_type: SpillerType::OrderBy,
+        };
+
+        let spiller = Spiller::create(ctx.clone(), op, spill_config)?;
 
         let sort_desc = Arc::new(vec![SortColumnDescription {
             offset: 0,
