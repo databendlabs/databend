@@ -31,14 +31,13 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v5_database_meta() -> anyhow::Result<()> {
-    let bytes: Vec<u8> = vec![
+fn test_decode_v110_database_meta() -> anyhow::Result<()> {
+    let database_meta_v110 = vec![
         34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97, 98,
         99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
         58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57,
         32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111, 111, 32, 98, 97,
-        114, 202, 1, 21, 10, 6, 116, 101, 110, 97, 110, 116, 18, 5, 115, 104, 97, 114, 101, 160, 6,
-        5, 168, 6, 1, 160, 6, 5, 168, 6, 1,
+        114, 232, 1, 1, 160, 6, 110, 168, 6, 24,
     ];
 
     let want = || mt::DatabaseMeta {
@@ -49,11 +48,11 @@ fn test_decode_v5_database_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
-        gc_in_progress: false,
+        gc_in_progress: true,
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 5, want())
+    common::test_load_old(func_name!(), database_meta_v110.as_slice(), 110, want())
 }
 
 fn s(ss: impl ToString) -> String {
