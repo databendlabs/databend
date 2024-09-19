@@ -17,9 +17,9 @@ NULL
 query I
 select * from order_test order by a desc
 ----
-NULL
 2
 1
+NULL
 
 query I
 select * from order_test order by a nulls first
