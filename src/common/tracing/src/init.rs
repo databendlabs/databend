@@ -294,7 +294,6 @@ pub fn init_logging(
                     "databend::log::query",
                     LevelFilter::Off,
                 ))
-                .layout(get_layout(&cfg.file.format))
                 .append(query_log_file);
             logger = logger.dispatch(dispatch);
         }
@@ -337,7 +336,6 @@ pub fn init_logging(
                     "databend::log::profile",
                     LevelFilter::Off,
                 ))
-                .layout(get_layout(&cfg.file.format))
                 .append(profile_log_file);
             logger = logger.dispatch(dispatch);
         }
