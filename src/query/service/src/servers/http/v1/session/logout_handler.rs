@@ -17,6 +17,8 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
 
+use crate::auth::Credential;
+use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryContext;
@@ -29,12 +31,12 @@ pub struct LogoutResponse {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn logout_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
-    let error = if let Some(token) = &ctx.databend_token {
+    let error = if let Credential::DatabendToken { token, .. } = &ctx.credential {
         ClientSessionManager::instance()
             .drop_client_session(token)
             .await
-            .map_err(QueryError::from_error_code)
-            .err()
+            .map_err(HttpErrorCode::server_error)?;
+        None
     } else {
         // should not get here since request is already authed
         Some(QueryError {

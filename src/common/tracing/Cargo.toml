@@ -19,18 +19,21 @@ databend-common-exception = { workspace = true }
 defer = "0.2"
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
-fern = "0.6.2"
 itertools = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
+logforth = { version = "0.11", git = "http://github.com/andylokandy/logforth", rev = "0ca61ca", features = [
+    'json',
+    'rolling_file',
+    'opentelemetry',
+    'fastrace',
+] }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 strip-ansi-escapes = "0.2"
 tonic = { workspace = true }
-tracing-appender = { workspace = true }
 
 [dev-dependencies]
 

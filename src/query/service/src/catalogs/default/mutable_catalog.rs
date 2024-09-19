@@ -99,7 +99,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -550,14 +549,14 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.undrop_table(req).await
     }
 
-    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<()> {
         let res = self.ctx.meta.undrop_table_by_id(req).await?;
         Ok(res)
     }
@@ -688,7 +687,17 @@ impl Catalog for MutableCatalog {
     }
 
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
-        Ok(self.ctx.meta.get_sequence(req).await?)
+        let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
+
+        let Some(seq_meta) = seq_meta else {
+            return Err(KVAppError::AppError(AppError::SequenceError(
+                req.ident.unknown_error(func_name!()).into(),
+            ))
+            .into());
+        };
+        Ok(GetSequenceReply {
+            meta: seq_meta.data,
+        })
     }
 
     async fn get_sequence_next_value(

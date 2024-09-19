@@ -19,8 +19,8 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_string_list;
 use crate::ast::CreateOption;
+use crate::ast::Expr;
 use crate::ast::TypeName;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -169,16 +169,17 @@ impl Display for DescProcedureStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CallProcedureStmt {
     pub name: String,
-    pub args: Vec<String>,
+    pub args: Vec<Expr>,
 }
 
 impl Display for CallProcedureStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CALL PROCEDURE {}(", self.name)?;
-        write_comma_separated_string_list(f, self.args.clone())?;
+        let CallProcedureStmt { name, args } = self;
+        write!(f, "CALL PROCEDURE {}(", name)?;
+        write_comma_separated_list(f, args)?;
         write!(f, ")")?;
         Ok(())
     }

@@ -184,7 +184,7 @@ impl DmaFile {
 
     fn write_direct(&mut self) -> io::Result<usize> {
         let buf = self.buffer();
-        match rustix::io::write(&self.fd, &buf) {
+        match rustix::io::write(&self.fd, buf) {
             Ok(n) => {
                 debug_assert_eq!(n, buf.len());
                 unsafe { self.mut_buffer().set_len(0) };

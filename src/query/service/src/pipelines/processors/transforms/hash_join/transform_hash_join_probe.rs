@@ -109,7 +109,7 @@ pub struct TransformHashJoinProbe {
     // The spiller is used to spill/restore data blocks.
     spiller: HashJoinSpiller,
     // The next partition id to restore.
-    partition_id_to_restore: u8,
+    partition_id_to_restore: usize,
 
     step: Step,
     step_logs: Vec<Step>,

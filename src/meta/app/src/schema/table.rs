@@ -654,9 +654,6 @@ impl Display for UndropTableReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropTableReply {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub name_ident: TableNameIdent,
@@ -900,16 +897,20 @@ impl ListTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TableInfoFilter {
-    // if datatime is some, filter only dropped tables which drop time before that,
-    // else filter all dropped tables
-    Dropped(Option<DateTime<Utc>>),
-    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
-    // in this case, `ListTableReq`.db_name will be ignored
-    // return Tables in two cases:
-    //  1) if database drop before date time, then all table in this db will be return;
-    //  2) else, return all the tables drop before data time.
-    AllDroppedTables(Option<DateTime<Utc>>),
-    // return all tables, ignore drop on time.
+    /// Choose only dropped tables.
+    ///
+    /// If the arg `retention_boundary` time is Some, choose only tables dropped before this boundary time.
+    DroppedTables(Option<DateTime<Utc>>),
+    /// Choose dropped table or all table in dropped databases.
+    ///
+    /// In this case, `ListTableReq`.db_name will be ignored.
+    ///
+    /// If the `retention_boundary` time is Some,
+    /// choose the table dropped before this time
+    /// or choose the database before this time.
+    DroppedTableOrDroppedDatabase(Option<DateTime<Utc>>),
+
+    /// return all tables, ignore drop on time.
     All,
 }
 
@@ -960,6 +961,16 @@ pub struct TableCopiedFileNameIdent {
     pub file: String,
 }
 
+impl fmt::Display for TableCopiedFileNameIdent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TableCopiedFileNameIdent{{table_id:{}, file:{}}}",
+            self.table_id, self.file
+        )
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileInfo {
     pub etag: Option<String>,
@@ -983,7 +994,8 @@ pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
     /// If not None, specifies the time-to-live for the keys.
     pub ttl: Option<Duration>,
-    pub fail_if_duplicated: bool,
+    /// If there is already existing key, ignore inserting
+    pub insert_if_not_exists: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

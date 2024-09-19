@@ -83,7 +83,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -189,12 +188,9 @@ pub trait SchemaApi: Send + Sync {
         req: CommitTableMetaReq,
     ) -> Result<CommitTableMetaReply, KVAppError>;
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<(), KVAppError>;
 
-    async fn undrop_table_by_id(
-        &self,
-        req: UndropTableByIdReq,
-    ) -> Result<UndropTableReply, KVAppError>;
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<(), KVAppError>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError>;
 

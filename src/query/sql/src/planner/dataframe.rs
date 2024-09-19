@@ -406,7 +406,6 @@ impl Dataframe {
             &self.bind_context,
             order_items,
             &select_list,
-            &mut scalar_items,
             self.s_expr,
         )?;
 

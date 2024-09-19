@@ -128,9 +128,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
         );
         // if database if empty, vacuum all tables
         let filter = if self.plan.database.is_empty() {
-            TableInfoFilter::AllDroppedTables(Some(retention_time))
+            TableInfoFilter::DroppedTableOrDroppedDatabase(Some(retention_time))
         } else {
-            TableInfoFilter::Dropped(Some(retention_time))
+            TableInfoFilter::DroppedTables(Some(retention_time))
         };
 
         let tenant = self.ctx.get_tenant();

@@ -30,7 +30,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -689,13 +688,8 @@ impl Table for FuseTable {
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
-    fn append_data(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        append_mode: AppendMode,
-    ) -> Result<()> {
-        self.do_append_data(ctx, pipeline, append_mode)
+    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        self.do_append_data(ctx, pipeline)
     }
 
     fn commit_insertion(
@@ -973,7 +967,7 @@ impl Table for FuseTable {
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let min_rows_per_block = (max_rows_per_block * 4).div_ceil(5);
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,

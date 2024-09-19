@@ -74,7 +74,10 @@ where
 /// Loads inverted index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-async fn load_inverted_index_meta(dal: Operator, path: &str) -> Result<Arc<InvertedIndexMeta>> {
+pub(crate) async fn load_inverted_index_meta(
+    dal: Operator,
+    path: &str,
+) -> Result<Arc<InvertedIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::inverted_index_meta_reader(dal);
@@ -96,45 +99,41 @@ async fn load_inverted_index_meta(dal: Operator, path: &str) -> Result<Arc<Inver
 /// Loads bytes of each inverted index files
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-async fn load_inverted_index_file<'a>(
-    index_path: &'a str,
+pub(crate) async fn load_inverted_index_file<'a>(
     name: &'a str,
     col_meta: &'a SingleColumnMeta,
-    need_position: bool,
+    index_path: &'a str,
     dal: &'a Operator,
 ) -> Result<Arc<InvertedIndexFile>> {
-    // Because the position file is relatively large, reading it will take more time.
-    // And position data is only used when the query has phrase terms.
-    // If the query has no phrase terms, we can ignore it and use empty position data instead.
-    if name == "pos" && !need_position {
-        let file = InvertedIndexFile::try_create(name.to_owned(), vec![])?;
-        return Ok(Arc::new(file));
-    }
-
+    let start = Instant::now();
     let storage_runtime = GlobalIORuntime::instance();
-    let file = {
-        let inverted_index_file_reader = InvertedIndexFileReader::new(
+    let bytes = {
+        let column_data_reader = InvertedIndexFileReader::new(
             index_path.to_owned(),
             name.to_owned(),
             col_meta,
             dal.clone(),
         );
-        async move { inverted_index_file_reader.read().await }
+        async move { column_data_reader.read().await }
     }
     .execute_in_runtime(&storage_runtime)
     .await??;
-    Ok(file)
+
+    // Perf.
+    {
+        metrics_inc_block_inverted_index_read_milliseconds(start.elapsed().as_millis() as u64);
+    }
+
+    Ok(bytes)
 }
 
 /// load inverted index directory
 #[fastrace::trace]
 pub(crate) async fn load_inverted_index_directory<'a>(
     dal: Operator,
-    need_position: bool,
     field_nums: usize,
     index_path: &'a str,
 ) -> Result<InvertedIndexDirectory> {
-    let start = Instant::now();
     // load inverted index meta, contains the offsets of each files.
     let inverted_index_meta = load_inverted_index_meta(dal.clone(), index_path).await?;
 
@@ -150,25 +149,18 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     let futs = inverted_index_meta
         .columns
         .iter()
-        .map(|(name, column_meta)| {
-            load_inverted_index_file(index_path, name, column_meta, need_position, &dal)
-        })
+        .map(|(name, column_meta)| load_inverted_index_file(name, column_meta, index_path, &dal))
         .collect::<Vec<_>>();
 
     let files: Vec<_> = try_join_all(futs).await?.into_iter().collect();
     // use those files to create inverted index directory
     let directory = InvertedIndexDirectory::try_create(field_nums, files)?;
 
-    // Perf.
-    {
-        metrics_inc_block_inverted_index_read_milliseconds(start.elapsed().as_millis() as u64);
-    }
-
     Ok(directory)
 }
 
 /// Read the inverted index file data.
-pub struct InvertedIndexFileReader {
+pub(crate) struct InvertedIndexFileReader {
     cached_reader: CachedReader,
     param: LoadParams,
 }
@@ -235,13 +227,13 @@ pub struct InvertedIndexFileLoader {
 impl Loader<InvertedIndexFile> for InvertedIndexFileLoader {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<InvertedIndexFile> {
-        let bytes = self
+        let buffer = self
             .operator
             .read_with(&params.location)
             .range(self.offset..self.offset + self.len)
             .await?;
 
-        InvertedIndexFile::try_create(self.name.clone(), bytes.to_vec())
+        InvertedIndexFile::try_create(self.name.clone(), buffer.to_vec())
     }
 
     fn cache_key(&self, _params: &LoadParams) -> CacheKey {

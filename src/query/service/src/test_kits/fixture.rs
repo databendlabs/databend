@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
-use databend_common_catalog::table::AppendMode;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
@@ -849,11 +848,7 @@ impl TestFixture {
             data_schema,
         )?;
 
-        table.append_data(
-            ctx.clone(),
-            &mut build_res.main_pipeline,
-            AppendMode::Normal,
-        )?;
+        table.append_data(ctx.clone(), &mut build_res.main_pipeline)?;
         if commit {
             table.commit_insertion(
                 ctx.clone(),

@@ -475,7 +475,7 @@ where
             {
                 Ok((d, _)) => d,
                 Err(e) => {
-                    ctx.set_error(builder.len(), e.message());
+                    ctx.set_error(builder.len(), e);
                     T::zero()
                 }
             };

@@ -22,13 +22,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_base::base::GlobalUniqName;
-use databend_common_exception::Result;
 
 pub struct TempFileManager {
     root: Box<Path>,
     total_limit: usize,
     dir_limit: usize,
-    reserved: usize,
+    _reserved: usize,
 
     group: Mutex<Group>,
 }
@@ -39,7 +38,7 @@ struct Group {
 
 impl Group {
     fn size(&self) -> usize {
-        self.dirs.iter().map(|(_, v)| *v.size.lock().unwrap()).sum()
+        self.dirs.values().map(|v| *v.size.lock().unwrap()).sum()
     }
 }
 

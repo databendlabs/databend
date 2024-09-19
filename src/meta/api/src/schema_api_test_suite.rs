@@ -80,7 +80,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
-use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -2599,7 +2598,7 @@ impl SchemaApiTestSuite {
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
                     ttl: None,
-                    fail_if_duplicated: true,
+                    insert_if_not_exists: true,
                 };
 
                 let req = UpdateTableMetaReq {
@@ -2649,7 +2648,7 @@ impl SchemaApiTestSuite {
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
                     ttl: None,
-                    fail_if_duplicated: true,
+                    insert_if_not_exists: true,
                 };
                 let req = UpdateTableMetaReq {
                     table_id,
@@ -2698,7 +2697,7 @@ impl SchemaApiTestSuite {
                 let upsert_source_table = UpsertTableCopiedFileReq {
                     file_info,
                     ttl: None,
-                    fail_if_duplicated: true,
+                    insert_if_not_exists: true,
                 };
                 let req = UpdateTableMetaReq {
                     table_id,
@@ -3396,7 +3395,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -3558,7 +3557,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -3606,7 +3605,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -3722,7 +3721,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -3803,7 +3802,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4316,7 +4315,7 @@ impl SchemaApiTestSuite {
             let now = Utc::now();
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(Some(now)),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(Some(now)),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4348,7 +4347,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -4557,7 +4556,7 @@ impl SchemaApiTestSuite {
         for (limit, number, drop_ids) in limit_and_drop_ids {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -5234,7 +5233,7 @@ impl SchemaApiTestSuite {
             // vacuum drop table
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::AllDroppedTables(None),
+                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
@@ -5598,12 +5597,11 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence");
         {
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
-            let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq".to_string()));
-            assert_eq!(resp.meta.current, 1);
+            let req = SequenceIdent::new(&tenant, sequence_name);
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 1);
         }
 
         info!("--- get sequence nextval");
@@ -5619,13 +5617,11 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence after nextval");
         {
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
-
-            let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq".to_string()));
-            assert_eq!(resp.meta.current, 11);
+            let req = SequenceIdent::new(&tenant, sequence_name);
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 11);
         }
 
         info!("--- replace sequence");
@@ -5639,13 +5635,12 @@ impl SchemaApiTestSuite {
 
             let _resp = mt.create_sequence(req).await?;
 
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
+            let req = SequenceIdent::new(&tenant, sequence_name);
 
-            let resp = mt.get_sequence(req).await?;
-            assert_eq!(resp.meta.comment, Some("seq1".to_string()));
-            assert_eq!(resp.meta.current, 1);
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, Some("seq1".to_string()));
+            assert_eq!(resp.current, 1);
         }
 
         {
@@ -5656,12 +5651,9 @@ impl SchemaApiTestSuite {
 
             let _resp = mt.drop_sequence(req).await?;
 
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
-            };
-
-            let resp = mt.get_sequence(req).await;
-            assert!(resp.is_err());
+            let req = SequenceIdent::new(&tenant, sequence_name);
+            let resp = mt.get_sequence(&req).await?;
+            assert!(resp.is_none());
         }
 
         Ok(())
@@ -5734,7 +5726,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -5784,7 +5776,7 @@ impl SchemaApiTestSuite {
                 file_info: file_info.clone(),
                 // Make it expire at once.
                 ttl: Some(std::time::Duration::from_secs(0)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -7213,7 +7205,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -7271,7 +7263,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: true,
+                insert_if_not_exists: true,
             };
 
             let req = UpdateTableMetaReq {
@@ -7326,7 +7318,7 @@ impl SchemaApiTestSuite {
             let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
-                fail_if_duplicated: false,
+                insert_if_not_exists: false,
             };
 
             let req = UpdateTableMetaReq {
@@ -7687,7 +7679,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
         let copied_file_req = UpsertTableCopiedFileReq {
             file_info: file_infos.clone(),
             ttl: Some(std::time::Duration::from_secs(86400)),
-            fail_if_duplicated: true,
+            insert_if_not_exists: true,
         };
 
         let req = UpdateTableMetaReq {

@@ -54,10 +54,8 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
-use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
@@ -192,11 +190,6 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     let typ = session.get_type();
     if typ.is_user_session() {
         SessionManager::instance().status.write().query_finish(now);
-        if typ == SessionType::HTTPQuery {
-            if let Some(cid) = session.get_client_session_id() {
-                ClientSessionManager::instance().on_query_finish(&cid, &session)
-            }
-        }
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
