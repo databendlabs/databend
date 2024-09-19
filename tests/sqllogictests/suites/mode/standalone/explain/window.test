@@ -54,9 +54,10 @@ CompoundBlockOperator(Project) × 1
         Merge to Resize × 4
           Transform Window × 1
             TransformWindowPartitionCollect × 1
-              TransformWindowPartitionScatter × 1
-                DeserializeDataTransform × 1
-                  SyncReadParquetDataSource × 1
+              ShuffleMergePartition × 1
+                ShufflePartition × 1
+                  DeserializeDataTransform × 1
+                    SyncReadParquetDataSource × 1
 
 
 # Enable sort spilling
