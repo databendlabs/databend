@@ -451,6 +451,38 @@ EvalScalar
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 0.00
 
+query T
+EXPLAIN SELECT referer, isrefresh, count() FROM t GROUP BY referer, isrefresh order by referer, isrefresh desc limit 10;
+----
+Limit
+├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+├── limit: 10
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+    ├── sort keys: [referer ASC NULLS LAST, isrefresh DESC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+        ├── group by: [referer, isrefresh]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── group by: [referer, isrefresh]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: 0.00
+            ├── rank limit: 10
+            └── TableScan
+                ├── table: default.default.t
+                ├── output columns: [referer (#0), isrefresh (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
+
 statement ok
 DROP TABLE IF EXISTS t;
 

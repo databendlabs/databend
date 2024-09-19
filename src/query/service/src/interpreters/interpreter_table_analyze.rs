@@ -298,6 +298,7 @@ fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
                     input: Box::new(traverse(*plan.input)),
                     group_by: plan.group_by,
                     agg_funcs: plan.agg_funcs,
+                    rank_limit: plan.rank_limit,
                     enable_experimental_aggregate_hashtable: plan
                         .enable_experimental_aggregate_hashtable,
                     group_by_display: plan.group_by_display,

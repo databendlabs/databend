@@ -83,10 +83,8 @@ impl Binder {
         let distinct_plan = Aggregate {
             mode: AggregateMode::Initial,
             group_items,
-            aggregate_functions: vec![],
             from_distinct: true,
-            limit: None,
-            grouping_sets: None,
+            ..Default::default()
         };
 
         Ok(SExpr::create_unary(

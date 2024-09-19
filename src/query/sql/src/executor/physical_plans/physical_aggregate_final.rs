@@ -22,6 +22,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 
+use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFunctionDesc;
@@ -46,7 +47,6 @@ pub struct AggregateFinal {
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
     pub limit: Option<usize>,
-
     pub group_by_display: Vec<String>,
 
     // Only used for explain
@@ -106,6 +106,7 @@ impl PhysicalPlanBuilder {
             from_distinct: agg.from_distinct,
             mode: agg.mode,
             limit: agg.limit,
+            rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
         };
 
@@ -177,6 +178,19 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
+                let rank_limit = agg.rank_limit.map(|(item, limit)| {
+                    let desc = item
+                        .iter()
+                        .map(|v| SortDesc {
+                            asc: v.asc,
+                            nulls_first: v.nulls_first,
+                            order_by: v.index,
+                            display_name: self.metadata.read().column(v.index).name(),
+                        })
+                        .collect::<Vec<_>>();
+                    (desc, limit)
+                });
+
                 match input {
                     PhysicalPlan::Exchange(Exchange { input, kind, .. })
                         if group_by_shuffle_mode == "before_merge" =>
@@ -197,6 +211,7 @@ impl PhysicalPlanBuilder {
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
+                                rank_limit: None,
                             }
                         } else {
                             AggregatePartial {
@@ -207,6 +222,7 @@ impl PhysicalPlanBuilder {
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
+                                rank_limit,
                             }
                         };
 
@@ -275,6 +291,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
+                                rank_limit: None,
                             })
                         } else {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
@@ -285,6 +302,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
+                                rank_limit,
                             })
                         }
                     }
@@ -359,6 +377,7 @@ impl PhysicalPlanBuilder {
                     PhysicalPlan::AggregatePartial(ref partial) => {
                         let before_group_by_schema = partial.input.output_schema()?;
                         let limit = agg.limit;
+
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: 0,
                             group_by_display: partial.group_by_display.clone(),

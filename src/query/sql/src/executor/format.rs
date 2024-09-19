@@ -1089,6 +1089,10 @@ fn aggregate_partial_to_format_tree(
         children.extend(items);
     }
 
+    if let Some((_, r)) = &plan.rank_limit {
+        children.push(FormatTreeNode::new(format!("rank limit: {r}")));
+    }
+
     append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, profs)?);

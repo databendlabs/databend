@@ -16,7 +16,6 @@ mod explain;
 mod format;
 mod physical_plan;
 mod physical_plan_builder;
-mod physical_plan_display;
 mod physical_plan_visitor;
 pub mod physical_plans;
 mod util;
