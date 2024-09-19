@@ -31,13 +31,13 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v109_database_meta() -> anyhow::Result<()> {
-    let database_meta_v109 = vec![
+fn test_decode_v110_database_meta() -> anyhow::Result<()> {
+    let database_meta_v110 = vec![
         34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97, 98,
         99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
         58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57,
         32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111, 111, 32, 98, 97,
-        114, 232, 1, 1, 160, 6, 109, 168, 6, 24,
+        114, 232, 1, 1, 160, 6, 110, 168, 6, 24,
     ];
 
     let want = || mt::DatabaseMeta {
@@ -52,7 +52,7 @@ fn test_decode_v109_database_meta() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), database_meta_v109.as_slice(), 109, want())
+    common::test_load_old(func_name!(), database_meta_v110.as_slice(), 110, want())
 }
 
 fn s(ss: impl ToString) -> String {
