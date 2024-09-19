@@ -114,7 +114,6 @@ impl PipelineBuilder {
             enable_experimental_aggregate_hashtable,
             self.is_exchange_neighbor,
             max_block_size as usize,
-            None,
             max_spill_io_requests as usize,
         )?;
 
@@ -250,7 +249,6 @@ impl PipelineBuilder {
             enable_experimental_aggregate_hashtable,
             self.is_exchange_neighbor,
             max_block_size as usize,
-            aggregate.limit,
             max_spill_io_requests as usize,
         )?;
 
@@ -317,7 +315,6 @@ impl PipelineBuilder {
         enable_experimental_aggregate_hashtable: bool,
         cluster_aggregator: bool,
         max_block_size: usize,
-        limit: Option<usize>,
         max_spill_io_requests: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
@@ -360,7 +357,6 @@ impl PipelineBuilder {
             enable_experimental_aggregate_hashtable,
             cluster_aggregator,
             max_block_size,
-            limit,
             max_spill_io_requests,
         )?;
 

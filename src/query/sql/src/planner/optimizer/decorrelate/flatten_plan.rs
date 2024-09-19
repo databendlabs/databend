@@ -620,7 +620,6 @@ impl SubqueryRewriter {
                     group_items,
                     aggregate_functions: agg_items,
                     from_distinct: aggregate.from_distinct,
-                    limit: aggregate.limit,
                     rank_limit: aggregate.rank_limit.clone(),
                     grouping_sets: aggregate.grouping_sets.clone(),
                 }

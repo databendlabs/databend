@@ -1134,11 +1134,6 @@ fn aggregate_final_to_format_tree(
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];
 
-    if let Some(limit) = &plan.limit {
-        let items = FormatTreeNode::new(format!("limit: {limit}"));
-        children.push(items);
-    }
-
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);

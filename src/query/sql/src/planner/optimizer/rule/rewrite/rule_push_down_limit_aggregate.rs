@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::sync::Arc;
 
 use crate::optimizer::extract::Matcher;
@@ -54,7 +53,10 @@ impl RulePushDownLimitAggregate {
                     op_type: RelOp::Limit,
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::Aggregate,
-                        children: vec![Matcher::Leaf],
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::Leaf],
+                        }],
                     }],
                 },
                 Matcher::MatchOp {
@@ -84,6 +86,8 @@ impl RulePushDownLimitAggregate {
         }
     }
 
+    // There is no order by, so we don't care the order of result.
+    // To make query works with consistent result and more efficient, we will inject a order by before limit
     fn apply_limit(
         &self,
         s_expr: &SExpr,
@@ -92,16 +96,38 @@ impl RulePushDownLimitAggregate {
         let limit: Limit = s_expr.plan().clone().try_into()?;
         if let Some(mut count) = limit.limit {
             count += limit.offset;
-            let agg = s_expr.child(0)?;
-            let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
+            let agg_final = s_expr.child(0)?;
+            let agg_partial = agg_final.child(0)?;
 
-            agg_limit.limit = Some(agg_limit.limit.map_or(count, |c| cmp::max(c, count)));
-            let agg = SExpr::create_unary(
+            let mut agg_limit: Aggregate = agg_partial.plan().clone().try_into()?;
+
+            let sort_items = agg_limit
+                .group_items
+                .iter()
+                .map(|g| SortItem {
+                    index: g.index,
+                    asc: true,
+                    nulls_first: false,
+                })
+                .collect::<Vec<_>>();
+            agg_limit.rank_limit = Some((sort_items.clone(), count));
+
+            let sort = Sort {
+                items: sort_items.clone(),
+                limit: Some(count),
+                after_exchange: None,
+                pre_projection: None,
+                window_partition: vec![],
+            };
+
+            let agg_partial = SExpr::create_unary(
                 Arc::new(RelOperator::Aggregate(agg_limit)),
-                Arc::new(agg.child(0)?.clone()),
+                Arc::new(agg_partial.child(0)?.clone()),
             );
+            let agg_final = agg_final.replace_children(vec![agg_partial.into()]);
+            let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg_final.into());
+            let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
 
-            let mut result = s_expr.replace_children(vec![Arc::new(agg)]);
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

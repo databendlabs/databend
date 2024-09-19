@@ -46,7 +46,6 @@ pub struct AggregateFinal {
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
-    pub limit: Option<usize>,
     pub group_by_display: Vec<String>,
 
     // Only used for explain
@@ -105,7 +104,6 @@ impl PhysicalPlanBuilder {
             aggregate_functions: used,
             from_distinct: agg.from_distinct,
             mode: agg.mode,
-            limit: agg.limit,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
         };
@@ -376,7 +374,6 @@ impl PhysicalPlanBuilder {
                 match input {
                     PhysicalPlan::AggregatePartial(ref partial) => {
                         let before_group_by_schema = partial.input.output_schema()?;
-                        let limit = agg.limit;
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: 0,
@@ -387,7 +384,6 @@ impl PhysicalPlanBuilder {
                             before_group_by_schema,
 
                             stat_info: Some(stat_info),
-                            limit,
                         })
                     }
 
@@ -396,7 +392,6 @@ impl PhysicalPlanBuilder {
                         ..
                     }) => {
                         let before_group_by_schema = partial.input.output_schema()?;
-                        let limit = agg.limit;
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: 0,
@@ -407,7 +402,6 @@ impl PhysicalPlanBuilder {
                             before_group_by_schema,
 
                             stat_info: Some(stat_info),
-                            limit,
                         })
                     }
 

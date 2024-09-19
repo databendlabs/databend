@@ -64,7 +64,6 @@ pub struct Aggregate {
     pub aggregate_functions: Vec<ScalarItem>,
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
-    pub limit: Option<usize>,
     pub rank_limit: Option<(Vec<SortItem>, usize)>,
 
     pub grouping_sets: Option<GroupingSets>,
@@ -77,7 +76,6 @@ impl Default for Aggregate {
             group_items: vec![],
             aggregate_functions: vec![],
             from_distinct: false,
-            limit: None,
             rank_limit: None,
             grouping_sets: None,
         }
