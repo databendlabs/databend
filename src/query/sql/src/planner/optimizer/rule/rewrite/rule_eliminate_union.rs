@@ -57,8 +57,7 @@ impl RuleEliminateUnion {
         if child_num == 0 {
             Ok(matches!(
                 s_expr.plan(),
-                RelOperator::DummyTableScan(_)
-                    | RelOperator::ConstantTableScan(ConstantTableScan { num_rows: 0, .. })
+                RelOperator::ConstantTableScan(ConstantTableScan { num_rows: 0, .. })
             ))
         } else {
             Self::is_empty_scan(s_expr.child(0)?)
