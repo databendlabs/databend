@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -21,13 +19,7 @@ use databend_common_expression::group_hash_columns_slice;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
-use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::Exchange;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::PipeItem;
 
 use super::WindowPartitionMeta;
 

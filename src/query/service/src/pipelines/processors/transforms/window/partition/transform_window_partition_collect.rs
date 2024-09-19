@@ -29,8 +29,6 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::sort_merge;
 
 use super::WindowPartitionBuffer;
