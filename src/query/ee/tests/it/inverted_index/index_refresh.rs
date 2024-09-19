@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InvertedIndexInfo;
@@ -38,6 +39,7 @@ use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use tantivy::schema::IndexRecordOption;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
@@ -144,14 +146,17 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let field_nums = query_fields.len();
     let has_score = true;
     let need_position = false;
+    let mut field_ids = HashSet::new();
+    field_ids.insert(0);
+    field_ids.insert(1);
+    let index_record = IndexRecordOption::WithFreqsAndPositions;
 
-    let index_reader =
-        InvertedIndexReader::try_create(dal.clone(), field_nums, need_position, &index_loc).await?;
+    let index_reader = InvertedIndexReader::create(dal.clone());
 
     let queries = vec![
         ("rust".to_string(), vec![0, 1]),
         ("java".to_string(), vec![2]),
-        ("data".to_string(), vec![4, 1, 5]),
+        ("data".to_string(), vec![1, 4, 5]),
     ];
 
     for (query_text, ids) in queries.into_iter() {
@@ -166,14 +171,24 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
             inverted_index_option: None,
         };
 
-        let (query, tokenizer_manager) = create_inverted_index_query(&inverted_index_info)?;
+        let (query, fuzziness, tokenizer_manager) =
+            create_inverted_index_query(&inverted_index_info)?;
 
-        let matched_rows = index_reader.clone().do_filter(
-            has_score,
-            &query,
-            tokenizer_manager,
-            block_meta.row_count,
-        )?;
+        let matched_rows = index_reader
+            .clone()
+            .do_filter(
+                field_nums,
+                need_position,
+                has_score,
+                query.box_clone(),
+                &field_ids,
+                &index_record,
+                &fuzziness,
+                tokenizer_manager,
+                block_meta.row_count as u32,
+                &index_loc,
+            )
+            .await?;
         assert!(matched_rows.is_some());
         let matched_rows = matched_rows.unwrap();
         assert_eq!(matched_rows.len(), ids.len());

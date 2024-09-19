@@ -19,6 +19,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cron = "0.12.0"
 databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }

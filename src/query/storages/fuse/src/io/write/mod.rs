@@ -27,6 +27,7 @@ pub use block_writer::BlockWriter;
 pub use block_writer::BloomIndexBuilder;
 pub use block_writer::BloomIndexState;
 pub use block_writer::InvertedIndexBuilder;
+pub(crate) use inverted_index_writer::block_to_inverted_index;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_tokenizer_manager;
 pub use inverted_index_writer::InvertedIndexWriter;

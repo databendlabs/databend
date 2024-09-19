@@ -399,6 +399,18 @@ impl Settings {
         Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_window_num_partitions(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_num_partitions")? as usize)
+    }
+
+    pub fn get_window_spill_unit_size_mb(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_spill_unit_size_mb")? as usize)
+    }
+
+    pub fn get_window_partition_sort_block_size(&self) -> Result<u64> {
+        self.try_get_u64("window_partition_sort_block_size")
+    }
+
     pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
     }

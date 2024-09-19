@@ -2125,12 +2125,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let call_procedure = map(
         rule! {
-            CALL ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+            CALL ~ PROCEDURE ~ #ident ~ "(" ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
-        |(_, _, name, _, _)| {
+        |(_, _, name, _, opt_args, _)| {
             Statement::CallProcedure(CallProcedureStmt {
                 name: name.to_string(),
-                args: vec![],
+                args: opt_args.unwrap_or_default(),
             })
         },
     );

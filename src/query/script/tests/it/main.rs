@@ -689,7 +689,7 @@ impl Client for MockClient {
         Ok(var)
     }
 
-    fn set_len(&self, set: &Self::Set) -> usize {
+    fn num_rows(&self, set: &Self::Set) -> usize {
         set.data.len()
     }
 
