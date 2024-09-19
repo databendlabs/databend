@@ -75,9 +75,10 @@ CompoundBlockOperator(Project) × 1
           Merge to Resize × 4
             Transform Window × 1
               TransformWindowPartitionCollect × 1
-                TransformWindowPartitionScatter × 1
-                  DeserializeDataTransform × 1
-                    SyncReadParquetDataSource × 1
+                ShuffleMergePartition × 1
+                  ShufflePartition × 1
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 
 statement ok
@@ -361,9 +362,10 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        TransformWindowPartitionScatter × 1
-          DeserializeDataTransform × 1
-            SyncReadParquetDataSource × 1
+        ShuffleMergePartition × 1
+          ShufflePartition × 1
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 # Enable sort spilling
 statement ok
@@ -377,9 +379,10 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        TransformWindowPartitionScatter × 1
-          DeserializeDataTransform × 1
-            SyncReadParquetDataSource × 1
+        ShuffleMergePartition × 1
+          ShufflePartition × 1
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 
 # Disable sort spilling
@@ -394,9 +397,10 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        TransformWindowPartitionScatter × 1
-          DeserializeDataTransform × 1
-            SyncReadParquetDataSource × 1
+        ShuffleMergePartition × 1
+          ShufflePartition × 1
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 # rows frame single window (can push down limit)
 query T
@@ -406,9 +410,10 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        TransformWindowPartitionScatter × 1
-          DeserializeDataTransform × 1
-            SyncReadParquetDataSource × 1
+        ShuffleMergePartition × 1
+          ShufflePartition × 1
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 # rows frame single window (can not push down limit)
 query T
@@ -418,9 +423,10 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        TransformWindowPartitionScatter × 1
-          DeserializeDataTransform × 1
-            SyncReadParquetDataSource × 1
+        ShuffleMergePartition × 1
+          ShufflePartition × 1
+            DeserializeDataTransform × 1
+              SyncReadParquetDataSource × 1
 
 # rows frame multi window (can not push down limit)
 query T
@@ -436,9 +442,10 @@ CompoundBlockOperator(Project) × 1
             Merge to Resize × 4
               Transform Window × 1
                 TransformWindowPartitionCollect × 1
-                  TransformWindowPartitionScatter × 1
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+                  ShuffleMergePartition × 1
+                    ShufflePartition × 1
+                      DeserializeDataTransform × 1
+                        SyncReadParquetDataSource × 1
 
 # row fetch with window function(pipeline explain)
 query T
@@ -453,11 +460,12 @@ CompoundBlockOperator(Project) × 1
             Merge to Resize × 4
               Transform Window × 1
                 TransformWindowPartitionCollect × 1
-                  TransformWindowPartitionScatter × 1
-                    TransformFilter × 1
-                      AddInternalColumnsTransform × 1
-                        DeserializeDataTransform × 1
-                          SyncReadParquetDataSource × 1
+                  ShuffleMergePartition × 1
+                    ShufflePartition × 1
+                      TransformFilter × 1
+                        AddInternalColumnsTransform × 1
+                          DeserializeDataTransform × 1
+                            SyncReadParquetDataSource × 1
 
 # row fetch with window function(plan explain)
 query T
@@ -515,9 +523,10 @@ CompoundBlockOperator(Project) × 1
     TransformFilter × 1
       Transform Window × 1
         TransformWindowPartitionCollect × 1
-          TransformWindowPartitionScatter × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+          ShuffleMergePartition × 1
+            ShufflePartition × 1
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # same order multi window
 query T
@@ -543,9 +552,10 @@ CompoundBlockOperator(Project) × 1
   Transform Window × 1
     Transform Window × 1
       TransformWindowPartitionCollect × 1
-        TransformWindowPartitionScatter × 1
-          CompoundBlockOperator(Map) × 1
-            NumbersSourceTransform × 1
+        ShuffleMergePartition × 1
+          ShufflePartition × 1
+            CompoundBlockOperator(Map) × 1
+              NumbersSourceTransform × 1
 
 # window partition with empty sort items from same window partition  with sort items
 ## explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number + 1) a
