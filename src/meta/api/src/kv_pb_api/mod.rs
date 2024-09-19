@@ -31,6 +31,7 @@ use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 use futures::future::FutureExt;
@@ -124,6 +125,22 @@ pub trait KVPbApi: KVApi {
         }
     }
 
+    /// Same as [`get_pb`](Self::get_pb)` but returns seq and value separately.
+    fn get_pb_seq_and_value<K>(
+        &self,
+        key: &K,
+    ) -> impl Future<Output = Result<(u64, Option<K::ValueType>), Self::Error>> + Send
+    where
+        K: kvapi::Key,
+        K::ValueType: FromToProto,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        async move {
+            let seq_v = self.get_pb(key).await?;
+            Ok((seq_v.seq(), seq_v.into_value()))
+        }
+    }
+
     /// Get protobuf encoded value by kvapi::Key.
     ///
     /// The key will be converted to string and the returned value is decoded by `FromToProto`.
@@ -161,6 +178,16 @@ pub trait KVPbApi: KVApi {
         }
     }
 
+    /// Get seq by [`kvapi::Key`].
+    fn get_seq<K>(&self, key: &K) -> impl Future<Output = Result<u64, Self::Error>> + Send
+    where K: kvapi::Key {
+        let key = key.to_string_key();
+        async move {
+            let raw_seqv = self.get_kv(&key).await?;
+            Ok(raw_seqv.seq())
+        }
+    }
+
     /// Same as `get_pb_stream` but does not return keys, only values.
     ///
     /// It guaranteed to return the same number of results as the input keys.
@@ -192,6 +219,23 @@ pub trait KVPbApi: KVApi {
                 }
                 Err(e) => Err(e),
             })
+    }
+
+    /// Same as [`get_pb_stream`](Self::get_pb_stream) but collect the result in a `Vec` instead of a stream.
+    fn get_pb_vec<K, I>(
+        &self,
+        keys: I,
+    ) -> impl Future<Output = Result<Vec<(K, Option<SeqV<K::ValueType>>)>, Self::Error>> + Send
+    where
+        K: kvapi::Key + 'static,
+        K::ValueType: FromToProto + Send + 'static,
+        I: IntoIterator<Item = K>,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        async move {
+            let kvs = self.get_pb_stream(keys).await?.try_collect().await?;
+            Ok(kvs)
+        }
     }
 
     /// Get protobuf encoded values by a series of kvapi::Key.

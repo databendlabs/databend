@@ -1481,8 +1481,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get table id name
             let table_id_to_name_key = TableIdToName { table_id };
-            let (table_id_to_name_seq, _): (_, Option<DBIdTableName>) =
-                get_pb_value(self, &table_id_to_name_key).await?;
+            let table_id_to_name_seq = self.get_seq(&table_id_to_name_key).await?;
+
             let db_id_table_name = DBIdTableName {
                 db_id: *new_seq_db_id.data,
                 table_name: req.new_table_name.clone(),
@@ -1632,16 +1632,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         table_id_history: &TableIdHistoryIdent,
     ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
         let table_name = &table_id_history.table_name;
-        let (meta_seq, table_id_list) = get_pb_value(self, table_id_history).await?;
-        if meta_seq == 0 || table_id_list.is_none() {
-            return Err(KVAppError::AppError(AppError::from(UnknownTable::new(
+
+        let (_seq, table_id_list) = self.get_pb_seq_and_value(&table_id_history).await?;
+
+        let table_id_list = table_id_list.ok_or_else(|| {
+            AppError::from(UnknownTable::new(
                 table_name,
                 format!("get_table_history: {}.{}", database_name, table_name),
-            ))));
-        }
+            ))
+        })?;
 
         let now = Utc::now();
-        let table_id_list = table_id_list.unwrap();
 
         let metas = get_table_meta_history(self, &now, table_id_list).await?;
 
@@ -3273,33 +3274,22 @@ async fn get_table_meta_history(
     tb_id_list: TableIdList,
 ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
     let mut tb_metas = vec![];
-    let inner_keys: Vec<String> = tb_id_list
-        .id_list
-        .iter()
-        .map(|table_id| {
-            TableId {
-                table_id: *table_id,
-            }
-            .to_string_key()
-        })
-        .collect();
-    let mut table_id_iter = tb_id_list.id_list.into_iter();
+
+    let inner_keys = tb_id_list.id_list.into_iter().map(TableId::new);
+
     for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
-        let tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(kv_api, c).await?;
-        for (tb_meta_seq, tb_meta) in tb_meta_vec {
-            let table_id = table_id_iter.next().unwrap();
-            if tb_meta_seq == 0 || tb_meta.is_none() {
-                error!("get_table_history cannot find {:?} table_meta", table_id);
+        let kvs = kv_api.get_pb_vec(c).await?;
+
+        for (k, table_meta) in kvs {
+            let Some(table_meta) = table_meta else {
+                error!("get_table_history cannot find {:?} table_meta", k);
+                continue;
+            };
+
+            if is_drop_time_out_of_retention_time(&table_meta.drop_on, now) {
                 continue;
             }
-
-            // Safe unwrap() because: tb_meta_seq > 0
-            let tb_meta = tb_meta.unwrap();
-            if is_drop_time_out_of_retention_time(&tb_meta.drop_on, now) {
-                continue;
-            }
-
-            tb_metas.push((TableId { table_id }, SeqV::new(tb_meta_seq, tb_meta)));
+            tb_metas.push((k, table_meta));
         }
     }
     Ok(tb_metas)
