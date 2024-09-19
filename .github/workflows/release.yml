@@ -180,35 +180,9 @@ jobs:
           features: python-udf
           category: udf
 
-  build_hdfs:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
-    needs: create_release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { target: x86_64-unknown-linux-gnu, runner: X64 }
-          - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.create_release.outputs.sha }}
-          fetch-depth: 0
-      - name: Build Release
-        uses: ./.github/actions/build_linux
-        env:
-          DATABEND_RELEASE_VERSION: ${{ needs.create_release.outputs.version }}
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,metactl,meta,query
-          features: storage-hdfs
-          category: hdfs
-
   publish:
     runs-on: [self-hosted, X64, Linux, 4c8g, aws]
-    needs: [create_release, build_default, build_musl, build_hdfs]
+    needs: [create_release, build_default, build_musl]
     strategy:
       fail-fast: false
       matrix:
@@ -221,10 +195,6 @@ jobs:
             target: x86_64-unknown-linux-musl
           - category: default
             target: aarch64-unknown-linux-musl
-          - category: hdfs
-            target: x86_64-unknown-linux-gnu
-          - category: hdfs
-            target: aarch64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
