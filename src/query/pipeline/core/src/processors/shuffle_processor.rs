@@ -33,9 +33,11 @@ pub enum MultiwayStrategy {
 pub trait Exchange: Send + Sync + 'static {
     const STRATEGY: MultiwayStrategy = MultiwayStrategy::Random;
 
-    fn partition(&self, state: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
 
-    fn multiway_pick(&self, partitions: &[Option<DataBlock>]) -> Result<usize>;
+    fn multiway_pick(&self, _partitions: &[Option<DataBlock>]) -> Result<usize> {
+        unimplemented!()
+    }
 }
 
 pub struct ShuffleProcessor {

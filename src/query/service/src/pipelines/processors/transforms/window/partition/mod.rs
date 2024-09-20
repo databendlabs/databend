@@ -13,11 +13,11 @@
 // limitations under the License.
 
 mod transform_window_partition_collect;
-mod transform_window_partition_scatter;
 mod window_partition_buffer;
+mod window_partition_exchange;
 mod window_partition_meta;
 
 pub use transform_window_partition_collect::*;
-pub use transform_window_partition_scatter::*;
 pub use window_partition_buffer::*;
+pub use window_partition_exchange::*;
 pub use window_partition_meta::*;
