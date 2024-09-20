@@ -21,6 +21,7 @@ use nom::combinator::map;
 use nom::combinator::not;
 use nom::combinator::value;
 use nom::Slice;
+use nom_rule::rule;
 
 use super::sequence::sequence;
 use crate::ast::*;
@@ -38,7 +39,6 @@ use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
-use crate::rule;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
