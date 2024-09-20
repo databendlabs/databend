@@ -32,8 +32,8 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::IResult;
 use databend_common_ast::parser::Input;
 use databend_common_ast::parser::ParseMode;
-use databend_common_ast::rule;
 use goldenfile::Mint;
+use nom_rule::rule;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
