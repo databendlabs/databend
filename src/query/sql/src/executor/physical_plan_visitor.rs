@@ -200,6 +200,7 @@ pub trait PhysicalPlanReplacer {
             group_by_display: plan.group_by_display.clone(),
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
+            rank_limit: plan.rank_limit.clone(),
         }))
     }
 
@@ -214,7 +215,6 @@ pub trait PhysicalPlanReplacer {
             agg_funcs: plan.agg_funcs.clone(),
             group_by_display: plan.group_by_display.clone(),
             stat_info: plan.stat_info.clone(),
-            limit: plan.limit,
         }))
     }
 

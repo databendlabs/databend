@@ -29,9 +29,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
-use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
@@ -66,7 +64,7 @@ pub enum AsyncStep {
 }
 
 pub struct TransformWindowPartitionCollect {
-    inputs: Vec<Arc<InputPort>>,
+    input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     restored_data_blocks: Vec<DataBlock>,
@@ -91,8 +89,11 @@ pub struct TransformWindowPartitionCollect {
 }
 
 impl TransformWindowPartitionCollect {
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<QueryContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
         settings: &Settings,
         processor_id: usize,
         num_processors: usize,
@@ -103,9 +104,6 @@ impl TransformWindowPartitionCollect {
         schema: DataSchemaRef,
         have_order_col: bool,
     ) -> Result<Self> {
-        let inputs = (0..num_processors).map(|_| InputPort::create()).collect();
-        let output = OutputPort::create();
-
         // Calculate the partition ids collected by the processor.
         let partitions: Vec<usize> = (0..num_partitions)
             .filter(|&partition| partition % num_processors == processor_id)
@@ -137,28 +135,21 @@ impl TransformWindowPartitionCollect {
         let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
 
         Ok(Self {
-            inputs,
+            input,
             output,
-            output_data_blocks: VecDeque::new(),
-            restored_data_blocks: Vec::new(),
             partition_id,
             buffer,
             sort_desc,
             schema,
             max_block_size,
-            sort_spilling_batch_bytes,
-            enable_loser_tree,
             have_order_col,
-            step: Step::Sync(SyncStep::Collect),
+            enable_loser_tree,
+            sort_spilling_batch_bytes,
             is_collect_finished: false,
+            output_data_blocks: VecDeque::new(),
+            restored_data_blocks: Vec::new(),
+            step: Step::Sync(SyncStep::Collect),
         })
-    }
-
-    pub fn into_pipe_item(self) -> PipeItem {
-        let inputs = self.inputs.clone();
-        let outputs = vec![self.output.clone()];
-        let processor_ptr = ProcessorPtr::create(Box::new(self));
-        PipeItem::create(processor_ptr, inputs, outputs)
     }
 
     fn next_step(&mut self, step: Step) -> Result<Event> {
@@ -166,9 +157,7 @@ impl TransformWindowPartitionCollect {
             Step::Sync(_) => Event::Sync,
             Step::Async(_) => Event::Async,
             Step::Finish => {
-                for input in self.inputs.iter() {
-                    input.finish();
-                }
+                self.input.finish();
                 self.output.finish();
                 Event::Finished
             }
@@ -178,41 +167,36 @@ impl TransformWindowPartitionCollect {
     }
 
     fn collect(&mut self) -> Result<Event> {
-        let mut finished_input = 0;
-        for input in self.inputs.iter() {
-            if input.is_finished() {
-                finished_input += 1;
-                continue;
-            }
-
-            if input.has_data() {
-                Self::collect_data_block(
-                    input.pull_data().unwrap()?,
-                    &self.partition_id,
-                    &mut self.buffer,
-                );
-            }
-
-            if input.is_finished() {
-                finished_input += 1;
-            } else {
-                input.set_need_data();
-            }
+        if self.output.is_finished() {
+            self.input.finish();
+            return self.next_step(Step::Finish);
         }
 
-        if finished_input == self.inputs.len() {
-            self.is_collect_finished = true;
-        }
-
+        // First check. flush memory data to external storage if need
         if self.need_spill() {
             return self.next_step(Step::Async(AsyncStep::Spill));
         }
 
-        if self.is_collect_finished {
-            self.next_step(Step::Async(AsyncStep::Restore))
-        } else {
-            Ok(Event::NeedData)
+        if self.input.has_data() {
+            Self::collect_data_block(
+                self.input.pull_data().unwrap()?,
+                &self.partition_id,
+                &mut self.buffer,
+            );
         }
+
+        // Check again. flush memory data to external storage if need
+        if self.need_spill() {
+            return self.next_step(Step::Async(AsyncStep::Spill));
+        }
+
+        if self.input.is_finished() {
+            self.is_collect_finished = true;
+            return self.next_step(Step::Async(AsyncStep::Restore));
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
     }
 
     fn output(&mut self) -> Result<Event> {
@@ -233,10 +217,9 @@ impl TransformWindowPartitionCollect {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.buffer.is_empty() {
-            self.next_step(Step::Async(AsyncStep::Restore))
-        } else {
-            self.next_step(Step::Finish)
+        match self.buffer.is_empty() {
+            true => self.next_step(Step::Finish),
+            false => self.next_step(Step::Async(AsyncStep::Restore)),
         }
     }
 }
@@ -252,28 +235,28 @@ impl Processor for TransformWindowPartitionCollect {
     }
 
     fn event(&mut self) -> Result<Event> {
+        // (collect <--> spill) -> (sort <--> restore) -> finish
         match self.step {
             Step::Sync(sync_step) => match sync_step {
                 SyncStep::Collect => self.collect(),
                 SyncStep::Sort => self.output(),
             },
             Step::Async(async_step) => match async_step {
-                AsyncStep::Spill => {
-                    if self.need_spill() {
-                        self.next_step(Step::Async(AsyncStep::Spill))
-                    } else if !self.is_collect_finished {
-                        self.collect()
-                    } else {
+                AsyncStep::Spill => match self.is_collect_finished {
+                    true => {
+                        self.step = Step::Sync(SyncStep::Sort);
                         self.output()
                     }
-                }
-                AsyncStep::Restore => {
-                    if !self.restored_data_blocks.is_empty() {
-                        self.next_step(Step::Sync(SyncStep::Sort))
-                    } else {
-                        self.next_step(Step::Finish)
+                    false => {
+                        // collect data again.
+                        self.step = Step::Sync(SyncStep::Collect);
+                        self.collect()
                     }
-                }
+                },
+                AsyncStep::Restore => match self.restored_data_blocks.is_empty() {
+                    true => self.next_step(Step::Finish),
+                    false => self.next_step(Step::Sync(SyncStep::Sort)),
+                },
             },
             Step::Finish => Ok(Event::Finished),
         }

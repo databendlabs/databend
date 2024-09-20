@@ -22,6 +22,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
+use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
@@ -109,7 +110,12 @@ impl FuseTable {
             let sort_desc = Arc::new(sort_desc);
 
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
-                || Ok(TransformSortPartial::new(None, sort_desc.clone())),
+                || {
+                    Ok(TransformSortPartial::new(
+                        LimitType::None,
+                        sort_desc.clone(),
+                    ))
+                },
                 transform_len,
             )?;
             if need_match {
@@ -152,7 +158,8 @@ impl FuseTable {
                 })
                 .collect();
             let sort_desc = Arc::new(sort_desc);
-            pipeline.add_transformer(|| TransformSortPartial::new(None, sort_desc.clone()));
+            pipeline
+                .add_transformer(|| TransformSortPartial::new(LimitType::None, sort_desc.clone()));
         }
         Ok(cluster_stats_gen)
     }

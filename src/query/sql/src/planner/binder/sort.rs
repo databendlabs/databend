@@ -67,14 +67,7 @@ impl Binder {
         distinct: bool,
     ) -> Result<OrderItems> {
         bind_context.set_expr_context(ExprContext::OrderByClause);
-        // null is the largest value in databend, smallest in hive
-        // TODO: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
-        let default_nulls_first = !self
-            .ctx
-            .get_settings()
-            .get_sql_dialect()
-            .unwrap()
-            .is_null_biggest();
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
@@ -94,11 +87,15 @@ impl Binder {
 
                     let index = index - 1;
                     let projection = &projections[index];
+
+                    let asc = order.asc.unwrap_or(true);
                     order_items.push(OrderItem {
                         index: projection.index,
                         name: projection.column_name.clone(),
-                        asc: order.asc.unwrap_or(true),
-                        nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                        asc,
+                        nulls_first: order
+                            .nulls_first
+                            .unwrap_or_else(|| default_nulls_first(asc)),
                     });
                 }
                 _ => {
@@ -119,11 +116,14 @@ impl Binder {
                         .find(|(_, (_, scalar))| bound_expr.eq(scalar))
                     {
                         // The order by expression is in the select list.
+                        let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
                             index: projections[idx].index,
                             name: alias.clone(),
-                            asc: order.asc.unwrap_or(true),
-                            nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                            asc,
+                            nulls_first: order
+                                .nulls_first
+                                .unwrap_or_else(|| default_nulls_first(asc)),
                         });
                     } else if distinct {
                         return Err(ErrorCode::SemanticError(
@@ -165,11 +165,14 @@ impl Binder {
                             index: column_binding.index,
                         };
                         scalar_items.insert(column_binding.index, item);
+                        let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
                             index: column_binding.index,
                             name: column_binding.column_name,
-                            asc: order.asc.unwrap_or(true),
-                            nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                            asc,
+                            nulls_first: order
+                                .nulls_first
+                                .unwrap_or_else(|| default_nulls_first(asc)),
                         });
                     }
                 }
