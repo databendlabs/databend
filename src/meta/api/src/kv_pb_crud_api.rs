@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::Change;
@@ -19,6 +21,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 use fastrace::func_name;
@@ -27,7 +30,10 @@ use log::debug;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::meta_txn_error::MetaTxnError;
+use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_cond_eq_seq;
+use crate::util::txn_op_put_pb;
 
 /// [`KVPbCrudApi`] provide generic meta-service access pattern implementations for `name -> value` mapping.
 ///
@@ -39,7 +45,113 @@ where
     K: kvapi::Key + Clone + Send + Sync + 'static,
     K::ValueType: FromToProto + Clone + Send + Sync + 'static,
 {
-    /// Update or insert a `name -> value` mapping.
+    /// Attempts to insert a new key-value pair in it does not exist, without CAS loop.
+    ///
+    /// See: [`KVPbCrudApi::crud_try_upsert`]
+    async fn crud_try_insert<E>(
+        &self,
+        key: &K,
+        value: K::ValueType,
+        ttl: Option<Duration>,
+        on_exist: impl FnOnce() -> Result<(), E> + Send,
+    ) -> Result<Result<(), E>, MetaTxnError> {
+        self.crud_try_upsert(key, MatchSeq::Exact(0), value, ttl, on_exist)
+            .await
+    }
+
+    /// Attempts to insert or update a new key-value pair, without CAS loop.
+    ///
+    /// # Arguments
+    /// * `key` - The identifier for the new entry.
+    /// * `value` - The value to be associated with the key.
+    /// * `ttl` - Optional time-to-live for the entry.
+    /// * `on_exist` - Callback function invoked if the key already exists.
+    ///
+    /// # Returns
+    /// * `Ok(Ok(()))` if the insertion was successful.
+    /// * `Ok(Err(E))` if the key already exists and `on_exist` returned an error.
+    /// * `Err(MetaTxnError)` for transaction-related or meta-service errors.
+    async fn crud_try_upsert<E>(
+        &self,
+        key: &K,
+        match_seq: MatchSeq,
+        value: K::ValueType,
+        ttl: Option<Duration>,
+        on_exist: impl FnOnce() -> Result<(), E> + Send,
+    ) -> Result<Result<(), E>, MetaTxnError> {
+        debug!(name_ident :? =key; "KVPbCrudApi: {}", func_name!());
+
+        let upsert = UpsertPB::insert(key.clone(), value).with(match_seq);
+        let upsert = if let Some(ttl) = ttl {
+            upsert.with_ttl(ttl)
+        } else {
+            upsert
+        };
+
+        let transition = self.upsert_pb(&upsert).await?;
+
+        if transition.is_changed() {
+            Ok(Ok(()))
+        } else {
+            Ok(on_exist())
+        }
+    }
+
+    /// Updates an existing key-value mapping with CAS loop.
+    ///
+    /// # Arguments
+    /// * `name_ident` - The identifier of the key to update.
+    /// * `update` - A function that takes the current value and returns an optional tuple of
+    ///   (new_value, ttl). If None is returned, the update is cancelled.
+    /// * `not_found` - A function called when the key doesn't exist. It should either return
+    ///   an error or Ok(()) to cancel the update.
+    ///
+    /// # Returns
+    /// * `Ok(Ok(()))` if the update was successful or cancelled.
+    /// * `Ok(Err(E))` if `not_found` returned an error.
+    /// * `Err(MetaTxnError)` for transaction-related errors.
+    ///
+    /// # Note
+    /// This method uses optimistic locking and will retry on conflicts.
+    async fn crud_update_existing<E>(
+        &self,
+        name_ident: &K,
+        update: impl Fn(K::ValueType) -> Option<(K::ValueType, Option<Duration>)> + Send,
+        not_found: impl Fn() -> Result<(), E> + Send,
+    ) -> Result<Result<(), E>, MetaTxnError> {
+        debug!(name_ident :? =name_ident; "KVPbCrudApi: {}", func_name!());
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut txn = TxnRequest::default();
+
+            let seq_meta = self.get_pb(name_ident).await?;
+            let seq = seq_meta.seq();
+
+            let updated = match seq_meta.into_value() {
+                Some(x) => update(x),
+                None => return Ok(not_found()),
+            };
+
+            let Some((updated, ttl)) = updated else {
+                // update is cancelled
+                return Ok(Ok(()));
+            };
+
+            txn.condition.push(txn_cond_eq_seq(name_ident, seq));
+            txn.if_then.push(txn_op_put_pb(name_ident, &updated, ttl)?);
+
+            let (succ, _responses) = send_txn(self, txn).await?;
+
+            if succ {
+                return Ok(Ok(()));
+            }
+        }
+    }
+
+    /// Update or insert a `name -> value` mapping, with CAS loop.
     ///
     /// The `update` function is called with the previous value and should output the updated to write back.
     /// - Ok(Some(x)): write back `x`.

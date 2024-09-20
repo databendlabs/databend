@@ -23,8 +23,6 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KeyCodec;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqValue;
-use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 use fastrace::func_name;
@@ -32,11 +30,8 @@ use log::debug;
 
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
+use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::send_txn;
-use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_eq_seq;
-use crate::util::txn_op_put_pb;
 
 /// NameValueApi provide generic meta-service access pattern implementations for `name -> value` mapping.
 ///
@@ -53,25 +48,16 @@ where
     /// Create a `name -> value` mapping.
     async fn insert_name_value(
         &self,
-        name_ident: TIdent<R, N>,
+        name_ident: &TIdent<R, N>,
         value: R::ValueType,
         ttl: Option<Duration>,
     ) -> Result<Result<(), ExistError<R, N>>, MetaTxnError> {
         debug!(name_ident :? =name_ident; "NameValueApi: {}", func_name!());
 
-        let upsert = UpsertPB::insert(name_ident.clone(), value);
-        let upsert = if let Some(ttl) = ttl {
-            upsert.with_ttl(ttl)
-        } else {
-            upsert
-        };
-
-        let transition = self.upsert_pb(&upsert).await?;
-
-        if !transition.is_changed() {
-            return Ok(Err(name_ident.exist_error(func_name!())));
-        }
-        Ok(Ok(()))
+        self.crud_try_insert(name_ident, value, ttl, || {
+            Err(name_ident.exist_error(func_name!()))
+        })
+        .await
     }
 
     /// Create a `name -> value` mapping, with `CreateOption` support
@@ -95,54 +81,6 @@ where
             }
         }
         Ok(Ok(()))
-    }
-
-    /// Update an existent `name -> value` mapping.
-    ///
-    /// The `update` function is called with the previous value
-    /// and should output the updated to write back,
-    /// with an optional time-to-last value.
-    ///
-    /// `not_found` is called when the name does not exist.
-    /// And this function decide to:
-    /// - cancel update by returning `Ok(())`
-    /// - or return an error when the name does not exist.
-    async fn update_existent_name_value<E>(
-        &self,
-        name_ident: &TIdent<R, N>,
-        update: impl Fn(R::ValueType) -> Option<(R::ValueType, Option<Duration>)> + Send,
-        not_found: impl Fn() -> Result<(), E> + Send,
-    ) -> Result<Result<(), E>, MetaTxnError> {
-        debug!(name_ident :? =name_ident; "NameValueApi: {}", func_name!());
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let mut txn = TxnRequest::default();
-
-            let seq_meta = self.get_pb(name_ident).await?;
-            let seq = seq_meta.seq();
-
-            let updated = match seq_meta.into_value() {
-                Some(x) => update(x),
-                None => return Ok(not_found()),
-            };
-
-            let Some((updated, ttl)) = updated else {
-                // update is cancelled
-                return Ok(Ok(()));
-            };
-
-            txn.condition.push(txn_cond_eq_seq(name_ident, seq));
-            txn.if_then.push(txn_op_put_pb(name_ident, &updated, ttl)?);
-
-            let (succ, _responses) = send_txn(self, txn).await?;
-
-            if succ {
-                return Ok(Ok(()));
-            }
-        }
     }
 }
 

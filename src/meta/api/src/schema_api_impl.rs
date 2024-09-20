@@ -981,7 +981,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         };
 
-        self.update_existent_name_value(
+        self.crud_update_existing(
             &req.name_ident,
             |mut meta| {
                 meta.virtual_columns = req.virtual_columns.clone();
@@ -2964,8 +2964,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Revision is unique. if it presents, consider it as success.
         // Thus, we could just ignore create result
-        let _create_res = self
-            .insert_name_value(key, lock_meta, Some(req.ttl))
+        let _ = self
+            .crud_try_insert(&key, lock_meta, Some(req.ttl), || Ok::<(), Infallible>(()))
             .await?;
 
         Ok(CreateLockRevReply { revision })
@@ -2982,7 +2982,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id = lock_key.get_table_id();
         let key = lock_key.gen_key(req.revision);
 
-        self.update_existent_name_value(
+        self.crud_update_existing(
             &key,
             |mut lock_meta| {
                 // Set `acquire_lock = true` to initialize `acquired_on` when the
