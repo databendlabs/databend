@@ -203,7 +203,6 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_keys;
-use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::name_value_api::NameValueApi;
@@ -791,48 +790,39 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // Using a empty db to to list all
-        let name_key = DatabaseNameIdent::new(req.tenant(), "");
+        let name_key = DatabaseNameIdent::new(req.tenant(), "dummy");
+        let dir = DirName::new(name_key);
 
-        // Pairs of db-name and db_id with seq
-        let (tenant_dbnames, db_ids) = list_u64_value(self, &name_key).await?;
+        let name_seq_ids = self.list_pb_vec(&dir).await?;
 
-        // Keys for fetching serialized DatabaseMeta from kvapi::KVApi
-        let mut kv_keys = Vec::with_capacity(db_ids.len());
+        let id_idents = name_seq_ids
+            .iter()
+            .map(|(_k, id)| {
+                let db_id = id.data;
+                DatabaseId { db_id: *db_id }
+            })
+            .collect::<Vec<_>>();
 
-        for db_id in db_ids.iter() {
-            let k = DatabaseId { db_id: *db_id }.to_string_key();
-            kv_keys.push(k);
-        }
+        let id_metas = self.get_pb_values_vec(id_idents).await?;
 
-        // Batch get all db-metas.
-        // - A db-meta may be already deleted. It is Ok. Just ignore it.
-
-        let seq_metas = self.mget_kv(&kv_keys).await?;
-        let mut db_infos = Vec::with_capacity(kv_keys.len());
-
-        for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
-            if let Some(seq_meta) = seq_meta_opt {
-                let db_meta: DatabaseMeta = deserialize_struct(&seq_meta.data)?;
-
+        let name_id_metas = name_seq_ids
+            .into_iter()
+            .zip(id_metas.into_iter())
+            // Remove values that are not found, may be just removed.
+            .filter_map(|((name, seq_id), opt_seq_meta)| {
+                opt_seq_meta.map(|seq_meta| (name, seq_id.data, seq_meta))
+            })
+            .map(|(name, db_id, seq_meta)| {
                 let db_info = DatabaseInfo {
-                    database_id: DatabaseId::new(db_ids[i]),
-                    name_ident: DatabaseNameIdent::new(
-                        name_key.tenant(),
-                        tenant_dbnames[i].database_name(),
-                    ),
-                    meta: SeqV::new(seq_meta.seq, db_meta),
+                    database_id: db_id.into_inner(),
+                    name_ident: name,
+                    meta: seq_meta,
                 };
-                db_infos.push(Arc::new(db_info));
-            } else {
-                debug!(
-                    k = &kv_keys[i];
-                    "db_meta not found, maybe just deleted after listing names and before listing meta"
-                );
-            }
-        }
+                Arc::new(db_info)
+            })
+            .collect::<Vec<_>>();
 
-        Ok(db_infos)
+        Ok(name_id_metas)
     }
 
     #[logcall::logcall]
