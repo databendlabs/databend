@@ -44,6 +44,7 @@ impl FromToProto for mt::DatabaseMeta {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
                 None => None,
             },
+            gc_in_progress: p.gc_in_progress,
             comment: p.comment,
         };
         Ok(v)
@@ -62,6 +63,7 @@ impl FromToProto for mt::DatabaseMeta {
                 Some(drop_on) => Some(drop_on.to_pb()?),
                 None => None,
             },
+            gc_in_progress: self.gc_in_progress,
             comment: self.comment.clone(),
             shared_by: vec![],
             from_share: None,

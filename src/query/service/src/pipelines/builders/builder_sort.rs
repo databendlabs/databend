@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
@@ -197,7 +198,12 @@ impl SortPipelineBuilder {
 
     pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         // Partial sort
-        pipeline.add_transformer(|| TransformSortPartial::new(self.limit, self.sort_desc.clone()));
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.sort_desc.clone(),
+            )
+        });
 
         self.build_merge_sort_pipeline(pipeline, false)
     }

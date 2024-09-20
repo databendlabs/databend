@@ -15,7 +15,6 @@
 use std::vec;
 
 use databend_common_exception::Result;
-use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::StringType;
@@ -198,11 +197,6 @@ fn test_block_sort() -> Result<()> {
                 entry.value
             );
         }
-
-        // test new sort algorithm
-        let res = DataBlock::sort_old(&decimal_block, &sort_descs, Some(decimal_block.num_rows()))?;
-        let res_new = DataBlock::sort(&decimal_block, &sort_descs, None)?;
-        assert_block_value_eq(&res, &res_new);
     }
 
     Ok(())

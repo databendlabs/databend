@@ -998,7 +998,16 @@ impl Debug for ExecutingGraph {
         write!(
             f,
             "{:?}",
-            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
+            Dot::with_attr_getters(
+                &self.graph,
+                &[Config::EdgeNoLabel],
+                &|_, edge| format!(
+                    "{} -> {}",
+                    edge.weight().output_index,
+                    edge.weight().input_index
+                ),
+                &|_, (_, _)| String::new(),
+            )
         )
     }
 }

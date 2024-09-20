@@ -69,8 +69,29 @@ pub struct DatabaseMeta {
     pub updated_on: DateTime<Utc>,
     pub comment: String,
 
-    // if used in CreateDatabaseReq, this field MUST set to None.
+    /// if used in CreateDatabaseReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
+
+    /// Indicates whether garbage collection is currently in progress for this dropped database.
+    ///
+    /// If it is in progress, the database should not be un-dropped, because the data may be incomplete.
+    ///
+    /// ```text
+    /// normal <----.
+    ///   |         |
+    ///   | drop()  | undrop()
+    ///   v         |
+    /// dropped ----'
+    ///   |
+    ///   | gc()
+    ///   v
+    /// gc_in_progress=True
+    ///   |
+    ///   | purge data from meta-service
+    ///   v
+    /// completed removed
+    /// ```
+    pub gc_in_progress: bool,
 }
 
 impl Default for DatabaseMeta {
@@ -83,6 +104,7 @@ impl Default for DatabaseMeta {
             updated_on: Utc::now(),
             comment: "".to_string(),
             drop_on: None,
+            gc_in_progress: false,
         }
     }
 }

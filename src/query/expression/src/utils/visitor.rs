@@ -43,7 +43,7 @@ pub trait ValueVisitor {
         self.visit_typed_column::<NumberType<T>>(column)
     }
 
-    fn visit_decimal<T: Decimal>(&mut self, column: Buffer<T>) -> Result<()> {
+    fn visit_decimal<T: Decimal>(&mut self, column: Buffer<T>, _size: DecimalSize) -> Result<()> {
         self.visit_typed_column::<DecimalType<T>>(column)
     }
 
@@ -120,7 +120,7 @@ pub trait ValueVisitor {
             }
             Column::Decimal(column) => {
                 with_decimal_type!(|DECIMAL_TYPE| match column {
-                    DecimalColumn::DECIMAL_TYPE(b, _) => self.visit_decimal(b),
+                    DecimalColumn::DECIMAL_TYPE(b, size) => self.visit_decimal(b, size),
                 })
             }
             Column::Boolean(bitmap) => self.visit_boolean(bitmap),

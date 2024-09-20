@@ -127,8 +127,6 @@ fn create_count_aggregate(mode: AggregateMode) -> Aggregate {
             }),
             index: 0,
         }],
-        from_distinct: false,
-        limit: None,
-        grouping_sets: None,
+        ..Default::default()
     }
 }

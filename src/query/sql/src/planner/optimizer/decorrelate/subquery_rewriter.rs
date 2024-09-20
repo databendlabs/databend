@@ -459,10 +459,7 @@ impl SubqueryRewriter {
                         .into(),
                         index: agg_func_index,
                     }],
-                    from_distinct: false,
-                    mode: AggregateMode::Initial,
-                    limit: None,
-                    grouping_sets: None,
+                    ..Default::default()
                 };
 
                 let compare = FunctionCall {
@@ -692,9 +689,7 @@ impl SubqueryRewriter {
                             index: any_idx,
                         },
                     ],
-                    from_distinct: false,
-                    limit: None,
-                    grouping_sets: None,
+                    ..Default::default()
                 }
                 .into(),
             ),
