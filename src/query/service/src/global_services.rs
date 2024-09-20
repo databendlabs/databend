@@ -147,10 +147,7 @@ impl GlobalServices {
             &config.query.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
-        TempDirManager::init(
-            &config.spill,
-            config.query.tenant_id.tenant_name().to_string(),
-        )?;
+        TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;

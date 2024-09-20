@@ -25,6 +25,7 @@ use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use databend_common_base::base::mask_string;
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -2944,6 +2945,14 @@ pub struct SpillConfig {
         default_value = "./.databend/temp/_query_spill"
     )]
     pub spill_local_disk_path: String,
+
+    #[clap(long, value_name = "VALUE", default_value = "60")]
+    /// Allow space in percentage to spill to local disk.
+    pub spill_local_disk_max_space_percentage: OrderedFloat<f64>,
+
+    #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
+    /// Allow space in bytes to spill to local disk.
+    pub spill_local_disk_max_bytes: u64,
 }
 
 mod cache_config_converters {
@@ -3069,8 +3078,23 @@ mod cache_config_converters {
         type Error = ErrorCode;
 
         fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
+            let SpillConfig {
+                spill_local_disk_path,
+                spill_local_disk_max_space_percentage,
+                spill_local_disk_max_bytes,
+            } = value;
+            if !spill_local_disk_max_space_percentage.is_normal()
+                || spill_local_disk_max_space_percentage.is_sign_negative()
+                || spill_local_disk_max_space_percentage > OrderedFloat(100.0)
+            {
+                return Err(ErrorCode::InvalidArgument(
+                    "invalid spill_local_disk_max_space_percentage",
+                ));
+            }
             Ok(Self {
-                path: value.spill_local_disk_path,
+                path: spill_local_disk_path,
+                max_disk_ratio: spill_local_disk_max_space_percentage / 100.0,
+                global_bytes_limit: spill_local_disk_max_bytes,
             })
         }
     }
@@ -3079,6 +3103,8 @@ mod cache_config_converters {
         fn from(value: inner::SpillConfig) -> Self {
             Self {
                 spill_local_disk_path: value.path,
+                spill_local_disk_max_space_percentage: value.max_disk_ratio * 100.0,
+                spill_local_disk_max_bytes: value.global_bytes_limit,
             }
         }
     }

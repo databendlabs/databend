@@ -33,14 +33,15 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::sort_merge;
+use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_cache::TempDir;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use super::WindowSpillSettings;
 use crate::sessions::QueryContext;
-use crate::spillers::DiskSpill;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
@@ -90,20 +91,16 @@ pub struct TransformWindowPartitionCollect {
 }
 
 impl TransformWindowPartitionCollect {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<QueryContext>,
+        settings: &Settings,
         processor_id: usize,
         num_processors: usize,
         num_partitions: usize,
         spill_settings: WindowSpillSettings,
-        disk_spill: Option<Arc<DiskSpill>>,
+        disk_spill: Option<Arc<TempDir>>,
         sort_desc: Vec<SortColumnDescription>,
         schema: DataSchemaRef,
-        max_block_size: usize,
-        sort_block_size: usize,
-        sort_spilling_batch_bytes: usize,
-        enable_loser_tree: bool,
         have_order_col: bool,
     ) -> Result<Self> {
         let inputs = (0..num_processors).map(|_| InputPort::create()).collect();
@@ -128,11 +125,16 @@ impl TransformWindowPartitionCollect {
 
         // Create an inner `Spiller` to spill data.
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;
+        let spiller = Spiller::create(ctx, operator, spill_config)?;
 
         // Create the window partition buffer.
+        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
         let buffer =
             WindowPartitionBuffer::new(spiller, num_partitions, sort_block_size, spill_settings)?;
+
+        let max_block_size = settings.get_max_block_size()? as usize;
+        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
 
         Ok(Self {
             inputs,

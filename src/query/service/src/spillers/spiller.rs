@@ -16,14 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fs::create_dir;
 use std::io;
 use std::ops::Range;
-use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::Once;
 use std::time::Instant;
 
 use databend_common_base::base::dma_read_file;
@@ -38,6 +33,8 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::DataBlock;
+use databend_storages_common_cache::TempDir;
+use databend_storages_common_cache::TempPath;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
@@ -68,7 +65,7 @@ impl Display for SpillerType {
 #[derive(Clone)]
 pub struct SpillerConfig {
     pub location_prefix: String,
-    pub disk_spill: Option<Arc<DiskSpill>>,
+    pub disk_spill: Option<Arc<TempDir>>,
     pub spiller_type: SpillerType,
 }
 
@@ -83,7 +80,7 @@ pub struct Spiller {
     ctx: Arc<QueryContext>,
     operator: Operator,
     location_prefix: String,
-    disk_spill: Option<Arc<DiskSpill>>,
+    disk_spill: Option<Arc<TempDir>>,
     _spiller_type: SpillerType,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
@@ -217,7 +214,8 @@ impl Spiller {
         let data = match location {
             Location::Storage(loc) => self.operator.read(loc).await?.to_bytes(),
             Location::Disk(path) => {
-                let cap = columns_layout.iter().sum();
+                let cap = path.size();
+                debug_assert_eq!(cap, columns_layout.iter().sum::<usize>());
                 let mut data = Vec::with_capacity(cap);
                 dma_read_file(path, &mut data).await?;
                 data.into()
@@ -264,11 +262,15 @@ impl Spiller {
             let data = match location {
                 Location::Storage(loc) => self.operator.read(loc).await?.to_bytes(),
                 Location::Disk(path) => {
-                    let cap = if let Some((_, range, _)) = partitions.last() {
-                        range.end
-                    } else {
-                        0
-                    };
+                    let cap = path.size();
+                    debug_assert_eq!(
+                        cap,
+                        if let Some((_, range, _)) = partitions.last() {
+                            range.end
+                        } else {
+                            0
+                        }
+                    );
 
                     let mut data = Vec::with_capacity(cap);
                     dma_read_file(path, &mut data).await?;
@@ -324,23 +326,14 @@ impl Spiller {
     }
 
     async fn write_encodes(&mut self, size: usize, blocks: Vec<EncodedBlock>) -> Result<Location> {
-        let unique_name = GlobalUniqName::unique();
         let location = match &self.disk_spill {
             None => None,
-            Some(disk) => {
-                if disk.can_write(size as isize) {
-                    disk.init()?;
-                    Some(Location::Disk(
-                        disk.root.join(unique_name.clone()).into_boxed_path(),
-                    ))
-                } else {
-                    None
-                }
-            }
+            Some(disk) => disk.new_file_with_size(size)?.map(Location::Disk),
         }
         .unwrap_or(Location::Storage(format!(
-            "{}/{unique_name}",
-            self.location_prefix
+            "{}/{}",
+            self.location_prefix,
+            GlobalUniqName::unique(),
         )));
 
         let written = match &location {
@@ -367,7 +360,7 @@ impl Spiller {
                     .map(|data| io::IoSlice::new(data))
                     .collect::<Vec<_>>();
 
-                dma_write_file_vectored(path, &bufs).await?
+                dma_write_file_vectored(path.as_ref(), &bufs).await?
             }
         };
         debug_assert_eq!(size, written);
@@ -390,7 +383,7 @@ pub enum SpilledData {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Location {
     Storage(String),
-    Disk(Box<Path>),
+    Disk(TempPath),
 }
 
 pub struct EncodedBlock(pub Vec<Vec<u8>>);
@@ -430,44 +423,6 @@ pub fn deserialize_block(columns_layout: &[usize], mut data: &[u8]) -> DataBlock
         .collect::<Vec<_>>();
 
     DataBlock::new_from_columns(columns)
-}
-
-pub struct DiskSpill {
-    pub root: PathBuf,
-    pub bytes_limit: Mutex<isize>,
-    inited: Once,
-}
-
-impl DiskSpill {
-    pub fn new(root: PathBuf, limit: isize) -> Arc<DiskSpill> {
-        Arc::new(DiskSpill {
-            root,
-            bytes_limit: Mutex::new(limit),
-            inited: Once::new(),
-        })
-    }
-
-    pub fn can_write(&self, size: isize) -> bool {
-        let mut guard = self.bytes_limit.lock().unwrap();
-        if *guard > size {
-            *guard -= size;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn init(&self) -> Result<()> {
-        let mut rt = Ok(());
-        self.inited.call_once(|| {
-            if let Err(e) = create_dir(&self.root) {
-                if !matches!(e.kind(), io::ErrorKind::AlreadyExists) {
-                    rt = Err(e);
-                }
-            }
-        });
-        Ok(rt?)
-    }
 }
 
 pub fn record_write_profile(start: &Instant, write_bytes: usize) {

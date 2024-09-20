@@ -22,6 +22,7 @@ use std::time::Duration;
 
 use databend_common_base::base::mask_string;
 use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
@@ -144,6 +145,7 @@ impl Debug for InnerConfig {
             .field("storage", &self.storage)
             .field("catalogs", &self.catalogs)
             .field("cache", &self.cache)
+            .field("spill", &self.spill)
             .field("background", &self.background)
             .finish()
     }
@@ -709,12 +711,20 @@ impl Default for CacheConfig {
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     pub path: String,
+
+    /// Allow ratio use of disk space.
+    pub max_disk_ratio: OrderedFloat<f64>,
+
+    /// Allow bytes use of disk space.
+    pub global_bytes_limit: u64,
 }
 
 impl Default for SpillConfig {
     fn default() -> Self {
         Self {
             path: "./.databend/temp/_query_spill".to_string(),
+            max_disk_ratio: OrderedFloat(0.6),
+            global_bytes_limit: u64::MAX,
         }
     }
 }

@@ -17,7 +17,6 @@ mod spiller;
 
 pub use partition_buffer::PartitionBuffer;
 pub use partition_buffer::PartitionBufferFetchOption;
-pub use spiller::DiskSpill;
 pub use spiller::Location;
 pub use spiller::SpilledData;
 pub use spiller::Spiller;

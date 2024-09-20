@@ -14,13 +14,13 @@
 
 #![feature(write_all_vectored)]
 #![feature(associated_type_defaults)]
+#![feature(assert_matches)]
 
 mod cache;
 mod caches;
 mod manager;
 mod providers;
 mod read;
-mod temp;
 mod temp_dir;
 
 pub use cache::CacheAccessor;
@@ -47,5 +47,4 @@ pub use read::InMemoryCacheReader;
 pub use read::InMemoryItemCacheReader;
 pub use read::LoadParams;
 pub use read::Loader;
-pub use temp_dir::TempDir;
-pub use temp_dir::TempDirManager;
+pub use temp_dir::*;

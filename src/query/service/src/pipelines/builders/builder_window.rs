@@ -32,7 +32,6 @@ use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
-use crate::spillers::DiskSpill;
 
 impl PipelineBuilder {
     pub(crate) fn build_window(&mut self, window: &Window) -> Result<()> {
@@ -175,10 +174,6 @@ impl PipelineBuilder {
         }
         self.main_pipeline.reorder_inputs(rule);
 
-        let max_block_size = settings.get_max_block_size()? as usize;
-        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
         let sort_desc = window_partition
             .order_by
@@ -194,12 +189,9 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
-        let disk_spill = TempDirManager::instance()
-            .get_disk_spill_config()
-            .map(|cfg| {
-                let root = cfg.path.join(self.ctx.get_id());
-                DiskSpill::new(root, disk_bytes_limit as isize)
-            });
+        let disk_spill =
+            TempDirManager::instance().get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id());
+
         let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
 
         // 3. Build window partition collect processors.
@@ -207,6 +199,7 @@ impl PipelineBuilder {
         for processor_id in 0..num_processors {
             let processor = TransformWindowPartitionCollect::new(
                 self.ctx.clone(),
+                &settings,
                 processor_id,
                 num_processors,
                 num_partitions,
@@ -214,10 +207,6 @@ impl PipelineBuilder {
                 disk_spill.clone(),
                 sort_desc.clone(),
                 plan_schema.clone(),
-                max_block_size,
-                sort_block_size,
-                sort_spilling_batch_bytes,
-                enable_loser_tree,
                 have_order_col,
             )?;
             pipe_items.push(processor.into_pipe_item());
