@@ -49,7 +49,7 @@ where
     /// This function returns an embedded result,
     /// - the outer result is for underlying kvapi error,
     /// - the inner result is for business logic error.
-    async fn upsert_with<E>(
+    async fn crud_upsert_with<E>(
         &self,
         name_ident: &K,
         update: impl Fn(Option<SeqV<K::ValueType>>) -> Result<Option<K::ValueType>, E> + Send,
@@ -79,6 +79,28 @@ where
                 return Ok(Ok(transition));
             }
         }
+    }
+
+    /// Remove the `name -> value` mapping by name.
+    ///
+    /// `not_found` is called when the name does not exist.
+    /// And this function decide to:
+    /// - cancel update by returning `Ok(())`
+    /// - or return an error when the name does not exist.
+    async fn crud_remove<E>(
+        &self,
+        name_ident: &K,
+        not_found: impl Fn() -> Result<(), E> + Send,
+    ) -> Result<Result<(), E>, MetaTxnError> {
+        debug!(key :? =name_ident; "NameValueApi: {}", func_name!());
+
+        let upsert = UpsertPB::delete(name_ident.clone());
+        let transition = self.upsert_pb(&upsert).await?;
+        if !transition.is_changed() {
+            return Ok(not_found());
+        }
+
+        Ok(Ok(()))
     }
 }
 

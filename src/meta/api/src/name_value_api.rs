@@ -144,30 +144,6 @@ where
             }
         }
     }
-
-    /// Remove the `name -> id -> value` mapping by name, along with associated records, such `id->name` reverse index.
-    ///
-    /// Returns the removed `SeqV<id>` and `SeqV<value>`, if the name exists.
-    /// Otherwise, returns None.
-    ///
-    /// `associated_records` is used to generate additional key-values to remove along with the main operation.
-    /// Such operations do not have any condition constraints.
-    /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
-    async fn remove_name_value<E>(
-        &self,
-        name_ident: &TIdent<R, N>,
-        not_found: impl Fn() -> Result<(), E> + Send,
-    ) -> Result<Result<(), E>, MetaTxnError> {
-        debug!(key :? =name_ident; "NameValueApi: {}", func_name!());
-
-        let upsert = UpsertPB::delete(name_ident.clone());
-        let transition = self.upsert_pb(&upsert).await?;
-        if !transition.is_changed() {
-            return Ok(not_found());
-        }
-
-        Ok(Ok(()))
-    }
 }
 
 impl<R, N, T> NameValueApi<R, N> for T
