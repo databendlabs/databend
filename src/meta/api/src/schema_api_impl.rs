@@ -981,7 +981,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         };
 
-        self.update_existent_name_value(
+        self.crud_update_existing(
             &req.name_ident,
             |mut meta| {
                 meta.virtual_columns = req.virtual_columns.clone();
@@ -1007,7 +1007,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         };
 
-        self.remove_name_value(&req.name_ident, not_found).await??;
+        self.crud_remove(&req.name_ident, not_found).await??;
 
         Ok(())
     }
@@ -2306,7 +2306,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             table_id: req.table_id,
         };
 
-        self.upsert_with(&tbid, |seq_meta: Option<SeqV<TableMeta>>| {
+        self.crud_upsert_with(&tbid, |seq_meta: Option<SeqV<TableMeta>>| {
             let Some(seq_meta) = seq_meta else {
                 return Err(AppError::UnknownTableId(UnknownTableId::new(
                     req.table_id,
@@ -2964,8 +2964,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Revision is unique. if it presents, consider it as success.
         // Thus, we could just ignore create result
-        let _create_res = self
-            .insert_name_value(key, lock_meta, Some(req.ttl))
+        let _ = self
+            .crud_try_insert(&key, lock_meta, Some(req.ttl), || Ok::<(), Infallible>(()))
             .await?;
 
         Ok(CreateLockRevReply { revision })
@@ -2982,7 +2982,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id = lock_key.get_table_id();
         let key = lock_key.gen_key(req.revision);
 
-        self.update_existent_name_value(
+        self.crud_update_existing(
             &key,
             |mut lock_meta| {
                 // Set `acquire_lock = true` to initialize `acquired_on` when the
@@ -3014,9 +3014,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let revision = req.revision;
         let key = lock_key.gen_key(revision);
 
-        self.remove_name_value(&key, || Ok::<(), ()>(()))
-            .await?
-            .unwrap();
+        self.crud_remove(&key, || Ok::<(), ()>(())).await?.unwrap();
 
         Ok(())
     }
@@ -3130,7 +3128,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&name_ident, &value); "SchemaApi: {}", func_name!());
 
         let transition = self
-            .upsert_with::<Infallible>(name_ident, |t: Option<SeqV<LeastVisibleTime>>| {
+            .crud_upsert_with::<Infallible>(name_ident, |t: Option<SeqV<LeastVisibleTime>>| {
                 let curr = t.into_value().unwrap_or_default();
                 if curr.time >= value.time {
                     Ok(None)
