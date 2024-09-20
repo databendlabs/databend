@@ -723,11 +723,11 @@ impl Settings {
     }
 
     pub fn get_flight_retry_interval(&self) -> Result<u64> {
-        Ok(self.try_get_u64("flight_connection_retry_interval")?)
+        self.try_get_u64("flight_connection_retry_interval")
     }
 
     pub fn get_max_flight_retry_times(&self) -> Result<u64> {
-        Ok(self.try_get_u64("max_flight_connection_retry_times")?)
+        self.try_get_u64("max_flight_connection_retry_times")
     }
 
     pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {
