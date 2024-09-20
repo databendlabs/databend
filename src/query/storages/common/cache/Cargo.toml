@@ -31,8 +31,8 @@ hex = "0.4.3"
 log = { workspace = true }
 parking_lot = { workspace = true }
 rayon = "1.9.0"
-siphasher = "0.3.10"
 rustix = "0.38.37"
+siphasher = "0.3.10"
 
 [dev-dependencies]
 tempfile = "3.4.0"
