@@ -415,7 +415,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                 .unwrap()
         };
         self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
-        return Ok(());
+        Ok(())
     }
 
     fn visit_binary(&mut self, col: BinaryColumn) -> Result<()> {
