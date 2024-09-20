@@ -129,14 +129,6 @@ impl Dialect {
         }
     }
 
-    pub fn is_null_biggest(&self) -> bool {
-        match self {
-            Dialect::MySQL => false,
-            Dialect::Hive => false,
-            Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => true,
-        }
-    }
-
     pub fn substr_index_zero_literal_as_one(&self) -> bool {
         match self {
             Dialect::MySQL => false,
