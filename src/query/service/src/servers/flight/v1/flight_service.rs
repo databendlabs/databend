@@ -111,6 +111,11 @@ impl FlightOperation for DatabendQueryFlightService {
                     .get_metadata("x-continue-from")?
                     .parse::<usize>()
                     .unwrap();
+                // if x-enable-retry is not 0, set enable_retry to a bool value true, otherwise false
+                let enable_retry: u64 = request
+                    .get_metadata("x-enable-retry")?
+                    .parse::<u64>()
+                    .unwrap_or_default();
                 let client_stream = request.into_inner();
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance().handle_statistics_exchange(
@@ -118,6 +123,7 @@ impl FlightOperation for DatabendQueryFlightService {
                         target,
                         continue_from,
                         client_stream,
+                        enable_retry != 0,
                     )?,
                 )))
             }
@@ -132,6 +138,10 @@ impl FlightOperation for DatabendQueryFlightService {
                     .get_metadata("x-continue-from")?
                     .parse::<usize>()
                     .unwrap();
+                let enable_retry: u64 = request
+                    .get_metadata("x-enable-retry")?
+                    .parse::<u64>()
+                    .unwrap_or_default();
                 let client_stream = request.into_inner();
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance().handle_exchange_fragment(
@@ -140,6 +150,7 @@ impl FlightOperation for DatabendQueryFlightService {
                         fragment,
                         continue_from,
                         client_stream,
+                        enable_retry != 0,
                     )?,
                 )))
             }

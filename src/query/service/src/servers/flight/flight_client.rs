@@ -143,6 +143,7 @@ impl FlightClient {
             .with_metadata("x-target", target)?
             .with_metadata("x-query-id", query_id)?
             .with_metadata("x-continue-from", "0")?
+            .with_metadata("x-enable-retry", &flight_params.retry_times.to_string())?
             .build();
         let streaming = self.get_streaming(req).await?;
 
@@ -180,6 +181,7 @@ impl FlightClient {
             .with_metadata("x-query-id", query_id)?
             .with_metadata("x-fragment-id", &fragment.to_string())?
             .with_metadata("x-continue-from", "0")?
+            .with_metadata("x-enable-retry", &flight_params.retry_times.to_string())?
             .build();
         let request = databend_common_tracing::inject_span_to_tonic_request(request);
 
@@ -268,12 +270,14 @@ impl FlightClient {
                 .with_metadata("x-query-id", &info.query_id)?
                 .with_metadata("x-fragment-id", &fragment_id.to_string())?
                 .with_metadata("x-continue-from", &seq.to_string())?
+                .with_metadata("x-enable-retry", &info.retry_times.to_string())?
                 .build(),
             None => RequestBuilder::create(Box::pin(server_rx))
                 .with_metadata("x-type", "request_server_exchange")?
                 .with_metadata("x-target", &info.target)?
                 .with_metadata("x-query-id", &info.query_id)?
                 .with_metadata("x-continue-from", &seq.to_string())?
+                .with_metadata("x-enable-retry", &info.retry_times.to_string())?
                 .build(),
         };
         let request = databend_common_tracing::inject_span_to_tonic_request(request);
@@ -642,6 +646,7 @@ impl FlightDataAckState {
 pub struct FlightDataAckStream {
     notify: Arc<WatchNotify>,
     state: Arc<Mutex<FlightDataAckState>>,
+    enable_retry: bool,
 }
 
 impl FlightDataAckStream {
@@ -649,6 +654,7 @@ impl FlightDataAckStream {
         state: Arc<Mutex<FlightDataAckState>>,
         begin: usize,
         client_stream: Streaming<FlightData>,
+        enable_retry: bool,
     ) -> Result<FlightDataAckStream> {
         let notify = Self::streaming_receiver(state.clone(), client_stream);
         let mut state_guard = state.lock();
@@ -658,7 +664,11 @@ impl FlightDataAckStream {
             handle.abort();
         }
         drop(state_guard);
-        Ok(FlightDataAckStream { notify, state })
+        Ok(FlightDataAckStream {
+            notify,
+            state,
+            enable_retry,
+        })
     }
 
     fn streaming_receiver(
@@ -700,8 +710,11 @@ impl FlightDataAckStream {
 
 impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
+        info!("Drop FlightDataAckStream enable: {:?}", self.enable_retry);
         let mut state = self.state.lock();
-        if state.finish {
+        // if not enable retry, fallback to close immediately
+        if !self.enable_retry || state.finish {
+            info!("{:?} {:?}", state.finish, self.enable_retry);
             self.notify.notify_waiters();
             state.receiver.close();
             return;

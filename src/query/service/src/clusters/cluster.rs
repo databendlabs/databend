@@ -528,7 +528,7 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     )))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FlightParams {
     pub(crate) timeout: u64,
     pub(crate) retry_times: u64,

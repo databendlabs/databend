@@ -131,13 +131,11 @@ impl DataExchangeManager {
 
         let config = GlobalConfig::instance();
         let with_cur_rt = env.create_rpc_clint_with_current_rt;
-
         let flight_params = FlightParams {
             timeout: env.settings.get_flight_client_timeout()?,
             retry_times: env.settings.get_max_flight_retry_times()?,
             retry_interval: env.settings.get_flight_retry_interval()?,
         };
-
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
 
@@ -372,19 +370,22 @@ impl DataExchangeManager {
         target: String,
         continue_from: usize,
         client_stream: Streaming<FlightData>,
+        enable_retry: bool,
     ) -> Result<FlightDataAckStream> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(id) {
-            Entry::Occupied(mut v) => {
-                v.get_mut()
-                    .add_statistics_exchange(target, continue_from, client_stream)
-            }
+            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(
+                target,
+                continue_from,
+                client_stream,
+                enable_retry,
+            ),
             Entry::Vacant(v) => match continue_from == 0 {
                 true => v
                     .insert(QueryCoordinator::create())
-                    .add_statistics_exchange(target, continue_from, client_stream),
+                    .add_statistics_exchange(target, continue_from, client_stream, enable_retry),
                 false => Err(ErrorCode::Timeout(
                     "Reconnection timeout, the state has been cleared",
                 )),
@@ -400,21 +401,26 @@ impl DataExchangeManager {
         fragment: usize,
         continue_from: usize,
         client_stream: Streaming<FlightData>,
+        enable_retry: bool,
     ) -> Result<FlightDataAckStream> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => {
-                v.get_mut()
-                    .add_fragment_exchange(target, fragment, continue_from, client_stream)
-            }
+            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(
+                target,
+                fragment,
+                continue_from,
+                client_stream,
+                enable_retry,
+            ),
             Entry::Vacant(v) => match continue_from == 0 {
                 true => v.insert(QueryCoordinator::create()).add_fragment_exchange(
                     target,
                     fragment,
                     continue_from,
                     client_stream,
+                    enable_retry,
                 ),
                 false => Err(ErrorCode::Timeout(
                     "Reconnection timeout, the state has been cleared",
@@ -678,6 +684,7 @@ impl QueryCoordinator {
         target: String,
         begin: usize,
         client_stream: Streaming<FlightData>,
+        enable_retry: bool,
     ) -> Result<FlightDataAckStream> {
         let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::Statistics(target);
@@ -686,11 +693,11 @@ impl QueryCoordinator {
             Entry::Vacant(v) => {
                 let state = FlightDataAckState::create(rx, 10);
                 v.insert(FlightExchange::create_sender(state.clone(), tx));
-                FlightDataAckStream::create(state, begin, client_stream)
+                FlightDataAckStream::create(state, begin, client_stream, enable_retry)
             }
             Entry::Occupied(mut v) => match v.get_mut() {
                 FlightExchange::MovedSender(v) => {
-                    FlightDataAckStream::create(v.state.clone(), begin, client_stream)
+                    FlightDataAckStream::create(v.state.clone(), begin, client_stream, enable_retry)
                 }
                 _ => Err(ErrorCode::Internal(
                     "statistics exchanges can only have one",
@@ -721,6 +728,7 @@ impl QueryCoordinator {
         fragment: usize,
         begin: usize,
         client_stream: Streaming<FlightData>,
+        enable_retry: bool,
     ) -> Result<FlightDataAckStream> {
         let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
@@ -729,11 +737,11 @@ impl QueryCoordinator {
             Entry::Vacant(v) => {
                 let state = FlightDataAckState::create(rx, 10);
                 v.insert(FlightExchange::create_sender(state.clone(), tx));
-                FlightDataAckStream::create(state, begin, client_stream)
+                FlightDataAckStream::create(state, begin, client_stream, enable_retry)
             }
             Entry::Occupied(mut v) => match v.get_mut() {
                 FlightExchange::MovedSender(v) => {
-                    FlightDataAckStream::create(v.state.clone(), begin, client_stream)
+                    FlightDataAckStream::create(v.state.clone(), begin, client_stream, enable_retry)
                 }
                 _ => Err(ErrorCode::Internal("fragment exchange can only have one")),
             },
