@@ -61,6 +61,12 @@ pub enum LimitType {
 }
 
 impl LimitType {
+    pub fn from_limit_rows(limit: Option<usize>) -> Self {
+        match limit {
+            Some(limit) => LimitType::LimitRows(limit),
+            None => LimitType::None,
+        }
+    }
     pub fn limit_rows(&self, rows: usize) -> usize {
         match self {
             LimitType::LimitRows(limit) => *limit,

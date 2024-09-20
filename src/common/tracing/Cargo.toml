@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+anyhow = { workspace = true }
 backtrace = { workspace = true }
 chrono = { workspace = true }
 color-backtrace = { version = "0.6" }
@@ -22,7 +23,7 @@ fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
 libc = "0.2.153"
 log = { workspace = true }
-logforth = { version = "0.11", git = "http://github.com/andylokandy/logforth", rev = "0ca61ca", features = [
+logforth = { version = "0.12", features = [
     'json',
     'rolling_file',
     'opentelemetry',
@@ -32,6 +33,7 @@ opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 strip-ansi-escapes = "0.2"
 tonic = { workspace = true }
 

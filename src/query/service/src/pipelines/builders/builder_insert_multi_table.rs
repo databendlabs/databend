@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
@@ -230,7 +231,7 @@ impl PipelineBuilder {
                         Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                             transform_input_port,
                             transform_output_port,
-                            None,
+                            LimitType::None,
                             sort_desc.clone(),
                         )?))
                     },
