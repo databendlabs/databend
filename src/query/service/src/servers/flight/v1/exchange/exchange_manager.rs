@@ -51,6 +51,7 @@ use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -131,8 +132,11 @@ impl DataExchangeManager {
         let config = GlobalConfig::instance();
         let with_cur_rt = env.create_rpc_clint_with_current_rt;
 
-        let flight_retry_times = config.query.max_flight_connection_retry_times as usize;
-        let flight_retry_interval = config.query.flight_connection_retry_interval as usize;
+        let flight_params = FlightParams {
+            timeout: env.settings.get_flight_client_timeout()?,
+            retry_times: env.settings.get_max_flight_retry_times()?,
+            retry_interval: env.settings.get_flight_retry_interval()?,
+        };
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
@@ -165,8 +169,7 @@ impl DataExchangeManager {
                                         &target.id,
                                         v,
                                         &address,
-                                        flight_retry_times,
-                                        flight_retry_interval,
+                                        flight_params,
                                     )
                                     .await?,
                             },
@@ -177,8 +180,7 @@ impl DataExchangeManager {
                                         &query_id,
                                         &target.id,
                                         &address,
-                                        flight_retry_times,
-                                        flight_retry_interval,
+                                        flight_params,
                                     )
                                     .await?,
                             },
@@ -452,13 +454,17 @@ impl DataExchangeManager {
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_max_flight_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+        };
         let root_actions = actions.get_root_actions()?;
         let conf = GlobalConfig::instance();
 
         // Initialize query env between cluster nodes
         let query_env = actions.get_query_env()?;
-        query_env.init(&ctx, timeout).await?;
+        query_env.init(&ctx, flight_params).await?;
 
         // Submit distributed tasks to all nodes.
         let cluster = ctx.get_cluster();
@@ -467,7 +473,7 @@ impl DataExchangeManager {
         let local_fragments = query_fragments.remove(&conf.query.node_id);
 
         let _: HashMap<String, ()> = cluster
-            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
+            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
             .await?;
 
         self.set_ctx(&ctx.get_id(), ctx.clone())?;
@@ -480,7 +486,7 @@ impl DataExchangeManager {
 
         let prepared_query = actions.prepared_query()?;
         let _: HashMap<String, ()> = cluster
-            .do_action(START_PREPARED_QUERY, prepared_query, timeout)
+            .do_action(START_PREPARED_QUERY, prepared_query, flight_params)
             .await?;
 
         Ok(build_res)

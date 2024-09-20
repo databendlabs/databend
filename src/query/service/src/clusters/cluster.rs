@@ -85,7 +85,7 @@ pub trait ClusterHelper {
         &self,
         path: &str,
         message: HashMap<String, T>,
-        timeout: u64,
+        flight_params: FlightParams,
     ) -> Result<HashMap<String, Res>>;
 }
 
@@ -122,7 +122,7 @@ impl ClusterHelper for Cluster {
         &self,
         path: &str,
         message: HashMap<String, T>,
-        timeout: u64,
+        flight_params: FlightParams,
     ) -> Result<HashMap<String, Res>> {
         fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
             for node in nodes {
@@ -148,8 +148,6 @@ impl ClusterHelper for Cluster {
 
                 async move {
                     let mut attempt = 0;
-                    let max_attempts = config.query.max_flight_connection_retry_times;
-                    let retry_interval = config.query.flight_connection_retry_interval;
 
                     loop {
                         let mut conn = create_client(&config, &flight_address).await?;
@@ -158,19 +156,19 @@ impl ClusterHelper for Cluster {
                                 path,
                                 node_secret.clone(),
                                 message.clone(),
-                                timeout,
+                                flight_params.timeout,
                             )
                             .await
                         {
                             Ok(result) => return Ok((id, result)),
                             Err(e)
                                 if e.code() == ErrorCode::CANNOT_CONNECT_NODE
-                                    && attempt < max_attempts =>
+                                    && attempt < flight_params.retry_times =>
                             {
                                 // only retry when error is network problem
                                 info!("retry do_action, attempt: {}", attempt);
                                 attempt += 1;
-                                sleep(Duration::from_secs(retry_interval)).await;
+                                sleep(Duration::from_secs(flight_params.retry_interval)).await;
                             }
                             Err(e) => return Err(e),
                         }
@@ -528,4 +526,11 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     Ok(FlightClient::new(FlightServiceClient::new(
         ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
     )))
+}
+
+#[derive(Clone, Copy)]
+pub struct FlightParams {
+    pub(crate) timeout: u64,
+    pub(crate) retry_times: u64,
+    pub(crate) retry_interval: u64,
 }

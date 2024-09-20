@@ -722,12 +722,12 @@ impl Settings {
         Ok(self.try_get_u64("random_function_seed")? == 1)
     }
 
-    pub fn get_flight_retry_interval(&self) -> Result<usize> {
-        Ok(self.try_get_u64("flight_connection_retry_interval")? as usize)
+    pub fn get_flight_retry_interval(&self) -> Result<u64> {
+        Ok(self.try_get_u64("flight_connection_retry_interval")?)
     }
 
-    pub fn get_max_flight_retry_times(&self) -> Result<usize> {
-        Ok(self.try_get_u64("max_flight_connection_retry_times")? as usize)
+    pub fn get_max_flight_retry_times(&self) -> Result<u64> {
+        Ok(self.try_get_u64("max_flight_connection_retry_times")?)
     }
 
     pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {

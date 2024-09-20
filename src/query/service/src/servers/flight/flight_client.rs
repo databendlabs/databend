@@ -51,6 +51,7 @@ use tonic::Request;
 use tonic::Status;
 use tonic::Streaming;
 
+use crate::clusters::FlightParams;
 use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -134,8 +135,7 @@ impl FlightClient {
         query_id: &str,
         target: &str,
         source_address: &str,
-        retry_times: usize,
-        retry_interval: usize,
+        flight_params: FlightParams,
     ) -> Result<FlightExchange> {
         let (server_tx, server_rx) = async_channel::bounded(1);
         let req = RequestBuilder::create(Box::pin(server_rx))
@@ -155,8 +155,8 @@ impl FlightClient {
                 target: target.to_string(),
                 fragment: None,
                 source_address: source_address.to_string(),
-                retry_times,
-                retry_interval: Duration::from_secs(retry_interval as u64),
+                retry_times: flight_params.retry_times,
+                retry_interval: Duration::from_secs(flight_params.retry_interval),
             }),
             server_tx,
         ))
@@ -170,8 +170,7 @@ impl FlightClient {
         target: &str,
         fragment: usize,
         source_address: &str,
-        retry_times: usize,
-        retry_interval: usize,
+        flight_params: FlightParams,
     ) -> Result<FlightExchange> {
         let (server_tx, server_rx) = async_channel::bounded(1);
 
@@ -195,8 +194,8 @@ impl FlightClient {
                 target: target.to_string(),
                 fragment: Some(fragment),
                 source_address: source_address.to_string(),
-                retry_times,
-                retry_interval: Duration::from_secs(retry_interval as u64),
+                retry_times: flight_params.retry_times,
+                retry_interval: Duration::from_secs(flight_params.retry_interval),
             }),
             server_tx,
         ))
@@ -292,7 +291,7 @@ pub struct ConnectionInfo {
     pub target: String,
     pub fragment: Option<usize>,
     pub source_address: String,
-    pub retry_times: usize,
+    pub retry_times: u64,
     pub retry_interval: Duration,
 }
 
