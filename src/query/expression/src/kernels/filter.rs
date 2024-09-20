@@ -133,7 +133,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                 if c.len() == self.num_rows || c.len() == 0 {
                     self.result = Some(Value::Column(c));
                 } else if self.num_rows == 0 {
-                    self.result = Some(Value::Column(c.slice(0..1)));
+                    self.result = Some(Value::Column(c.slice(0..0)));
                 } else {
                     self.visit_column(c)?;
                 }
