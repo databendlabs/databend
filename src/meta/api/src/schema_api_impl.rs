@@ -156,7 +156,6 @@ use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -3260,7 +3259,7 @@ async fn get_table_meta_history(
         .collect::<Vec<_>>();
 
     for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
-        let kvs = kv_api.get_pb_vec(c.into_iter().cloned()).await?;
+        let kvs = kv_api.get_pb_vec(c.iter().cloned()).await?;
 
         for (k, table_meta) in kvs {
             let Some(table_meta) = table_meta else {
