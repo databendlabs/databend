@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use nom_rule::rule;
+
 use super::common::ident;
 use super::expr::literal_string;
 use super::statement::parse_create_option;
@@ -20,9 +22,9 @@ use crate::ast::DropSequenceStmt;
 use crate::ast::Statement;
 use crate::parser::common::map_res;
 use crate::parser::common::IResult;
+use crate::parser::common::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;
-use crate::rule;
 
 pub fn sequence(i: Input) -> IResult<Statement> {
     rule!(
