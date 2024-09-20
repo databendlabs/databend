@@ -247,7 +247,6 @@ impl Catalog for MutableCatalog {
             .meta
             .list_databases(ListDatabaseReq {
                 tenant: tenant.clone(),
-                filter: None,
             })
             .await?;
 

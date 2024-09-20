@@ -314,15 +314,8 @@ impl GetDatabaseReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DatabaseInfoFilter {
-    /// Include all databases, even those that are before retention boundary time.
-    IncludeNonRetainable,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDatabaseReq {
     pub tenant: Tenant,
-    pub filter: Option<DatabaseInfoFilter>,
 }
 
 impl ListDatabaseReq {
