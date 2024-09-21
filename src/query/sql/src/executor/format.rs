@@ -1089,6 +1089,10 @@ fn aggregate_partial_to_format_tree(
         children.extend(items);
     }
 
+    if let Some((_, r)) = &plan.rank_limit {
+        children.push(FormatTreeNode::new(format!("rank limit: {r}")));
+    }
+
     append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, profs)?);
@@ -1129,11 +1133,6 @@ fn aggregate_final_to_format_tree(
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];
-
-    if let Some(limit) = &plan.limit {
-        let items = FormatTreeNode::new(format!("limit: {limit}"));
-        children.push(items);
-    }
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);

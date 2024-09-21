@@ -12,26 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::array::ord as arrow_ord;
-use databend_common_arrow::arrow::array::ord::DynComparator;
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::PrimitiveArray;
-use databend_common_arrow::arrow::compute::sort as arrow_sort;
-use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
-use databend_common_arrow::arrow::error::Error as ArrowError;
-use databend_common_arrow::arrow::error::Result as ArrowResult;
 use databend_common_exception::Result;
 
-use crate::converts::arrow2::ARROW_EXT_TYPE_EMPTY_ARRAY;
-use crate::converts::arrow2::ARROW_EXT_TYPE_EMPTY_MAP;
-use crate::converts::arrow2::ARROW_EXT_TYPE_VARIANT;
 use crate::types::DataType;
-use crate::utils::arrow::column_to_arrow_array;
 use crate::visitor::ValueVisitor;
-use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
@@ -61,6 +47,12 @@ pub enum LimitType {
 }
 
 impl LimitType {
+    pub fn from_limit_rows(limit: Option<usize>) -> Self {
+        match limit {
+            Some(limit) => LimitType::LimitRows(limit),
+            None => LimitType::None,
+        }
+    }
     pub fn limit_rows(&self, rows: usize) -> usize {
         match self {
             LimitType::LimitRows(limit) => *limit,
@@ -124,97 +116,6 @@ impl DataBlock {
 
         let permutations = sort_compare.take_permutation();
         DataBlock::take(block, &permutations, &mut None)
-    }
-
-    // TODO remove these
-    #[allow(dead_code)]
-    pub fn sort_old(
-        block: &DataBlock,
-        descriptions: &[SortColumnDescription],
-        limit: Option<usize>,
-    ) -> Result<DataBlock> {
-        let num_rows = block.num_rows();
-        if num_rows <= 1 {
-            return Ok(block.clone());
-        }
-        let order_columns = descriptions
-            .iter()
-            .map(|d| column_to_arrow_array(block.get_by_offset(d.offset), num_rows))
-            .collect::<Vec<_>>();
-
-        let order_arrays = descriptions
-            .iter()
-            .zip(order_columns.iter())
-            .map(|(d, array)| arrow_sort::SortColumn {
-                values: array.as_ref(),
-                options: Some(arrow_sort::SortOptions {
-                    descending: !d.asc,
-                    nulls_first: d.nulls_first,
-                }),
-            })
-            .collect::<Vec<_>>();
-
-        let indices: PrimitiveArray<u32> =
-            arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
-        DataBlock::take(block, indices.values(), &mut None)
-    }
-}
-
-fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    let left = Column::from_arrow(left, &DataType::Variant)
-        .unwrap()
-        .as_variant()
-        .cloned()
-        .unwrap();
-    let right = Column::from_arrow(right, &DataType::Variant)
-        .unwrap()
-        .as_variant()
-        .cloned()
-        .unwrap();
-    Ok(Box::new(move |i, j| {
-        let l = unsafe { left.index_unchecked(i) };
-        let r = unsafe { right.index_unchecked(j) };
-        jsonb::compare(l, r).unwrap()
-    }))
-}
-
-fn compare_null() -> ArrowResult<DynComparator> {
-    Ok(Box::new(move |_, _| Ordering::Equal))
-}
-
-fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    let left = left
-        .as_any()
-        .downcast_ref::<databend_common_arrow::arrow::array::PrimitiveArray<
-            databend_common_arrow::arrow::types::i256,
-        >>()
-        .unwrap()
-        .clone();
-    let right = right
-        .as_any()
-        .downcast_ref::<databend_common_arrow::arrow::array::PrimitiveArray<
-            databend_common_arrow::arrow::types::i256,
-        >>()
-        .unwrap()
-        .clone();
-
-    Ok(Box::new(move |i, j| left.value(i).cmp(&right.value(j))))
-}
-
-fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
-    assert_eq!(left.data_type(), right.data_type());
-    match left.data_type() {
-        ArrowType::Extension(name, _, _) => match name.as_str() {
-            ARROW_EXT_TYPE_VARIANT => compare_variant(left, right),
-            ARROW_EXT_TYPE_EMPTY_ARRAY | ARROW_EXT_TYPE_EMPTY_MAP => compare_null(),
-            _ => Err(ArrowError::NotYetImplemented(format!(
-                "Sort not supported for data type {:?}",
-                left.data_type()
-            ))),
-        },
-        ArrowType::Null => compare_null(),
-        ArrowType::Decimal256(_, _) => compare_decimal256(left, right),
-        _ => arrow_ord::build_compare(left, right),
     }
 }
 

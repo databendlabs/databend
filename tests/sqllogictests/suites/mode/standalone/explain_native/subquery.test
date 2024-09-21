@@ -179,12 +179,12 @@ HashJoin
 │           ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │           ├── group by: []
 │           ├── aggregate functions: [count(), any(number)]
-│           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── group by: []
 │               ├── aggregate functions: [count(), any(number)]
 │               ├── estimated rows: 1.00
+│               ├── rank limit: 1
 │               └── Filter
 │                   ├── output columns: [numbers.number (#1)]
 │                   ├── filters: [numbers.number (#1) = 0]

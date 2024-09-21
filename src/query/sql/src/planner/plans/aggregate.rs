@@ -27,6 +27,7 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
+use crate::plans::sort::SortItem;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
@@ -63,8 +64,22 @@ pub struct Aggregate {
     pub aggregate_functions: Vec<ScalarItem>,
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
-    pub limit: Option<usize>,
+    pub rank_limit: Option<(Vec<SortItem>, usize)>,
+
     pub grouping_sets: Option<GroupingSets>,
+}
+
+impl Default for Aggregate {
+    fn default() -> Self {
+        Self {
+            mode: AggregateMode::Initial,
+            group_items: vec![],
+            aggregate_functions: vec![],
+            from_distinct: false,
+            rank_limit: None,
+            grouping_sets: None,
+        }
+    }
 }
 
 impl Aggregate {

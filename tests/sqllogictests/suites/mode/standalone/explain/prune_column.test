@@ -54,6 +54,7 @@ Limit
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
             ├── estimated rows: 0.00
+            ├── rank limit: 1
             └── Filter
                 ├── output columns: [numbers.number (#0)]
                 ├── filters: [numbers.number (#0) > 1]
@@ -132,12 +133,12 @@ HashJoin
 │           ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
 │           ├── group by: []
 │           ├── aggregate functions: [count(), any(COUNT(*))]
-│           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── group by: []
 │               ├── aggregate functions: [count(), any(COUNT(*))]
 │               ├── estimated rows: 1.00
+│               ├── rank limit: 1
 │               └── AggregateFinal
 │                   ├── output columns: [COUNT(*) (#12)]
 │                   ├── group by: []

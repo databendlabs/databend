@@ -98,7 +98,7 @@ macro_rules! do_sorter {
 impl SortCompare {
     pub fn new(ordering_descs: Vec<SortColumnDescription>, rows: usize, limit: LimitType) -> Self {
         let equality_index =
-            if ordering_descs.len() == 1 && matches!(limit, LimitType::LimitRank(_)) {
+            if ordering_descs.len() == 1 && !matches!(limit, LimitType::LimitRank(_)) {
                 vec![]
             } else {
                 vec![1; rows as _]
@@ -112,6 +112,11 @@ impl SortCompare {
             validity: None,
             equality_index,
         }
+    }
+
+    fn need_update_equality_index(&self) -> bool {
+        self.current_column_index != self.ordering_descs.len() - 1
+            || matches!(self.limit, LimitType::LimitRank(_))
     }
 
     pub fn increment_column_index(&mut self) {
@@ -196,8 +201,7 @@ impl SortCompare {
         } else {
             let mut current = 1;
             let len = self.rows;
-            let need_update_equality_index =
-                self.current_column_index != self.ordering_descs.len() - 1;
+            let need_update_equality_index = self.need_update_equality_index();
 
             while current < len {
                 // Find the start of the next range of equal elements

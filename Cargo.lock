@@ -3219,7 +3219,7 @@ dependencies = [
  "nom",
  "nom-rule",
  "ordered-float 4.2.2",
- "pratt 0.4.0",
+ "pratt",
  "pretty",
  "pretty_assertions",
  "recursive",
@@ -10754,16 +10754,16 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f0f33cd048b8e0f5cd2fc6fd26f4feda8e33b4781673e59fe1406b137600e9d"
+checksum = "c72951bd83c76b88d820f03b38b124f981dc2520070d62170da7012d1ce964ab"
 dependencies = [
  "nom",
- "pratt 0.3.0",
+ "pratt",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.58",
 ]
 
 [[package]]
@@ -12022,12 +12022,6 @@ dependencies = [
 
 [[package]]
 name = "pratt"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e31bbc12f7936a7b195790dd6d9b982b66c54f45ff6766decf25c44cac302dce"
-
-[[package]]
-name = "pratt"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17e0a4425d076f0718b820673a38fbf3747080c61017eeb0dd79bc7e472b8bb8"
@@ -12510,7 +12504,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "portable-atomic",
  "pyo3-build-config",
  "pyo3-ffi",
@@ -12637,9 +12631,9 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.11.3"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b22d8e7369034b9a7132bc2008cac12f2013c8132b45e0554e6e20e2617f2156"
+checksum = "8c7c5fdde3cdae7203427dc4f0a68fe0ed09833edc525a03456b153b79828684"
 dependencies = [
  "bytes",
  "pin-project-lite",

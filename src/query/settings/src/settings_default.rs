@@ -658,6 +658,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("default_order_by_null", DefaultSettingValue {
+                    value: UserSettingValue::String("nulls_last".to_string()),
+                    desc: "Set numeric default_order_by_null mode",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(vec![
+                        "nulls_first".into(), "nulls_last".into(), 
+                        "nulls_first_on_asc_last_on_desc".into(), "nulls_last_on_asc_first_on_desc".into(), 
+                    ])),
+                }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets new columns to be nullable (1) or not (0) by default in table operations.",
@@ -867,6 +876,12 @@ impl DefaultSettings {
                 ("enable_loser_tree_merge_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables loser tree merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_parallel_multi_merge_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables parallel multi merge sort",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

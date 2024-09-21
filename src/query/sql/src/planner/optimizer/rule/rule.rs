@@ -27,6 +27,7 @@ use crate::optimizer::SExpr;
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
         RuleID::EliminateSort,
+        RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
         // Filter
         RuleID::EliminateFilter,
@@ -46,7 +47,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownLimitEvalScalar,
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitWindow,
-        RuleID::PushDownLimitAggregate,
+        RuleID::RulePushDownRankLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
         RuleID::SemiToInnerJoin,
@@ -78,6 +79,7 @@ pub trait Rule {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum RuleID {
     // Rewrite rules
+    EliminateUnion,
     NormalizeScalarFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
@@ -93,7 +95,7 @@ pub enum RuleID {
     PushDownLimitEvalScalar,
     PushDownLimitSort,
     PushDownLimitWindow,
-    PushDownLimitAggregate,
+    RulePushDownRankLimitAggregate,
     PushDownLimitScan,
     PushDownSortEvalScalar,
     PushDownSortScan,
@@ -129,7 +131,7 @@ impl Display for RuleID {
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::PushDownLimitEvalScalar => write!(f, "PushDownLimitEvalScalar"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
-            RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
+            RuleID::RulePushDownRankLimitAggregate => write!(f, "RulePushDownRankLimitAggregate"),
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
@@ -152,6 +154,7 @@ impl Display for RuleID {
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
             RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
+            RuleID::EliminateUnion => write!(f, "EliminateUnion"),
         }
     }
 }
