@@ -58,6 +58,7 @@ impl SubqueryRewriter {
                     args.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
                 Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                    span: agg.span,
                     display_name: agg.display_name.clone(),
                     func_name: agg.func_name.clone(),
                     distinct: agg.distinct,
