@@ -20,7 +20,7 @@ use crate::testing::new_raft_test_context;
 use crate::testing::raft_store_test_harness;
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_state_create() -> anyhow::Result<()> {
     // - create a raft state
     // - creating another raft state in the same sled db should fail
@@ -53,7 +53,7 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_state_open() -> anyhow::Result<()> {
     // - create a raft state
     // - open it.
@@ -76,7 +76,7 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -91,7 +91,7 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
     // - create a raft state
     // - write vote and the read it.

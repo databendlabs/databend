@@ -19,9 +19,6 @@ use std::sync::Arc;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
-use databend_common_catalog::plan::InternalColumn;
-use databend_common_catalog::plan::InternalColumnMeta;
-use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -34,13 +31,13 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::Value;
-use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_storage::MutationStatus;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -53,6 +50,7 @@ use crate::operations::mutation::SerializeDataMeta;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum MutationAction {
     Deletion,
     Update,
@@ -88,7 +86,6 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
-    query_row_id_col: bool,
 
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
@@ -105,7 +102,6 @@ impl MutationSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
-        query_row_id_col: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -117,7 +113,6 @@ impl MutationSource {
             operators,
             storage_format,
             action,
-            query_row_id_col,
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
         })))
@@ -186,28 +181,6 @@ impl Processor for MutationSource {
 
                 let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                 if let Some(filter) = self.filter.as_ref() {
-                    if self.query_row_id_col {
-                        // Add internal column to data block
-                        let block_meta = fuse_part.block_meta_index().unwrap();
-                        let internal_column_meta = InternalColumnMeta {
-                            segment_idx: block_meta.segment_idx,
-                            block_id: block_meta.block_id,
-                            block_location: block_meta.block_location.clone(),
-                            segment_location: block_meta.segment_location.clone(),
-                            snapshot_location: None,
-                            offsets: None,
-                            base_block_ids: None,
-                            inner: None,
-                            matched_rows: block_meta.matched_rows.clone(),
-                        };
-                        let internal_col = InternalColumn {
-                            column_name: ROW_ID_COL_NAME.to_string(),
-                            column_type: InternalColumnType::RowId,
-                        };
-                        let row_id_col = internal_col
-                            .generate_column_values(&internal_column_meta, data_block.num_rows());
-                        data_block.add_column(row_id_col);
-                    }
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
                     let func_ctx = self.ctx.get_function_context()?;
@@ -231,16 +204,7 @@ impl Processor for MutationSource {
                     };
 
                     if affect_rows != 0 {
-                        // Pop the row_id column
-                        if self.query_row_id_col {
-                            data_block.pop_columns(1);
-                        }
-
-                        let progress_values = ProgressValues {
-                            rows: affect_rows,
-                            bytes: 0,
-                        };
-                        self.ctx.get_write_progress().incr(&progress_values);
+                        self.update_mutation_status(affect_rows);
 
                         match self.action {
                             MutationAction::Deletion => {
@@ -304,12 +268,7 @@ impl Processor for MutationSource {
                         self.state = State::Output(self.ctx.get_partition(), DataBlock::empty());
                     }
                 } else {
-                    let progress_values = ProgressValues {
-                        rows: num_rows,
-                        // ignore the bytes.
-                        bytes: 0,
-                    };
-                    self.ctx.get_write_progress().incr(&progress_values);
+                    self.update_mutation_status(num_rows);
                     self.state = State::PerformOperator(data_block, fuse_part.location.clone());
                 }
             }
@@ -372,11 +331,7 @@ impl Processor for MutationSource {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 match Mutation::from_part(&part)? {
                     Mutation::MutationDeletedSegment(deleted_segment) => {
-                        let progress_values = ProgressValues {
-                            rows: deleted_segment.summary.row_count as usize,
-                            bytes: 0,
-                        };
-                        self.ctx.get_write_progress().incr(&progress_values);
+                        self.update_mutation_status(deleted_segment.summary.row_count as usize);
                         self.state = State::Output(
                             self.ctx.get_partition(),
                             DataBlock::empty_with_meta(Box::new(
@@ -401,11 +356,7 @@ impl Processor for MutationSource {
                             && matches!(self.action, MutationAction::Deletion)
                         {
                             // whole block deletion.
-                            let progress_values = ProgressValues {
-                                rows: fuse_part.nums_rows,
-                                bytes: 0,
-                            };
-                            self.ctx.get_write_progress().incr(&progress_values);
+                            self.update_mutation_status(fuse_part.nums_rows);
                             let meta = Box::new(SerializeDataMeta::SerializeBlock(
                                 SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
                             ));
@@ -458,5 +409,26 @@ impl Processor for MutationSource {
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+impl MutationSource {
+    fn update_mutation_status(&self, num_rows: usize) {
+        let progress_values = ProgressValues {
+            rows: num_rows,
+            bytes: 0,
+        };
+        self.ctx.get_write_progress().incr(&progress_values);
+
+        let (update_rows, deleted_rows) = if self.action == MutationAction::Update {
+            (num_rows as u64, 0)
+        } else {
+            (0, num_rows as u64)
+        };
+        self.ctx.add_mutation_status(MutationStatus {
+            insert_rows: 0,
+            update_rows,
+            deleted_rows,
+        });
     }
 }

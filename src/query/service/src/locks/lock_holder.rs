@@ -24,17 +24,15 @@ use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::lock::Lock;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
-use databend_common_meta_app::schema::LockKey;
-use databend_common_meta_app::tenant::Tenant;
+use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_storages_fuse::operations::set_backoff;
 use futures::future::select;
 use futures::future::Either;
-use minitrace::func_name;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -48,44 +46,36 @@ pub struct LockHolder {
 
 impl LockHolder {
     #[async_backtrace::framed]
-    pub async fn start<T: Lock + ?Sized>(
+    pub async fn start(
         self: &Arc<Self>,
         query_id: String,
         catalog: Arc<dyn Catalog>,
-        lock: &T,
-        revision: u64,
-        expire_secs: u64,
-    ) -> Result<()> {
-        let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
+        req: CreateLockRevReq,
+    ) -> Result<u64> {
+        let lock_key = req.lock_key.clone();
+        let ttl = req.ttl;
+        let sleep_range = (ttl / 3)..=(ttl * 2 / 3);
 
-        let tenant_name = lock.tenant_name();
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-        let lock_key = LockKey::Table {
-            tenant: tenant.clone(),
-            table_id: lock.get_table_id(),
-        };
+        // get a new table lock revision.
+        let res = catalog.create_lock_revision(req).await?;
+        let revision = res.revision;
+        // metrics.
+        record_created_lock_nums(lock_key.lock_type().to_string(), lock_key.get_table_id(), 1);
 
         let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
-        let extend_table_lock_req =
-            ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, false);
-
-        self.try_extend_lock(
-            catalog.clone(),
-            extend_table_lock_req.clone(),
-            Some(Duration::from_millis(expire_secs * 1000)),
-        )
-        .await?;
+        let extend_table_lock_req = ExtendLockRevReq::new(lock_key.clone(), revision, ttl, false);
 
         GlobalIORuntime::instance().spawn({
             let self_clone = self.clone();
             async move {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());
                 while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
-                    let mills = {
+                    let rand_sleep_duration = {
                         let mut rng = thread_rng();
                         rng.gen_range(sleep_range.clone())
                     };
-                    let sleep_range = Box::pin(sleep(Duration::from_millis(mills)));
+
+                    let sleep_range = Box::pin(sleep(rand_sleep_duration));
                     match select(notified, sleep_range).await {
                         Either::Left((_, _)) => {
                             // shutdown.
@@ -97,7 +87,7 @@ impl LockHolder {
                                 .try_extend_lock(
                                     catalog.clone(),
                                     extend_table_lock_req.clone(),
-                                    Some(Duration::from_millis(expire_secs * 1000 - mills)),
+                                    Some(ttl - rand_sleep_duration),
                                 )
                                 .await
                             {
@@ -113,16 +103,11 @@ impl LockHolder {
                     }
                 }
 
-                Self::try_delete_lock(
-                    catalog,
-                    delete_table_lock_req,
-                    Some(Duration::from_millis(expire_secs * 1000)),
-                )
-                .await
+                Self::try_delete_lock(catalog, delete_table_lock_req, Some(ttl)).await
             }
         });
 
-        Ok(())
+        Ok(revision)
     }
 
     pub fn shutdown(&self) {

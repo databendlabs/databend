@@ -14,12 +14,13 @@
 
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
 
 use crate::schema::catalog::catalog_info::CatalogId;
+use crate::schema::catalog_id_ident;
+use crate::schema::CatalogIdIdent;
 use crate::schema::CatalogNameIdent;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -96,6 +97,13 @@ impl IcebergCatalogOption {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShareCatalogOption {
+    pub provider: String,
+    pub share_name: String,
+    pub share_endpoint: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IcebergRestCatalogOption {
     pub uri: String,
     pub warehouse: String,
@@ -157,7 +165,7 @@ mod catalog_info {
     impl From<crate::schema::CatalogIdIdent> for CatalogId {
         fn from(value: crate::schema::CatalogIdIdent) -> Self {
             Self {
-                catalog_id: value.catalog_id(),
+                catalog_id: *value.catalog_id(),
             }
         }
     }
@@ -181,6 +189,18 @@ impl Default for CatalogInfo {
 }
 
 impl CatalogInfo {
+    pub fn new(
+        name_ident: CatalogNameIdent,
+        id: catalog_id_ident::CatalogId,
+        meta: CatalogMeta,
+    ) -> Self {
+        CatalogInfo {
+            id: CatalogIdIdent::new_generic(name_ident.tenant(), id).into(),
+            name_ident: name_ident.into(),
+            meta,
+        }
+    }
+
     /// Get the catalog type via catalog info.
     pub fn catalog_type(&self) -> CatalogType {
         self.meta.catalog_option.catalog_type()
@@ -252,25 +272,6 @@ impl Display for DropCatalogReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropCatalogReply {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GetCatalogReq {
-    pub inner: CatalogNameIdent,
-}
-
-impl Deref for GetCatalogReq {
-    type Target = CatalogNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl GetCatalogReq {
-    pub fn new(ident: CatalogNameIdent) -> GetCatalogReq {
-        GetCatalogReq { inner: ident }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListCatalogReq {

@@ -195,7 +195,7 @@ impl SuggestedBackgroundTasksSource {
         info!(
             background = true,
             tenant = ctx.get_tenant().tenant_name().to_string();
-            "list all lsuggestions"
+            "list all suggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await
     }
@@ -241,7 +241,6 @@ impl SuggestedBackgroundTasksSource {
 impl AsyncSource for SuggestedBackgroundTasksSource {
     const NAME: &'static str = "suggested_background_tasks";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.done {

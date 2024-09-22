@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -19,11 +20,12 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::base::OrderedFloat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
+use num_traits::float::FloatCore;
 use num_traits::NumCast;
-use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -215,6 +217,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+
+    #[inline(always)]
+    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
+        left.cmp(&right)
     }
 
     #[inline(always)]
@@ -561,6 +568,14 @@ impl NumberScalar {
             NumberScalar::Float64(value) => Some(value.into_inner()),
             _ => None,
         }
+    }
+
+    pub fn to_f64(&self) -> F64 {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => (*num as f64).into(),
+            NumberScalar::Float32(num) => (num.into_inner() as f64).into(),
+            NumberScalar::Float64(num) => *num,
+        })
     }
 }
 

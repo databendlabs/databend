@@ -7,8 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-arrow-cast = { workspace = true }
-arrow-schema = { workspace = true, features = ["serde"] }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }

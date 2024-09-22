@@ -1,0 +1,141 @@
+statement ok
+set max_block_size = 1;
+
+statement ok
+CREATE or replace TABLE default.issue2549 AS SELECT * FROM (VALUES
+	(0, 1, 614),
+	(1, 1, null),
+	(2, 1, null),
+	(3, 1, 639),
+	(4, 1, 2027)
+) tbl(id, user_id, order_id);
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  LAST_VALUE (order_id) IGNORE NULLS over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM default.issue2549 order by 1,2,3,4
+----
+0	1	614	NULL
+1	1	NULL	614
+2	1	NULL	614
+3	1	639	614
+4	1	2027	639
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  FIRST_VALUE (order_id) IGNORE NULLS over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN 1 PRECEDING AND UNBOUNDED FOLLOWING
+  ) AS last_order_id
+FROM default.issue2549 order by 1,2,3,4
+----
+0	1	614	614
+1	1	NULL	614
+2	1	NULL	639
+3	1	639	639
+4	1	2027	639
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  NTH_VALUE (order_id, 2) IGNORE NULLS over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM default.issue2549 order by 1,2,3,4
+----
+0	1	614	NULL
+1	1	NULL	NULL
+2	1	NULL	NULL
+3	1	639	NULL
+4	1	2027	639
+
+
+statement ok
+unset max_block_size;
+
+statement ok
+CREATE or replace TABLE default.issue2549 AS SELECT * FROM (VALUES
+	(0, 1, 614),
+	(1, 1, null),
+	(2, 1, null),
+	(3, 1, 639),
+	(4, 1, 2027)
+) tbl(id, user_id, order_id);
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  LAST_VALUE (order_id) IGNORE NULLS over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM default.issue2549 order by 1,2,3,4
+----
+0	1	614	NULL
+1	1	NULL	614
+2	1	NULL	614
+3	1	639	614
+4	1	2027	639
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  FIRST_VALUE (order_id) IGNORE NULLS over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN 1 PRECEDING AND UNBOUNDED FOLLOWING
+  ) AS last_order_id
+FROM default.issue2549 order by 1,2,3,4
+----
+0	1	614	614
+1	1	NULL	614
+2	1	NULL	639
+3	1	639	639
+4	1	2027	639
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  NTH_VALUE (order_id, 2) IGNORE NULLS over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM default.issue2549 order by 1,2,3,4
+----
+0	1	614	NULL
+1	1	NULL	NULL
+2	1	NULL	NULL
+3	1	639	NULL
+4	1	2027	639
+
+statement error 1065
+SELECT  id,  user_id,  order_id,  sum (order_id) IGNORE NULLS over (    PARTITION BY user_id    ORDER BY id    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING  ) AS last_order_id FROM default.issue2549
+
+statement error 1065
+SELECT  id,  user_id,  order_id,  lag(order_id, 1) IGNORE NULLS over (    PARTITION BY user_id    ORDER BY id    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING  ) AS last_order_id FROM default.issue2549
+
+statement ok
+drop TABLE default.issue2549

@@ -21,8 +21,8 @@ use databend_common_expression as ex;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::storage::StorageParams;
+use fastrace::func_name;
 use maplit::btreemap;
-use minitrace::func_name;
 
 use crate::common;
 

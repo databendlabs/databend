@@ -23,13 +23,8 @@ pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
     match (semver, git_sha, rustc_semver, timestamp) {
-        #[cfg(not(feature = "simd"))]
         (Some(semver), Some(git_sha), Some(rustc_semver), Some(timestamp)) => {
             format!("{semver}-{git_sha}(rust-{rustc_semver}-{timestamp})")
-        }
-        #[cfg(feature = "simd")]
-        (Some(semver), Some(git_sha), Some(rustc_semver), Some(timestamp)) => {
-            format!("{semver}-{git_sha}-simd(rust-{rustc_semver}-{timestamp})")
         }
         _ => String::new(),
     }

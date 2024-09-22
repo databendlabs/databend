@@ -146,14 +146,14 @@ impl Debug for FlightSerializedMeta {
 }
 
 impl serde::Serialize for FlightSerializedMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         unimplemented!("Unimplemented serialize FlightSerializedMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for FlightSerializedMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         unimplemented!("Unimplemented deserialize FlightSerializedMeta")
     }
@@ -176,7 +176,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Error;
     const NAME: &'static str = "TransformExchangeGroupBySerializer";
 
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
+    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
             if block.is_empty() && block.get_meta().is_none() {
@@ -287,9 +287,9 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
             };
         }
 
-        Ok(DataBlock::empty_with_meta(FlightSerializedMeta::create(
-            serialized_blocks,
-        )))
+        Ok(vec![DataBlock::empty_with_meta(
+            FlightSerializedMeta::create(serialized_blocks),
+        )])
     }
 }
 

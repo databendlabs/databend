@@ -1,4 +1,13 @@
 statement ok
+DROP DATABASE IF EXISTS seq_db
+
+statement ok
+CREATE DATABASE seq_db
+
+statement ok
+USE seq_db
+
+statement ok
 DROP SEQUENCE IF EXISTS seq
 
 statement ok
@@ -33,6 +42,12 @@ INSERT INTO tmp1 values(nextval(seq));
 
 statement ok
 INSERT INTO tmp2 select nextval(seq) from numbers(2);
+
+query I
+select * from tmp2;
+----
+2
+3
 
 statement ok
 INSERT INTO tmp2 values(nextval(seq)), (1024);
@@ -116,3 +131,6 @@ DROP TABLE IF EXISTS tmp2;
 
 statement ok
 DROP TABLE IF EXISTS tmp3;
+
+statement ok
+DROP DATABASE seq_db;

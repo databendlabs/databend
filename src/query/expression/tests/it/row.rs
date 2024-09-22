@@ -19,6 +19,7 @@ use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::converts::arrow2::set_validities;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::*;
@@ -32,7 +33,6 @@ use ethnum::i256;
 use itertools::Itertools;
 use jsonb::convert_to_comparable;
 use jsonb::parse_value;
-use ordered_float::OrderedFloat;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
@@ -409,10 +409,7 @@ fn test_variant() {
         }
         builder.commit_row();
     }
-    let col = Column::Nullable(Box::new(NullableColumn {
-        column: Column::Variant(builder.build()),
-        validity: validity.into(),
-    }));
+    let col = NullableColumn::new_column(Column::Variant(builder.build()), validity.into());
 
     let converter =
         RowConverter::new(vec![SortField::new(DataType::Variant.wrap_nullable())]).unwrap();

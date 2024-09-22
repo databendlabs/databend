@@ -203,7 +203,7 @@ mod prometheus_parse {
 
     fn parse_golang_float(s: &str) -> Result<f64, <f64 as std::str::FromStr>::Err> {
         match s.to_lowercase().as_str() {
-            "nan" => Ok(std::f64::NAN), // f64::parse doesn't recognize 'nan'
+            "nan" => Ok(f64::NAN), // f64::parse doesn't recognize 'nan'
             "+inf" | "inf" => Ok(f64::MAX),
             "-inf" => Ok(f64::MIN),
             s => s.parse::<f64>(),

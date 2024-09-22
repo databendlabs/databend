@@ -22,16 +22,18 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_fuse::TableContext;
-use databend_common_storages_share::update_share_table_info;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_bloom_index_columns;
 use super::interpreter_table_create::is_valid_create_opt;
+use super::interpreter_table_create::is_valid_data_retention_period;
 use super::interpreter_table_create::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -66,20 +68,37 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        // check data_retention_period
+        is_valid_data_retention_period(&self.plan.set_options)?;
+
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
-        if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
+        if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_STORAGE_FORMAT
             )));
         }
-        if self.plan.set_options.get(OPT_KEY_DATABASE_ID).is_some() {
+        if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_DATABASE_ID
+            )));
+        }
+        if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_TEMP_PREFIX
+            )));
+        }
+        if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_CLUSTER_TYPE
             )));
         }
         for table_option in self.plan.set_options.iter() {
@@ -124,19 +143,9 @@ impl Interpreter for SetOptionsInterpreter {
             options: options_map,
         };
 
-        let resp = catalog
+        let _resp = catalog
             .upsert_table_option(&self.ctx.get_tenant(), database, req)
             .await?;
-        if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-            update_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &share_name_vec,
-                db_id,
-                &share_table_info,
-            )
-            .await?;
-        }
         Ok(PipelineBuildResult::create())
     }
 }

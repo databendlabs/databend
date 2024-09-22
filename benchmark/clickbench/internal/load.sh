@@ -17,3 +17,14 @@ for((i=1;i<=1000;i++));
 do
 	echo "create table if not exists test2.t_$i(id int comment 'tes\t', c2 string comment 'c2comment')" | bendsql
 done
+
+echo "create database test3" | bendsql
+for((i=1;i<=1000;i++));
+do
+	echo "create table if not exists test3.t_$i(id int comment 'tes\t', c2 string comment 'c2comment')" | bendsql
+done
+
+for((i=1;i<=500;i++));
+do
+	echo "drop table if exists test3.t_$i;" | bendsql
+done

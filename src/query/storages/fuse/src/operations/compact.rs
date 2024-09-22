@@ -21,13 +21,15 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -156,7 +158,7 @@ impl FuseTable {
                     )
                     .await?;
 
-                    Result::<_, ErrorCode>::Ok(partitions)
+                    Result::<_>::Ok(partitions)
                 })?;
 
                 let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
@@ -182,6 +184,7 @@ impl FuseTable {
                 ctx.get_function_context()?,
                 self.schema_with_stream(),
                 self.get_table_info().ident.seq,
+                false,
                 false,
             )?)
         } else {
@@ -221,7 +224,15 @@ impl FuseTable {
         if is_lazy {
             pipeline.try_resize(1)?;
             pipeline.add_async_accumulating_transformer(|| {
-                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact)
+                TableMutationAggregator::create(
+                    self,
+                    ctx.clone(),
+                    vec![],
+                    vec![],
+                    vec![],
+                    Statistics::default(),
+                    MutationKind::Compact,
+                )
             });
         }
         Ok(())
@@ -261,5 +272,15 @@ impl FuseTable {
             num_segment_limit,
             num_block_limit,
         }))
+    }
+
+    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
+        self.schema_with_stream()
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .map(|(i, _)| i)
+            .collect::<Vec<FieldIndex>>()
     }
 }

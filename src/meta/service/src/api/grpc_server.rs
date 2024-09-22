@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::AnyError;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::sync::oneshot::Receiver;
 use databend_common_base::base::tokio::sync::oneshot::Sender;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Stoppable;
@@ -25,9 +25,8 @@ use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
-use futures::future::Either;
+use fastrace::prelude::*;
 use log::info;
-use minitrace::prelude::*;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
@@ -40,8 +39,7 @@ pub struct GrpcServer {
     conf: Config,
     pub(crate) meta_node: Arc<MetaNode>,
     join_handle: Option<JoinHandle<()>>,
-    stop_tx: Option<Sender<()>>,
-    fin_rx: Option<Receiver<()>>,
+    stop_grpc_tx: Option<Sender<()>>,
 }
 
 impl GrpcServer {
@@ -50,8 +48,7 @@ impl GrpcServer {
             conf,
             meta_node,
             join_handle: None,
-            stop_tx: None,
-            fin_rx: None,
+            stop_grpc_tx: None,
         }
     }
 
@@ -65,9 +62,7 @@ impl GrpcServer {
         // For sending signal when server started.
         let (started_tx, started_rx) = oneshot::channel::<()>();
         // For receive stop signal.
-        let (stop_tx, stop_rx) = oneshot::channel::<()>();
-        // For sending the signal when server finished shutting down.
-        let (fin_tx, fin_rx) = oneshot::channel::<()>();
+        let (stop_grpc_tx, stop_rx) = oneshot::channel::<()>();
 
         let reflect_srv = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
@@ -91,7 +86,7 @@ impl GrpcServer {
 
         let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
 
-        info!("gRPC addr: {}", addr);
+        info!("start gRPC listening: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());
         let grpc_srv = MetaServiceServer::new(grpc_impl)
@@ -111,16 +106,7 @@ impl GrpcServer {
                     })
                     .await;
 
-                // gRPC server quit. Starting to shutdown meta node.
-
-                let _ = meta_node.stop().await;
-                let send_fin_res = fin_tx.send(());
-                info!(
-                    "metasrv sending signal of finishing shutdown {}, res: {:?}",
-                    addr, send_fin_res
-                );
-
-                info!("metasrv returned res: {:?}", res);
+                info!("grpc task returned res: {:?}", res);
             }
             .in_span(Span::enter_with_local_parent("spawn-grpc")),
         );
@@ -130,43 +116,26 @@ impl GrpcServer {
             .expect("maybe address already in use, try to use another port");
 
         self.join_handle = Some(j);
-        self.stop_tx = Some(stop_tx);
-        self.fin_rx = Some(fin_rx);
+        self.stop_grpc_tx = Some(stop_grpc_tx);
 
         Ok(())
     }
 
-    async fn do_stop(&mut self, force: Option<tokio::sync::broadcast::Receiver<()>>) {
-        if let Some(tx) = self.stop_tx.take() {
-            let _ = tx.send(());
+    async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
+        if let Some(stop_grpc_tx) = self.stop_grpc_tx.take() {
+            info!("Sending stop signal to gRPC server");
+            let _ = stop_grpc_tx.send(());
         }
 
         if let Some(j) = self.join_handle.take() {
-            if let Some(mut f) = force {
-                let f = Box::pin(f.recv());
-                let j = Box::pin(j);
-
-                match futures::future::select(f, j).await {
-                    Either::Left((_x, j)) => {
-                        info!("received force shutdown signal");
-                        j.abort();
-                    }
-                    Either::Right(_) => {
-                        info!("Done: graceful shutdown");
-                    }
-                }
-            } else {
-                info!("no force signal, block waiting for join handle for ever");
-                let res = j.await;
-                info!("Done: waiting for join handle: res: {:?}", res);
-            }
+            info!("Waiting for gRPC server stop");
+            let x = tokio::time::timeout(Duration::from_millis(1_000), j).await;
+            info!("Done: waiting for grpc stop: res: {:?}", x);
         }
 
-        if let Some(rx) = self.fin_rx.take() {
-            info!("block waiting for fin_rx");
-            let res = rx.await;
-            info!("Done: block waiting for fin_rx: res: {:?}", res);
-        }
+        info!("Waiting for meta_node stop");
+        let x = tokio::time::timeout(Duration::from_millis(1_000), self.meta_node.stop()).await;
+        info!("Done: waiting for meta_node stop: res: {:?}", x);
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {

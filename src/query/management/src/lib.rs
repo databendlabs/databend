@@ -27,14 +27,18 @@ mod stage;
 pub mod udf;
 mod user;
 
+mod client_session;
 pub mod errors;
+mod procedure;
 
+pub use client_session::ClientSessionMgr;
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use connection::ConnectionMgr;
 pub use file_format::FileFormatMgr;
 pub use network_policy::NetworkPolicyMgr;
 pub use password_policy::PasswordPolicyMgr;
+pub use procedure::ProcedureMgr;
 pub use quota::QuotaApi;
 pub use quota::QuotaMgr;
 pub use role::RoleApi;

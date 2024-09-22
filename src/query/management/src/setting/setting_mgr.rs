@@ -22,13 +22,12 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::IntoSeqV;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 
 use crate::setting::SettingApi;
 
@@ -62,7 +61,7 @@ impl SettingMgr {
 #[async_trait::async_trait]
 impl SettingApi for SettingMgr {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn set_setting(&self, setting: UserSetting) -> Result<u64> {
         // Upsert.
         let seq = MatchSeq::GE(0);
@@ -78,7 +77,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_settings(&self) -> Result<Vec<UserSetting>> {
         let prefix = self.setting_prefix();
         let values = self.kv_api.prefix_list_kv(&prefix).await?;
@@ -92,7 +91,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>> {
         let key = self.setting_key(name);
         let res = self.kv_api.get_kv(&key).await?;
@@ -102,7 +101,7 @@ impl SettingApi for SettingMgr {
         })?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => Ok(seq_value.try_map(|d| d.try_into())?),
             Err(_) => Err(ErrorCode::UnknownVariable(format!(
                 "Setting '{}' does not exist.",
                 name
@@ -111,7 +110,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn try_drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = self.setting_key(name);
         let _res = self

@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
@@ -40,7 +39,6 @@ pub trait AsyncSink: Send {
         Ok(())
     }
 
-    #[unboxed_simple]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool>;
 
     fn details_status(&self) -> Option<String> {

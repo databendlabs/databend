@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
 use chrono_tz::Tz;
-use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
@@ -33,7 +33,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
+use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -91,6 +95,7 @@ pub struct Binder {
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
     /// Use `IndexMap` because need to keep the insertion order
     /// Then wrap materialized ctes to main plan.
     pub ctes_map: Box<IndexMap<String, CteInfo>>,
@@ -100,6 +105,8 @@ pub struct Binder {
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+
+    pub enable_result_cache: bool,
 }
 
 impl<'a> Binder {
@@ -110,6 +117,10 @@ impl<'a> Binder {
         metadata: MetadataRef,
     ) -> Self {
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        let enable_result_cache = ctx
+            .get_settings()
+            .get_enable_query_result_cache()
+            .unwrap_or_default();
         Binder {
             ctx,
             dialect,
@@ -118,14 +129,16 @@ impl<'a> Binder {
             metadata,
             m_cte_bound_ctx: Default::default(),
             m_cte_bound_s_expr: Default::default(),
+            m_cte_materialized_indexes: Default::default(),
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            enable_result_cache,
         }
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let start = Instant::now();
         self.ctx.set_status_info("binding");
@@ -155,19 +168,18 @@ impl<'a> Binder {
                         continue;
                     }
                     let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-                    let left_output_columns = cte_info.columns.clone();
+                    let materialized_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx })),
-                        Arc::new(cte_s_expr.clone()),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: self.m_cte_materialized_indexes.clone() })),
                         Arc::new(s_expr),
+                        Arc::new(cte_s_expr.clone()),
                     );
                 }
 
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    Some(format_statement(stmt.clone())?)
+                    Some(stmt.to_string())
                 } else {
                     None
                 };
@@ -185,9 +197,9 @@ impl<'a> Binder {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze { query } => {
+            Statement::ExplainAnalyze {partial, query } => {
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { plan: Box::new(plan) }
+                Plan::ExplainAnalyze { partial: *partial, plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { show_options } => {
@@ -224,6 +236,7 @@ impl<'a> Binder {
             Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
             Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
             Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
+            Statement::ShowVariables { show_options } => self.bind_show_variables(bind_context, show_options).await?,
             Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
             Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
@@ -270,7 +283,11 @@ impl<'a> Binder {
             Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
-
+            // Dictionaries
+            Statement::CreateDictionary(stmt) => self.bind_create_dictionary(stmt).await?,
+            Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
+            Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
+            Statement::ShowDictionaries { show_options: _ } => todo!(),
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -449,17 +466,13 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetVariable {
-                is_global,
-                variable,
-                value,
-            } => {
-                self.bind_set_variable(bind_context, *is_global, variable, value)
+            Statement::SetStmt {set_type, identifiers, values } => {
+                self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetVariable(stmt) => {
-                self.bind_unset_variable(bind_context, stmt)
+            Statement::UnSetStmt{unset_type, identifiers } => {
+                self.bind_unset(bind_context, *unset_type, identifiers)
                     .await?
             }
 
@@ -478,43 +491,6 @@ impl<'a> Binder {
                     .await?
             }
 
-            // share statements
-            Statement::CreateShareEndpoint(stmt) => {
-                self.bind_create_share_endpoint(stmt).await?
-            }
-            Statement::ShowShareEndpoint(stmt) => {
-                self.bind_show_share_endpoint(stmt).await?
-            }
-            Statement::DropShareEndpoint(stmt) => {
-                self.bind_drop_share_endpoint(stmt).await?
-            }
-            Statement::CreateShare(stmt) => {
-                self.bind_create_share(stmt).await?
-            }
-            Statement::DropShare(stmt) => {
-                self.bind_drop_share(stmt).await?
-            }
-            Statement::GrantShareObject(stmt) => {
-                self.bind_grant_share_object(stmt).await?
-            }
-            Statement::RevokeShareObject(stmt) => {
-                self.bind_revoke_share_object(stmt).await?
-            }
-            Statement::AlterShareTenants(stmt) => {
-                self.bind_alter_share_accounts(stmt).await?
-            }
-            Statement::DescShare(stmt) => {
-                self.bind_desc_share(stmt).await?
-            }
-            Statement::ShowShares(stmt) => {
-                self.bind_show_shares(stmt).await?
-            }
-            Statement::ShowObjectGrantPrivileges(stmt) => {
-                self.bind_show_object_grant_privileges(stmt).await?
-            }
-            Statement::ShowGrantsOfShare(stmt) => {
-                self.bind_show_grants_of_share(stmt).await?
-            }
             Statement::CreateDatamaskPolicy(stmt) => {
                 self.bind_create_data_mask_policy(stmt).await?
             }
@@ -618,6 +594,34 @@ impl<'a> Binder {
                 self.bind_set_priority(priority, object_id).await?
             },
             Statement::System(stmt) => self.bind_system(stmt).await?,
+            Statement::CreateProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_create_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+            }
+            }
+            Statement::DropProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_drop_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
+            }  }
+            Statement::ShowProcedures { show_options } => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_show_procedures(bind_context, show_options).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
+            }  }
+            Statement::DescProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_desc_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+            }  }
+            Statement::CallProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_call_procedure(bind_context, stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
+                }
+                }
         };
 
         match plan.kind() {
@@ -754,6 +758,21 @@ impl<'a> Binder {
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
+    }
+
+    pub(crate) fn check_allowed_scalar_expr_with_udf(&self, scalar: &ScalarExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
     }
 
     pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
@@ -893,22 +912,50 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    pub(crate) fn check_allowed_scalar_expr_with_subquery(
-        &self,
-        scalar: &ScalarExpr,
-    ) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-                    | ScalarExpr::UDFCall(_)
-            )
-        };
+    pub(crate) fn add_internal_column_into_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if bind_context.bound_internal_columns.is_empty() {
+            return Ok(s_expr);
+        }
+        // check inverted index license
+        if !bind_context.inverted_index_map.is_empty() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
+        let bound_internal_columns = &bind_context.bound_internal_columns;
+        let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
+        let mut s_expr = s_expr;
 
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut has_score = false;
+        let mut has_matched = false;
+        for column_id in bound_internal_columns.keys() {
+            if *column_id == SEARCH_SCORE_COLUMN_ID {
+                has_score = true;
+            } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
+                has_matched = true;
+            }
+        }
+        if has_score && !has_matched {
+            return Err(ErrorCode::SemanticError(
+                "score function must run with match or query function".to_string(),
+            ));
+        }
+
+        for (table_index, column_index) in bound_internal_columns.values() {
+            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
+                i.has_score = has_score;
+                i
+            });
+            s_expr = SExpr::add_internal_column_index(
+                &s_expr,
+                *table_index,
+                *column_index,
+                &inverted_index,
+            );
+        }
+        Ok(s_expr)
     }
 }

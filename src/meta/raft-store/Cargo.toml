@@ -30,6 +30,7 @@ databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
@@ -37,7 +38,6 @@ hostname = "0.3.1"
 itertools = { workspace = true }
 log = { workspace = true }
 maplit = "1.0.2"
-minitrace = { workspace = true }
 num = "0.4.0"
 openraft = { workspace = true }
 ordq = { workspace = true }

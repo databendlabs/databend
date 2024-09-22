@@ -22,14 +22,13 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
-use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
 use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
-use crate::storages::fuse::do_vacuum_drop_tables;
 use crate::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
-
+use crate::storages::fuse::vacuum_drop_tables;
 pub struct RealVacuumHandler {}
 
 #[async_trait::async_trait]
@@ -49,8 +48,8 @@ impl VacuumHandler for RealVacuumHandler {
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
-        do_vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
+    ) -> VacuumDropTablesResult {
+        vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
     }
 
     async fn do_vacuum_temporary_files(

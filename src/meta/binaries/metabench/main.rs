@@ -171,7 +171,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     let value = Operation::Update(node_key().as_bytes().to_vec());
 
     let res = client
-        .upsert_kv(UpsertKVReq::new(&node_key(), seq, value, None))
+        .upsert_kv(UpsertKVReq::new(node_key(), seq, value, None))
         .await;
 
     print_res(i, "upsert_kv", &res);
@@ -198,7 +198,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     print_res(i, "create_db", &res);
     let db_id = match res {
-        Ok(res) => res.db_id,
+        Ok(res) => *res.db_id,
         Err(_) => 0,
     };
 
@@ -238,6 +238,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             db_id,
             table_name: table_name(),
             tb_id: t.ident.table_id,
+            engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         })
         .await;
 

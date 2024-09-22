@@ -62,7 +62,7 @@ impl Interpreter for SystemActionInterpreter {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if self.proxy_to_cluster {
             let cluster = self.ctx.get_cluster();

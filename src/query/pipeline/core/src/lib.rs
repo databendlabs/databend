@@ -14,6 +14,7 @@
 
 #![feature(once_cell_try)]
 #![feature(variant_count)]
+#![feature(associated_type_defaults)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::useless_asref)]
 
@@ -28,6 +29,7 @@ mod pipeline_display;
 mod unsafe_cell_wrap;
 
 pub use finished_chain::always_callback;
+pub use finished_chain::basic_callback;
 pub use finished_chain::Callback;
 pub use finished_chain::ExecutionInfo;
 pub use finished_chain::FinishedCallbackChain;

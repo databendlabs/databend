@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
@@ -27,10 +29,21 @@ use crate::executor::PhysicalPlan;
 pub struct CommitSink {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub snapshot: Arc<TableSnapshot>,
+    pub snapshot: Option<Arc<TableSnapshot>>,
     pub table_info: TableInfo,
     pub mutation_kind: MutationKind,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
     pub deduplicated_label: Option<String>,
+
+    // Used for recluster.
+    pub recluster_info: Option<ReclusterInfoSideCar>,
+}
+
+// TODO refine this
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ReclusterInfoSideCar {
+    pub merged_blocks: Vec<Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_statistics: Statistics,
 }

@@ -25,11 +25,11 @@ use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use fastrace::func_path;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 use futures::StreamExt;
 use futures_util::future::Either;
-use minitrace::full_name;
-use minitrace::future::FutureExt;
-use minitrace::Span;
 use serde::Deserialize;
 use serde::Serialize;
 use tonic::metadata::AsciiMetadataKey;
@@ -57,7 +57,7 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn do_action<T, Res>(
         &mut self,
         path: &str,
@@ -135,7 +135,7 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn do_get(
         &mut self,
         query_id: &str,
@@ -195,7 +195,7 @@ impl FlightClient {
                 tx.close();
             }
         }
-        .in_span(Span::enter_with_local_parent(full_name!()));
+        .in_span(Span::enter_with_local_parent(func_path!()));
 
         databend_common_base::runtime::spawn(fut);
 
@@ -248,11 +248,11 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: Sender<Result<FlightData, Status>>,
+    tx: Sender<std::result::Result<FlightData, Status>>,
 }
 
 impl FlightSender {
-    pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
+    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
         FlightSender { tx }
     }
 
@@ -282,11 +282,13 @@ pub enum FlightExchange {
         notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     },
-    Sender(Sender<Result<FlightData, Status>>),
+    Sender(Sender<std::result::Result<FlightData, Status>>),
 }
 
 impl FlightExchange {
-    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
+    pub fn create_sender(
+        sender: Sender<std::result::Result<FlightData, Status>>,
+    ) -> FlightExchange {
         FlightExchange::Sender(sender)
     }
 

@@ -91,11 +91,11 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 1.64
+├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t.number (#0)]
 │   ├── filters: [t.number (#0) > 1]
-│   ├── estimated rows: 0.20
+│   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t
 │       ├── output columns: [number (#0)]
@@ -109,7 +109,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: []
     ├── filters: [t1.number (#1) > 1]
-    ├── estimated rows: 8.18
+    ├── estimated rows: 8.00
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [number (#1)]
@@ -242,7 +242,7 @@ HashJoin
 ├── Filter(Build)
 │   ├── output columns: [a.x (#0)]
 │   ├── filters: [is_true(a.x (#0) > 42)]
-│   ├── estimated rows: 3.00
+│   ├── estimated rows: 2.67
 │   └── TableScan
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
@@ -256,7 +256,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [b.x (#1), b.y (#2)]
     ├── filters: [is_true(b.x (#1) > 42)]
-    ├── estimated rows: 3.20
+    ├── estimated rows: 3.00
     └── TableScan
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]
@@ -277,11 +277,11 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 1.21
+├── estimated rows: 1.17
 ├── Filter(Build)
 │   ├── output columns: [a.x (#0)]
 │   ├── filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)]
-│   ├── estimated rows: 1.75
+│   ├── estimated rows: 1.33
 │   └── TableScan
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
@@ -295,7 +295,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [b.x (#1), b.y (#2)]
     ├── filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)]
-    ├── estimated rows: 2.08
+    ├── estimated rows: 1.75
     └── TableScan
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]
@@ -311,39 +311,39 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
-├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
 ├── join type: INNER
-├── build keys: [a.x (#0)]
-├── probe keys: [b.x (#1)]
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 3.00
+├── estimated rows: 3.56
 ├── Filter(Build)
-│   ├── output columns: [a.x (#0)]
-│   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
-│   ├── estimated rows: 3.00
+│   ├── output columns: [b.x (#1), b.y (#2)]
+│   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
+│   ├── estimated rows: 2.67
 │   └── TableScan
-│       ├── table: default.default.onecolumn
-│       ├── output columns: [x (#0)]
+│       ├── table: default.default.twocolumn
+│       ├── output columns: [x (#1), y (#2)]
 │       ├── read rows: 4
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── output columns: [b.x (#1), b.y (#2)]
-    ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-    ├── estimated rows: 3.20
+    ├── output columns: [a.x (#0)]
+    ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
+    ├── estimated rows: 2.67
     └── TableScan
-        ├── table: default.default.twocolumn
-        ├── output columns: [x (#1), y (#2)]
+        ├── table: default.default.onecolumn
+        ├── output columns: [x (#0)]
         ├── read rows: 4
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
+        ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
         └── estimated rows: 4.00
 
 # the following cases won't be converted to inner join
@@ -354,7 +354,7 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 Filter
 ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
 ├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
-├── estimated rows: 2.00
+├── estimated rows: 1.33
 └── HashJoin
     ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
     ├── join type: LEFT OUTER
@@ -392,11 +392,11 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 3.20
+├── estimated rows: 3.56
 ├── Filter(Build)
 │   ├── output columns: [a.x (#0)]
 │   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
-│   ├── estimated rows: 3.00
+│   ├── estimated rows: 2.67
 │   └── TableScan
 │       ├── table: default.default.onecolumn
 │       ├── output columns: [x (#0)]
@@ -410,7 +410,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [b.x (#1), b.y (#2)]
     ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-    ├── estimated rows: 3.20
+    ├── estimated rows: 2.67
     └── TableScan
         ├── table: default.default.twocolumn
         ├── output columns: [x (#1), y (#2)]

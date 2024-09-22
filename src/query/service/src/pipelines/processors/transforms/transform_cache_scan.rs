@@ -41,7 +41,7 @@ impl CacheSourceState {
 
 #[derive(Clone)]
 pub struct HashJoinCacheState {
-    initilized: bool,
+    initialized: bool,
     column_indexes: Vec<usize>,
     columns: Vec<Vec<BlockEntry>>,
     num_rows: Vec<usize>,
@@ -58,7 +58,7 @@ impl HashJoinCacheState {
         max_block_size: usize,
     ) -> Self {
         Self {
-            initilized: false,
+            initialized: false,
             column_indexes,
             columns: Vec::new(),
             num_rows: Vec::new(),
@@ -69,14 +69,14 @@ impl HashJoinCacheState {
         }
     }
     fn next_data_block(&mut self) -> Option<DataBlock> {
-        if !self.initilized {
+        if !self.initialized {
             self.num_cache_blocks = self.hash_join_state.num_build_chunks();
             for column_index in self.column_indexes.iter() {
                 let column = self.hash_join_state.get_cached_columns(*column_index);
                 self.columns.push(column);
             }
             self.num_rows = self.hash_join_state.get_cached_num_rows();
-            self.initilized = true;
+            self.initialized = true;
         }
 
         if let Some(data_block) = self.output_buffer.pop_front() {
@@ -124,7 +124,6 @@ impl TransformCacheScan {
 impl AsyncSource for TransformCacheScan {
     const NAME: &'static str = "TransformCacheScan";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let data_block = self.cache_source_state.next_data_block();

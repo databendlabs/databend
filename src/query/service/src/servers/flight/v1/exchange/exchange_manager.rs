@@ -28,19 +28,20 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlan;
+use fastrace::prelude::*;
 use log::warn;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
 use petgraph::Direction;
-use tokio::task::JoinHandle;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;
@@ -108,7 +109,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn init_query_env(
         &self,
         env: &QueryEnv,
@@ -313,7 +314,7 @@ impl DataExchangeManager {
     }
 
     // Execute query in background
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -328,7 +329,7 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -343,12 +344,12 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn handle_statistics_exchange(
         &self,
         id: String,
         target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -360,13 +361,13 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
         target: String,
         fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -387,7 +388,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -402,7 +403,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -469,16 +470,16 @@ impl DataExchangeManager {
                     Mutex::new(statistics_receiver);
 
                 // Interrupting the execution of finished callback if network error
-                build_res
-                    .main_pipeline
-                    .lift_on_finished(move |info: &ExecutionInfo| {
+                build_res.main_pipeline.set_on_finished(basic_callback(
+                    move |info: &ExecutionInfo| {
                         let query_id = ctx.get_id();
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
                         ctx.get_exchange_manager().on_finished_query(&query_id);
                         statistics_receiver.wait_shutdown()
-                    });
+                    },
+                ));
 
                 // Return if it‘s an error returned by another query node
                 build_res
@@ -574,7 +575,7 @@ impl QueryCoordinator {
     pub fn add_statistics_exchange(
         &mut self,
         target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         match self
             .statistics_exchanges
@@ -606,7 +607,7 @@ impl QueryCoordinator {
         &mut self,
         target: String,
         fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         self.fragment_exchanges.insert(
             (target, fragment, FLIGHT_SENDER),
@@ -951,7 +952,15 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            let pipeline_ctx = QueryContext::create_from(ctx);
+            let pipeline_ctx = QueryContext::create_from(ctx.clone());
+
+            unsafe {
+                pipeline_ctx
+                    .get_settings()
+                    .unchecked_apply_changes(ctx.get_settings().changes());
+
+                drop(ctx);
+            }
 
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,

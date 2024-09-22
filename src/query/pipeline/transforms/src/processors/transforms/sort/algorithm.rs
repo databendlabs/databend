@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::fmt;
+use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::binary_heap;
 use std::collections::BinaryHeap;
@@ -21,10 +22,14 @@ use std::ops::DerefMut;
 
 use super::loser_tree;
 use super::utils::find_bigger_child_of_root;
-use super::Cursor;
+use super::Cursor as RawCursor;
+use super::CursorOrder;
 use super::Rows;
 
+pub type Cursor<R> = RawCursor<R, ItemCursorOrder>;
+
 pub trait SortAlgorithm {
+    const SHOULD_PEEK_TOP2: bool;
     type Rows: Rows;
     type PeekMut<'b>: Deref<Target = Reverse<Cursor<Self::Rows>>> + DerefMut
     where Self: 'b;
@@ -56,6 +61,7 @@ pub trait SortAlgorithm {
 pub type HeapSort<R> = BinaryHeap<Reverse<Cursor<R>>>;
 
 impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
+    const SHOULD_PEEK_TOP2: bool = true;
     type Rows = R;
     type PeekMut<'a> = binary_heap::PeekMut<'a, Reverse<Cursor<R>>> where R:'a;
     fn with_capacity(capacity: usize) -> Self {
@@ -122,6 +128,7 @@ impl<R: Rows> fmt::Debug for LoserTreeSort<R> {
 }
 
 impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
+    const SHOULD_PEEK_TOP2: bool = false;
     type Rows = R;
     type PeekMut<'a> = LoserTreePeekMut<'a,Self::Rows>  where Self: 'a;
     fn with_capacity(capacity: usize) -> Self {
@@ -195,5 +202,18 @@ impl<R: Rows> DerefMut for LoserTreePeekMut<'_, R> {
 impl<R: Rows> Drop for LoserTreePeekMut<'_, R> {
     fn drop(&mut self) {
         self.0.tree.adjust_top();
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ItemCursorOrder;
+
+impl<R: Rows> CursorOrder<R> for ItemCursorOrder {
+    fn eq(a: &RawCursor<R, Self>, b: &RawCursor<R, Self>) -> bool {
+        a.current() == b.current()
+    }
+
+    fn cmp(a: &RawCursor<R, Self>, b: &RawCursor<R, Self>) -> Ordering {
+        a.current().cmp(&b.current())
     }
 }

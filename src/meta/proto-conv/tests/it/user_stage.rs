@@ -15,7 +15,7 @@
 //! Test StageInfo
 
 use databend_common_meta_app as mt;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 use crate::user_proto_conv::test_cos_stage_info;

@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
-use dashmap::DashMap;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_pipeline_core::InputError;
 use databend_common_storage::FileParseError;
 use databend_common_storage::FileStatus;
 
 pub struct ErrorHandler {
     pub on_error_mode: OnErrorMode,
     pub on_error_count: AtomicU64,
-    pub on_error_map: Option<Arc<DashMap<String, HashMap<u16, InputError>>>>,
 }
 
 impl ErrorHandler {

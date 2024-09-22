@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
@@ -36,8 +37,13 @@ use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
@@ -47,6 +53,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
+use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
@@ -57,6 +64,7 @@ pub enum StreamStatus {
 
 pub struct StreamTable {
     info: TableInfo,
+    max_batch_size: Option<u64>,
 
     source_table: Option<Arc<dyn Table>>,
 }
@@ -65,12 +73,21 @@ impl StreamTable {
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(StreamTable {
             info,
+            max_batch_size: None,
             source_table: None,
         }))
     }
 
-    pub fn create(info: TableInfo, source_table: Option<Arc<dyn Table>>) -> Arc<dyn Table> {
-        Arc::new(StreamTable { info, source_table })
+    pub fn create(
+        info: TableInfo,
+        max_batch_size: Option<u64>,
+        source_table: Option<Arc<dyn Table>>,
+    ) -> Arc<dyn Table> {
+        Arc::new(StreamTable {
+            info,
+            max_batch_size,
+            source_table,
+        })
     }
 
     pub fn description() -> StorageDescription {
@@ -116,6 +133,97 @@ impl StreamTable {
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(desc, self.offset()?)?;
         Ok(source)
+    }
+
+    pub async fn navigate_within_batch_limit(
+        &self,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        source_db_name: &str,
+        source_tb_name: &str,
+        batch_limit: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        let stream_desc = &self.info.desc;
+        let source = catalog
+            .get_table(tenant, source_db_name, source_tb_name)
+            .await
+            .map_err(|err| {
+                ErrorCode::IllegalStream(format!(
+                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                    source_db_name,
+                    source_tb_name,
+                    stream_desc,
+                    err.message()
+                ))
+            })?;
+
+        let Some(batch_limit) = batch_limit else {
+            return Ok(source);
+        };
+
+        let source_desc = &source.get_table_info().desc;
+        if source.get_table_info().ident.table_id != self.source_table_id()? {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Base table {} dropped, cannot read from stream {}",
+                source_desc, stream_desc,
+            )));
+        }
+
+        let fuse_table = FuseTable::try_from_table(source.as_ref())?;
+        fuse_table.check_changes_valid(source_desc, self.offset()?)?;
+
+        let (base_row_count, base_timsestamp) = if let Some(base_loc) = self.snapshot_loc() {
+            let (base, _) =
+                SnapshotsIO::read_snapshot(base_loc.to_string(), fuse_table.get_operator()).await?;
+            (base.summary.row_count, base.timestamp)
+        } else {
+            (0, None)
+        };
+
+        let Some(location) = fuse_table.snapshot_loc().await? else {
+            return Ok(source);
+        };
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
+        let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+        let mut snapshot_stream = reader.snapshot_history(
+            location,
+            snapshot_version,
+            fuse_table.meta_location_generator().clone(),
+        );
+
+        let mut instant = None;
+        let start = Instant::now();
+        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
+            if snapshot_with_version.0.timestamp <= base_timsestamp {
+                break;
+            }
+
+            let change_row_count = snapshot_with_version
+                .0
+                .summary
+                .row_count
+                .abs_diff(base_row_count);
+            instant = Some(snapshot_with_version);
+            if change_row_count <= batch_limit {
+                break;
+            }
+        }
+        log::info!(
+            "Stream {} traversed the snapshot history of source table {}, cost:{:?}",
+            stream_desc,
+            source_desc,
+            start.elapsed(),
+        );
+
+        if let Some((snapshot, format_version)) = instant {
+            Ok(fuse_table.load_table_by_snapshot(snapshot.as_ref(), format_version)?)
+        } else {
+            Ok(source)
+        }
+    }
+
+    pub fn max_batch_size(&self) -> Option<u64> {
+        self.max_batch_size
     }
 
     pub fn offset(&self) -> Result<u64> {
@@ -216,7 +324,7 @@ impl StreamTable {
             .await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
         let base_table = self.source_table(ctx).await?;
         let status = if base_table.get_table_info().ident.seq == self.offset()? {
@@ -230,6 +338,10 @@ impl StreamTable {
 
 #[async_trait::async_trait]
 impl Table for StreamTable {
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -264,7 +376,7 @@ impl Table for StreamTable {
         ]
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -275,7 +387,7 @@ impl Table for StreamTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -290,6 +402,7 @@ impl Table for StreamTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let table = self.source_table(ctx.clone()).await?;
@@ -310,20 +423,16 @@ impl Table for StreamTable {
     }
 
     #[async_backtrace::framed]
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
+        with_options: &str,
     ) -> Result<String> {
         let table = self.source_table(ctx).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_desc = if consume {
-            format!("{}.{} with consume", database_name, table_name)
-        } else {
-            format!("{}.{}", database_name, table_name)
-        };
+        let table_desc = format!("{database_name}.{table_name}{with_options}");
         fuse_table
             .get_changes_query(
                 &self.mode(),

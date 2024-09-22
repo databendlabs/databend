@@ -389,15 +389,30 @@ statement ok
 DROP TABLE IF EXISTS d
 
 statement ok
-create table d(value decimal(10, 2))
+create table d(a decimal(10, 2), b string, c int, d variant, e array(string))
 
 statement ok
-insert into d values(20), (10)
+insert into d values
+    (20, 'abc', null, '{"k":"v"}', ['a','b']),
+    (10, 'de', 100, 'null', []),
+    (4.23, null, 200, '"uvw"', ['x','y']),
+    (5.99, 'xyz', 300, '[1,2,3]', ['z'])
+
 
 query F
-select stddev_samp(value) from d;
+select stddev_samp(a) from d;
 ----
-7.0710678118654755
+7.055988000745655
+
+query TTTTT
+select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
+----
+[20.0,10.0,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
+
+query TTTTT
+select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json_object_agg(b, e), json_object_agg(b, 'a') from d
+----
+{"abc":20.0,"de":10.0,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
 
 statement ok
 DROP TABLE d

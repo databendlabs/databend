@@ -25,7 +25,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_sharing::ShareEndpointManager;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
@@ -35,7 +34,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_cache::CacheManager;
 
 use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
@@ -46,6 +45,7 @@ use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
@@ -107,6 +107,7 @@ impl GlobalServices {
 
         QueriesQueueManager::init(config.query.max_running_queries as usize)?;
         HttpQueryManager::init(config).await?;
+        ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
@@ -133,7 +134,6 @@ impl GlobalServices {
         }
 
         RoleCacheManager::init()?;
-        ShareEndpointManager::init()?;
 
         DataOperator::init(&config.storage).await?;
         ShareTableConfig::init(

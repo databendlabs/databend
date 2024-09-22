@@ -17,7 +17,7 @@ ColumnRef {
                 ),
                 name: "a",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
         ),
     },
@@ -71,7 +71,7 @@ FunctionCall {
             ),
             name: "char",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Literal {
@@ -786,7 +786,7 @@ FunctionCall {
             ),
             name: "typeof",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             BinaryOp {
@@ -1037,7 +1037,7 @@ BinaryOp {
                         ),
                         name: "a",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -1055,7 +1055,7 @@ BinaryOp {
                         ),
                         name: "c",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
                 column: Name(
@@ -1065,7 +1065,7 @@ BinaryOp {
                         ),
                         name: "d",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -1098,7 +1098,7 @@ BinaryOp {
                     ),
                     name: "number",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1143,7 +1143,7 @@ MapAccess {
                         quote: Some(
                             '"',
                         ),
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -1155,7 +1155,7 @@ MapAccess {
                 ),
                 name: "k1",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
         },
     },
@@ -1166,7 +1166,7 @@ MapAccess {
             ),
             name: "k2",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
     },
 }
@@ -1205,7 +1205,7 @@ MapAccess {
                             quote: Some(
                                 '"',
                             ),
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -1217,7 +1217,7 @@ MapAccess {
                     ),
                     name: "k1",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             },
         },
@@ -1228,7 +1228,7 @@ MapAccess {
                 ),
                 name: "k2",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
         },
     },
@@ -1261,7 +1261,7 @@ MapAccess {
                     ),
                     name: "t",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1323,7 +1323,7 @@ Between {
                     ),
                     name: "col1",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1365,7 +1365,7 @@ FunctionCall {
             ),
             name: "sum",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -1382,7 +1382,7 @@ FunctionCall {
                             ),
                             name: "col1",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -1414,7 +1414,7 @@ FunctionCall {
             quote: Some(
                 '"',
             ),
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
@@ -1441,7 +1441,7 @@ FunctionCall {
             ),
             name: "random",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
@@ -1468,7 +1468,7 @@ FunctionCall {
             ),
             name: "covar_samp",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -1485,7 +1485,7 @@ FunctionCall {
                             ),
                             name: "number",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -1504,7 +1504,7 @@ FunctionCall {
                             ),
                             name: "number",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -1540,7 +1540,7 @@ Cast {
                     ),
                     name: "col1",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1573,7 +1573,7 @@ TryCast {
                     ),
                     name: "col1",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1605,7 +1605,7 @@ TryCast {
                     ),
                     name: "col1",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1679,7 +1679,7 @@ Extract {
                     ),
                     name: "d",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1711,7 +1711,7 @@ DatePart {
                     ),
                     name: "d",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1750,7 +1750,7 @@ Position {
                     ),
                     name: "str",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1781,7 +1781,7 @@ Substring {
                     ),
                     name: "a",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1800,7 +1800,7 @@ Substring {
                     ),
                     name: "b",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1820,7 +1820,7 @@ Substring {
                         ),
                         name: "c",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -1852,7 +1852,7 @@ Substring {
                     ),
                     name: "a",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1871,7 +1871,7 @@ Substring {
                     ),
                     name: "b",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1891,7 +1891,7 @@ Substring {
                         ),
                         name: "c",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -1923,7 +1923,7 @@ Cast {
                     ),
                     name: "col1",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -1964,7 +1964,7 @@ MapAccess {
                             ),
                             name: "arr",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -1987,7 +1987,7 @@ MapAccess {
                 ),
                 name: "a",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
         },
     },
@@ -1998,7 +1998,7 @@ MapAccess {
             ),
             name: "b",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
     },
 }
@@ -2031,7 +2031,7 @@ MapAccess {
                         ),
                         name: "arr",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -2064,7 +2064,7 @@ MapAccess {
                         quote: Some(
                             '"',
                         ),
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -2097,7 +2097,7 @@ BinaryOp {
                     ),
                     name: "a",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -2185,7 +2185,7 @@ BinaryOp {
                         ),
                         name: "G",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
                 table: Some(
@@ -2195,7 +2195,7 @@ BinaryOp {
                         ),
                         name: "E",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
                 column: Name(
@@ -2205,7 +2205,7 @@ BinaryOp {
                         ),
                         name: "B",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -2230,7 +2230,7 @@ BinaryOp {
                         ),
                         name: "col1",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -2249,7 +2249,7 @@ BinaryOp {
                         ),
                         name: "col2",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -2286,7 +2286,7 @@ BinaryOp {
                                 ),
                                 name: "col3",
                                 quote: None,
-                                is_hole: false,
+                                ident_type: None,
                             },
                         ),
                     },
@@ -2304,7 +2304,7 @@ BinaryOp {
                         ),
                         name: "sum",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                     args: [
                         ColumnRef {
@@ -2321,7 +2321,7 @@ BinaryOp {
                                         ),
                                         name: "col4",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -2360,7 +2360,7 @@ BinaryOp {
                 ),
                 name: "sum",
                 quote: None,
-                is_hole: false,
+                ident_type: None,
             },
             args: [
                 Case {
@@ -2387,7 +2387,7 @@ BinaryOp {
                                             ),
                                             name: "n2",
                                             quote: None,
-                                            is_hole: false,
+                                            ident_type: None,
                                         },
                                     ),
                                     column: Name(
@@ -2397,7 +2397,7 @@ BinaryOp {
                                             ),
                                             name: "n_name",
                                             quote: None,
-                                            is_hole: false,
+                                            ident_type: None,
                                         },
                                     ),
                                 },
@@ -2427,7 +2427,7 @@ BinaryOp {
                                         ),
                                         name: "ol_amount",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -2473,7 +2473,7 @@ BinaryOp {
                             ),
                             name: "sum",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                         args: [
                             ColumnRef {
@@ -2490,7 +2490,7 @@ BinaryOp {
                                             ),
                                             name: "ol_amount",
                                             quote: None,
-                                            is_hole: false,
+                                            ident_type: None,
                                         },
                                     ),
                                 },
@@ -2534,7 +2534,7 @@ BinaryOp {
                         ),
                         name: "sum",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                     args: [
                         ColumnRef {
@@ -2551,7 +2551,7 @@ BinaryOp {
                                         ),
                                         name: "ol_amount",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -2632,7 +2632,7 @@ BinaryOp {
                                                 ),
                                                 name: "p_partkey",
                                                 quote: None,
-                                                is_hole: false,
+                                                ident_type: None,
                                             },
                                         ),
                                     },
@@ -2651,7 +2651,7 @@ BinaryOp {
                                                 ),
                                                 name: "l_partkey",
                                                 quote: None,
-                                                is_hole: false,
+                                                ident_type: None,
                                             },
                                         ),
                                     },
@@ -2676,7 +2676,7 @@ BinaryOp {
                                                 ),
                                                 name: "p_brand",
                                                 quote: None,
-                                                is_hole: false,
+                                                ident_type: None,
                                             },
                                         ),
                                     },
@@ -2709,7 +2709,7 @@ BinaryOp {
                                             ),
                                             name: "p_container",
                                             quote: None,
-                                            is_hole: false,
+                                            ident_type: None,
                                         },
                                     ),
                                 },
@@ -2770,7 +2770,7 @@ BinaryOp {
                                         ),
                                         name: "l_quantity",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -2811,7 +2811,7 @@ BinaryOp {
                                     ),
                                     name: "l_quantity",
                                     quote: None,
-                                    is_hole: false,
+                                    ident_type: None,
                                 },
                             ),
                         },
@@ -2865,7 +2865,7 @@ BinaryOp {
                                 ),
                                 name: "p_size",
                                 quote: None,
-                                is_hole: false,
+                                ident_type: None,
                             },
                         ),
                     },
@@ -2921,7 +2921,7 @@ BinaryOp {
                             ),
                             name: "l_shipmode",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -2966,7 +2966,7 @@ BinaryOp {
                         ),
                         name: "l_shipinstruct",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ),
             },
@@ -3000,7 +3000,7 @@ FunctionCall {
             ),
             name: "nullif",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Literal {
@@ -3044,7 +3044,7 @@ FunctionCall {
             ),
             name: "nullif",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3061,7 +3061,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3080,7 +3080,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3110,7 +3110,7 @@ FunctionCall {
             ),
             name: "coalesce",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Literal {
@@ -3162,7 +3162,7 @@ FunctionCall {
             ),
             name: "coalesce",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3179,7 +3179,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3198,7 +3198,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3217,7 +3217,7 @@ FunctionCall {
                             ),
                             name: "c",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3247,7 +3247,7 @@ FunctionCall {
             ),
             name: "ifnull",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Literal {
@@ -3291,7 +3291,7 @@ FunctionCall {
             ),
             name: "ifnull",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3308,7 +3308,7 @@ FunctionCall {
                             ),
                             name: "a",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3327,7 +3327,7 @@ FunctionCall {
                             ),
                             name: "b",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3392,7 +3392,7 @@ IsDistinctFrom {
                     ),
                     name: "a",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -3411,7 +3411,7 @@ IsDistinctFrom {
                     ),
                     name: "b",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
             ),
         },
@@ -3504,45 +3504,48 @@ FunctionCall {
             ),
             name: "ROW_NUMBER",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    28..34,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                28..34,
-                                            ),
-                                            name: "salary",
-                                            quote: None,
-                                            is_hole: false,
-                                        },
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        28..34,
                                     ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    28..34,
+                                                ),
+                                                name: "salary",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
                                 },
+                                asc: Some(
+                                    false,
+                                ),
+                                nulls_first: None,
                             },
-                            asc: Some(
-                                false,
-                            ),
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: None,
-                },
-            ),
+                        ],
+                        window_frame: None,
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -3566,7 +3569,7 @@ FunctionCall {
             ),
             name: "SUM",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3583,7 +3586,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3591,14 +3594,17 @@ FunctionCall {
         ],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [],
-                    order_by: [],
-                    window_frame: None,
-                },
-            ),
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [],
+                        window_frame: None,
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -3622,7 +3628,7 @@ FunctionCall {
             ),
             name: "AVG",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3639,7 +3645,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3647,34 +3653,37 @@ FunctionCall {
         ],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [
-                        ColumnRef {
-                            span: Some(
-                                31..41,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            31..41,
-                                        ),
-                                        name: "department",
-                                        quote: None,
-                                        is_hole: false,
-                                    },
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [
+                            ColumnRef {
+                                span: Some(
+                                    31..41,
                                 ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                31..41,
+                                            ),
+                                            name: "department",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
                             },
-                        },
-                    ],
-                    order_by: [],
-                    window_frame: None,
-                },
-            ),
+                        ],
+                        order_by: [],
+                        window_frame: None,
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -3698,7 +3707,7 @@ FunctionCall {
             ),
             name: "SUM",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3715,7 +3724,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3723,35 +3732,15 @@ FunctionCall {
         ],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [
-                        ColumnRef {
-                            span: Some(
-                                31..41,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            31..41,
-                                        ),
-                                        name: "department",
-                                        quote: None,
-                                        is_hole: false,
-                                    },
-                                ),
-                            },
-                        },
-                    ],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [
+                            ColumnRef {
                                 span: Some(
-                                    51..57,
+                                    31..41,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -3759,32 +3748,55 @@ FunctionCall {
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                51..57,
+                                                31..41,
                                             ),
-                                            name: "salary",
+                                            name: "department",
                                             quote: None,
-                                            is_hole: false,
+                                            ident_type: None,
                                         },
                                     ),
                                 },
                             },
-                            asc: Some(
-                                false,
-                            ),
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: Some(
-                        WindowFrame {
-                            units: Rows,
-                            start_bound: Preceding(
-                                None,
-                            ),
-                            end_bound: CurrentRow,
-                        },
-                    ),
-                },
-            ),
+                        ],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        51..57,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    51..57,
+                                                ),
+                                                name: "salary",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                asc: Some(
+                                    false,
+                                ),
+                                nulls_first: None,
+                            },
+                        ],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Rows,
+                                start_bound: Preceding(
+                                    None,
+                                ),
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -3808,7 +3820,7 @@ FunctionCall {
             ),
             name: "AVG",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -3825,7 +3837,7 @@ FunctionCall {
                             ),
                             name: "salary",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -3833,35 +3845,15 @@ FunctionCall {
         ],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [
-                        ColumnRef {
-                            span: Some(
-                                31..41,
-                            ),
-                            column: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Name(
-                                    Identifier {
-                                        span: Some(
-                                            31..41,
-                                        ),
-                                        name: "department",
-                                        quote: None,
-                                        is_hole: false,
-                                    },
-                                ),
-                            },
-                        },
-                    ],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [
+                            ColumnRef {
                                 span: Some(
-                                    51..60,
+                                    31..41,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -3869,39 +3861,62 @@ FunctionCall {
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                51..60,
+                                                31..41,
                                             ),
-                                            name: "hire_date",
+                                            name: "department",
                                             quote: None,
-                                            is_hole: false,
+                                            ident_type: None,
                                         },
                                     ),
                                 },
                             },
-                            asc: None,
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: Some(
-                        WindowFrame {
-                            units: Rows,
-                            start_bound: Preceding(
-                                Some(
-                                    Literal {
-                                        span: Some(
-                                            74..75,
-                                        ),
-                                        value: UInt64(
-                                            2,
+                        ],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        51..60,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    51..60,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
                                         ),
                                     },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Rows,
+                                start_bound: Preceding(
+                                    Some(
+                                        Literal {
+                                            span: Some(
+                                                74..75,
+                                            ),
+                                            value: UInt64(
+                                                2,
+                                            ),
+                                        },
+                                    ),
                                 ),
-                            ),
-                            end_bound: CurrentRow,
-                        },
-                    ),
-                },
-            ),
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -3925,66 +3940,69 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    23..32,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        23..32,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    23..32,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Range,
+                                start_bound: Preceding(
+                                    Some(
+                                        Interval {
                                             span: Some(
-                                                23..32,
+                                                47..63,
                                             ),
-                                            name: "hire_date",
-                                            quote: None,
-                                            is_hole: false,
+                                            expr: Literal {
+                                                span: Some(
+                                                    56..59,
+                                                ),
+                                                value: String(
+                                                    "7",
+                                                ),
+                                            },
+                                            unit: Day,
                                         },
                                     ),
-                                },
-                            },
-                            asc: None,
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: Some(
-                        WindowFrame {
-                            units: Range,
-                            start_bound: Preceding(
-                                Some(
-                                    Interval {
-                                        span: Some(
-                                            47..63,
-                                        ),
-                                        expr: Literal {
-                                            span: Some(
-                                                56..59,
-                                            ),
-                                            value: String(
-                                                "7",
-                                            ),
-                                        },
-                                        unit: Day,
-                                    },
                                 ),
-                            ),
-                            end_bound: CurrentRow,
-                        },
-                    ),
-                },
-            ),
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -4008,51 +4026,54 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    23..32,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                23..32,
-                                            ),
-                                            name: "hire_date",
-                                            quote: None,
-                                            is_hole: false,
-                                        },
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        23..32,
                                     ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    23..32,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
                                 },
+                                asc: None,
+                                nulls_first: None,
                             },
-                            asc: None,
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: Some(
-                        WindowFrame {
-                            units: Rows,
-                            start_bound: Preceding(
-                                None,
-                            ),
-                            end_bound: CurrentRow,
-                        },
-                    ),
-                },
-            ),
+                        ],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Rows,
+                                start_bound: Preceding(
+                                    None,
+                                ),
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -4076,49 +4097,52 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    23..32,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                23..32,
-                                            ),
-                                            name: "hire_date",
-                                            quote: None,
-                                            is_hole: false,
-                                        },
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        23..32,
                                     ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    23..32,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
                                 },
+                                asc: None,
+                                nulls_first: None,
                             },
-                            asc: None,
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: Some(
-                        WindowFrame {
-                            units: Rows,
-                            start_bound: CurrentRow,
-                            end_bound: CurrentRow,
-                        },
-                    ),
-                },
-            ),
+                        ],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Rows,
+                                start_bound: CurrentRow,
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -4142,60 +4166,63 @@ FunctionCall {
             ),
             name: "COUNT",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [],
         params: [],
         window: Some(
-            WindowSpec(
-                WindowSpec {
-                    existing_window_name: None,
-                    partition_by: [],
-                    order_by: [
-                        OrderByExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    23..32,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                23..32,
-                                            ),
-                                            name: "hire_date",
-                                            quote: None,
-                                            is_hole: false,
-                                        },
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        23..32,
                                     ),
-                                },
-                            },
-                            asc: None,
-                            nulls_first: None,
-                        },
-                    ],
-                    window_frame: Some(
-                        WindowFrame {
-                            units: Rows,
-                            start_bound: Preceding(
-                                Some(
-                                    Literal {
-                                        span: Some(
-                                            38..39,
-                                        ),
-                                        value: UInt64(
-                                            3,
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    23..32,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
                                         ),
                                     },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Rows,
+                                start_bound: Preceding(
+                                    Some(
+                                        Literal {
+                                            span: Some(
+                                                38..39,
+                                            ),
+                                            value: UInt64(
+                                                3,
+                                            ),
+                                        },
+                                    ),
                                 ),
-                            ),
-                            end_bound: CurrentRow,
-                        },
-                    ),
-                },
-            ),
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
         ),
         lambda: None,
     },
@@ -4219,7 +4246,7 @@ FunctionCall {
             ),
             name: "ARRAY_APPLY",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Array {
@@ -4265,7 +4292,7 @@ FunctionCall {
                         ),
                         name: "x",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ],
                 expr: BinaryOp {
@@ -4287,7 +4314,7 @@ FunctionCall {
                                     ),
                                     name: "x",
                                     quote: None,
-                                    is_hole: false,
+                                    ident_type: None,
                                 },
                             ),
                         },
@@ -4324,7 +4351,7 @@ FunctionCall {
             ),
             name: "ARRAY_FILTER",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             ColumnRef {
@@ -4341,7 +4368,7 @@ FunctionCall {
                             ),
                             name: "col",
                             quote: None,
-                            is_hole: false,
+                            ident_type: None,
                         },
                     ),
                 },
@@ -4358,7 +4385,7 @@ FunctionCall {
                         ),
                         name: "y",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ],
                 expr: BinaryOp {
@@ -4385,7 +4412,7 @@ FunctionCall {
                                         ),
                                         name: "y",
                                         quote: None,
-                                        is_hole: false,
+                                        ident_type: None,
                                     },
                                 ),
                             },
@@ -4436,7 +4463,7 @@ Tuple {
                     ),
                     name: "current_timestamp",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
                 args: [],
                 params: [],
@@ -4456,7 +4483,7 @@ Tuple {
                     ),
                     name: "current_timestamp",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
                 args: [],
                 params: [],
@@ -4476,7 +4503,7 @@ Tuple {
                     ),
                     name: "now",
                     quote: None,
-                    is_hole: false,
+                    ident_type: None,
                 },
                 args: [],
                 params: [],
@@ -4505,7 +4532,7 @@ FunctionCall {
             ),
             name: "ARRAY_REDUCE",
             quote: None,
-            is_hole: false,
+            ident_type: None,
         },
         args: [
             Array {
@@ -4551,7 +4578,7 @@ FunctionCall {
                         ),
                         name: "acc",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                     Identifier {
                         span: Some(
@@ -4559,7 +4586,7 @@ FunctionCall {
                         ),
                         name: "t",
                         quote: None,
-                        is_hole: false,
+                        ident_type: None,
                     },
                 ],
                 expr: BinaryOp {
@@ -4581,7 +4608,7 @@ FunctionCall {
                                     ),
                                     name: "acc",
                                     quote: None,
-                                    is_hole: false,
+                                    ident_type: None,
                                 },
                             ),
                         },
@@ -4600,7 +4627,7 @@ FunctionCall {
                                     ),
                                     name: "t",
                                     quote: None,
-                                    is_hole: false,
+                                    ident_type: None,
                                 },
                             ),
                         },

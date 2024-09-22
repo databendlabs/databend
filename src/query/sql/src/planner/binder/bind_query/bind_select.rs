@@ -32,34 +32,20 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
 
-use crate::binder::project_set::SrfCollector;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::plans::ScalarExpr;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
-use crate::UdfRewriter;
 use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
-pub struct SelectList<'a> {
-    pub items: Vec<SelectItem<'a>>,
-}
-
-#[derive(Debug)]
-pub struct SelectItem<'a> {
-    pub select_target: &'a SelectTarget,
-    pub scalar: ScalarExpr,
-    pub alias: String,
-}
+pub struct SelectList {}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -112,26 +98,15 @@ impl Binder {
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
-        // Collect set returning functions
-        let set_returning_functions = {
-            let mut collector = SrfCollector::new();
-            stmt.select_list.iter().for_each(|item| {
-                if let SelectTarget::AliasedExpr { expr, .. } = item {
-                    collector.visit(expr);
-                }
-            });
-            collector.into_srfs()
-        };
-
-        // Bind set returning functions
-        s_expr = self.bind_project_set(&mut from_context, &set_returning_functions, s_expr)?;
-
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
         // Generate a analyzed select list with from context
         let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
+
+        // analyze set returning functions
+        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -149,6 +124,12 @@ impl Binder {
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
+
+        let have_srfs = !from_context.srfs.is_empty();
+        if have_srfs {
+            // Bind set returning functions first.
+            s_expr = self.bind_project_set(&mut from_context, s_expr)?;
+        }
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
@@ -189,7 +170,7 @@ impl Binder {
         )?;
 
         // After all analysis is done.
-        if set_returning_functions.is_empty() {
+        if !have_srfs {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,
@@ -232,42 +213,28 @@ impl Binder {
             )?;
         }
 
-        if !order_by.is_empty() {
-            s_expr = self.bind_order_by(
-                &from_context,
-                order_items,
-                &select_list,
-                &mut scalar_items,
-                s_expr,
-            )?;
-        }
-
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite async function to async function plan
-        let mut async_func_rewriter = AsyncFunctionRewriter::new();
-        s_expr = async_func_rewriter.rewrite(&s_expr)?;
+        if !order_by.is_empty() {
+            s_expr = self.bind_order_by(&from_context, order_items, &select_list, s_expr)?;
+        }
 
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        if from_context.have_async_func {
+            // rewrite async function to async function plan
+            let mut async_func_rewriter = AsyncFunctionRewriter::new(self.metadata.clone());
+            s_expr = async_func_rewriter.rewrite(&s_expr)?;
+        }
 
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
         // rewrite variant inner fields as virtual columns
         let mut virtual_column_rewriter =
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
 
-        // check inverted index license
-        if !from_context.inverted_index_map.is_empty() {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
-        }
         // add internal column binding into expr
-        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
+        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;

@@ -23,15 +23,19 @@ memory-profiling = [
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+borsh = { workspace = true }
 bytesize = "1.1.0"
+chrono = { workspace = true }
 ctrlc = { version = "3.2.3", features = ["termination"] }
 databend-common-exception = { workspace = true }
 enquote = "1.1.0"
+fastrace = { workspace = true }
 futures = { workspace = true }
-libc = "0.2.133"
+libc = "0.2.153"
 log = { workspace = true }
 logcall = { workspace = true }
-minitrace = { workspace = true }
+micromarshal = "0.5.0"
+num-traits = "0.2.19"
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
@@ -43,10 +47,12 @@ pprof = { version = "0.11.1", features = [
 ] }
 prometheus-client = { workspace = true }
 prometheus-parse = "0.2.3"
+rand = { workspace = true, features = ["serde1"] }
 regex = { workspace = true }
 replace_with = "0.1.7"
 semver = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 state = "0.5"
 tikv-jemalloc-ctl = { workspace = true }
 tikv-jemalloc-sys = "0.5.2"
@@ -61,6 +67,10 @@ procfs = { version = "^0.16" }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
+serde_test = "1.0"
+
+[build-dependencies]
+databend-common-building = { workspace = true }
 
 [lints]
 workspace = true

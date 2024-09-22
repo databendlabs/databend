@@ -16,8 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_node::JoinNode;
@@ -27,6 +28,7 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -44,6 +46,7 @@ const RELATION_THRESHOLD: usize = 10;
 // See the paper for more details.
 pub struct DPhpy {
     ctx: Arc<dyn TableContext>,
+    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
     metadata: MetadataRef,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
@@ -58,9 +61,14 @@ pub struct DPhpy {
 }
 
 impl DPhpy {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        metadata: MetadataRef,
+        sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    ) -> Self {
         Self {
             ctx,
+            sample_executor,
             metadata,
             join_relations: vec![],
             table_index_map: Default::default(),
@@ -72,25 +80,31 @@ impl DPhpy {
         }
     }
 
-    fn new_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn new_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // Parallel process children: start a new dphyp for each child.
         let ctx = self.ctx.clone();
         let metadata = self.metadata.clone();
+        let sample_executor = self.sample_executor.clone();
         let left_expr = s_expr.children[0].clone();
-        let left_res = Thread::spawn(move || {
-            let mut dphyp = DPhpy::new(ctx, metadata);
-            (dphyp.optimize(&left_expr), dphyp.table_index_map)
+        let left_res = spawn(async move {
+            let mut dphyp = DPhpy::new(ctx, metadata, sample_executor);
+            (dphyp.optimize(&left_expr).await, dphyp.table_index_map)
         });
         let ctx = self.ctx.clone();
         let metadata = self.metadata.clone();
+        let sample_executor = self.sample_executor.clone();
         let right_expr = s_expr.children[1].clone();
-        let right_res = Thread::spawn(move || {
-            let mut dphyp = DPhpy::new(ctx, metadata);
-            (dphyp.optimize(&right_expr), dphyp.table_index_map)
+        let right_res = spawn(async move {
+            let mut dphyp = DPhpy::new(ctx, metadata, sample_executor);
+            (dphyp.optimize(&right_expr).await, dphyp.table_index_map)
         });
-        let left_res = left_res.join()?;
+        let left_res = left_res
+            .await
+            .map_err(|e| ErrorCode::TokioError(format!("Cannot join tokio job, err: {:?}", e)))?;
+        let right_res = right_res
+            .await
+            .map_err(|e| ErrorCode::TokioError(format!("Cannot join tokio job, err: {:?}", e)))?;
         let (left_expr, _) = left_res.0?;
-        let right_res = right_res.join()?;
         let (right_expr, _) = right_res.0?;
 
         // Merge `table_index_map` of left and right into current `table_index_map`.
@@ -105,7 +119,8 @@ impl DPhpy {
     }
 
     // Traverse the s_expr and get all base relations and join conditions
-    fn get_base_relations(
+    #[async_recursion::async_recursion(#[recursive::recursive])]
+    async fn get_base_relations(
         &mut self,
         s_expr: &SExpr,
         join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
@@ -115,14 +130,19 @@ impl DPhpy {
     ) -> Result<(Arc<SExpr>, bool)> {
         if is_subquery {
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-            let (new_s_expr, _) = dphyp.optimize(s_expr)?;
+            let mut dphyp = DPhpy::new(
+                self.ctx.clone(),
+                self.metadata.clone(),
+                self.sample_executor.clone(),
+            );
+            let (new_s_expr, _) = dphyp.optimize(s_expr).await?;
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
             for table_index in dphyp.table_index_map.keys() {
                 self.table_index_map.insert(*table_index, relation_idx);
             }
-            self.join_relations.push(JoinRelation::new(&new_s_expr));
+            self.join_relations
+                .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
             return Ok((new_s_expr, true));
         }
 
@@ -132,9 +152,9 @@ impl DPhpy {
                     // Check if relation contains filter, if exists, check if the filter in `filters`
                     // If exists, remove it from `filters`
                     self.check_filter(relation);
-                    JoinRelation::new(relation)
+                    JoinRelation::new(relation, self.sample_executor.clone())
                 } else {
-                    JoinRelation::new(s_expr)
+                    JoinRelation::new(s_expr, self.sample_executor.clone())
                 };
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
@@ -196,24 +216,29 @@ impl DPhpy {
                     self.filters.insert(filter);
                 }
                 if !is_inner_join {
-                    let new_s_expr = self.new_children(s_expr)?;
-                    self.join_relations.push(JoinRelation::new(&new_s_expr));
+                    let new_s_expr = self.new_children(s_expr).await?;
+                    self.join_relations
+                        .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
                     Ok((Arc::new(new_s_expr), true))
                 } else {
-                    let left_res = self.get_base_relations(
-                        s_expr.child(0)?,
-                        join_conditions,
-                        true,
-                        None,
-                        left_is_subquery,
-                    )?;
-                    let right_res = self.get_base_relations(
-                        s_expr.child(1)?,
-                        join_conditions,
-                        true,
-                        None,
-                        right_is_subquery,
-                    )?;
+                    let left_res = self
+                        .get_base_relations(
+                            s_expr.child(0)?,
+                            join_conditions,
+                            true,
+                            None,
+                            left_is_subquery,
+                        )
+                        .await?;
+                    let right_res = self
+                        .get_base_relations(
+                            s_expr.child(1)?,
+                            join_conditions,
+                            true,
+                            None,
+                            right_is_subquery,
+                        )
+                        .await?;
                     let new_s_expr: Arc<SExpr> =
                         Arc::new(s_expr.replace_children([left_res.0, right_res.0]));
                     Ok((new_s_expr, left_res.1 && right_res.1))
@@ -232,30 +257,29 @@ impl DPhpy {
                     if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
                         self.filters.insert(op.clone());
                     }
-                    let (child, optimized) = self.get_base_relations(
-                        s_expr.child(0)?,
-                        join_conditions,
-                        true,
-                        Some(s_expr),
-                        false,
-                    )?;
+                    let (child, optimized) = self
+                        .get_base_relations(
+                            s_expr.child(0)?,
+                            join_conditions,
+                            true,
+                            Some(s_expr),
+                            false,
+                        )
+                        .await?;
                     let new_s_expr = Arc::new(s_expr.replace_children([child]));
                     Ok((new_s_expr, optimized))
                 } else {
-                    let (child, optimized) = self.get_base_relations(
-                        s_expr.child(0)?,
-                        join_conditions,
-                        false,
-                        None,
-                        false,
-                    )?;
+                    let (child, optimized) = self
+                        .get_base_relations(s_expr.child(0)?, join_conditions, false, None, false)
+                        .await?;
                     let new_s_expr = Arc::new(s_expr.replace_children([child]));
                     Ok((new_s_expr, optimized))
                 }
             }
             RelOperator::UnionAll(_) => {
-                let new_s_expr = self.new_children(s_expr)?;
-                self.join_relations.push(JoinRelation::new(&new_s_expr));
+                let new_s_expr = self.new_children(s_expr).await?;
+                self.join_relations
+                    .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
                 Ok((Arc::new(new_s_expr), true))
             }
             RelOperator::Exchange(_) => {
@@ -269,19 +293,23 @@ impl DPhpy {
             | RelOperator::AsyncFunction(_)
             | RelOperator::MaterializedCte(_)
             | RelOperator::RecursiveCteScan(_)
-            | RelOperator::MergeInto(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::Mutation(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 
     // The input plan tree has been optimized by heuristic optimizer
     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
     // The output plan will have optimal join order theoretically
-    pub fn optimize(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
+    pub async fn optimize(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let (s_expr, optimized) =
-            self.get_base_relations(s_expr, &mut join_conditions, false, None, false)?;
+        let (s_expr, optimized) = self
+            .get_base_relations(s_expr, &mut join_conditions, false, None, false)
+            .await?;
         if !optimized {
             return Ok((s_expr, false));
         }
@@ -333,7 +361,7 @@ impl DPhpy {
         for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {
             neighbors.sort();
         }
-        self.join_reorder()?;
+        self.join_reorder().await?;
         // Get all join relations in `relation_set_tree`
         let all_relations = self
             .relation_set_tree
@@ -349,12 +377,14 @@ impl DPhpy {
     // Adaptive Optimization:
     // If the if the query graph is simple enough, it uses dynamic programming to construct the optimal join tree,
     // if that is not possible within the given optimization budget, it switches to a greedy approach.
-    fn join_reorder(&mut self) -> Result<()> {
+    async fn join_reorder(&mut self) -> Result<()> {
         // Initial `dp_table` with plan for single relation
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
-            let ce = relation.cardinality()?;
+            let ce = relation
+                .cardinality(self.ctx.clone(), self.metadata.clone())
+                .await?;
             let join = JoinNode {
                 join_type: JoinType::Inner,
                 leaves: Arc::new(nodes.clone()),
@@ -368,30 +398,30 @@ impl DPhpy {
         }
 
         // First, try to use dynamic programming to find the optimal join order.
-        if !self.join_reorder_by_dphyp()? {
+        if !self.join_reorder_by_dphyp().await? {
             // When DPhpy takes too much time during join ordering, it is necessary to exit the dynamic programming algorithm
             // and switch to a greedy algorithm to minimizes the overall query time.
-            self.join_reorder_by_greedy()?;
+            self.join_reorder_by_greedy().await?;
         }
 
         Ok(())
     }
 
     // Join reorder by dynamic programming algorithm.
-    fn join_reorder_by_dphyp(&mut self) -> Result<bool> {
+    async fn join_reorder_by_dphyp(&mut self) -> Result<bool> {
         // Choose all nodes as enumeration start node once (desc order)
         for idx in (0..self.join_relations.len()).rev() {
             // Get node from `relation_set_tree`
             let node = self.relation_set_tree.get_relation_set_by_index(idx)?;
             // Emit node as subgraph
-            if !self.emit_csg(&node)? {
+            if !self.emit_csg(&node).await? {
                 return Ok(false);
             }
             // Create forbidden node set
             // Forbid node idx will less than current idx
             let forbidden_nodes = (0..idx).collect();
             // Enlarge the subgraph recursively
-            if !self.enumerate_csg_rec(&node, &forbidden_nodes)? {
+            if !self.enumerate_csg_rec(&node, &forbidden_nodes).await? {
                 return Ok(false);
             }
         }
@@ -399,7 +429,7 @@ impl DPhpy {
     }
 
     // Join reorder by greedy algorithm.
-    fn join_reorder_by_greedy(&mut self) -> Result<bool> {
+    async fn join_reorder_by_greedy(&mut self) -> Result<bool> {
         // The Greedy Operator Ordering starts with a single relation and iteratively adds the relation that minimizes the cost of the join.
         // the algorithm terminates when all relations have been added, the cost of a join is the sum of the cardinalities of the node involved
         // in the tree, the algorithm is not guaranteed to find the optimal join tree, it is guaranteed to find it in polynomial time.
@@ -425,8 +455,9 @@ impl DPhpy {
                     if !join_conditions.is_empty() {
                         // If left_relation set and right_relation set are connected, emit csg-cmp-pair and keep the
                         // minimum cost pair in `dp_table`.
-                        let cost =
-                            self.emit_csg_cmp(left_relation, right_relation, join_conditions)?;
+                        let cost = self
+                            .emit_csg_cmp(left_relation, right_relation, join_conditions)
+                            .await?;
                         // Update the minimum cost pair.
                         if cost < min_cost {
                             min_cost = cost;
@@ -445,7 +476,7 @@ impl DPhpy {
                 let mut lowest_index = Vec::with_capacity(2);
                 for (i, relation) in join_relations.iter().enumerate().take(2) {
                     let mut join_node = self.dp_table.get(relation).unwrap().clone();
-                    let cardinality = join_node.cardinality(&self.join_relations)?;
+                    let cardinality = join_node.cardinality(&self.join_relations).await?;
                     lowest_cost.push(cardinality);
                     lowest_index.push(i);
                 }
@@ -456,7 +487,7 @@ impl DPhpy {
                 // Update the minimum cost relation set pair.
                 for (i, relation) in join_relations.iter().enumerate().skip(2) {
                     let mut join_node = self.dp_table.get(relation).unwrap().clone();
-                    let cardinality = join_node.cardinality(&self.join_relations)?;
+                    let cardinality = join_node.cardinality(&self.join_relations).await?;
                     if cardinality < lowest_cost[0] {
                         lowest_cost[1] = cardinality;
                         lowest_index[1] = i;
@@ -477,7 +508,8 @@ impl DPhpy {
                     &join_relations[left_idx],
                     &join_relations[right_idx],
                     vec![],
-                )?;
+                )
+                .await?;
             }
             if left_idx > right_idx {
                 std::mem::swap(&mut left_idx, &mut right_idx);
@@ -491,7 +523,7 @@ impl DPhpy {
 
     // EmitCsg will take a non-empty subset of hyper_graph's nodes(V) which contains a connected subgraph.
     // Then it will possibly generate a connected complement which will combine `nodes` to be a csg-cmp-pair.
-    fn emit_csg(&mut self, nodes: &[IndexType]) -> Result<bool> {
+    async fn emit_csg(&mut self, nodes: &[IndexType]) -> Result<bool> {
         if nodes.len() == self.join_relations.len() {
             return Ok(true);
         }
@@ -511,11 +543,16 @@ impl DPhpy {
             // Check if neighbor is connected with `nodes`
             let join_conditions = self.query_graph.is_connected(nodes, &neighbor_relations)?;
             if !join_conditions.is_empty()
-                && !self.try_emit_csg_cmp(nodes, &neighbor_relations, join_conditions)?
+                && !self
+                    .try_emit_csg_cmp(nodes, &neighbor_relations, join_conditions)
+                    .await?
             {
                 return Ok(false);
             }
-            if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)? {
+            if !self
+                .enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)
+                .await?
+            {
                 return Ok(false);
             }
         }
@@ -524,7 +561,8 @@ impl DPhpy {
 
     // EnumerateCsgRec will extend the given `nodes`.
     // It'll consider each non-empty, proper subset of the neighborhood of nodes that are not forbidden.
-    fn enumerate_csg_rec(
+    #[async_recursion::async_recursion(#[recursive::recursive])]
+    async fn enumerate_csg_rec(
         &mut self,
         nodes: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
@@ -549,7 +587,7 @@ impl DPhpy {
             let merged_relation_set = union(nodes, &neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set)
                 && merged_relation_set.len() > nodes.len()
-                && !self.emit_csg(&merged_relation_set)?
+                && !self.emit_csg(&merged_relation_set).await?
             {
                 return Ok(false);
             }
@@ -562,14 +600,17 @@ impl DPhpy {
                 new_forbidden_nodes = forbidden_nodes.clone();
             }
             new_forbidden_nodes.insert(*neighbor);
-            if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
+            if !self
+                .enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)
+                .await?
+            {
                 return Ok(false);
             }
         }
         Ok(true)
     }
 
-    fn try_emit_csg_cmp(
+    async fn try_emit_csg_cmp(
         &mut self,
         left: &[IndexType],
         right: &[IndexType],
@@ -580,7 +621,7 @@ impl DPhpy {
         // otherwise it will take too much time
         match self.emit_count > EMIT_THRESHOLD {
             false => {
-                self.emit_csg_cmp(left, right, join_conditions)?;
+                self.emit_csg_cmp(left, right, join_conditions).await?;
                 Ok(true)
             }
             true => Ok(false),
@@ -588,7 +629,7 @@ impl DPhpy {
     }
 
     // EmitCsgCmp will join the optimal plan from left and right
-    fn emit_csg_cmp(
+    async fn emit_csg_cmp(
         &mut self,
         left: &[IndexType],
         right: &[IndexType],
@@ -599,8 +640,8 @@ impl DPhpy {
         let parent_set = union(left, right);
         let mut left_join = self.dp_table.get(left).unwrap().clone();
         let mut right_join = self.dp_table.get(right).unwrap().clone();
-        let left_cardinality = left_join.cardinality(&self.join_relations)?;
-        let right_cardinality = right_join.cardinality(&self.join_relations)?;
+        let left_cardinality = left_join.cardinality(&self.join_relations).await?;
+        let right_cardinality = right_join.cardinality(&self.join_relations).await?;
 
         if left_cardinality < right_cardinality {
             for join_condition in join_conditions.iter_mut() {
@@ -638,7 +679,7 @@ impl DPhpy {
             }
         };
         if join_node.join_type == JoinType::Inner {
-            let cost = join_node.cardinality(&self.join_relations)?
+            let cost = join_node.cardinality(&self.join_relations).await?
                 + join_node.children[0].cost
                 + join_node.children[1].cost;
             join_node.set_cost(cost);
@@ -665,7 +706,8 @@ impl DPhpy {
 
     // The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
     // Therefore, it considers the neighborhood of right.
-    fn enumerate_cmp_rec(
+    #[async_recursion::async_recursion(#[recursive::recursive])]
+    async fn enumerate_cmp_rec(
         &mut self,
         left: &[IndexType],
         right: &[IndexType],
@@ -686,7 +728,9 @@ impl DPhpy {
             if merged_relation_set.len() > right.len()
                 && self.dp_table.contains_key(&merged_relation_set)
                 && !join_conditions.is_empty()
-                && !self.try_emit_csg_cmp(left, &merged_relation_set, join_conditions)?
+                && !self
+                    .try_emit_csg_cmp(left, &merged_relation_set, join_conditions)
+                    .await?
             {
                 return Ok(false);
             }
@@ -696,7 +740,10 @@ impl DPhpy {
         let mut new_forbidden_nodes = forbidden_nodes.clone();
         for (idx, neighbor) in neighbor_set.iter().enumerate() {
             new_forbidden_nodes.insert(*neighbor);
-            if !self.enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)? {
+            if !self
+                .enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)
+                .await?
+            {
                 return Ok(false);
             }
         }

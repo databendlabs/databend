@@ -1,4 +1,4 @@
-#![feature(lazy_cell)]
+#![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +36,7 @@ pub use config::ShareTableConfig;
 pub use config::StorageConfig;
 
 mod operator;
+pub use operator::build_operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
 
@@ -48,10 +49,6 @@ mod runtime_layer;
 mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
-
-mod parquet2;
-pub use parquet2::infer_schema_with_extension;
-pub use parquet2::read_parquet_metas_in_parallel;
 
 pub mod parquet_rs;
 pub use parquet_rs::read_metadata_async;
@@ -66,6 +63,7 @@ pub use stage::StageFilesInfo;
 pub use stage::STDIN_FD;
 
 mod copy;
+mod histogram;
 mod merge;
 mod metrics_layer;
 mod multi_table_insert;
@@ -74,7 +72,10 @@ mod statistics;
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
 pub use copy::FileStatus;
-pub use merge::MergeStatus;
+pub use histogram::Histogram;
+pub use histogram::HistogramBucket;
+pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
+pub use merge::MutationStatus;
 pub use multi_table_insert::MultiTableInsertStatus;
 pub use statistics::Datum;
 pub use statistics::F64;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -20,14 +21,14 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
+use databend_common_exception::ResultExt;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
 use log::debug;
 use log::error;
@@ -50,6 +51,8 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+
+pub struct ExecutionError;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
@@ -97,7 +100,7 @@ pub enum ExecuteState {
 }
 
 impl ExecuteState {
-    pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
+    pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode<ExecutionError>>) {
         match self {
             Starting(_) => (ExecuteStateKind::Starting, None),
             Running(_) => (ExecuteStateKind::Running, None),
@@ -129,7 +132,7 @@ pub struct ExecuteStopped {
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
-    pub reason: Result<()>,
+    pub reason: Result<(), ExecutionError>,
     pub session_state: ExecutorSessionState,
     pub query_duration_ms: i64,
     pub warnings: Vec<String>,
@@ -150,6 +153,8 @@ pub struct ExecutorSessionState {
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Arc<Settings>,
     pub txn_manager: TxnManagerRef,
+    pub temp_tbl_mgr: TempTblMgrRef,
+    pub variables: HashMap<String, Scalar>,
 }
 
 impl ExecutorSessionState {
@@ -160,6 +165,8 @@ impl ExecutorSessionState {
             secondary_roles: session.get_secondary_roles(),
             settings: session.get_settings(),
             txn_manager: session.txn_mgr(),
+            temp_tbl_mgr: session.temp_tbl_mgr(),
+            variables: session.get_all_variables(),
         }
     }
 }
@@ -251,26 +258,16 @@ impl Executor {
         }
     }
     #[async_backtrace::framed]
-    pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>) {
-        {
-            let guard = this.read().await;
-            if let Stopped(s) = &guard.state {
-                debug!(
-                    "{}: http query already stopped, reason {:?}, new reason {:?}",
-                    &guard.query_id, s.reason, reason
-                );
-                return;
-            } else {
+    pub async fn stop<C>(this: &Arc<RwLock<Executor>>, reason: Result<(), C>) {
+        let reason = reason.with_context(|| "execution stopped");
+        let mut guard = this.write().await;
+
+        let state = match &guard.state {
+            Starting(s) => {
                 info!(
-                    "{}: http query change state to Stopped, reason {:?}",
+                    "{}: http query begin changing state from Staring to Stopped, reason {:?}",
                     &guard.query_id, reason
                 );
-            }
-        }
-
-        let mut guard = this.write().await;
-        match &guard.state {
-            Starting(s) => {
                 if let Err(e) = &reason {
                     InterpreterQueryLog::log_finish(
                         &s.ctx,
@@ -285,38 +282,52 @@ impl Executor {
                         s.ctx.get_current_session().txn_mgr().lock().set_fail();
                     }
                 }
-                guard.state = Stopped(Box::new(ExecuteStopped {
+                ExecuteStopped {
                     stats: Default::default(),
                     schema: vec![],
                     has_result_set: None,
-                    reason,
+                    reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
                     warnings: s.ctx.pop_warnings(),
                     affect: Default::default(),
-                }))
+                }
             }
             Running(r) => {
+                info!(
+                    "{}: http query changing state from Running to Stopped, reason {:?}",
+                    &guard.query_id, reason
+                );
                 if let Err(e) = &reason {
                     if e.code() != ErrorCode::CLOSED_QUERY {
                         r.session.txn_mgr().lock().set_fail();
                     }
                     r.session.force_kill_query(e.clone());
                 }
-
-                guard.state = Stopped(Box::new(ExecuteStopped {
+                ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
                     has_result_set: Some(r.has_result_set),
-                    reason,
+                    reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
                     warnings: r.ctx.pop_warnings(),
                     affect: r.ctx.get_affect(),
-                }))
+                }
             }
-            Stopped(_) => {}
-        }
+            Stopped(s) => {
+                debug!(
+                    "{}: http query already stopped, reason {:?}, new reason {:?}",
+                    &guard.query_id, s.reason, reason
+                );
+                return;
+            }
+        };
+        info!(
+            "{}: http query has change state to Stopped, reason {:?}",
+            &guard.query_id, reason
+        );
+        guard.state = Stopped(Box::new(state));
     }
 }
 
@@ -329,13 +340,16 @@ impl ExecuteState {
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
         format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
-    ) -> Result<()> {
+    ) -> Result<(), ExecutionError> {
+        let make_error = || format!("failed to start query: {sql}");
+
         info!("http query prepare to plan sql");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
             .await
-            .map_err(|err| err.display_with_sql(&sql))?;
+            .map_err(|err| err.display_with_sql(&sql))
+            .with_context(make_error)?;
 
         let query_queue_manager = QueriesQueueManager::instance();
 
@@ -344,19 +358,24 @@ impl ExecuteState {
             query_queue_manager.length()
         );
 
-        let entry = QueryEntry::create(&ctx, &plan, &extras)?;
-        let queue_guard = query_queue_manager.acquire(entry).await?;
+        let entry = QueryEntry::create(&ctx, &plan, &extras).with_context(make_error)?;
+        let queue_guard = query_queue_manager
+            .acquire(entry)
+            .await
+            .with_context(make_error)?;
         {
             // set_var may change settings
             let mut guard = format_settings.write();
-            *guard = Some(ctx.get_format_settings()?);
+            *guard = Some(ctx.get_format_settings().with_context(make_error)?);
         }
         info!(
             "http query finished acquiring from queue, length: {}",
             query_queue_manager.length()
         );
 
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
+            .await
+            .with_context(make_error)?;
         let has_result_set = plan.has_result_set();
         let schema = if has_result_set {
             // check has_result_set first for safety
@@ -407,32 +426,21 @@ async fn execute(
     ctx: Arc<QueryContext>,
     block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
-) -> Result<()> {
-    let data_stream_res = interpreter.execute(ctx.clone()).await;
-    if let Err(err) = data_stream_res {
-        // duplicate codes, but there is an async call
-        let data = BlockEntry::new(
-            DataType::String,
-            databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
-        );
-        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
-        return Err(err);
-    }
-    let mut data_stream = data_stream_res.unwrap();
+) -> Result<(), ExecutionError> {
+    let make_error = || format!("failed to execute {}", interpreter.name());
+
+    let mut data_stream = interpreter
+        .execute(ctx.clone())
+        .await
+        .with_context(make_error)?;
     match data_stream.next().await {
         None => {
             let block = DataBlock::empty_with_schema(schema);
             block_sender.send(block, 0).await;
-            Executor::stop(&executor, Ok(())).await;
+            Executor::stop::<()>(&executor, Ok(())).await;
             block_sender.close();
         }
         Some(Err(err)) => {
-            // duplicate codes, but there is an async call
-            let data = BlockEntry::new(
-                DataType::String,
-                databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
-            );
-            block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err)).await;
             block_sender.close();
         }
@@ -445,20 +453,12 @@ async fn execute(
                         block_sender.send(block.clone(), block.num_rows()).await;
                     }
                     Err(err) => {
-                        // duplicate codes, but there is an async call
-                        let data = BlockEntry::new(
-                            DataType::String,
-                            databend_common_expression::Value::Scalar(Scalar::String(
-                                err.to_string(),
-                            )),
-                        );
-                        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
                         block_sender.close();
-                        return Err(err);
+                        return Err(err.with_context(make_error()));
                     }
                 };
             }
-            Executor::stop(&executor, Ok(())).await;
+            Executor::stop::<()>(&executor, Ok(())).await;
             block_sender.close();
         }
     }

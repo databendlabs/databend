@@ -11,17 +11,24 @@ doctest = false
 test = true
 
 [dependencies]
+anyhow = { workspace = true }
 backtrace = { workspace = true }
+chrono = { workspace = true }
 color-backtrace = { version = "0.6" }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 defer = "0.2"
-fern = "0.6.2"
-humantime = "2.1.0"
+fastrace = { workspace = true }
+fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
+libc = "0.2.153"
 log = { workspace = true }
-minitrace = { workspace = true }
-minitrace-opentelemetry = { workspace = true }
+logforth = { version = "0.12", features = [
+    'json',
+    'rolling_file',
+    'opentelemetry',
+    'fastrace',
+] }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
@@ -29,7 +36,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 strip-ansi-escapes = "0.2"
 tonic = { workspace = true }
-tracing-appender = { workspace = true }
 
 [dev-dependencies]
 

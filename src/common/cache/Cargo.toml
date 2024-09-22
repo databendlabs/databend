@@ -10,16 +10,9 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[features]
-heapsize = ["heapsize_"]
-
 [dependencies]
-bytes = { workspace = true }
 hashbrown = { workspace = true }
 hashlink = "0.8"
-
-[target.'cfg(not(target_os = "macos"))'.dependencies]
-heapsize_ = { package = "heapsize", version = "0.4.2", optional = true }
 
 [dev-dependencies]
 

@@ -39,7 +39,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -97,7 +97,8 @@ impl MatchedAggregator {
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
     ) -> Result<Self> {
-        let target_table_schema = table.schema_with_stream();
+        let target_table_schema =
+            Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
         let data_accessor = table.get_operator();
         let write_settings = table.get_write_settings();
         let update_stream_columns = table.change_tracking_enabled();
@@ -126,6 +127,7 @@ impl MatchedAggregator {
                 target_table_schema,
                 table.get_table_info().ident.seq,
                 true,
+                false,
             )?)
         } else {
             None
@@ -155,7 +157,7 @@ impl MatchedAggregator {
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
         // An optimization: If we use target table as build side, the deduplicate will be done
         // in hashtable probe phase.In this case, We don't support delete for now, so we
-        // don't to add MergeStatus here.
+        // don't to add MutationStatus here.
         if data_block.get_meta().is_some() && data_block.is_empty() {
             let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
             if meta_index.is_some() {
@@ -208,24 +210,17 @@ impl MatchedAggregator {
                 }
             }
             RowIdKind::Delete => {
+                let mut num_deleted_rows = 0;
                 for row_id in row_ids.iter() {
                     let (prefix, offset) =
                         split_row_id(row_id.as_number().unwrap().into_u_int64().unwrap());
                     let value = self.block_mutation_row_offset.get(&prefix);
                     if value.is_none() {
-                        self.ctx.add_merge_status(MergeStatus {
-                            insert_rows: 0,
-                            update_rows: 0,
-                            deleted_rows: 1,
-                        });
+                        num_deleted_rows += 1;
                     } else {
                         let s = value.unwrap();
                         if !s.1.contains(&(offset as usize)) {
-                            self.ctx.add_merge_status(MergeStatus {
-                                insert_rows: 0,
-                                update_rows: 0,
-                                deleted_rows: 1,
-                            });
+                            num_deleted_rows += 1;
                         }
                     }
                     // support idempotent delete
@@ -235,6 +230,11 @@ impl MatchedAggregator {
                         .1
                         .insert(offset as usize);
                 }
+                self.ctx.add_mutation_status(MutationStatus {
+                    insert_rows: 0,
+                    update_rows: 0,
+                    deleted_rows: num_deleted_rows,
+                });
             }
         };
         let elapsed_time = start.elapsed().as_millis() as u64;

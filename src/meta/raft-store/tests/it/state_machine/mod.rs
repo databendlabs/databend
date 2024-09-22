@@ -19,6 +19,9 @@ use std::time::UNIX_EPOCH;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_raft_store::state_machine::StateMachine;
 use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Cmd;
@@ -26,14 +29,11 @@ use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::EntryPayload;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use log::info;
@@ -47,7 +47,7 @@ mod expire;
 mod schema_api_impl;
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -119,7 +119,7 @@ async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -296,7 +296,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Result<()> {
     // - Update a value-meta of None does nothing.
     // - Update a value-meta of Some() only updates the value-meta.
@@ -395,7 +395,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
     struct T {
         // input:

@@ -43,7 +43,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
-use crate::plans::SrfItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::BaseTableColumn;
@@ -105,7 +104,7 @@ impl SubqueryRewriter {
                     scan_columns.insert(derived_col);
                 }
             }
-            let mut logical_get = SExpr::create_leaf(Arc::new(
+            let mut scan = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: scan_columns,
@@ -114,15 +113,15 @@ impl SubqueryRewriter {
                 .into(),
             ));
             if !scalar_items.is_empty() {
-                // Wrap `EvalScalar` to `logical_get`.
-                logical_get = SExpr::create_unary(
+                // Wrap `EvalScalar` to `scan`.
+                scan = SExpr::create_unary(
                     Arc::new(
                         EvalScalar {
                             items: scalar_items,
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
             if self.ctx.get_cluster().is_empty() {
@@ -144,19 +143,16 @@ impl SubqueryRewriter {
                         index: column_index,
                     });
                 }
-                logical_get = SExpr::create_unary(
+                scan = SExpr::create_unary(
                     Arc::new(
                         Aggregate {
                             mode: AggregateMode::Initial,
                             group_items,
-                            aggregate_functions: vec![],
-                            from_distinct: false,
-                            limit: None,
-                            grouping_sets: None,
+                            ..Default::default()
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
 
@@ -175,7 +171,7 @@ impl SubqueryRewriter {
 
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(logical_get),
+                Arc::new(scan),
                 Arc::new(plan.clone()),
             ));
         }
@@ -324,7 +320,7 @@ impl SubqueryRewriter {
         )?;
         let mut srfs = Vec::with_capacity(project_set.srfs.len());
         for item in project_set.srfs.iter() {
-            let new_item = SrfItem {
+            let new_item = ScalarItem {
                 scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
                 index: item.index,
             };
@@ -624,7 +620,7 @@ impl SubqueryRewriter {
                     group_items,
                     aggregate_functions: agg_items,
                     from_distinct: aggregate.from_distinct,
-                    limit: aggregate.limit,
+                    rank_limit: aggregate.rank_limit.clone(),
                     grouping_sets: aggregate.grouping_sets.clone(),
                 }
                 .into(),

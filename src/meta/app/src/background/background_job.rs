@@ -20,6 +20,7 @@ use std::str::FromStr;
 use chrono::DateTime;
 use chrono::Utc;
 use cron::Schedule;
+use databend_common_meta_types::SeqV;
 
 use crate::background::BackgroundJobIdIdent;
 use crate::background::BackgroundJobIdent;
@@ -256,11 +257,11 @@ impl Display for GetBackgroundJobReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundJobReply {
     pub id_ident: BackgroundJobIdIdent,
-    pub info: BackgroundJobInfo,
+    pub info: SeqV<BackgroundJobInfo>,
 }
 
 impl GetBackgroundJobReply {
-    pub fn new(id_ident: BackgroundJobIdIdent, info: BackgroundJobInfo) -> Self {
+    pub fn new(id_ident: BackgroundJobIdIdent, info: SeqV<BackgroundJobInfo>) -> Self {
         Self { id_ident, info }
     }
 }

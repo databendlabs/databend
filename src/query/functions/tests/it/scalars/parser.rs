@@ -23,6 +23,7 @@ use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::decimal::DecimalDataType;
@@ -36,7 +37,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
@@ -558,6 +558,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         }
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
         databend_common_ast::ast::TypeName::Geometry => DataType::Geometry,
+        databend_common_ast::ast::TypeName::Geography => DataType::Geography,
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }

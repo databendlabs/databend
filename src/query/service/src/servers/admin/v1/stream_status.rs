@@ -18,9 +18,8 @@ use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_storages_common_txn::TxnManager;
+use fastrace::func_name;
 use log::debug;
-use minitrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
@@ -45,7 +44,7 @@ async fn check_stream_status(
     tenant: &Tenant,
     params: Query<StreamStatusQuery>,
 ) -> Result<StreamStatusResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
+    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
     let db_name = params.database.clone().unwrap_or("default".to_string());
     let tbl = catalog
         .get_table(tenant, &db_name, &params.stream_name)
@@ -75,7 +74,7 @@ pub async fn stream_status_handler(
     params: Query<StreamStatusQuery>,
 ) -> poem::Result<impl IntoResponse> {
     debug!(
-        "check_stream_stauts: tenant: {}, params: {:?}",
+        "check_stream_status: tenant: {}, params: {:?}",
         tenant, params
     );
 

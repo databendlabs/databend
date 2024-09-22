@@ -1,0 +1,8 @@
+insecure-entitlements = ["network.host", "security.insecure"]
+
+[registry."docker.io"]
+http = true
+insecure = true
+mirrors = ["docker-registry-mirror:5000"]
+[registry."docker-registry-mirror:5000"]
+http = true

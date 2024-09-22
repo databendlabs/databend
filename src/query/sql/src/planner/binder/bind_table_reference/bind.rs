@@ -35,7 +35,8 @@ impl Binder {
                 temporal,
                 pivot: _,
                 unpivot: _,
-                consume,
+                with_options,
+                sample,
             } => self.bind_table(
                 bind_context,
                 span,
@@ -44,7 +45,8 @@ impl Binder {
                 table,
                 alias,
                 temporal,
-                *consume,
+                with_options,
+                sample,
             ),
             TableReference::TableFunction {
                 span,
@@ -52,8 +54,17 @@ impl Binder {
                 params,
                 named_params,
                 alias,
+                sample,
                 ..
-            } => self.bind_table_function(bind_context, span, name, params, named_params, alias),
+            } => self.bind_table_function(
+                bind_context,
+                span,
+                name,
+                params,
+                named_params,
+                alias,
+                sample,
+            ),
             TableReference::Subquery {
                 span: _,
                 lateral,

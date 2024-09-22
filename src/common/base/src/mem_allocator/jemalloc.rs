@@ -46,19 +46,13 @@ pub mod linux {
     use super::JEAllocator;
     use crate::runtime::ThreadTracker;
 
-    #[cfg(any(
-        target_arch = "arm",
-        target_arch = "mips",
-        target_arch = "mipsel",
-        target_arch = "powerpc"
-    ))]
+    #[cfg(any(target_arch = "arm", target_arch = "mips", target_arch = "powerpc"))]
     const ALIGNOF_MAX_ALIGN_T: usize = 8;
     #[cfg(any(
         target_arch = "x86",
         target_arch = "x86_64",
         target_arch = "aarch64",
         target_arch = "powerpc64",
-        target_arch = "powerpc64le",
         target_arch = "mips64",
         target_arch = "riscv64",
         target_arch = "s390x",

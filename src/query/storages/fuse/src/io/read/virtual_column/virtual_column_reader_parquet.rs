@@ -16,8 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::parquet::read as pread;
+use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
@@ -29,7 +28,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::infer_schema_with_extension;
+use databend_common_storage::parquet_rs::infer_schema_with_extension;
+use databend_common_storage::parquet_rs::read_metadata_sync;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::VirtualColumnReader;
@@ -71,20 +71,10 @@ impl VirtualColumnReader {
         read_settings: &ReadSettings,
         loc: &str,
     ) -> Option<VirtualMergeIOReadResult> {
-        let meta = self.reader.operator.blocking().stat(loc).ok()?;
-        let mut reader = self
-            .reader
-            .operator
-            .blocking()
-            .reader(loc)
-            .ok()?
-            .into_std_read(0..meta.content_length())
-            .ok()?;
-
-        let metadata = pread::read_metadata(&mut reader).ok()?;
-        debug_assert_eq!(metadata.row_groups.len(), 1);
-        let row_group = &metadata.row_groups[0];
-        let schema = infer_schema_with_extension(&metadata).ok()?;
+        let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
+        debug_assert_eq!(metadata.num_row_groups(), 1);
+        let row_group = &metadata.row_groups()[0];
+        let schema = infer_schema_with_extension(metadata.file_metadata()).ok()?;
         let columns_meta = build_columns_meta(row_group);
 
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
@@ -121,15 +111,10 @@ impl VirtualColumnReader {
         read_settings: &ReadSettings,
         loc: &str,
     ) -> Option<VirtualMergeIOReadResult> {
-        let meta = self.reader.operator.stat(loc).await.ok()?;
-        let reader = self.reader.operator.reader(loc).await.ok()?;
-
-        let metadata = pread::read_metadata_async(reader, meta.content_length())
-            .await
-            .ok()?;
-        let schema = infer_schema_with_extension(&metadata).ok()?;
-        debug_assert_eq!(metadata.row_groups.len(), 1);
-        let row_group = &metadata.row_groups[0];
+        let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
+        let schema = infer_schema_with_extension(metadata.file_metadata()).ok()?;
+        debug_assert_eq!(metadata.num_row_groups(), 1);
+        let row_group = &metadata.row_groups()[0];
         let columns_meta = build_columns_meta(row_group);
 
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
@@ -177,7 +162,7 @@ impl VirtualColumnReader {
         let mut virtual_src_cnts = self.virtual_src_cnts.clone();
         for virtual_column in self.virtual_column_infos.iter() {
             for (i, f) in schema.fields.iter().enumerate() {
-                if f.name == virtual_column.name {
+                if f.name() == &virtual_column.name {
                     if let Some(column_meta) = columns_meta.get(&(i as u32)) {
                         let (offset, len) = column_meta.offset_length();
                         ranges.push((i as u32, offset..(offset + len)));

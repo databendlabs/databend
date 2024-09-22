@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package meta;
 
+import "raft.proto";
 import "request.proto";
 
 message Empty {}
@@ -27,6 +28,12 @@ message RaftRequest {
 message RaftReply {
   string data = 1;
   string error = 2;
+}
+
+message TransferLeaderRequest {
+  Vote from = 1;
+  uint64 to = 2;
+  LogId last_log_id = 3;
 }
 
 message MemberListRequest { string data = 1; }
@@ -252,6 +259,7 @@ service RaftService {
   rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
   rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (SnapshotResponseV003);
   rpc Vote(RaftRequest) returns (RaftReply);
+  rpc TransferLeader(TransferLeaderRequest) returns (Empty);
 }
 
 service MetaService {

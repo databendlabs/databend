@@ -350,21 +350,33 @@ impl ClusterDiscovery {
     async fn detect_local(cfg: &InnerConfig, api: &Arc<dyn ClusterApi>) -> Result<NodeInfo> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
+        let mut discovery_address = match cfg.query.discovery_address.is_empty() {
+            true => format!(
+                "{}:{}",
+                cfg.query.http_handler_host, cfg.query.http_handler_port
+            ),
+            false => cfg.query.discovery_address.clone(),
+        };
 
-        if let Ok(socket_addr) = SocketAddr::from_str(&address) {
-            let ip_addr = socket_addr.ip();
-            if ip_addr.is_loopback() || ip_addr.is_unspecified() {
-                if let Some(local_addr) = api.get_local_addr().await? {
-                    let local_socket_addr = SocketAddr::from_str(&local_addr)?;
-                    let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
-                    warn!(
-                        "Detected loopback or unspecified address as cluster flight endpoint. \
-                        We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
-                        If there are proxies between nodes, you can specify endpoint with --flight-api-address.",
-                        address, new_addr
-                    );
+        for (lookup_ip, typ) in [
+            (&mut address, "flight-api-address"),
+            (&mut discovery_address, "discovery-address"),
+        ] {
+            if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
+                let ip_addr = socket_addr.ip();
+                if ip_addr.is_loopback() || ip_addr.is_unspecified() {
+                    if let Some(local_addr) = api.get_local_addr().await? {
+                        let local_socket_addr = SocketAddr::from_str(&local_addr)?;
+                        let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
+                        warn!(
+                            "Detected loopback or unspecified address as {} endpoint. \
+                            We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
+                            If there are proxies between nodes, you can specify endpoint with --{}.",
+                            typ, lookup_ip, new_addr, typ
+                        );
 
-                    address = new_addr;
+                        *lookup_ip = new_addr;
+                    }
                 }
             }
         }
@@ -374,6 +386,7 @@ impl ClusterDiscovery {
             cfg.query.node_secret.clone(),
             cpus,
             address,
+            discovery_address,
             DATABEND_COMMIT_VERSION.to_string(),
         ))
     }
@@ -444,7 +457,7 @@ impl ClusterDiscovery {
         )
     }
 
-    async fn get_license_key(tenant: &str) -> Result<String, ErrorCode> {
+    async fn get_license_key(tenant: &str) -> Result<String> {
         // We must get the license key from settings. It may be in the configuration file.
         let settings = Settings::create(Tenant::new_literal(tenant));
         settings.load_changes().await?;

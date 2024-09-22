@@ -174,6 +174,7 @@ pub struct QueryConfig {
     pub http_handler_port: u16,
     pub http_handler_result_timeout_secs: u64,
     pub flight_api_address: String,
+    pub discovery_address: String,
     pub flight_sql_handler_host: String,
     pub flight_sql_handler_port: u16,
     pub admin_api_address: String,
@@ -214,6 +215,8 @@ pub struct QueryConfig {
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
+    // enable_meta_data_upgrade_json_to_pb_from_v307
+    pub upgrade_to_pb: bool,
     pub internal_enable_sandbox_tenant: bool,
     pub internal_merge_on_read_mutation: bool,
     /// Disable some system load(For example system.configs) for cloud security.
@@ -232,6 +235,7 @@ pub struct QueryConfig {
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
+    pub udf_server_allow_insecure: bool,
 
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
@@ -264,6 +268,7 @@ impl Default for QueryConfig {
             flight_api_address: "127.0.0.1:9090".to_string(),
             flight_sql_handler_host: "127.0.0.1".to_string(),
             flight_sql_handler_port: 8900,
+            discovery_address: "".to_string(),
             admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             api_tls_server_cert: "".to_string(),
@@ -293,6 +298,7 @@ impl Default for QueryConfig {
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
+            upgrade_to_pb: false,
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
@@ -305,6 +311,7 @@ impl Default for QueryConfig {
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
+            udf_server_allow_insecure: false,
             cloud_control_grpc_server_address: None,
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
@@ -362,7 +369,7 @@ impl Default for MetaConfig {
             endpoints: vec![],
             username: "root".to_string(),
             password: "".to_string(),
-            client_timeout_in_second: 10,
+            client_timeout_in_second: 4,
             auto_sync_interval: 0,
             unhealth_endpoint_evict_time: 120,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
@@ -611,6 +618,15 @@ impl Default for CacheStorageTypeConfig {
     }
 }
 
+impl Display for CacheStorageTypeConfig {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            CacheStorageTypeConfig::None => write!(f, "none"),
+            CacheStorageTypeConfig::Disk => write!(f, "disk"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiskCacheKeyReloadPolicy {
     // remove all the disk cache during restart
@@ -626,20 +642,11 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-impl ToString for CacheStorageTypeConfig {
-    fn to_string(&self) -> String {
+impl Display for DiskCacheKeyReloadPolicy {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            CacheStorageTypeConfig::None => "none".to_string(),
-            CacheStorageTypeConfig::Disk => "disk".to_string(),
-        }
-    }
-}
-
-impl ToString for DiskCacheKeyReloadPolicy {
-    fn to_string(&self) -> String {
-        match self {
-            DiskCacheKeyReloadPolicy::Reset => "reset".to_string(),
-            DiskCacheKeyReloadPolicy::Fuzzy => "fuzzy".to_string(),
+            DiskCacheKeyReloadPolicy::Reset => write!(f, "reset"),
+            DiskCacheKeyReloadPolicy::Fuzzy => write!(f, "fuzzy"),
         }
     }
 }

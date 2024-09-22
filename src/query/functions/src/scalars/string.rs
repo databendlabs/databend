@@ -37,6 +37,52 @@ use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use stringslice::StringSlice;
 
+pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
+    "upper",
+    "lower",
+    "bit_length",
+    "octet_length",
+    "length",
+    "lpad",
+    "rpad",
+    "insert",
+    "replace",
+    "translate",
+    "to_uuid",
+    "strcmp",
+    "instr",
+    "position",
+    "locate",
+    "quote",
+    "reverse",
+    "ascii",
+    "ltrim",
+    "rtrim",
+    "trim",
+    "trim_leading",
+    "trim_trailing",
+    "trim_both",
+    "to_hex",
+    "bin",
+    "oct",
+    "to_hex",
+    "repeat",
+    "ord",
+    "soundex",
+    "space",
+    "left",
+    "right",
+    "substr",
+    "split",
+    "split_part",
+    "concat",
+    "concat_ws",
+    "regexp_instr",
+    "regexp_like",
+    "regexp_replace",
+    "regexp_substr",
+];
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
     registry.register_aliases("upper", &["ucase"]);

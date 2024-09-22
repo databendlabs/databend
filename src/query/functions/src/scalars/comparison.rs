@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_expression::gerenate_like_pattern;
+use databend_common_expression::generate_like_pattern;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::AnyType;
@@ -494,7 +494,7 @@ fn register_like(registry: &mut FunctionRegistry) {
         "like",
         |_, lhs, rhs| {
             if rhs.max.as_ref() == Some(&rhs.min) {
-                let pattern_type = gerenate_like_pattern(rhs.min.as_bytes());
+                let pattern_type = generate_like_pattern(rhs.min.as_bytes());
 
                 if pattern_type == LikePattern::OrdinalStr {
                     return lhs.domain_eq(rhs);
@@ -565,13 +565,13 @@ fn vectorize_like(
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes());
             Value::Scalar(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
 
-            let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes());
             // faster path for memmem to have a single instance of Finder
             if pattern_type == LikePattern::SurroundByPercent && arg2.len() > 2 {
                 let finder = memmem::Finder::new(&arg2[1..arg2.len() - 1]);
@@ -590,7 +590,7 @@ fn vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
-                let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes());
                 builder.push(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
@@ -600,7 +600,7 @@ fn vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes());
                 builder.push(func(arg1.as_bytes(), arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
@@ -614,13 +614,13 @@ fn variant_vectorize_like(
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes());
             Value::Scalar(func(arg1, arg2.as_bytes(), ctx, &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = VariantType::iter_column(&arg1);
 
-            let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes());
             // faster path for memmem to have a single instance of Finder
             if pattern_type == LikePattern::SurroundByPercent && arg2.len() > 2 {
                 let finder = memmem::Finder::new(&arg2[1..arg2.len() - 1]);
@@ -639,7 +639,7 @@ fn variant_vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
-                let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes());
                 builder.push(func(arg1, arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())
@@ -649,7 +649,7 @@ fn variant_vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = gerenate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes());
                 builder.push(func(arg1, arg2.as_bytes(), ctx, &pattern_type));
             }
             Value::Column(builder.into())

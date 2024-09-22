@@ -42,7 +42,13 @@ impl<'a> Binder {
                         &table.database,
                         &table.table,
                     );
-                let subquery = format!("SELECT * FROM {catalog_name}.{database_name}.{table_name}");
+                let with_options_str = table
+                    .with_options
+                    .as_ref()
+                    .map_or(String::new(), |with_options| format!(" {with_options}"));
+                let subquery = format!(
+                    "SELECT * FROM \"{catalog_name}\".\"{database_name}\".\"{table_name}\"{with_options_str}"
+                );
                 let tokens = tokenize_sql(&subquery)?;
                 let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;
                 let sub_stmt = sub_stmt_msg.0;

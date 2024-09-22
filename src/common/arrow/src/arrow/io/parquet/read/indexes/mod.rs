@@ -350,6 +350,7 @@ pub fn compute_page_row_intervals(
 /// the set of [`FilteredPage`] that fulfill the predicate.
 ///
 /// The non-trivial argument of this function is `predicate`, that controls which pages are selected.
+///
 /// Its signature contains 2 arguments:
 /// * 0th argument (indexes): contains one [`ColumnPageStatistics`] (page statistics) per field.
 ///   Use it to evaluate the predicate against
@@ -357,6 +358,7 @@ pub fn compute_page_row_intervals(
 ///   For each field, the outermost vector corresponds to each parquet column:
 ///   a primitive field contains 1 column, a struct field with 2 primitive fields contain 2 columns.
 ///   The inner `Vec<Interval>` contains one [`Interval`] per page: its length equals the length of [`ColumnPageStatistics`].
+///
 /// It returns a single [`Vec<Interval>`] denoting the set of intervals that the predicate selects (over all columns).
 ///
 /// This returns one item per `field`. For each field, there is one item per column (for non-nested types it returns one column)

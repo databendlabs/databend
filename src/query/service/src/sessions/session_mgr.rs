@@ -20,7 +20,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
-use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
@@ -265,24 +264,7 @@ impl SessionManager {
     }
 
     pub fn processes_info(&self) -> Vec<ProcessInfo> {
-        let active_sessions = {
-            // Here the situation is the same of method `graceful_shutdown`:
-            //
-            // We should drop the read lock before
-            // - acquiring upgraded session reference: the Arc<Session>,
-            // - extracting the ProcessInfo from it
-            // - and then drop the Arc<Session>
-            // Since there are chances that we are the last one that holding the reference, and the
-            // destruction of session need to acquire the write lock of `active_sessions`, which leads
-            // to dead lock.
-            //
-            // Although online expression can also do this, to make this clearer, we wrap it in a block
-
-            let active_sessions_guard = self.active_sessions.read();
-            active_sessions_guard.values().cloned().collect::<Vec<_>>()
-        };
-
-        active_sessions
+        self.active_sessions_snapshot()
             .into_iter()
             .filter_map(|weak_ptr| weak_ptr.upgrade().map(|session| session.process_info()))
             .collect::<Vec<_>>()
@@ -328,11 +310,9 @@ impl SessionManager {
 
         let mut running_queries_count = 0;
         let mut active_sessions_count = 0;
-        let mut max_running_query_execute_time = 0;
+        let mut max_running_query_executed_secs = 0;
 
-        let now = SystemTime::now();
-        let active_sessions = self.active_sessions.read();
-        for session in active_sessions.values() {
+        for session in self.active_sessions_snapshot() {
             if let Some(session_ref) = session.upgrade() {
                 if !session_ref.get_type().is_user_session() {
                     continue;
@@ -342,41 +322,26 @@ impl SessionManager {
                 if process_info.state == ProcessInfoState::Query {
                     running_queries_count += 1;
 
-                    let executed_time = process_info.created_time.duration_since(now);
-                    let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
-
-                    max_running_query_execute_time =
-                        std::cmp::max(max_running_query_execute_time, execute_time_seconds);
+                    let query_executed_secs = process_info
+                        .created_time
+                        .elapsed()
+                        .map(|x| x.as_secs())
+                        .unwrap_or(0);
+                    max_running_query_executed_secs =
+                        std::cmp::max(max_running_query_executed_secs, query_executed_secs);
                 }
             }
         }
 
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
-        status_t.max_running_query_execute_time = max_running_query_execute_time;
+        status_t.max_running_query_executed_secs = max_running_query_executed_secs;
         status_t
     }
 
     pub fn get_queries_profiles(&self) -> HashMap<String, Vec<PlanProfile>> {
-        let active_sessions = {
-            // Here the situation is the same of method `graceful_shutdown`:
-            //
-            // We should drop the read lock before
-            // - acquiring upgraded session reference: the Arc<Session>,
-            // - extracting the ProcessInfo from it
-            // - and then drop the Arc<Session>
-            // Since there are chances that we are the last one that holding the reference, and the
-            // destruction of session need to acquire the write lock of `active_sessions`, which leads
-            // to dead lock.
-            //
-            // Although online expression can also do this, to make this clearer, we wrap it in a block
-
-            let active_sessions_guard = self.active_sessions.read();
-            active_sessions_guard.values().cloned().collect::<Vec<_>>()
-        };
-
         let mut queries_profiles = HashMap::new();
-        for weak_ptr in active_sessions {
+        for weak_ptr in self.active_sessions_snapshot() {
             let Some(arc_session) = weak_ptr.upgrade() else {
                 continue;
             };
@@ -395,24 +360,7 @@ impl SessionManager {
     }
 
     pub fn get_query_profiles(&self, query_id: &str) -> Result<Vec<PlanProfile>> {
-        let active_sessions = {
-            // Here the situation is the same of method `graceful_shutdown`:
-            //
-            // We should drop the read lock before
-            // - acquiring upgraded session reference: the Arc<Session>,
-            // - extracting the ProcessInfo from it
-            // - and then drop the Arc<Session>
-            // Since there are chances that we are the last one that holding the reference, and the
-            // destruction of session need to acquire the write lock of `active_sessions`, which leads
-            // to dead lock.
-            //
-            // Although online expression can also do this, to make this clearer, we wrap it in a block
-
-            let active_sessions_guard = self.active_sessions.read();
-            active_sessions_guard.values().cloned().collect::<Vec<_>>()
-        };
-
-        for weak_ptr in active_sessions {
+        for weak_ptr in self.active_sessions_snapshot() {
             let Some(arc_session) = weak_ptr.upgrade() else {
                 continue;
             };
@@ -430,5 +378,22 @@ impl SessionManager {
             "Unknown query {}",
             query_id
         )))
+    }
+
+    fn active_sessions_snapshot(&self) -> Vec<Weak<Session>> {
+        // Here the situation is the same of method `graceful_shutdown`:
+        //
+        // We should drop the read lock before
+        // - acquiring upgraded session reference: the Arc<Session>,
+        // - extracting the ProcessInfo from it
+        // - and then drop the Arc<Session>
+        // Since there are chances that we are the last one that holding the reference, and the
+        // destruction of session need to acquire the write lock of `active_sessions`, which leads
+        // to dead lock.
+        //
+        // Although online expression can also do this, to make this clearer, we wrap it in a block
+
+        let active_sessions_guard = self.active_sessions.read();
+        active_sessions_guard.values().cloned().collect::<Vec<_>>()
     }
 }

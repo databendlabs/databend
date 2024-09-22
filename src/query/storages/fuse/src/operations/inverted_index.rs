@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -30,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
@@ -47,6 +47,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
+use crate::io::block_to_inverted_index;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
@@ -218,7 +219,6 @@ impl InvertedIndexSource {
 impl AsyncSource for InvertedIndexSource {
     const NAME: &'static str = "InvertedIndexSource";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
@@ -294,7 +294,10 @@ impl AsyncTransform for InvertedIndexTransform {
         let mut writer =
             InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
         writer.add_block(&self.source_schema, &data_block)?;
-        let data = writer.finalize()?;
+
+        let (index_schema, index_block) = writer.finalize()?;
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = block_to_inverted_index(&index_schema, index_block, &mut data)?;
         let index_size = data.len() as u64;
         write_data(data, &self.operator, &index_location).await?;
 
@@ -328,7 +331,6 @@ impl InvertedIndexSink {
 impl AsyncSink for InvertedIndexSink {
     const NAME: &'static str = "InvertedIndexSink";
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
         let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);

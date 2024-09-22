@@ -103,53 +103,17 @@ TableScan
 query T
 explain select * from numbers(1) where number = 0 and false
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 1.00
+EmptyResultScan
 
 query T
 explain select * from numbers(1) where number = 0 and null
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 1.00
+EmptyResultScan
 
 query T
 explain select * from numbers(1) where null
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 1.00
+EmptyResultScan
 
 query T
 explain select a from (select number as a, number as b from numbers(1))
@@ -180,19 +144,7 @@ TableScan
 query T
 explain select * from (select * from numbers(100)  where  number> 33 ) where 1=2;
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 100.00
+EmptyResultScan
 
 statement ok
 drop table if exists t_json

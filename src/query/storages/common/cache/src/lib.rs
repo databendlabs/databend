@@ -13,23 +13,25 @@
 // limitations under the License.
 
 #![feature(write_all_vectored)]
+#![feature(associated_type_defaults)]
 
 mod cache;
+mod caches;
+mod manager;
 mod providers;
 mod read;
 
 pub use cache::CacheAccessor;
-pub use cache::CacheAccessorExt;
-pub use cache::Named;
-pub use cache::NamedCache;
 pub use cache::Unit;
-pub use databend_common_cache::CountableMeter;
+pub use caches::BlockMetaCache;
+pub use caches::CacheValue;
+pub use caches::CachedObject;
+pub use caches::SizedColumnArray;
+pub use manager::CacheManager;
 pub use providers::DiskCacheError;
 pub use providers::DiskCacheKey;
 pub use providers::DiskCacheResult;
-pub use providers::InMemoryBytesCacheHolder;
-pub use providers::InMemoryCacheBuilder;
-pub use providers::InMemoryItemCacheHolder;
+pub use providers::InMemoryLruCache;
 pub use providers::LruDiskCache;
 pub use providers::LruDiskCacheBuilder;
 pub use providers::LruDiskCacheHolder;
@@ -39,7 +41,6 @@ pub use providers::TableDataCacheKey;
 pub use providers::DISK_TABLE_DATA_CACHE_NAME;
 pub use read::CacheKey;
 pub use read::CachedReader;
-pub use read::InMemoryBytesCacheReader;
 pub use read::InMemoryCacheReader;
 pub use read::InMemoryItemCacheReader;
 pub use read::LoadParams;

@@ -119,7 +119,7 @@ where
     /// When returning an existent one, `check()` will be called on it to ensure it is still valid.
     /// E.g., when returning a tcp connection.
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get(&self, key: &Mgr::Key) -> Result<Mgr::Item, Mgr::Error> {
         let pool_item = self.get_pool_item(key);
 

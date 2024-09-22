@@ -17,7 +17,7 @@ use chrono::Utc;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::storage::StorageS3Config;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

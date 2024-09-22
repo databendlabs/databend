@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::OrderedFloat;
 use ethnum::i256;
-use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
 use crate::types::geometry::GeometryType;
@@ -39,6 +39,15 @@ use crate::ScalarRef;
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
 pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
+    debug_assert!(!cols.is_empty());
+    let mut iter = cols.iter();
+    combine_group_hash_column::<true>(iter.next().unwrap(), values);
+    for col in iter {
+        combine_group_hash_column::<false>(col, values);
+    }
+}
+
+pub fn group_hash_columns_slice(cols: &[Column], values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
     let mut iter = cols.iter();
     combine_group_hash_column::<true>(iter.next().unwrap(), values);

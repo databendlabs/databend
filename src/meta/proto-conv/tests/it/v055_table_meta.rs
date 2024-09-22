@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -21,10 +20,9 @@ use databend_common_expression as ce;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use fastrace::func_name;
 use maplit::btreemap;
 use maplit::btreeset;
-use minitrace::func_name;
 
 use crate::common;
 
@@ -121,10 +119,7 @@ fn test_decode_v51_database_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
-        shared_by: BTreeSet::new(),
-        from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
-        using_share_endpoint: None,
-        from_share_db_id: None,
+        gc_in_progress: false,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

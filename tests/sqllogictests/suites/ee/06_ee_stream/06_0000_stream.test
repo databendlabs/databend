@@ -702,6 +702,20 @@ drop table replace_t1;
 statement ok
 drop table replace_t2;
 
+query TT
+show create table replace_s
+----
+replace_s CREATE STREAM `replace_s` ON TABLE `test_stream`.`replace_t2`
+
+statement ok
+set data_retention_time_in_days = 0
+
+statement ok
+vacuum drop table from test_stream
+
+statement error 1025
+show create table replace_s
+
 statement ok
 drop stream replace_s;
 

@@ -1,5 +1,5 @@
 statement ok
-create table range_t(c varchar, i int)
+create or replace table range_t(c varchar, i int)
 
 statement ok
 insert into range_t values ('bcd', 1), ('efg', 10)
@@ -33,11 +33,11 @@ explain select 1 from range_t where i > 20
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.40
+├── estimated rows: 0.00
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(range_t.i (#1) > 20)]
-    ├── estimated rows: 0.40
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.range_t
         ├── output columns: [i (#1)]
@@ -52,37 +52,13 @@ EvalScalar
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 10.00
+EmptyResultScan
 
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar)   < '10' and 1 = 0;
 ----
-Filter
-├── output columns: [numbers.number (#0)]
-├── filters: [false]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.numbers
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 10.00
+EmptyResultScan
 
 statement ok
 drop table range_t

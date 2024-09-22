@@ -71,7 +71,10 @@ struct RemoveIdentifierQuote;
 
 impl RemoveIdentifierQuote {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
-        ident.quote = None
+        if !ident.is_hole() && !ident.is_variable() {
+            ident.quote = None;
+            ident.name = ident.name.to_lowercase();
+        }
     }
 }
 
@@ -285,7 +288,7 @@ impl Binder {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
                             expr.drive_mut(&mut remove_quote_visitor);
-                            format!("{:#}", expr).to_lowercase()
+                            format!("{:#}", expr)
                         }
                     };
 

@@ -79,13 +79,14 @@ impl PipelineBuilder {
             self.main_pipeline.get_scopes(),
         );
         pipeline_builder.cte_state = self.cte_state.clone();
+        pipeline_builder.cte_scan_offsets = self.cte_scan_offsets.clone();
         pipeline_builder.hash_join_states = self.hash_join_states.clone();
 
         let mut build_res = pipeline_builder.finalize(input)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(2);
 
         build_res.main_pipeline.add_sink(|input_port| {
             Ok(ProcessorPtr::create(UnionReceiveSink::create(

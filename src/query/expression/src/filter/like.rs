@@ -183,7 +183,7 @@ pub fn is_like_pattern_escape(c: char) -> bool {
 /// 'a\\%row'
 /// '\\%' will be escaped to a percent. Need transform to `a%row`.
 #[inline]
-pub fn gerenate_like_pattern(pattern: &[u8]) -> LikePattern {
+pub fn generate_like_pattern(pattern: &[u8]) -> LikePattern {
     let len = pattern.len();
     if len == 0 {
         return LikePattern::OrdinalStr;
@@ -306,7 +306,7 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 #[test]
-fn test_gerenate_like_pattern() {
+fn test_generate_like_pattern() {
     let segments = vec![
         "databend".as_bytes().to_vec(),
         "cloud".as_bytes().to_vec(),
@@ -342,6 +342,6 @@ fn test_gerenate_like_pattern() {
         ("databend%cloud_data%warehouse", LikePattern::ComplexPattern),
     ];
     for (pattern, pattern_type) in test_cases {
-        assert_eq!(pattern_type, gerenate_like_pattern(pattern.as_bytes()));
+        assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes()));
     }
 }

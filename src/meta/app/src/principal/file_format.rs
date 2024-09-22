@@ -239,7 +239,7 @@ impl FileFormatParams {
             params.check().map_err(|msg| {
                 ErrorCode::BadArguments(format!(
                     "Invalid {} option value: {msg}",
-                    params.get_type().to_string()
+                    params.get_type()
                 ))
             })?;
             if reader.options.is_empty() {

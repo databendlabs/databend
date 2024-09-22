@@ -25,6 +25,7 @@ pub use bloom_pruner::BloomPruner;
 pub use bloom_pruner::BloomPrunerCreator;
 pub use fuse_pruner::FusePruner;
 pub use fuse_pruner::PruningContext;
+pub use inverted_index_pruner::create_inverted_index_query;
 pub use inverted_index_pruner::InvertedIndexPruner;
 pub use pruner_location::create_segment_location_vector;
 pub use pruner_location::SegmentLocation;

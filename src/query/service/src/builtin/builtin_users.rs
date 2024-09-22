@@ -197,7 +197,7 @@ mod tests {
         let builtin_users = BuiltinUsers::create(user_configs);
 
         let auth_infos = builtin_users.to_auth_infos();
-        assert!(auth_infos.get("user5").is_none());
+        assert!(!auth_infos.contains_key("user5"));
     }
 
     #[test]
@@ -206,7 +206,7 @@ mod tests {
         let builtin_users = BuiltinUsers::create(user_configs);
 
         let auth_infos = builtin_users.to_auth_infos();
-        assert!(auth_infos.get("user6").is_none());
+        assert!(!auth_infos.contains_key("user6"));
     }
 
     #[test]
@@ -215,6 +215,6 @@ mod tests {
         let builtin_users = BuiltinUsers::create(user_configs);
 
         let auth_infos = builtin_users.to_auth_infos();
-        assert!(auth_infos.get("user7").is_none());
+        assert!(!auth_infos.contains_key("user7"));
     }
 }

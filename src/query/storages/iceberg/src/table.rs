@@ -72,7 +72,7 @@ impl IcebergTable {
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let ctl = IcebergCatalog::try_create(info.catalog_info.clone())?;
-        let (db_name, table_name) = info.desc.as_str().split_once(',').ok_or_else(|| {
+        let (db_name, table_name) = info.desc.as_str().rsplit_once('.').ok_or_else(|| {
             ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", &info.desc))
         })?;
         Ok(Box::new(Self {
@@ -240,7 +240,7 @@ impl IcebergTable {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,

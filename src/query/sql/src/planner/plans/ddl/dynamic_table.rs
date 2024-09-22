@@ -36,7 +36,7 @@ pub struct CreateDynamicTablePlan {
     pub cluster_key: Option<String>,
     pub as_query: String,
 
-    pub traget_lag: TargetLag,
+    pub target_lag: TargetLag,
     pub warehouse_opts: WarehouseOptions,
     pub refresh_mode: RefreshMode,
     pub initialize: InitializeMode,

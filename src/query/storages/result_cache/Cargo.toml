@@ -11,9 +11,9 @@ doctest = false
 test = true
 
 [dependencies]
+arrow = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -23,15 +23,15 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sinks = { workspace = true }
-databend-common-pipeline-sources = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 

@@ -77,8 +77,8 @@ select count(*) from products;
 statement ok
 truncate table products;
 
-statement ok
-set max_threads = 1;
+#statement ok
+#set max_threads = 1;
 
 #query T
 #explain pipeline copy into products from (select $1,$2,$4 from @s1 as t2) force = true;

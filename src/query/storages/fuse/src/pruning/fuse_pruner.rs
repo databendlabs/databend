@@ -19,7 +19,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
@@ -27,9 +26,9 @@ use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::BlockMetaCache;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache_manager::BlockMetaCache;
-use databend_storages_common_cache_manager::CacheManager;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -48,6 +47,9 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
+use rand::thread_rng;
 
 use crate::io::BloomIndexBuilder;
 use crate::operations::DeletedSegmentInfo;
@@ -311,6 +313,7 @@ impl FusePruner {
                 let block_pruner = block_pruner.clone();
                 let segment_pruner = segment_pruner.clone();
                 let pruning_ctx = self.pruning_ctx.clone();
+                let push_down = self.push_down.clone();
 
                 async move {
                     // Build pruning tasks.
@@ -357,38 +360,44 @@ impl FusePruner {
                             );
                         }
                     } else {
+                        let sample_probability = table_sample(&push_down);
                         for (location, info) in pruned_segments {
-                            let block_metas =
+                            let mut block_metas =
                                 Self::extract_block_metas(&location.location.0, &info, true)?;
+                            if let Some(probability) = sample_probability {
+                                let mut sample_block_metas = Vec::with_capacity(block_metas.len());
+                                let mut rng = thread_rng();
+                                let bernoulli = Bernoulli::new(probability).unwrap();
+                                for block in block_metas.iter() {
+                                    if bernoulli.sample(&mut rng) {
+                                        sample_block_metas.push(block.clone());
+                                    }
+                                }
+                                block_metas = Arc::new(sample_block_metas);
+                            }
                             res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
                     }
-                    Result::<_, ErrorCode>::Ok((res, deleted_segments))
+                    Result::<_>::Ok((res, deleted_segments))
                 }
             }));
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let mut res = worker?;
-                    metas.extend(res.0);
-                    self.deleted_segments.append(&mut res.1);
-                }
-                if delete_pruning {
-                    Ok(metas)
-                } else {
-                    // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-                    // will get here, we can prevent other mutations like update and so on.
-                    // TopN pruner.
-                    self.topn_pruning(metas)
-                }
-            }
+        let workers = futures::future::try_join_all(works).await?;
+
+        let mut metas = vec![];
+        for worker in workers {
+            let mut res = worker?;
+            metas.extend(res.0);
+            self.deleted_segments.append(&mut res.1);
+        }
+        if delete_pruning {
+            Ok(metas)
+        } else {
+            // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+            // will get here, we can prevent other mutations like update and so on.
+            // TopN pruner.
+            self.topn_pruning(metas)
         }
     }
 
@@ -401,11 +410,10 @@ impl FusePruner {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {
-                let block_metas = Arc::new(segment.block_metas()?);
-                if populate_cache {
-                    cache.put(segment_path.to_string(), block_metas.clone());
+                match populate_cache {
+                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
+                    false => Ok(Arc::new(segment.block_metas()?)),
                 }
-                Ok(block_metas)
             }
         } else {
             Ok(Arc::new(segment.block_metas()?))
@@ -445,29 +453,23 @@ impl FusePruner {
                         )
                         .await?;
 
-                    Result::<_, ErrorCode>::Ok(res)
+                    Result::<_>::Ok(res)
                 }
             }));
             segment_idx += 1;
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let res = worker?;
-                    metas.extend(res);
-                }
-                // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-                // will get here, we can prevent other mutations like update and so on.
-                // TopN pruner.
-                self.topn_pruning(metas)
-            }
+        let workers = futures::future::try_join_all(works).await?;
+
+        let mut metas = vec![];
+        for worker in workers {
+            let res = worker?;
+            metas.extend(res);
         }
+        // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+        // will get here, we can prevent other mutations like update and so on.
+        // TopN pruner.
+        self.topn_pruning(metas)
     }
 
     // topn pruner:
@@ -528,5 +530,16 @@ impl FusePruner {
 
     pub fn get_inverse_range_index(&self) -> Option<RangeIndex> {
         self.inverse_range_index.clone()
+    }
+}
+
+fn table_sample(push_down_info: &Option<PushDownInfo>) -> Option<f64> {
+    if let Some(sample) = push_down_info
+        .as_ref()
+        .and_then(|info| info.sample.as_ref())
+    {
+        sample.sample_probability(None)
+    } else {
+        None
     }
 }

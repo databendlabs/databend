@@ -266,6 +266,14 @@ SELECT * FROM `05_0028_at_t0_4` order by a
 0.4 0 NULL
 
 statement ok
+ALTER TABLE `05_0028_at_t0_4` ADD COLUMN f string not null DEFAULT uuid()
+
+query I
+SELECT uniq(f) FROM `05_0028_at_t0_4`
+----
+4
+
+statement ok
 DROP TABLE IF EXISTS `05_0028_at_t0_3`
 
 statement ok

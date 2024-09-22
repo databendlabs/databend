@@ -57,6 +57,7 @@ pub fn add_building_env_vars() {
     add_env_credits_info();
     add_target_features();
     add_env_version();
+    add_env_license();
 }
 
 pub fn set_env_config() {
@@ -85,6 +86,11 @@ fn discover_version() -> Result<String> {
             Ok(tag)
         }
     }
+}
+
+pub fn add_env_license() {
+    let v = env::var("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").unwrap_or_default();
+    println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_EMBEDDED={v}");
 }
 
 pub fn add_env_commit_authors(repo: &Repository) {

@@ -242,6 +242,7 @@ impl<'a> AggregateRewriter<'a> {
         );
 
         let replaced_agg = AggregateFunction {
+            span: aggregate.span,
             display_name: aggregate.display_name.clone(),
             func_name: aggregate.func_name.clone(),
             distinct: aggregate.distinct,
@@ -346,8 +347,8 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
+        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
-            let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
             rewriter.visit(&mut item.scalar)?;
         }
 
@@ -443,9 +444,11 @@ impl Binder {
         let agg_info = &bind_context.aggregate_info;
         let mut scalar_items: Vec<ScalarItem> =
             Vec::with_capacity(agg_info.aggregate_arguments.len() + agg_info.group_items.len());
+
         for arg in agg_info.aggregate_arguments.iter() {
             scalar_items.push(arg.clone());
         }
+
         for item in agg_info.group_items.iter() {
             if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
                 if col.column.column_name.eq("_grouping_id") {
@@ -469,7 +472,8 @@ impl Binder {
             group_items: agg_info.group_items.clone(),
             aggregate_functions: agg_info.aggregate_functions.clone(),
             from_distinct: false,
-            limit: None,
+            rank_limit: None,
+
             grouping_sets: agg_info.grouping_sets.as_ref().map(|g| GroupingSets {
                 grouping_id_index: g.grouping_id_column.index,
                 sets: g.sets.clone(),
@@ -649,8 +653,7 @@ impl Binder {
             if bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&scalar_expr)
-                .is_some()
+                .contains_key(&scalar_expr)
             {
                 // The group key is duplicated
                 continue;

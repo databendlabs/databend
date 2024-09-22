@@ -1,12 +1,17 @@
 use databend_common_expression::block_debug::box_render;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 
 use crate::common::new_block;
 
@@ -55,4 +60,19 @@ fn test_box_render_block() {
 │ (5 shown) │        │
 └────────────────────┘"#;
     assert_eq!(d, expected);
+}
+
+#[test]
+fn test_block_entry_memory_size() {
+    let scalar_u8 = Scalar::Number(NumberScalar::UInt8(1));
+
+    let entry = BlockEntry::new(
+        DataType::Number(NumberDataType::UInt8),
+        Value::<AnyType>::Scalar(scalar_u8),
+    );
+    assert_eq!(1, entry.memory_size());
+
+    let scalar_str = Scalar::String("abc".to_string());
+    let entry = BlockEntry::new(DataType::String, Value::<AnyType>::Scalar(scalar_str));
+    assert_eq!(3, entry.memory_size());
 }

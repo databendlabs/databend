@@ -245,10 +245,24 @@ impl Binder {
         let table_entry = &tables[0];
         let table = table_entry.table();
 
+        if table.is_read_only() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is read-only, creating index not allowed",
+                table.name()
+            )));
+        }
+
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create index",
                 table.engine()
+            )));
+        }
+
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating index not allowed",
+                table.name()
             )));
         }
 
@@ -350,7 +364,8 @@ impl Binder {
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+                .with_planning_agg_index();
             Ok(optimize(opt_ctx, select_plan).await?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
@@ -415,10 +430,24 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let table = self.ctx.get_table(&catalog, &database, &table).await?;
+
+        if table.is_read_only() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is read-only, creating inverted index not allowed",
+                table.name()
+            )));
+        }
+
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create inverted index",
                 table.engine()
+            )));
+        }
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating inverted index not allowed",
+                table.name()
             )));
         }
         let table_schema = table.schema();

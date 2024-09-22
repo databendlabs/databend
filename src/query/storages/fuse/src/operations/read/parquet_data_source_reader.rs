@@ -169,7 +169,6 @@ impl SyncSource for ReadParquetDataSource<true> {
                 } else {
                     None
                 };
-
                 let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
                     &virtual_source.ignore_column_ids
                 } else {

@@ -643,11 +643,13 @@ pub fn geo_dist_init() {
             // Everything is initialized, transmute and return.
             unsafe {
                 (
-                    std::mem::transmute::<_, [f32; 2 * (METRIC_LUT_SIZE + 1)]>(
+                    std::mem::transmute::<[MaybeUninit<f32>; 2050], [f32; 2050]>(
                         wgs84_metric_meters_lut,
                     ),
-                    std::mem::transmute::<_, [f32; METRIC_LUT_SIZE + 1]>(sphere_metric_meters_lut),
-                    std::mem::transmute::<_, [f32; METRIC_LUT_SIZE + 1]>(sphere_metric_lut),
+                    std::mem::transmute::<[MaybeUninit<f32>; 1025], [f32; 1025]>(
+                        sphere_metric_meters_lut,
+                    ),
+                    std::mem::transmute::<[MaybeUninit<f32>; 1025], [f32; 1025]>(sphere_metric_lut),
                 )
             }
         };

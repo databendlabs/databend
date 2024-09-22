@@ -28,6 +28,7 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::cursor_ext::unwrap_local_time;
 use num_traits::AsPrimitive;
 
 use crate::types::date::check_date;
@@ -270,7 +271,12 @@ pub const FACTOR_MINUTE: i64 = 60;
 pub const FACTOR_SECOND: i64 = 1;
 const LAST_DAY_LUT: [u8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
+fn add_years_base(
+    year: i32,
+    month: u32,
+    day: u32,
+    delta: i64,
+) -> std::result::Result<NaiveDate, String> {
     let new_year = year + delta as i32;
     let mut new_day = day;
     if std::intrinsics::unlikely(month == 2 && day == 29) {
@@ -280,7 +286,12 @@ fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDa
         .ok_or_else(|| format!("Overflow on date YMD {}-{}-{}.", new_year, month, new_day))
 }
 
-fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate, String> {
+fn add_months_base(
+    year: i32,
+    month: u32,
+    day: u32,
+    delta: i64,
+) -> std::result::Result<NaiveDate, String> {
     let total_months = month as i64 + delta - 1;
     let mut new_year = year + (total_months / 12) as i32;
     let mut new_month0 = total_months % 12;
@@ -324,7 +335,7 @@ macro_rules! impl_interval_year_month {
                 date: i32,
                 tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
-            ) -> Result<i32, String> {
+            ) -> std::result::Result<i32, String> {
                 let date = date.to_date(tz.tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
                 check_date(
@@ -338,7 +349,7 @@ macro_rules! impl_interval_year_month {
                 us: i64,
                 tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
-            ) -> Result<i64, String> {
+            ) -> std::result::Result<i64, String> {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 check_timestamp(
@@ -357,11 +368,14 @@ impl_interval_year_month!(AddMonthsImpl, add_months_base);
 pub struct AddDaysImpl;
 
 impl AddDaysImpl {
-    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> Result<i32, String> {
+    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> std::result::Result<i32, String> {
         check_date((date as i64).wrapping_add(delta.as_()))
     }
 
-    pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
+    pub fn eval_timestamp(
+        date: i64,
+        delta: impl AsPrimitive<i64>,
+    ) -> std::result::Result<i64, String> {
         check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * MICROS_IN_A_SEC))
     }
 }
@@ -369,7 +383,11 @@ impl AddDaysImpl {
 pub struct AddTimesImpl;
 
 impl AddTimesImpl {
-    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> Result<i32, String> {
+    pub fn eval_date(
+        date: i32,
+        delta: impl AsPrimitive<i64>,
+        factor: i64,
+    ) -> std::result::Result<i32, String> {
         check_date(
             (date as i64 * 3600 * 24 * MICROS_IN_A_SEC)
                 .wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC),
@@ -380,7 +398,7 @@ impl AddTimesImpl {
         us: i64,
         delta: impl AsPrimitive<i64>,
         factor: i64,
-    ) -> Result<i64, String> {
+    ) -> std::result::Result<i64, String> {
         check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC))
     }
 }
@@ -406,14 +424,14 @@ impl ToNumberImpl {
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: TzLUT) -> R {
-        let dt = date
-            .to_date(tz.tz)
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_local_timezone(tz.tz)
-            .unwrap();
-        T::to_number(&dt)
+    pub fn eval_date<T: ToNumber<R>, R>(
+        date: i32,
+        tz: TzLUT,
+        enable_dst_hour_fix: bool,
+    ) -> Result<R> {
+        let naive_dt = date.to_date(tz.tz).and_hms_opt(0, 0, 0).unwrap();
+        let dt = unwrap_local_time(&tz.tz, enable_dst_hour_fix, &naive_dt)?;
+        Ok(T::to_number(&dt))
     }
 }
 
@@ -534,14 +552,14 @@ impl DateRounder {
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: TzLUT) -> i32 {
-        let dt = date
-            .to_date(tz.tz)
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_local_timezone(tz.tz)
-            .unwrap();
-        T::to_number(&dt)
+    pub fn eval_date<T: ToNumber<i32>>(
+        date: i32,
+        tz: TzLUT,
+        enable_dst_hour_fix: bool,
+    ) -> Result<i32> {
+        let naive_dt = date.to_date(tz.tz).and_hms_opt(0, 0, 0).unwrap();
+        let dt = unwrap_local_time(&tz.tz, enable_dst_hour_fix, &naive_dt)?;
+        Ok(T::to_number(&dt))
     }
 }
 
@@ -554,8 +572,8 @@ fn datetime_to_date_inner_number(date: &DateTime<Tz>) -> i32 {
         .signed_duration_since(
             NaiveDate::from_ymd_opt(1970, 1, 1)
                 .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
+                // if dt is dst, should respect dt.time
+                .and_time(date.time()),
         )
         .num_days() as i32
 }
@@ -569,13 +587,15 @@ pub struct ToStartOfISOYear;
 
 impl ToNumber<i32> for ToLastMonday {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(dt) - dt.weekday().num_days_from_monday() as i32
+        // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
+        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_monday() as i32
     }
 }
 
 impl ToNumber<i32> for ToLastSunday {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(dt) - dt.weekday().num_days_from_sunday() as i32
+        // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
+        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_sunday() as i32
     }
 }
 

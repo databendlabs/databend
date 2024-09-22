@@ -18,19 +18,27 @@ use databend_common_exception::Result;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::SExpr;
-use crate::plans::Exchange::Hash;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-pub struct MergeOptimizer {
-    pub merge_matcher: Matcher,
+pub struct BroadcastToShuffleOptimizer {
+    pub matcher: Matcher,
 }
 
-impl MergeOptimizer {
+impl BroadcastToShuffleOptimizer {
     pub fn create() -> Self {
         Self {
-            merge_matcher: Self::merge_matcher(),
+            matcher: Self::matcher(),
         }
+    }
+
+    pub fn is_broadcast(&self, s_expr: &SExpr) -> Result<bool> {
+        let right = s_expr.child(1)?;
+        Ok(matches!(
+            right.plan(),
+            RelOperator::Exchange(Exchange::Broadcast)
+        ))
     }
 
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -51,11 +59,11 @@ impl MergeOptimizer {
 
         let new_join_children = vec![
             Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Hash(left_conditions))),
+                Arc::new(RelOperator::Exchange(Exchange::Hash(left_conditions))),
                 Arc::new(left_exchange_input.clone()),
             )),
             Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Hash(right_conditions))),
+                Arc::new(RelOperator::Exchange(Exchange::Hash(right_conditions))),
                 Arc::new(right_exchange_input.clone()),
             )),
         ];
@@ -64,7 +72,7 @@ impl MergeOptimizer {
         Ok(join_s_expr)
     }
 
-    fn merge_matcher() -> Matcher {
+    fn matcher() -> Matcher {
         // Input:
         //         Join
         //         /  \

@@ -18,7 +18,7 @@ use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

@@ -60,7 +60,7 @@ impl GrantPrivilegeInterpreter {
                     .get_database(tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 Ok(OwnershipObject::Database {
                     catalog_name,
@@ -74,7 +74,7 @@ impl GrantPrivilegeInterpreter {
                     .get_database(tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = catalog
                     .get_table(tenant, db_name.as_str(), table_name)
@@ -107,7 +107,7 @@ impl GrantPrivilegeInterpreter {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn grant_ownership(
         &self,
@@ -172,7 +172,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_privilege_execute");

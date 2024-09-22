@@ -21,8 +21,12 @@ CREATE TABLE fuse_compat_table (
         c_varchar VARCHAR,
         c_array VARIANT,
         c_object VARIANT,
-        c_variant VARIANT
+        c_variant VARIANT,
+        c_array_str ARRAY(String)
 ) Engine = Fuse;
+
+statement ok
+CREATE TABLE fuse_compat_table_2 like fuse_compat_table Engine = Fuse cluster by (c_smallint, c_varchar);
 
 statement ok
 INSERT INTO fuse_compat_table VALUES(
@@ -38,5 +42,15 @@ INSERT INTO fuse_compat_table VALUES(
         'varchar',
         parse_json('[1,2,3,["a","b","c"]]'),
         parse_json('{"a":1,"b":{"c":2}}'),
-        parse_json('[1,{"a":1,"b":{"c":2}}]')
+        parse_json('[1,{"a":1,"b":{"c":2}}]'),
+        ['item1', 'item2_looooooooooooooooooong_val', 'item3', 'item4']
 );
+
+statement ok
+INSERT INTO fuse_compat_table_2 select * FROM fuse_compat_table;
+
+statement ok
+INSERT INTO fuse_compat_table_2 select * FROM fuse_compat_table_2;
+
+statement ok
+INSERT INTO fuse_compat_table_2 select * FROM fuse_compat_table_2;

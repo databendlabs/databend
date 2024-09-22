@@ -152,15 +152,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         let block = block.convert_to_full();
-        let group_columns = self
-            .params
-            .group_columns
-            .iter()
-            .map(|&index| {
-                let c = block.get_by_offset(index);
-                (c.value.as_column().unwrap().clone(), c.data_type.clone())
-            })
-            .collect::<Vec<_>>();
+        let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
 
         {
             let rows_num = block.num_rows();
@@ -168,7 +160,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
                         unsafe {
                             let _ = cell.hashtable.insert_and_entry(key);
@@ -176,7 +168,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
                         unsafe {
                             let _ = cell.hashtable.insert_and_entry(key);
@@ -184,8 +176,6 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     }
                 }
                 HashTable::AggregateHashTable(hashtable) => {
-                    let group_columns =
-                        InputColumns::new_block_proxy(&self.params.group_columns, &block);
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
                         group_columns,

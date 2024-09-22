@@ -14,7 +14,7 @@
 
 //! Test for db_map_api_ro_impl.
 
-use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 

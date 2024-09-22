@@ -46,7 +46,7 @@ impl Interpreter for AlterUserInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_execute");

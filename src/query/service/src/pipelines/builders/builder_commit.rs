@@ -21,6 +21,7 @@ use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -37,15 +38,25 @@ impl PipelineBuilder {
                 .add_accumulating_transformer(|| TransformMergeCommitMeta::create(cluster_key_id));
         } else {
             self.main_pipeline.add_async_accumulating_transformer(|| {
-                let base_segments = if matches!(plan.mutation_kind, MutationKind::Compact) {
+                let base_segments = if matches!(
+                    plan.mutation_kind,
+                    MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
+                ) {
                     vec![]
                 } else {
-                    plan.snapshot.segments.clone()
+                    plan.snapshot.segments().to_vec()
                 };
-                TableMutationAggregator::new(
+
+                // extract re-cluster related mutations from physical plan
+                let recluster_info = plan.recluster_info.clone().unwrap_or_default();
+
+                TableMutationAggregator::create(
                     table,
                     self.ctx.clone(),
                     base_segments,
+                    recluster_info.merged_blocks,
+                    recluster_info.removed_segment_indexes,
+                    recluster_info.removed_statistics,
                     plan.mutation_kind,
                 )
             });

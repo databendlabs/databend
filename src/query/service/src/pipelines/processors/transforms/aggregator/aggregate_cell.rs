@@ -81,7 +81,6 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
 pub trait HashTableDropper<T: HashMethodBounds, V: Send + Sync + 'static> {
     fn as_any(&self) -> &dyn Any;
     fn destroy(&self, hashtable: &mut T::HashTable<V>);
-    fn destroy_value(&self, value: &<T::HashTable<V> as HashtableLike>::Value);
 }
 
 pub struct GroupByHashTableDropper<T: HashMethodBounds> {
@@ -102,10 +101,6 @@ impl<T: HashMethodBounds> HashTableDropper<T, ()> for GroupByHashTableDropper<T>
     }
 
     fn destroy(&self, _: &mut T::HashTable<()>) {
-        // do nothing
-    }
-
-    fn destroy_value(&self, _: &()) {
         // do nothing
     }
 }
@@ -154,30 +149,6 @@ impl<T: HashMethodBounds> HashTableDropper<T, usize> for AggregateHashTableDropp
                     unsafe { function.drop_state(place.next(*state_offset)) }
                 }
             }
-        }
-    }
-
-    fn destroy_value(&self, value: &usize) {
-        let aggregator_params = self.params.as_ref();
-        let aggregate_functions = &aggregator_params.aggregate_functions;
-        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
-
-        let functions = aggregate_functions
-            .iter()
-            .filter(|p| p.need_manual_drop_state())
-            .collect::<Vec<_>>();
-
-        let state_offsets = offsets_aggregate_states
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
-            .map(|(_, s)| *s)
-            .collect::<Vec<_>>();
-
-        let temp_place = StateAddr::new(*value);
-        for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
-            let place = temp_place.next(*state_offset);
-            unsafe { function.drop_state(place) }
         }
     }
 }
@@ -238,14 +209,5 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static>
         for inner_table in hashtable.iter_tables_mut() {
             self._inner_dropper.destroy(inner_table)
         }
-    }
-
-    fn destroy_value(
-        &self,
-        value: &<<PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-            PartitionedHashMethod<Method>,
-        >>::HashTable<V> as HashtableLike>::Value,
-    ) {
-        self._inner_dropper.destroy_value(value)
     }
 }

@@ -183,27 +183,6 @@ impl Display for UserPrivilegeType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum ShareGrantObjectName {
-    // database name
-    Database(Identifier),
-    // database name, table name
-    Table(Identifier, Identifier),
-}
-
-impl Display for ShareGrantObjectName {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ShareGrantObjectName::Database(db) => {
-                write!(f, "DATABASE {db}")
-            }
-            ShareGrantObjectName::Table(db, table) => {
-                write!(f, "TABLE {db}.{table}")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ShareGrantObjectPrivilege {
     // For DATABASE or SCHEMA
     Usage,

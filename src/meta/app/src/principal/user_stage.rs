@@ -146,20 +146,20 @@ impl FromStr for StageFileCompression {
     }
 }
 
-impl ToString for StageFileCompression {
-    fn to_string(&self) -> String {
-        match *self {
-            StageFileCompression::Auto => "auto".to_string(),
-            StageFileCompression::Gzip => "gzip".to_string(),
-            StageFileCompression::Bz2 => "bz2".to_string(),
-            StageFileCompression::Brotli => "brotli".to_string(),
-            StageFileCompression::Zstd => "zstd".to_string(),
-            StageFileCompression::Deflate => "deflate".to_string(),
-            StageFileCompression::RawDeflate => "raw_deflate".to_string(),
-            StageFileCompression::Lzo => "lzo".to_string(),
-            StageFileCompression::Snappy => "snappy".to_string(),
-            StageFileCompression::Xz => "xz".to_string(),
-            StageFileCompression::None => "none".to_string(),
+impl Display for StageFileCompression {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            StageFileCompression::Auto => write!(f, "auto"),
+            StageFileCompression::Gzip => write!(f, "gzip"),
+            StageFileCompression::Bz2 => write!(f, "bz2"),
+            StageFileCompression::Brotli => write!(f, "brotli"),
+            StageFileCompression::Zstd => write!(f, "zstd"),
+            StageFileCompression::Deflate => write!(f, "deflate"),
+            StageFileCompression::RawDeflate => write!(f, "raw_deflate"),
+            StageFileCompression::Lzo => write!(f, "lzo"),
+            StageFileCompression::Snappy => write!(f, "snappy"),
+            StageFileCompression::Xz => write!(f, "xz"),
+            StageFileCompression::None => write!(f, "none"),
         }
     }
 }
@@ -204,9 +204,19 @@ impl FromStr for StageFileFormatType {
     }
 }
 
-impl ToString for StageFileFormatType {
-    fn to_string(&self) -> String {
-        format!("{:?}", *self).to_uppercase()
+impl Display for StageFileFormatType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            StageFileFormatType::Csv => write!(f, "CSV"),
+            StageFileFormatType::Tsv => write!(f, "TSV"),
+            StageFileFormatType::Json => write!(f, "JSON"),
+            StageFileFormatType::NdJson => write!(f, "NDJSON"),
+            StageFileFormatType::Avro => write!(f, "AVRO"),
+            StageFileFormatType::Orc => write!(f, "ORC"),
+            StageFileFormatType::Parquet => write!(f, "PARQUET"),
+            StageFileFormatType::Xml => write!(f, "XML"),
+            StageFileFormatType::None => write!(f, "NONE"),
+        }
     }
 }
 

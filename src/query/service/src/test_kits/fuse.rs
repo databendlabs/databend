@@ -23,10 +23,10 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_sql::plans::DeletePlan;
-use databend_common_sql::plans::UpdatePlan;
+use databend_common_sql::optimizer::SExpr;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentWriter;
@@ -51,9 +51,8 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
-use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
-use crate::interpreters::UpdateInterpreter;
+use crate::interpreters::MutationInterpreter;
 use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
@@ -214,7 +213,8 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         None,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
-    snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary, None);
+    snapshot_1.summary =
+        merge_statistics(snapshot_0.summary.clone(), &segments_v3[0].1.summary, None);
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_1
@@ -230,7 +230,8 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1, None);
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
-    snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary, None);
+    snapshot_2.summary =
+        merge_statistics(snapshot_1.summary.clone(), &segments_v3[1].1.summary, None);
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_2
@@ -282,15 +283,13 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     fixture.execute_command(&query).await
 }
 
-pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
-    let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
-    let _ = delete_interpreter.execute(ctx).await?;
-    Ok(())
-}
-
-pub async fn do_update(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<()> {
-    let update_interpreter = UpdateInterpreter::try_create(ctx.clone(), plan)?;
-    let _ = update_interpreter.execute(ctx).await?;
+pub async fn do_mutation(
+    ctx: Arc<QueryContext>,
+    s_expr: SExpr,
+    schema: DataSchemaRef,
+) -> Result<()> {
+    let interpreter = MutationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
+    let _ = interpreter.execute(ctx).await?;
     Ok(())
 }
 

@@ -15,6 +15,10 @@
 1
 2
 <<<<
+#### select attach table from system.tables
+>>>> select is_attach from system.tables where name = 'table_to';
+ATTACH
+<<<<
 #### select attach table with self-defined connection
 >>>> select * from table_to2 order by a;
 0

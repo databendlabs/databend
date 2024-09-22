@@ -20,7 +20,6 @@ use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
@@ -39,12 +38,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     if is_nullable {
         columns = columns
             .iter()
-            .map(|c| {
-                Column::Nullable(Box::new(NullableColumn {
-                    column: c.clone(),
-                    validity: Bitmap::new_constant(true, c.len()),
-                }))
-            })
+            .map(|c| NullableColumn::new_column(c.clone(), Bitmap::new_constant(true, c.len())))
             .collect();
     }
 
@@ -61,7 +55,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     .map(|r| r.iter().map(|v| v.to_string()).collect::<Vec<_>>())
     .collect::<Vec<_>>();
 
-    assert_eq!(json_block.data().clone(), expect);
+    assert_eq!(json_block.as_data("").clone(), expect);
     Ok(())
 }
 

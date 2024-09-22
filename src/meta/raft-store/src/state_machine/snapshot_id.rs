@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::str::FromStr;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -128,19 +129,23 @@ impl FromStr for MetaSnapshotId {
     }
 }
 
-impl ToString for MetaSnapshotId {
-    fn to_string(&self) -> String {
-        let a = if let Some(last) = self.last_applied {
-            format!("{}-{}-{}", last.leader_id, last.index, self.uniq)
+impl Display for MetaSnapshotId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(last) = self.last_applied {
+            write!(
+                f,
+                "{}-{}-{}-{}",
+                last.leader_id.term, last.leader_id.node_id, last.index, self.uniq
+            )?;
         } else {
-            format!("---{}", self.uniq)
-        };
+            write!(f, "---{}", self.uniq)?;
+        }
 
         if let Some(n) = self.key_num {
-            format!("{}-k{}", a, n)
-        } else {
-            a
+            write!(f, "-k{n}")?;
         }
+
+        Ok(())
     }
 }
 

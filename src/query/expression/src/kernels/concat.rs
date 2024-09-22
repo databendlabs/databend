@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::copy_continuous_bits;
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
@@ -28,6 +29,7 @@ use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -39,6 +41,7 @@ use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -334,7 +337,7 @@ impl Column {
                     capacity,
                 ));
                 let validity = BooleanType::try_downcast_column(&validity).unwrap();
-                Column::Nullable(Box::new(NullableColumn { column, validity }))
+                NullableColumn::new_column(column, validity)
             }
             Column::Tuple(fields) => {
                 let fields = (0..fields.len())
@@ -356,6 +359,12 @@ impl Column {
                 columns.map(|col| col.into_geometry().unwrap()),
                 capacity,
             )),
+            Column::Geography(_) => {
+                GeographyType::upcast_column(GeographyColumn(Self::concat_binary_types(
+                    columns.map(|col| col.into_geography().unwrap().0),
+                    capacity,
+                )))
+            }
         };
         Ok(column)
     }
@@ -381,23 +390,17 @@ impl Column {
         // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
         // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut offsets_len = 0;
         let mut data_size = 0;
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            *offsets.get_unchecked_mut(offsets_len) = 0;
-            offsets_len += 1;
-            for col in cols.clone() {
-                let mut start = col.offsets()[0];
-                for end in col.offsets()[1..].iter() {
-                    data_size += end - start;
-                    start = *end;
-                    *offsets.get_unchecked_mut(offsets_len) = data_size;
-                    offsets_len += 1;
-                }
+        offsets.push(0);
+        for col in cols.clone() {
+            let mut start = col.offsets()[0];
+            for end in col.offsets()[1..].iter() {
+                data_size += end - start;
+                start = *end;
+                offsets.push(data_size);
             }
-            offsets.set_len(offsets_len);
         }
 
         // Build [`data`].
@@ -460,7 +463,7 @@ impl Column {
                 }
                 let remaining = len - idx;
                 if remaining > 0 {
-                    let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
                         &mut builder_ptr,
                         bitmap_slice,
                         builder_idx,

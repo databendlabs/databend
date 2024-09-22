@@ -24,8 +24,6 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -111,16 +109,6 @@ impl Operator for CacheScan {
         Ok(PhysicalProperty {
             distribution: Distribution::Serial,
         })
-    }
-
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo {
-            cardinality: 0.0,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: Default::default(),
-            },
-        }))
     }
 
     fn compute_required_prop_child(

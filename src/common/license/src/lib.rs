@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod display_jwt_claims;
 pub mod license;
 pub mod license_manager;

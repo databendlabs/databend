@@ -22,6 +22,7 @@ use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
@@ -32,15 +33,17 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdHistoryIdent;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_types::SeqValue;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -74,22 +77,26 @@ impl DefaultDatabase {
             .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?;
 
-        let mut refreshed = Vec::with_capacity(table_infos.len());
-        for table_info in table_infos {
-            refreshed.push(
-                self.ctx
-                    .storage_factory
-                    .refresh_table_info(table_info.clone())
-                    .await
-                    .map_err(|err| {
-                        err.add_message_back(format!(
-                            "(while refresh table info on {})",
-                            table_info.name
-                        ))
-                    })?,
-            );
+        if self.ctx.disable_table_info_refresh {
+            Ok(table_infos)
+        } else {
+            let mut refreshed = Vec::with_capacity(table_infos.len());
+            for table_info in table_infos {
+                refreshed.push(
+                    self.ctx
+                        .storage_factory
+                        .refresh_table_info(table_info.clone())
+                        .await
+                        .map_err(|err| {
+                            err.add_message_back(format!(
+                                "(while refresh table info on {})",
+                                table_info.name
+                            ))
+                        })?,
+                );
+            }
+            Ok(refreshed)
         }
-        Ok(refreshed)
     }
 }
 #[async_trait::async_trait]
@@ -120,13 +127,55 @@ impl Database for DefaultDatabase {
             ))
             .await?;
 
-        let table_info_refreshed = self
+        let table_info = if self.ctx.disable_table_info_refresh {
+            table_info
+        } else {
+            self.ctx
+                .storage_factory
+                .refresh_table_info(table_info)
+                .await?
+        };
+
+        self.get_table_by_info(table_info.as_ref())
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_history(&self, table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let metas = self
             .ctx
-            .storage_factory
-            .refresh_table_info(table_info)
+            .meta
+            .get_table_meta_history(
+                self.db_info.name_ident.database_name(),
+                &TableIdHistoryIdent {
+                    database_id: self.db_info.database_id.db_id,
+                    table_name: table_name.to_string(),
+                },
+            )
             .await?;
 
-        self.get_table_by_info(table_info_refreshed.as_ref())
+        let table_infos: Vec<Arc<TableInfo>> = metas
+            .into_iter()
+            .map(|(table_id, seqv)| {
+                Arc::new(TableInfo {
+                    ident: TableIdent {
+                        table_id: table_id.table_id,
+                        seq: seqv.seq(),
+                    },
+                    desc: format!(
+                        "'{}'.'{}'",
+                        self.db_info.name_ident.database_name(),
+                        table_name
+                    ),
+                    name: table_name.to_string(),
+                    meta: seqv.data,
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                })
+            })
+            .collect();
+
+        // disable refresh in history table
+        self.load_tables(table_infos)
     }
 
     #[async_backtrace::framed]
@@ -145,7 +194,7 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_table_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .get_tables_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
             .await?
             .into_iter()
             .filter(|i| i.meta.drop_on.is_some())
@@ -171,7 +220,7 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let res = self.ctx.meta.undrop_table(req).await?;
         Ok(res)
     }

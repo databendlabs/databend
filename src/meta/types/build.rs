@@ -29,6 +29,7 @@ fn build_proto() {
 
     let proto_dir = Path::new(&manifest_dir).join("proto");
     let protos = [
+        &Path::new(&proto_dir).join(Path::new("raft.proto")),
         &Path::new(&proto_dir).join(Path::new("meta.proto")),
         &Path::new(&proto_dir).join(Path::new("request.proto")),
     ];

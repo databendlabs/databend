@@ -22,6 +22,7 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geography;
 pub mod geometry;
 pub mod map;
 pub mod null;
@@ -37,26 +38,32 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
 pub use self::any::AnyType;
+pub use self::array::ArrayColumn;
 pub use self::array::ArrayType;
+pub use self::binary::BinaryColumn;
 pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
-pub use self::decimal::DecimalDataType;
-pub use self::decimal::DecimalSize;
+pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
+pub use self::geography::GeographyColumn;
+pub use self::geography::GeographyType;
 pub use self::map::MapType;
 pub use self::null::NullType;
+pub use self::nullable::NullableColumn;
 pub use self::nullable::NullableType;
 pub use self::number::*;
 pub use self::number_class::*;
+pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
@@ -87,6 +94,7 @@ pub enum DataType {
     Tuple(Vec<DataType>),
     Variant,
     Geometry,
+    Geography,
 
     // Used internally for generic types
     Generic(usize),
@@ -140,7 +148,8 @@ impl DataType {
             | DataType::Date
             | DataType::Bitmap
             | DataType::Variant
-            | DataType::Geometry => false,
+            | DataType::Geometry
+            | DataType::Geography => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
@@ -164,6 +173,7 @@ impl DataType {
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
+            | DataType::Geography
             | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
             DataType::Nullable(ty) => ty.has_nested_nullable(),
@@ -381,46 +391,47 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    /// Compare two scalars and return the Ordering between them, some data types not support comparison.
+    /// This is default implementation yet it's not efficient.
     #[inline(always)]
-    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
-        None
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        Self::upcast_scalar(Self::to_owned_scalar(lhs))
+            .cmp(&Self::upcast_scalar(Self::to_owned_scalar(rhs)))
     }
 
     /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Equal))
+        matches!(Self::compare(left, right), Ordering::Equal)
     }
 
     /// Not equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Equal))
+        !matches!(Self::compare(left, right), Ordering::Equal)
     }
 
     /// Greater than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Greater))
+        matches!(Self::compare(left, right), Ordering::Greater)
     }
 
     /// Less than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Less))
+        matches!(Self::compare(left, right), Ordering::Less)
     }
 
     /// Greater than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Less))
+        !matches!(Self::compare(left, right), Ordering::Less)
     }
 
     /// Less than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Greater))
+        !matches!(Self::compare(left, right), Ordering::Greater)
     }
 }
 

@@ -17,14 +17,12 @@ use std::io;
 
 use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
-use serde::Deserialize;
-use serde::Serialize;
 use sled::transaction::UnabortableTransactionError;
 
 use crate::MetaBytesError;
 
 /// Storage level error that is raised by meta service.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
     /// An error raised when encode/decode data to/from underlying storage.
     #[error(transparent)]

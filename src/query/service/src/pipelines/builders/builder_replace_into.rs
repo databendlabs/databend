@@ -35,6 +35,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -42,7 +43,7 @@ use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
-use databend_common_sql::plans::insert::InsertValue;
+use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
@@ -324,10 +325,13 @@ impl PipelineBuilder {
             Arc::new(target_schema.clone().into()),
         )?;
 
+        let block_thresholds = table.get_block_thresholds();
+        build_compact_block_pipeline(&mut self.main_pipeline, block_thresholds)?;
+
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
-            table.get_block_thresholds(),
+            block_thresholds,
             Some(modified_schema),
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
@@ -408,7 +412,6 @@ impl AsyncSource for ValueSource {
     const NAME: &'static str = "ValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
@@ -478,7 +481,6 @@ impl AsyncSource for RawValueSource {
     const NAME: &'static str = "RawValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {

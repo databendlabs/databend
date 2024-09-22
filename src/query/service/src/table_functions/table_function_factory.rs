@@ -19,12 +19,17 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
+use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
-use databend_common_storages_fuse::table_functions::FuseColumnTable;
-use databend_common_storages_fuse::table_functions::FuseEncodingTable;
-use databend_common_storages_fuse::table_functions::SetCacheCapacity;
+use databend_common_storages_fuse::table_functions::FuseBlockFunc;
+use databend_common_storages_fuse::table_functions::FuseColumnFunc;
+use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
+use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
+use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -32,13 +37,9 @@ use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
-use crate::catalogs::SYS_TBL_FUC_ID_END;
-use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
-use crate::storages::fuse::table_functions::ClusteringInformationTable;
-use crate::storages::fuse::table_functions::FuseBlockTable;
-use crate::storages::fuse::table_functions::FuseSegmentTable;
-use crate::storages::fuse::table_functions::FuseSnapshotTable;
-use crate::storages::fuse::table_functions::FuseStatisticTable;
+use crate::storages::fuse::table_functions::ClusteringInformationFunc;
+use crate::storages::fuse::table_functions::FuseSegmentFunc;
+use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
@@ -48,6 +49,7 @@ use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
+use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -120,7 +122,10 @@ impl TableFunctionFactory {
 
         creators.insert(
             "fuse_snapshot".to_string(),
-            (next_id(), Arc::new(FuseSnapshotTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseSnapshotFunc>::create),
+            ),
         );
 
         creators.insert(
@@ -132,33 +137,59 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "set_cache_capacity".to_string(),
+            "fuse_segment".to_string(),
             (
                 next_id(),
-                Arc::new(TableFunctionTemplate::<SetCacheCapacity>::create),
+                Arc::new(TableFunctionTemplate::<FuseSegmentFunc>::create),
             ),
         );
 
         creators.insert(
-            "fuse_segment".to_string(),
-            (next_id(), Arc::new(FuseSegmentTable::create)),
-        );
-        creators.insert(
             "fuse_block".to_string(),
-            (next_id(), Arc::new(FuseBlockTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseBlockFunc>::create),
+            ),
         );
+
         creators.insert(
             "fuse_column".to_string(),
-            (next_id(), Arc::new(FuseColumnTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseColumnFunc>::create),
+            ),
         );
+
         creators.insert(
             "fuse_statistic".to_string(),
-            (next_id(), Arc::new(FuseStatisticTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseStatisticsFunc>::create),
+            ),
         );
 
         creators.insert(
             "clustering_information".to_string(),
-            (next_id(), Arc::new(ClusteringInformationTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<ClusteringInformationFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "clustering_statistics".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<ClusteringStatisticsFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_temporary_table".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumTemporaryTable>::create),
+            ),
         );
 
         creators.insert(
@@ -227,7 +258,10 @@ impl TableFunctionFactory {
 
         creators.insert(
             "fuse_encoding".to_string(),
-            (next_id(), Arc::new(FuseEncodingTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseEncodingFunc>::create),
+            ),
         );
 
         creators.insert(
@@ -248,6 +282,11 @@ impl TableFunctionFactory {
         creators.insert(
             "task_history".to_string(),
             (next_id(), Arc::new(TaskHistoryTable::create)),
+        );
+
+        creators.insert(
+            "show_variables".to_string(),
+            (next_id(), Arc::new(ShowVariables::create)),
         );
 
         TableFunctionFactory {

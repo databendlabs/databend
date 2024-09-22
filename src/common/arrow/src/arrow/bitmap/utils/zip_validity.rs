@@ -104,8 +104,10 @@ where
 
 /// An [`Iterator`] over [`Option<T>`]
 /// This enum can be used in two distinct ways:
+///
 /// * as an iterator, via `Iterator::next`
 /// * as an enum of two iterators, via `match self`
+///
 /// The latter allows specializalizing to when there are no nulls
 #[derive(Debug, Clone)]
 pub enum ZipValidity<T, I, V>

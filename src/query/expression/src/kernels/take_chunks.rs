@@ -28,28 +28,14 @@ use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
+use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
-use crate::types::AnyType;
-use crate::types::ArgType;
-use crate::types::ArrayType;
-use crate::types::BinaryType;
-use crate::types::BooleanType;
-use crate::types::DataType;
-use crate::types::DateType;
-use crate::types::MapType;
-use crate::types::NumberColumnVec;
-use crate::types::NumberType;
-use crate::types::StringType;
-use crate::types::TimestampType;
-use crate::types::ValueType;
-use crate::types::VariantType;
-use crate::types::F32;
-use crate::types::F64;
+use crate::types::*;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
@@ -374,10 +360,10 @@ impl Column {
                     result_size,
                 );
 
-                Column::Nullable(Box::new(NullableColumn {
-                    column: inner_column,
-                    validity: BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                }))
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             Column::Tuple { .. } => {
                 let inner_ty = datatype.as_tuple().unwrap();
@@ -410,6 +396,10 @@ impl Column {
             Column::Geometry(_) => {
                 let builder = GeometryType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<GeometryType>(columns, builder, indices)
+            }
+            Column::Geography(_) => {
+                let builder = GeographyType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<GeographyType>(columns, builder, indices)
             }
         }
     }
@@ -626,6 +616,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Geometry(columns)
             }
+            Column::Geography(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| GeographyType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Geography(columns)
+            }
         }
     }
 
@@ -737,10 +734,10 @@ impl Column {
                     binary_items_buf,
                 );
 
-                Column::Nullable(Box::new(NullableColumn {
-                    column: inner_column,
-                    validity: BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                }))
+                NullableColumn::new_column(
+                    inner_column,
+                    BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
+                )
             }
             ColumnVec::Tuple(columns) => {
                 let inner_data_type = data_type.as_tuple().unwrap();
@@ -766,6 +763,14 @@ impl Column {
             ColumnVec::Geometry(columns) => GeometryType::upcast_column(
                 Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
+            ColumnVec::Geography(columns) => {
+                let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
+                GeographyType::upcast_column(GeographyColumn(Self::take_block_vec_binary_types(
+                    &columns,
+                    indices,
+                    binary_items_buf.as_mut(),
+                )))
+            }
         }
     }
 
@@ -804,6 +809,8 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
             *offsets.get_unchecked_mut(0) = 0;
             for (i, row_ptr) in indices.iter().enumerate() {
                 let item =
@@ -812,8 +819,6 @@ impl Column {
                 *items.get_unchecked_mut(i) = (item.as_ptr() as u64, item.len());
                 *offsets.get_unchecked_mut(i + 1) = data_size;
             }
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
         }
 
         // Build [`data`].
@@ -872,30 +877,27 @@ impl Column {
 
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_len = 0;
         let mut unset_bits = 0;
         let mut value = 0;
         let mut i = 0;
 
+        for row_ptr in indices.iter() {
+            if col[row_ptr.chunk_index as usize].get_bit(row_ptr.row_index as usize) {
+                value |= BIT_MASK[i % 8];
+            } else {
+                unset_bits += 1;
+            }
+            i += 1;
+            if i % 8 == 0 {
+                builder.push(value);
+                value = 0;
+            }
+        }
+        if i % 8 != 0 {
+            builder.push(value);
+        }
+
         unsafe {
-            for row_ptr in indices.iter() {
-                if col[row_ptr.chunk_index as usize].get_bit_unchecked(row_ptr.row_index as usize) {
-                    value |= BIT_MASK[i % 8];
-                } else {
-                    unset_bits += 1;
-                }
-                i += 1;
-                if i % 8 == 0 {
-                    *builder.get_unchecked_mut(builder_len) = value;
-                    builder_len += 1;
-                    value = 0;
-                }
-            }
-            if i % 8 != 0 {
-                *builder.get_unchecked_mut(builder_len) = value;
-                builder_len += 1;
-            }
-            builder.set_len(builder_len);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()

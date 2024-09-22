@@ -26,6 +26,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
@@ -51,6 +52,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
@@ -72,7 +74,7 @@ pub trait Interpreter: Sync + Send {
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         log_query_start(&ctx);
         match self.execute_inner(ctx.clone()).await {
@@ -85,8 +87,10 @@ pub trait Interpreter: Sync + Send {
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        let make_error = || "failed to execute interpreter";
+
         ctx.set_status_info("building pipeline");
-        ctx.check_aborting()?;
+        ctx.check_aborting().with_context(make_error)?;
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
@@ -115,49 +119,7 @@ pub trait Interpreter: Sync + Send {
         build_res
             .main_pipeline
             .set_on_finished(always_callback(move |info: &ExecutionInfo| {
-                let mut has_profiles = false;
-                query_ctx.add_query_profiles(&info.profiling);
-
-                let query_profiles = query_ctx.get_query_profiles();
-
-                if !query_profiles.is_empty() {
-                    has_profiles = true;
-                    #[derive(serde::Serialize)]
-                    struct QueryProfiles {
-                        query_id: String,
-                        profiles: Vec<PlanProfile>,
-                        statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
-                    }
-
-                    info!(
-                        target: "databend::log::profile",
-                        "{}",
-                        serde_json::to_string(&QueryProfiles {
-                            query_id: query_ctx.get_id(),
-                            profiles: query_profiles.clone(),
-                            statistics_desc: get_statistics_desc(),
-                        })?
-                    );
-                    let profiles_queue = ProfilesLogQueue::instance()?;
-
-                    profiles_queue.append_data(ProfilesLogElement {
-                        query_id: query_ctx.get_id(),
-                        profiles: query_profiles,
-                    })?;
-                }
-
-                hook_vacuum_temp_files(&query_ctx)?;
-
-                let err_opt = match &info.res {
-                    Ok(_) => None,
-                    Err(e) => Some(e.clone()),
-                };
-
-                log_query_finished(&query_ctx, err_opt, has_profiles);
-                match &info.res {
-                    Ok(_) => Ok(()),
-                    Err(error) => Err(error.clone()),
-                }
+                on_execution_finished(info, query_ctx)
             }));
 
         ctx.set_status_info("executing pipeline");
@@ -207,8 +169,8 @@ fn log_query_start(ctx: &QueryContext) {
     InterpreterMetrics::record_query_start(ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
-
-    if session.get_type().is_user_session() {
+    let typ = session.get_type();
+    if typ.is_user_session() {
         SessionManager::instance().status.write().query_start(now);
     }
 
@@ -224,8 +186,9 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     let session = ctx.get_current_session();
 
     session.get_status().write().query_finish();
-    if session.get_type().is_user_session() {
-        SessionManager::instance().status.write().query_finish(now)
+    let typ = session.get_type();
+    if typ.is_user_session() {
+        SessionManager::instance().status.write().query_finish(now);
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
@@ -239,7 +202,10 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
 ///
 /// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
 pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
-    let mut planner = Planner::new(ctx.clone());
+    let mut planner = Planner::new_with_sample_executor(
+        ctx.clone(),
+        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
+    );
     let result = planner.plan_sql(sql).await;
     let short_sql = short_sql(sql.to_string());
     let mut stmt = if let Ok((_, extras)) = &result {
@@ -282,4 +248,48 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     };
 
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
+}
+
+pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
+    let mut has_profiles = false;
+    query_ctx.add_query_profiles(&info.profiling);
+
+    let query_profiles = query_ctx.get_query_profiles();
+    if !query_profiles.is_empty() {
+        has_profiles = true;
+        #[derive(serde::Serialize)]
+        struct QueryProfiles {
+            query_id: String,
+            profiles: Vec<PlanProfile>,
+            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+        }
+
+        info!(
+            target: "databend::log::profile",
+            "{}",
+            serde_json::to_string(&QueryProfiles {
+                query_id: query_ctx.get_id(),
+                profiles: query_profiles.clone(),
+                statistics_desc: get_statistics_desc(),
+            })?
+        );
+        let profiles_queue = ProfilesLogQueue::instance()?;
+        profiles_queue.append_data(ProfilesLogElement {
+            query_id: query_ctx.get_id(),
+            profiles: query_profiles,
+        })?;
+    }
+
+    hook_vacuum_temp_files(&query_ctx)?;
+
+    let err_opt = match &info.res {
+        Ok(_) => None,
+        Err(e) => Some(e.clone()),
+    };
+
+    log_query_finished(&query_ctx, err_opt, has_profiles);
+    match &info.res {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error.clone()),
+    }
 }

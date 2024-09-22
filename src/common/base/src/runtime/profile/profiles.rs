@@ -45,6 +45,8 @@ pub enum ProfileStatisticsName {
     SpillReadTime,
     RuntimeFilterPruneParts,
     MemoryUsage,
+    ExternalServerRetryCount,
+    ExternalServerRequestCount,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -242,7 +244,21 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 index: ProfileStatisticsName::MemoryUsage as usize,
                 unit: StatisticsUnit::Bytes,
                 plain_statistics: false,
-            })
+            }),
+            (ProfileStatisticsName::ExternalServerRetryCount, ProfileDesc {
+                display_name: "external server retry count",
+                desc: "The count of external server retry times",
+                index: ProfileStatisticsName::ExternalServerRetryCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::ExternalServerRequestCount, ProfileDesc {
+                display_name: "external server request count",
+                desc: "The count of external server request times",
+                index: ProfileStatisticsName::ExternalServerRequestCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
         ]))
     }).clone()
 }

@@ -1,0 +1,40 @@
+query T
+SELECT st_point(60,37);
+----
+{"type": "Point", "coordinates": [60,37]}
+
+statement error 1801
+SELECT st_point(60,100);
+
+query T
+SELECT lon, st_point(lon,lat) geom FROM (VALUES (1,2), (9,10), (5,6), (3,4), (7,8)) as t1(lon,lat) having lon > 3 order by lon;
+----
+5 {"type": "Point", "coordinates": [5,6]}
+7 {"type": "Point", "coordinates": [7,8]}
+9 {"type": "Point", "coordinates": [9,10]}
+
+statement ok
+SET geometry_output_format='EWKT'
+
+query T
+SELECT st_point(60,37);
+----
+POINT(60 37)
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+SET enable_geo_create_table=1
+
+statement ok
+CREATE TABLE t1 (a int, g geography)
+
+statement ok
+INSERT INTO t1 VALUES(1, ST_GeogFromWkt('POINT(38.986635 58.1900303)')), (2, ST_GeogFromWkt('POINT(4.500212 -52.161170)'))
+
+query T
+SELECT a, g FROM t1
+----
+1 POINT(38.986635 58.1900303)
+2 POINT(4.500212 -52.16117)

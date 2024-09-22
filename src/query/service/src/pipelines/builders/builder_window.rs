@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -20,9 +23,13 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::Window;
+use databend_common_sql::executor::physical_plans::WindowPartition;
 
 use crate::pipelines::processors::transforms::FrameBound;
+use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
+use crate::pipelines::processors::transforms::WindowPartitionExchange;
+use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
 
@@ -31,7 +38,6 @@ impl PipelineBuilder {
         self.build_pipeline(&window.input)?;
 
         let input_schema = window.input.output_schema()?;
-
         let partition_by = window
             .partition_by
             .iter()
@@ -40,7 +46,6 @@ impl PipelineBuilder {
                 Ok(offset)
             })
             .collect::<Result<Vec<_>>>()?;
-
         let order_by = window
             .order_by
             .iter()
@@ -57,7 +62,9 @@ impl PipelineBuilder {
 
         let old_output_len = self.main_pipeline.output_len();
         // `TransformWindow` is a pipeline breaker.
-        self.main_pipeline.try_resize(1)?;
+        if partition_by.is_empty() {
+            self.main_pipeline.try_resize(1)?;
+        }
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
@@ -117,7 +124,78 @@ impl PipelineBuilder {
             };
             Ok(ProcessorPtr::create(transform))
         })?;
+        if partition_by.is_empty() {
+            self.main_pipeline.try_resize(old_output_len)?;
+        }
+        Ok(())
+    }
 
-        self.main_pipeline.try_resize(old_output_len)
+    pub(crate) fn build_window_partition(
+        &mut self,
+        window_partition: &WindowPartition,
+    ) -> Result<()> {
+        self.build_pipeline(&window_partition.input)?;
+
+        let num_processors = self.main_pipeline.output_len();
+
+        // Settings.
+        let settings = self.ctx.get_settings();
+        let num_partitions = settings.get_window_num_partitions()?;
+        let max_block_size = settings.get_max_block_size()? as usize;
+        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
+        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
+        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+        let window_spill_settings = WindowSpillSettings::new(settings.clone(), num_processors)?;
+
+        let plan_schema = window_partition.output_schema()?;
+
+        let partition_by = window_partition
+            .partition_by
+            .iter()
+            .map(|index| plan_schema.index_of(&index.to_string()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let sort_desc = window_partition
+            .order_by
+            .iter()
+            .map(|desc| {
+                let offset = plan_schema.index_of(&desc.order_by.to_string())?;
+                Ok(SortColumnDescription {
+                    offset,
+                    asc: desc.asc,
+                    nulls_first: desc.nulls_first,
+                    is_nullable: plan_schema.field(offset).is_nullable(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let have_order_col = window_partition.after_exchange.unwrap_or(false);
+
+        self.main_pipeline.exchange(
+            num_processors,
+            WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+        );
+
+        let processor_id = AtomicUsize::new(0);
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Box::new(
+                TransformWindowPartitionCollect::new(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    processor_id.fetch_add(1, std::sync::atomic::Ordering::AcqRel),
+                    num_processors,
+                    num_partitions,
+                    window_spill_settings.clone(),
+                    sort_desc.clone(),
+                    plan_schema.clone(),
+                    max_block_size,
+                    sort_block_size,
+                    sort_spilling_batch_bytes,
+                    enable_loser_tree,
+                    have_order_col,
+                )?,
+            )))
+        })
     }
 }

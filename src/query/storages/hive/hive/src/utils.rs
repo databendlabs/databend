@@ -14,13 +14,13 @@
 
 use std::fmt::Debug;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
-use ordered_float::OrderedFloat;
 use volo_thrift::MaybeException;
 
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
@@ -95,7 +95,7 @@ pub fn from_thrift_error(error: impl std::error::Error) -> ErrorCode {
 }
 
 /// Format a thrift exception into iceberg error.
-pub fn from_thrift_exception<T, E: Debug>(value: MaybeException<T, E>) -> Result<T, ErrorCode> {
+pub fn from_thrift_exception<T, E: Debug>(value: MaybeException<T, E>) -> Result<T> {
     match value {
         MaybeException::Ok(v) => Ok(v),
         MaybeException::Exception(err) => Err(ErrorCode::Internal(format!(

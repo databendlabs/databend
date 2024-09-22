@@ -51,7 +51,7 @@ impl Interpreter for CreateCatalogInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_catalog_execute");
@@ -68,7 +68,7 @@ impl Interpreter for CreateCatalogInterpreter {
             },
         };
         let ctl = catalog_manager
-            .build_catalog(Arc::new(ctl_info), self.ctx.txn_mgr())
+            .build_catalog(Arc::new(ctl_info), self.ctx.session_state())
             .map_err(|err| err.add_message("Error creating catalog."))?;
 
         // list databases to check if the catalog is valid.

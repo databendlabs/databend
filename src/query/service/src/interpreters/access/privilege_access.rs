@@ -30,15 +30,19 @@ use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_sql::binder::MutationType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::MergeInto;
+use databend_common_sql::plans::Mutation;
+use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
+use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -80,7 +84,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
 ];
 
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["set_cache_capacity"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["fuse_amend"];
 
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
@@ -93,6 +97,7 @@ impl PrivilegeAccess {
     async fn convert_to_owner_object(
         &self,
         object: &GrantObject,
+        disable_table_info_refresh: bool,
     ) -> Result<Option<OwnershipObject>> {
         let tenant = self.ctx.get_tenant();
 
@@ -108,7 +113,7 @@ impl PrivilegeAccess {
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 OwnershipObject::Database {
                     catalog_name: catalog_name.clone(),
@@ -119,15 +124,36 @@ impl PrivilegeAccess {
                 if db_name.to_lowercase() == "system" {
                     return Ok(None);
                 }
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
+                let catalog = if !disable_table_info_refresh {
+                    self.ctx.get_catalog(catalog_name).await?
+                } else {
+                    self.ctx
+                        .get_catalog(catalog_name)
+                        .await?
+                        .disable_table_info_refresh()?
+                };
                 let db_id = catalog
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
-                let table = catalog.get_table(&tenant, db_name, table_name).await?;
-                let table_id = table.get_id();
+                let table_id = if !disable_table_info_refresh {
+                    self.ctx
+                        .get_table(catalog_name, db_name, table_name)
+                        .await?
+                        .get_id()
+                } else {
+                    match self.ctx.get_table(catalog_name, db_name, table_name).await {
+                        Ok(table) => table.get_id(),
+                        // attach table issue_16121 xx, then vacuum drop table from issue_16121 , then drop table
+                        // should disable catalog
+                        Err(_) => {
+                            let cat = catalog.disable_table_info_refresh()?;
+                            cat.get_table(&tenant, db_name, table_name).await?.get_id()
+                        }
+                    }
+                };
                 OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
                     db_id,
@@ -173,6 +199,7 @@ impl PrivilegeAccess {
                 &GrantObject::Database(catalog_name.to_string(), db_name.to_string()),
                 privileges,
                 check_current_role_only,
+                false,
             )
             .await
         {
@@ -181,7 +208,10 @@ impl PrivilegeAccess {
             }
             Err(_err) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
-                match self.convert_to_id(&tenant, &catalog, db_name, None).await {
+                match self
+                    .convert_to_id(&tenant, &catalog, db_name, None, false)
+                    .await
+                {
                     Ok(obj) => {
                         let (db_id, _) = match obj {
                             ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
@@ -192,6 +222,7 @@ impl PrivilegeAccess {
                                 &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
                                 privileges,
                                 check_current_role_only,
+                                false,
                             )
                             .await
                         {
@@ -230,6 +261,7 @@ impl PrivilegeAccess {
                     Err(e) => match e.code() {
                         ErrorCode::UNKNOWN_DATABASE
                         | ErrorCode::UNKNOWN_TABLE
+                        | ErrorCode::ILLEGAL_STREAM
                         | ErrorCode::UNKNOWN_CATALOG
                             if if_exists =>
                         {
@@ -250,12 +282,17 @@ impl PrivilegeAccess {
         table_name: &str,
         privilege: UserPrivilegeType,
         if_exists: bool,
+        disable_table_info_refresh: bool,
     ) -> Result<()> {
         // skip checking the privilege on system tables.
         if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
             || db_name == "information_schema")
             && privilege == UserPrivilegeType::Select
         {
+            return Ok(());
+        }
+
+        if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());
         }
 
@@ -278,13 +315,20 @@ impl PrivilegeAccess {
                         ),
                         privilege,
                         false,
+                        disable_table_info_refresh,
                     )
                     .await
                 {
                     Ok(_) => return Ok(()),
                     Err(_err) => {
                         match self
-                            .convert_to_id(&tenant, &catalog, db_name, Some(table_name))
+                            .convert_to_id(
+                                &tenant,
+                                &catalog,
+                                db_name,
+                                Some(table_name),
+                                disable_table_info_refresh,
+                            )
                             .await
                         {
                             Ok(obj) => {
@@ -302,6 +346,7 @@ impl PrivilegeAccess {
                                         ),
                                         privilege,
                                         false,
+                                        disable_table_info_refresh,
                                     )
                                     .await
                                 {
@@ -331,6 +376,7 @@ impl PrivilegeAccess {
                             Err(e) => match e.code() {
                                 ErrorCode::UNKNOWN_DATABASE
                                 | ErrorCode::UNKNOWN_TABLE
+                                | ErrorCode::ILLEGAL_STREAM
                                 | ErrorCode::UNKNOWN_CATALOG
                                     if if_exists =>
                                 {
@@ -360,13 +406,15 @@ impl PrivilegeAccess {
         session: &Arc<Session>,
         grant_object: &GrantObject,
         check_current_role_only: bool,
+        disable_table_info_refresh: bool,
     ) -> Result<bool> {
         let owner_object = self
-            .convert_to_owner_object(grant_object)
+            .convert_to_owner_object(grant_object, disable_table_info_refresh)
             .await
             .or_else(|e| match e.code() {
                 ErrorCode::UNKNOWN_DATABASE
                 | ErrorCode::UNKNOWN_TABLE
+                | ErrorCode::ILLEGAL_STREAM
                 | ErrorCode::UNKNOWN_CATALOG => Ok(None),
                 _ => Err(e.add_message("error on check has_ownership")),
             })?;
@@ -406,6 +454,7 @@ impl PrivilegeAccess {
         grant_object: &GrantObject,
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
+        disable_table_info_refresh: bool,
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
@@ -421,7 +470,12 @@ impl PrivilegeAccess {
 
         if verify_ownership
             && self
-                .has_ownership(&session, grant_object, check_current_role_only)
+                .has_ownership(
+                    &session,
+                    grant_object,
+                    check_current_role_only,
+                    disable_table_info_refresh,
+                )
                 .await?
         {
             return Ok(());
@@ -506,6 +560,7 @@ impl PrivilegeAccess {
             &GrantObject::Stage(stage_info.stage_name.to_string()),
             privilege,
             false,
+            false,
         )
         .await
     }
@@ -516,6 +571,7 @@ impl PrivilegeAccess {
             self.validate_access(
                 &GrantObject::UDF(udf.clone()),
                 UserPrivilegeType::Usage,
+                false,
                 false,
             )
             .await?;
@@ -557,18 +613,36 @@ impl PrivilegeAccess {
         catalog: &Arc<dyn Catalog>,
         database_name: &str,
         table_name: Option<&str>,
+        disable_table_info_refresh: bool,
     ) -> Result<ObjectId> {
-        let db_id = catalog
+        let cat = catalog.clone();
+        let db_id = cat
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
-            .ident
+            .database_id
             .db_id;
         if let Some(table_name) = table_name {
-            let table_id = catalog
-                .get_table(tenant, database_name, table_name)
-                .await?
-                .get_id();
+            let table_id = if !disable_table_info_refresh {
+                self.ctx
+                    .get_table(cat.name().as_str(), database_name, table_name)
+                    .await?
+                    .get_id()
+            } else {
+                match self
+                    .ctx
+                    .get_table(cat.name().as_str(), database_name, table_name)
+                    .await
+                {
+                    Ok(table) => table.get_id(),
+                    // attach table issue_16121 xx, then vacuum drop table from issue_16121 , then drop table
+                    // should disable catalog
+                    Err(_) => cat
+                        .get_table(tenant, database_name, table_name)
+                        .await?
+                        .get_id(),
+                }
+            };
             return Ok(ObjectId::Table(db_id, table_id));
         }
         Ok(ObjectId::Database(db_id))
@@ -643,7 +717,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     Some(RewriteKind::ShowTables(catalog, database)) => {
                         let clg = self.ctx.get_catalog(catalog).await?;
-                        let (show_db_id, table_id) = match self.convert_to_id(&tenant, &clg, database, None).await? {
+                        let (show_db_id, table_id) = match self.convert_to_id(&tenant, &clg, database, None, false).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -663,7 +737,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
                         let ctl = self.ctx.get_catalog(&ctl_name).await?;
-                        let (show_db_id, table_id) = match self.convert_to_id(&tenant, &ctl, database, None).await? {
+                        let (show_db_id, table_id) = match self.convert_to_id(&tenant, &ctl, database, None, false).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -680,13 +754,16 @@ impl AccessChecker for PrivilegeAccess {
                         check_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
+                        if self.ctx.is_temp_table(catalog_name,database,table){
+                            return Ok(());
+                        }
                         let session = self.ctx.get_current_session();
-                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false).await? ||
-                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false).await?   {
+                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false, false).await? ||
+                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false, false).await?   {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, Some(table)).await? {
+                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, Some(table), false).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -732,18 +809,19 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
                     }
-                    if table.is_source_of_view() {
+                    if table.is_source_of_view()||table.table().is_temp() {
                         continue;
                     }
+
                     let catalog_name = table.catalog();
                     // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
                     // this is no means to check table `system.read_parquet(s3)` privilege
                     if !table.is_source_of_stage() {
-                        self.validate_table_access(catalog_name, table.database(), table.name(), UserPrivilegeType::Select, false).await?
+                        self.validate_table_access(catalog_name, table.database(), table.name(), UserPrivilegeType::Select, false, false).await?
                     }
                 }
             }
-            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => {
+            Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
             }
 
@@ -752,7 +830,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Select, false).await?
             }
             Plan::CreateDatabase(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true, false)
                     .await?;
             }
             Plan::DropDatabase(plan) => {
@@ -762,15 +840,15 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropIndex(_)
             | Plan::DropTableIndex(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
                     .await?;
             }
             Plan::CreateStage(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
                     .await?;
             }
             Plan::CreateUDF(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
                     .await?;
             }
             Plan::DropUDF(plan) => {
@@ -782,7 +860,7 @@ impl AccessChecker for PrivilegeAccess {
                     let udf = HashSet::from([udf_name]);
                     self.validate_udf_access(udf).await?;
                 } else {
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false)
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
                                         .await?;
                 }
             }
@@ -795,7 +873,7 @@ impl AccessChecker for PrivilegeAccess {
                                 self.validate_stage_access(&stage, privilege).await?;
                             }
                         } else {
-                            self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
+                            self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                                 .await?;
                         }
                     }
@@ -814,7 +892,7 @@ impl AccessChecker for PrivilegeAccess {
                 let ctl = self.ctx.get_catalog(&ctl_name).await?;
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (show_db_id, _) = match self.convert_to_id(&tenant, &ctl, &plan.database, None).await? {
+                let (show_db_id, _) = match self.convert_to_id(&tenant, &ctl, &plan.database, None, false).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
@@ -833,33 +911,36 @@ impl AccessChecker for PrivilegeAccess {
 
             // Virtual Column.
             Plan::CreateVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Create, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Create, false, false).await?
             }
             Plan::AlterVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
             }
             Plan::DropVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, plan.if_exists).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, plan.if_exists, false).await?
             }
             Plan::RefreshVirtualColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
 
             // Table.
             Plan::ShowCreateTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
             }
             Plan::DescribeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
             }
             Plan::CreateTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX){
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }
             }
             Plan::DropTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, plan.if_exists).await?;
+                // For attach table
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, plan.if_exists, true).await?;
             }
             Plan::UndropTable(plan) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
@@ -867,64 +948,77 @@ impl AccessChecker for PrivilegeAccess {
 
             }
             Plan::RenameTable(plan) => {
+                if  self.ctx.is_temp_table(&plan.catalog,&plan.database, &plan.table) {
+                    return Ok(());
+                }
                 // You must have ALTER and DROP privileges for the original table,
                 // and CREATE for the new db.
                 let privileges = vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop];
                 for privilege in privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, plan.if_exists).await?;
+                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, plan.if_exists, false).await?;
                 }
                 self.validate_db_access(&plan.catalog, &plan.new_database, UserPrivilegeType::Create, false).await?;
             }
             Plan::SetOptions(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::AddTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::RenameTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::ModifyTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::ModifyTableComment(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::AlterTableClusterKey(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableClusterKey(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, false, false).await?
             }
-            Plan::ReclusterTable(plan) => {
-                if enable_experimental_rbac_check {
-                    if let Some(scalar) = &plan.push_downs {
-                        let udf = get_udf_names(scalar)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false).await?
+            Plan::ReclusterTable{s_expr, ..} => {
+                let plan: Recluster = s_expr.plan().clone().try_into()?;
+                // UDF has been disabled in recluster, no need to check udf privilege access.
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::TruncateTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false, false).await?
             }
-            Plan::OptimizeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
-            }
+            Plan::OptimizePurge(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            },
+            Plan::OptimizeCompactSegment(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            },
+            Plan::OptimizeCompactBlock { s_expr, .. } => {
+                let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            },
             Plan::VacuumTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::VacuumDropTable(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
             }
             Plan::VacuumTemporaryFiles(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false).await?
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
             }
             Plan::AnalyzeTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            }
+            // Dictionary
+            Plan::ShowCreateDictionary(_)
+            | Plan::CreateDictionary(_)
+            | Plan::DropDictionary(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
             }
             // Others.
             Plan::Insert(plan) => {
@@ -934,7 +1028,7 @@ impl AccessChecker for PrivilegeAccess {
                     vec![UserPrivilegeType::Insert]
                 };
                 for privilege in target_table_privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
+                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false, false).await?;
                 }
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
@@ -946,7 +1040,7 @@ impl AccessChecker for PrivilegeAccess {
                 };
                 for target in plan.whens.iter().flat_map(|when|when.intos.iter()).chain(plan.opt_else.as_ref().into_iter().flat_map(|e|e.intos.iter())){
                     for privilege in target_table_privileges.clone() {
-                    self.validate_table_access(&target.catalog, &target.database, &target.table, privilege, false).await?;
+                    self.validate_table_access(&target.catalog, &target.database, &target.table, privilege, false, false).await?;
                     }
                 }
                 self.check(ctx, &plan.input_source).await?;
@@ -955,12 +1049,12 @@ impl AccessChecker for PrivilegeAccess {
                 //plan.delete_when is Expr no need to check privileges.
                 let privileges = vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete];
                 for privilege in privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
+                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false, false).await?;
                 }
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
-            Plan::MergeInto { s_expr, .. } => {
-                let plan: MergeInto = s_expr.plan().clone().try_into()?;
+            Plan::DataMutation { s_expr, .. } => {
+                let plan: Mutation = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
                     let s_expr = s_expr.child(0)?;
                     match s_expr.get_udfs() {
@@ -998,56 +1092,14 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let privileges = vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete];
+                let privileges = match plan.mutation_type {
+                    MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                    MutationType::Update => vec![UserPrivilegeType::Update],
+                    MutationType::Delete => vec![UserPrivilegeType::Delete],
+                };
                 for privilege in privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
+                    self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false, false).await?;
                 }
-            }
-            Plan::Delete(plan) => {
-                if enable_experimental_rbac_check {
-                    if let Some(selection) = &plan.selection {
-                        let udf = get_udf_names(selection)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    for subquery in &plan.subquery_desc {
-                        match subquery.input_expr.get_udfs() {
-                            Ok(udfs) => {
-                                if !udfs.is_empty() {
-                                    self.validate_udf_access(udfs).await?;
-                                }
-                            }
-                            Err(err) => {
-                                return Err(err.add_message("Unable to access necessary user-defined functions for executing the DELETE operation"));
-                            }
-                        }
-                    }
-                }
-                self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, UserPrivilegeType::Delete, false).await?
-            }
-            Plan::Update(plan) => {
-                if enable_experimental_rbac_check {
-                    for scalar in plan.update_list.values() {
-                        let udf = get_udf_names(scalar)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    if let Some(selection) = &plan.selection {
-                        let udf = get_udf_names(selection)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    for subquery in &plan.subquery_desc {
-                        match subquery.input_expr.get_udfs() {
-                            Ok(udfs) => {
-                                if !udfs.is_empty() {
-                                    self.validate_udf_access(udfs).await?;
-                                }
-                            }
-                            Err(err) => {
-                                return Err(err.add_message("Failed to retrieve necessary user-defined functions for executing the UPDATE operation."));
-                            }
-                        }
-                    }
-                }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Update, false).await?;
             }
             Plan::CreateView(plan) => {
                 let mut planner = Planner::new(self.ctx.clone());
@@ -1064,7 +1116,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?
             }
             Plan::DescribeView(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false, false).await?
             }
             Plan::CreateStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?
@@ -1080,6 +1132,7 @@ impl AccessChecker for PrivilegeAccess {
                     &GrantObject::Global,
                     UserPrivilegeType::CreateUser,
                     false,
+                    false,
                 )
                     .await?;
             }
@@ -1087,7 +1140,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::DropUser,
-                    false,
+                    false,false
                 )
                     .await?;
             }
@@ -1096,6 +1149,7 @@ impl AccessChecker for PrivilegeAccess {
                     &GrantObject::Global,
                     UserPrivilegeType::CreateRole,
                     false,
+                    false,
                 )
                     .await?;
             }
@@ -1103,39 +1157,34 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::DropRole,
-                    false,
+                    false, false
                 )
                     .await?;
             }
-            Plan::GrantShareObject(_)
-            | Plan::RevokeShareObject(_)
-            | Plan::ShowObjectGrantPrivileges(_)
-            | Plan::ShowGrantTenantsOfShare(_)
-            | Plan::GrantRole(_)
+            Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
             | Plan::RevokeRole(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false, false)
                     .await?;
             }
-            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
+            Plan::Set(_) | Plan::Unset(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
 
             Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
-            | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_)
             | Plan::RefreshTableIndex(_)
             | Plan::AlterUser(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
                 self.validate_stage_access(&plan.stage_table_info.stage_info, UserPrivilegeType::Read).await?;
-                self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false).await?;
+                self.validate_table_access(plan.catalog_info.catalog_name(), &plan.database_name, &plan.table_name, UserPrivilegeType::Insert, false, false).await?;
                 if let Some(query) = &plan.query {
                     self.check(ctx, query).await?;
                 }
@@ -1148,14 +1197,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
-            Plan::CreateShareEndpoint(_)
-            | Plan::ShowShareEndpoint(_)
-            | Plan::DropShareEndpoint(_)
-            | Plan::CreateShare(_)
-            | Plan::DropShare(_)
-            | Plan::DescShare(_)
-            | Plan::ShowShares(_)
-            | Plan::ShowCreateCatalog(_)
+            Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
             | Plan::CreateFileFormat(_)
@@ -1188,14 +1230,14 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterTask(_)
             | Plan::CreateSequence(_)
             | Plan::DropSequence(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
             Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::CreateDataMask,
-                    false,
+                    false,false
                 )
                     .await?;
             }
@@ -1217,9 +1259,17 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExistsTable(_) => {}
             Plan::DescDatamaskPolicy(_) => {}
             Plan::Begin => {}
+            Plan::ExecuteImmediate(_)
+            | Plan::CallProcedure(_)
+            | Plan::CreateProcedure(_)
+            | Plan::DropProcedure(_)
+            /*| Plan::ShowCreateProcedure(_)
+            | Plan::RenameProcedure(_)*/ => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
+            }
             Plan::Commit => {}
             Plan::Abort => {}
-            Plan::ExecuteImmediate(_) => {}
         }
 
         Ok(())
@@ -1285,7 +1335,9 @@ async fn has_priv(
     }
     if db_name.to_lowercase() == "system" {
         if let Some(table_name) = table_name {
-            return Ok(SYSTEM_TABLES_ALLOW_LIST.contains(&table_name));
+            if SYSTEM_TABLES_ALLOW_LIST.contains(&table_name) {
+                return Ok(true);
+            }
         }
     }
 

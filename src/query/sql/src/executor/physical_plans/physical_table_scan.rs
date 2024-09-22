@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::SampleLevel;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
@@ -40,10 +41,14 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
+use rand::thread_rng;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -119,6 +124,14 @@ impl PhysicalPlanBuilder {
             let columns = scan.columns.clone();
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
+            if scan.is_lazy_table {
+                let lazy_columns = columns.difference(&used).cloned().collect();
+                let mut metadata = self.metadata.write();
+                metadata.set_table_lazy_columns(scan.table_index, lazy_columns);
+                for column_index in used.iter() {
+                    metadata.add_retained_column(*column_index);
+                }
+            }
             if let Some(ref mut pw) = prewhere {
                 debug_assert!(
                     pw.prewhere_columns.is_subset(&columns),
@@ -225,6 +238,28 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
+        if let Some(sample) = scan.sample
+            && !table.use_own_sample_block()
+        {
+            match sample.sample_level {
+                SampleLevel::ROW => {}
+                SampleLevel::BLOCK => {
+                    let probability = sample.sample_probability(None);
+                    if let Some(probability) = probability {
+                        let original_parts = source.parts.partitions.len();
+                        let mut sample_parts = Vec::with_capacity(original_parts);
+                        let mut rng = thread_rng();
+                        let bernoulli = Bernoulli::new(probability).unwrap();
+                        for part in source.parts.partitions.iter() {
+                            if bernoulli.sample(&mut rng) {
+                                sample_parts.push(part.clone());
+                            }
+                        }
+                        source.parts.partitions = sample_parts;
+                    }
+                }
+            }
+        }
         source.table_index = scan.table_index;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
@@ -238,20 +273,38 @@ impl PhysicalPlanBuilder {
         } else {
             Some(project_internal_columns)
         };
-        Ok(PhysicalPlan::TableScan(TableScan {
+
+        if scan.is_lazy_table {
+            let mut metadata = self.metadata.write();
+            metadata.set_table_source(scan.table_index, source.clone());
+        }
+
+        let mut plan = PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
             name_mapping,
             source: Box::new(source),
             table_index: Some(scan.table_index),
             stat_info: Some(stat_info),
             internal_column,
-        }))
+        });
+
+        // Update stream columns if needed.
+        if scan.update_stream_columns {
+            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
+                &self.metadata,
+                plan,
+                scan.table_index,
+                table.get_table_info().ident.seq,
+            )?));
+        }
+
+        Ok(plan)
     }
 
     pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
-            .get_default_catalog(self.ctx.txn_mgr())?
+            .get_default_catalog(self.ctx.session_state())?
             .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 
@@ -477,6 +530,7 @@ impl PhysicalPlanBuilder {
             agg_index: None,
             change_type: scan.change_type.clone(),
             inverted_index: scan.inverted_index.clone(),
+            sample: scan.sample.clone(),
         })
     }
 

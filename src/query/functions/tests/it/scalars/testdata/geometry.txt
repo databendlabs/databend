@@ -83,7 +83,7 @@ ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_
 raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'))
 checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"))
 optimized expr : true
-output type    : Boolean NULL
+output type    : Boolean
 output domain  : {TRUE}
 output         : true
 
@@ -92,7 +92,7 @@ ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_
 raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-1 0, 0 1, 1 0, -1 0))'))
 checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("POLYGON((-1 0, 0 1, 1 0, -1 0))"))
 optimized expr : true
-output type    : Boolean NULL
+output type    : Boolean
 output domain  : {TRUE}
 output         : true
 
@@ -101,7 +101,7 @@ ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_
 raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-1 1, 0 2, 1 1))'))
 checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("LINESTRING(-1 1, 0 2, 1 1))"))
 optimized expr : false
-output type    : Boolean NULL
+output type    : Boolean
 output domain  : {FALSE}
 output         : false
 
@@ -110,7 +110,7 @@ ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_
 raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-2 0, 0 0, 0 1))'))
 checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("LINESTRING(-2 0, 0 0, 0 1))"))
 optimized expr : true
-output type    : Boolean NULL
+output type    : Boolean
 output domain  : {TRUE}
 output         : true
 
@@ -200,7 +200,7 @@ ast            : st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'
 raw expr       : st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'))
 checked expr   : st_distance<Geometry, Geometry>(to_geometry<String>("POINT(0 0)"), to_geometry<String>("POINT(1 1)"))
 optimized expr : 1.414213562_f64
-output type    : Float64 NULL
+output type    : Float64
 output domain  : {1.414213562..=1.414213562}
 output         : 1.414213562
 
@@ -275,7 +275,7 @@ ast            : st_length(to_geometry('POINT(1 1)'))
 raw expr       : st_length(to_geometry('POINT(1 1)'))
 checked expr   : st_length<Geometry>(to_geometry<String>("POINT(1 1)"))
 optimized expr : 0_f64
-output type    : Float64 NULL
+output type    : Float64
 output domain  : {0..=0}
 output         : 0
 
@@ -284,7 +284,7 @@ ast            : st_length(to_geometry('LINESTRING(0 0, 1 1)'))
 raw expr       : st_length(to_geometry('LINESTRING(0 0, 1 1)'))
 checked expr   : st_length<Geometry>(to_geometry<String>("LINESTRING(0 0, 1 1)"))
 optimized expr : 1.414213562_f64
-output type    : Float64 NULL
+output type    : Float64
 output domain  : {1.414213562..=1.414213562}
 output         : 1.414213562
 
@@ -293,7 +293,7 @@ ast            : st_length(to_geometry('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))
 raw expr       : st_length(to_geometry('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))
 checked expr   : st_length<Geometry>(to_geometry<String>("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))"))
 optimized expr : 0_f64
-output type    : Float64 NULL
+output type    : Float64
 output domain  : {0..=0}
 output         : 0
 
@@ -415,7 +415,7 @@ ast            : st_npoints(to_geometry('POINT(66 12)'))
 raw expr       : st_npoints(to_geometry('POINT(66 12)'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("POINT(66 12)"))
 optimized expr : 1_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {1..=1}
 output         : 1
 
@@ -424,7 +424,7 @@ ast            : st_npoints(to_geometry('MULTIPOINT((45 21), (12 54))'))
 raw expr       : st_npoints(to_geometry('MULTIPOINT((45 21), (12 54))'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("MULTIPOINT((45 21), (12 54))"))
 optimized expr : 2_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {2..=2}
 output         : 2
 
@@ -433,7 +433,7 @@ ast            : st_npoints(to_geometry('LINESTRING(40 60, 50 50, 60 40)'))
 raw expr       : st_npoints(to_geometry('LINESTRING(40 60, 50 50, 60 40)'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("LINESTRING(40 60, 50 50, 60 40)"))
 optimized expr : 3_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {3..=3}
 output         : 3
 
@@ -442,7 +442,7 @@ ast            : st_npoints(to_geometry('MULTILINESTRING((1 1, 32 17), (33 12, 7
 raw expr       : st_npoints(to_geometry('MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))"))
 optimized expr : 5_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {5..=5}
 output         : 5
 
@@ -451,7 +451,7 @@ ast            : st_npoints(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17
 raw expr       : st_npoints(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))"))
 optimized expr : 5_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {5..=5}
 output         : 5
 
@@ -460,7 +460,7 @@ ast            : st_npoints(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),
 raw expr       : st_npoints(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))"))
 optimized expr : 8_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {8..=8}
 output         : 8
 
@@ -469,7 +469,7 @@ ast            : st_npoints(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,
 raw expr       : st_npoints(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))
 checked expr   : st_npoints<Geometry>(to_geometry<String>("GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))"))
 optimized expr : 8_u32
-output type    : UInt32 NULL
+output type    : UInt32
 output domain  : {8..=8}
 output         : 8
 
@@ -496,7 +496,7 @@ ast            : st_setsrid(to_geometry('POINT(13 51)'), 4326)
 raw expr       : st_setsrid(to_geometry('POINT(13 51)'), 4326)
 checked expr   : st_setsrid<Geometry, Int32>(to_geometry<String>("POINT(13 51)"), to_int32<UInt16>(4326_u16))
 optimized expr : "SRID=4326;POINT(13 51)"
-output type    : Geometry NULL
+output type    : Geometry
 output domain  : Undefined
 output         : 'SRID=4326;POINT(13 51)'
 
@@ -505,7 +505,7 @@ ast            : st_srid(to_geometry('POINT(-122.306100 37.554162)', 1234))
 raw expr       : st_srid(to_geometry('POINT(-122.306100 37.554162)', 1234))
 checked expr   : st_srid<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(1234_u16)))
 optimized expr : 1234_i32
-output type    : Int32 NULL
+output type    : Int32
 output domain  : {1234..=1234}
 output         : 1234
 
@@ -514,7 +514,7 @@ ast            : st_srid(st_makegeompoint(37.5, 45.5))
 raw expr       : st_srid(st_makegeompoint(37.5, 45.5))
 checked expr   : st_srid<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(3, 1)>(37.5_d128(3,1)), to_float64<Decimal(3, 1)>(45.5_d128(3,1))))
 optimized expr : 4326_i32
-output type    : Int32 NULL
+output type    : Int32
 output domain  : {4326..=4326}
 output         : 4326
 
@@ -550,7 +550,7 @@ ast            : st_x(st_makegeompoint(37.5, 45.5))
 raw expr       : st_x(st_makegeompoint(37.5, 45.5))
 checked expr   : st_x<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(3, 1)>(37.5_d128(3,1)), to_float64<Decimal(3, 1)>(45.5_d128(3,1))))
 optimized expr : 37.5_f64
-output type    : Float64 NULL
+output type    : Float64
 output domain  : {37.5..=37.5}
 output         : 37.5
 
@@ -577,7 +577,7 @@ ast            : st_y(st_makegeompoint(37.5, 45.5))
 raw expr       : st_y(st_makegeompoint(37.5, 45.5))
 checked expr   : st_y<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(3, 1)>(37.5_d128(3,1)), to_float64<Decimal(3, 1)>(45.5_d128(3,1))))
 optimized expr : 45.5_f64
-output type    : Float64 NULL
+output type    : Float64
 output domain  : {45.5..=45.5}
 output         : 45.5
 
@@ -1187,5 +1187,69 @@ optimized expr : 10_f64
 output type    : Float64 NULL
 output domain  : {10..=10}
 output         : 10
+
+
+ast            : st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)
+raw expr       : st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)
+checked expr   : st_transform<Geometry, Int32>(st_geometryfromwkt<String, Int32>("POINT(389866.35 5819003.03)", to_int32<UInt16>(32633_u16)), to_int32<UInt16>(3857_u16))
+optimized expr : "SRID=3857;POINT(1489140.093766 6892872.19868)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=3857;POINT(1489140.093766 6892872.19868)'
+
+
+ast            : st_transform(st_geomfromwkt(a, b), c)
+raw expr       : st_transform(st_geomfromwkt(a::String, b::Int32), c::Int32)
+checked expr   : st_transform<Geometry, Int32>(st_geometryfromwkt<String, Int32>(a, b), c)
+optimized expr : "SRID=3857;POINT(1489140.093766 6892872.19868)"
+evaluation:
++--------+-----------------------------------------------------------------+-----------------+---------------+-------------------------------------------------+
+|        | a                                                               | b               | c             | Output                                          |
++--------+-----------------------------------------------------------------+-----------------+---------------+-------------------------------------------------+
+| Type   | String                                                          | Int32           | Int32         | Geometry                                        |
+| Domain | {"POINT(389866.35 5819003.03)"..="POINT(389866.35 5819003.03)"} | {32633..=32633} | {3857..=3857} | Undefined                                       |
+| Row 0  | 'POINT(389866.35 5819003.03)'                                   | 32633           | 3857          | 'SRID=3857;POINT(1489140.093766 6892872.19868)' |
++--------+-----------------------------------------------------------------+-----------------+---------------+-------------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                              |
++--------+---------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x504f494e54283338393836362e333520353831393030332e303329, offsets: [0, 27] } |
+| b      | Int32([32633])                                                                                    |
+| c      | Int32([3857])                                                                                     |
+| Output | BinaryColumn { data: 0x0101000020110f00006f0c0118f4b83641522cb70c524b5a41, offsets: [0, 25] }     |
++--------+---------------------------------------------------------------------------------------------------+
+
+
+ast            : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
+raw expr       : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
+checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>("POINT(4.500212 52.161170)"), to_int32<UInt16>(4326_u16), to_int32<UInt16>(28992_u16))
+optimized expr : "SRID=28992;POINT(94308.670475 464038.168827)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=28992;POINT(94308.670475 464038.168827)'
+
+
+ast            : st_transform(st_geomfromwkt(a), b, c)
+raw expr       : st_transform(st_geomfromwkt(a::String), b::Int32, c::Int32)
+checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>(a), b, c)
+optimized expr : "SRID=28992;POINT(94308.670475 464038.168827)"
+evaluation:
++--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
+|        | a                                                           | b             | c               | Output                                         |
++--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
+| Type   | String                                                      | Int32         | Int32           | Geometry                                       |
+| Domain | {"POINT(4.500212 52.161170)"..="POINT(4.500212 52.161170)"} | {4326..=4326} | {28992..=28992} | Undefined                                      |
+| Row 0  | 'POINT(4.500212 52.161170)'                                 | 4326          | 28992           | 'SRID=28992;POINT(94308.670475 464038.168827)' |
++--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                          |
++--------+-----------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x504f494e5428342e3530303231322035322e31363131373029, offsets: [0, 25] } |
+| b      | Int32([4326])                                                                                 |
+| c      | Int32([28992])                                                                                |
+| Output | BinaryColumn { data: 0x0101000020407100005dfe43ba4a06f7402ffce0ac98521c41, offsets: [0, 25] } |
++--------+-----------------------------------------------------------------------------------------------+
 
 

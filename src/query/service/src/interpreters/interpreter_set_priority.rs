@@ -87,7 +87,7 @@ impl Interpreter for SetPriorityInterpreter {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let id = &self.plan.id;
         match self.ctx.get_session_by_id(id) {

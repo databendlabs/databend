@@ -98,7 +98,6 @@ impl AsyncSource for ORCSourceForCopy {
     const NAME: &'static str = "ORCSourceForCopy";
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         loop {

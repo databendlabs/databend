@@ -14,7 +14,6 @@
 
 #![feature(try_blocks)]
 #![feature(coroutines)]
-#![feature(lazy_cell)]
 #![allow(clippy::uninlined_format_args)]
 
 pub mod api;

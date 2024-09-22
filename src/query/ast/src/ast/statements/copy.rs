@@ -415,6 +415,7 @@ impl Display for UriLocation {
 ///
 /// - internal stage: `@internal_stage/path/to/dir/`
 /// - external stage: `@s3_external_stage/path/to/dir/`
+///
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`

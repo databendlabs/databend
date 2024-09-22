@@ -1,0 +1,18 @@
+statement ok
+create or replace table t02(id int, c1 varchar);
+
+statement ok
+create or replace table t01(id int, c1 int);
+
+statement ok
+insert into t01 values(1,1),(2,2);
+
+statement ok
+insert into t02 values(1,1),(2,2);
+
+statement ok
+insert into t02 values(3,'a');
+
+# cover the code path that receive Err in stream of Result<DataBlock>
+statement error 1006
+select a.id from t01 a join t02 b on a.c1=b.c1;

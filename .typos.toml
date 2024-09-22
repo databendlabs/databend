@@ -19,8 +19,8 @@ extend-exclude = [
     "benchmark/",
     "tests/",
     "src/meta",
-    "src/query",
-    "src/binaries",
+    # masked secrets
+    "src/query/config/src/mask.rs",
     # Forked from upstream
     "src/common/parquet2"
 ]

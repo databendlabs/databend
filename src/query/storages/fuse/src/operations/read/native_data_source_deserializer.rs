@@ -22,7 +22,6 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::native::read::ArrayIter;
-use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -84,11 +83,13 @@ struct ReadPartState {
     /// The number of pages need to be skipped for each iter in `array_iters`.
     array_skip_pages: BTreeMap<usize, usize>,
     /// `read_column_ids` is the columns that are in the block to read.
+    ///
     /// The not read columns may have two cases:
     /// 1. the columns added after `alter table`.
     /// 2. the source columns used to generate virtual columns,
     ///    and all the virtual columns have been generated,
     ///    then the source columns are not needed.
+    ///
     /// These columns need to be filled with their default values.
     read_column_ids: HashSet<ColumnId>,
     /// If the block to read has default values, this flag is used for a short path.
@@ -203,7 +204,6 @@ pub struct NativeDeserializeDataTransform {
     // Structures for table scan information:
     table_index: IndexType,
     block_reader: Arc<BlockReader>,
-    column_leaves: Vec<Vec<ColumnDescriptor>>,
     src_schema: DataSchema,
     output_schema: DataSchema,
 
@@ -347,16 +347,6 @@ impl NativeDeserializeDataTransform {
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
 
-        let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
-        for column_node in &block_reader.project_column_nodes {
-            let leaves: Vec<ColumnDescriptor> = column_node
-                .leaf_indices
-                .iter()
-                .map(|i| block_reader.parquet_schema_descriptor.columns()[*i].clone())
-                .collect::<Vec<_>>();
-            column_leaves.push(leaves);
-        }
-
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
                 ctx,
@@ -364,7 +354,6 @@ impl NativeDeserializeDataTransform {
                 func_ctx,
                 scan_progress,
                 block_reader,
-                column_leaves,
                 input,
                 output,
                 output_data: None,
@@ -611,8 +600,7 @@ impl NativeDeserializeDataTransform {
             for (index, column_node) in self.block_reader.project_column_nodes.iter().enumerate() {
                 let readers = chunks.remove(&index).unwrap_or_default();
                 if !readers.is_empty() {
-                    let leaves = self.column_leaves.get(index).unwrap().clone();
-                    let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
+                    let array_iter = self.block_reader.build_array_iter(column_node, readers)?;
                     self.read_state.array_iters.insert(index, array_iter);
                     self.read_state.array_skip_pages.insert(index, 0);
 

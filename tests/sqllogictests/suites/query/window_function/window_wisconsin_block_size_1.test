@@ -1,0 +1,18 @@
+statement ok
+set max_block_size = 1;
+
+include ./expr_in_window.test
+include ./named_window_basic.test
+include ./window_basic.test
+include ./window_bound.test
+include ./window_ignore_nulls.test
+include ./window_in_expr.test
+include ./window_ntile.test
+include ./window_partition_spill.test
+include ./window_qualify.test
+include ./window_range.test
+include ./window_subquery.test
+include ./window_wisconsin.test
+
+statement ok
+unset global max_block_size;

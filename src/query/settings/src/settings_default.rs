@@ -116,6 +116,7 @@ impl DefaultSettings {
             let num_cpus = Self::num_cpus();
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
+            let default_max_spill_io_requests = Self::spill_io_requests(num_cpus);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
             let data_retention_time_in_days_max = Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
@@ -159,9 +160,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
+                ("max_spill_io_requests", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(default_max_spill_io_requests),
+                    desc: "Sets the maximum number of concurrent spill I/O requests.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
-                    desc: "Sets the maximum number of concurrent I/O requests.",
+                    desc: "Sets the maximum number of concurrent storage I/O requests.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
@@ -291,16 +298,10 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024),
+                    value: UserSettingValue::UInt64(512),
                     desc: "Set the spilling buffer threshold (MB) for each join processor.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("disable_merge_into_join_reorder", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Disable merge into join reorder optimization.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -356,6 +357,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enforce_shuffle_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce shuffle join.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
@@ -379,6 +386,12 @@ impl DefaultSettings {
                     desc: "Injects a custom 'sandbox_tenant' into this session. This is only for testing purposes and will take effect only when 'internal_enable_sandbox_tenant' is turned on.",
                     mode: SettingMode::Both,
                     range: None,
+                }),
+                ("enable_planner_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables caching logic plan from same query.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -434,6 +447,36 @@ impl DefaultSettings {
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("window_partition_spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that a window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("window_partition_spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("window_num_partitions", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256),
+                    desc: "Sets the number of partitions for window operator.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("window_spill_unit_size_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256),
+                    desc: "Sets the spill unit size (MB) for window operator.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("window_partition_sort_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(65536),
+                    desc: "Sets the block size of data blocks to be sorted in window partition.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -493,7 +536,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20),
+                    value: UserSettingValue::UInt64(30),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -522,8 +565,14 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_distributed_merge_into", DefaultSettingValue {
+                ("enable_experimental_procedure", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
+                    desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_distributed_merge_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -540,6 +589,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_analyze_histogram", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables analyze histogram for query optimization during analyzing table.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables scanning aggregating index data while querying.",
@@ -552,11 +607,26 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                (
+                    "enable_compact_after_multi_table_insert",
+                    DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables recluster and compact after multi-table insert.",
+                        mode: SettingMode::Both,
+                        range: Some(SettingRange::Numeric(0..=1)),
+                    }
+                ),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("auto_compaction_segments_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -587,6 +657,15 @@ impl DefaultSettings {
                     desc: "Sets the seconds that recluster final will be timeout.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("default_order_by_null", DefaultSettingValue {
+                    value: UserSettingValue::String("nulls_last".to_string()),
+                    desc: "Set numeric default_order_by_null mode",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(vec![
+                        "nulls_first".into(), "nulls_last".into(), 
+                        "nulls_first_on_asc_last_on_desc".into(), "nulls_last_on_asc_first_on_desc".into(), 
+                    ])),
                 }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -641,6 +720,12 @@ impl DefaultSettings {
                     desc: "Request batch rows to external server",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("external_server_request_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8),
+                    desc: "Request max retry times to external server",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=256)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -702,6 +787,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_strict_datetime_parser", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Strict datetime parser. Only support ISO 8601 as Default format.The best practice is to turn this parameter on.(enable by default)",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("disable_variant_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable variant check to allow insert invalid JSON values",
@@ -729,7 +820,7 @@ impl DefaultSettings {
                 // this setting will be removed when geometry type stable.
                 ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Create and alter table with geometry type",
+                    desc: "Create and alter table with geometry/geography type",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -787,7 +878,37 @@ impl DefaultSettings {
                     desc: "Enables loser tree merge sort",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                })
+                }),
+                ("enable_parallel_multi_merge_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables parallel multi merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_last_snapshot_location_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables writing last_snapshot_location_hint object",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("format_null_as_str", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Format NULL as str in query api response",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("random_function_seed", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Seed for random function",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("dynamic_sample_time_budget_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time budget for dynamic sample in milliseconds",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -807,10 +928,20 @@ impl DefaultSettings {
         }
     }
 
+    fn spill_io_requests(num_cpus: u64) -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => std::cmp::min(num_cpus, 64),
+            Some(conf) => match conf.storage.params.is_fs() {
+                true => 48,
+                false => std::cmp::min(num_cpus, 64),
+            },
+        }
+    }
+
     /// The maximum number of days that data can be retained.
     /// The max is read from the global config:data_retention_time_in_days_max
     /// If the global config is not set, the default value is 90 days.
-    fn data_retention_time_in_days_max() -> u64 {
+    pub(crate) fn data_retention_time_in_days_max() -> u64 {
         match GlobalConfig::try_get_instance() {
             None => 90,
             Some(conf) => conf.query.data_retention_time_in_days_max,
@@ -914,7 +1045,7 @@ impl DefaultSettings {
     /// If the value is not a valid u64, it will be parsed as f64.
     /// Used for:
     /// set max_memory_usage = 1024*1024*1024*1.5;
-    fn parse_to_u64(v: &str) -> Result<u64, ErrorCode> {
+    fn parse_to_u64(v: &str) -> Result<u64> {
         match v.parse::<u64>() {
             Ok(val) => Ok(val),
             Err(_) => {

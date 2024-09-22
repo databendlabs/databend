@@ -179,10 +179,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             Operation::CreateDir,
             start_time.elapsed(),
         );
-        create_res.map_err(|e| {
+        create_res.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::CreateDir, e.kind());
-            e
         })
     }
 
@@ -207,10 +206,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
                 })
             })
             .await;
-        read_res.map_err(|e| {
+        read_res.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::Read, e.kind());
-            e
         })
     }
 
@@ -236,10 +234,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             })
             .await;
 
-        write_res.map_err(|e| {
+        write_res.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::Write, e.kind());
-            e
         })
     }
 
@@ -259,10 +256,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
 
         self.metrics
             .observe_request_duration(self.scheme, Operation::Stat, start_time.elapsed());
-        stat_res.map_err(|e| {
+        stat_res.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::Stat, e.kind());
-            e
         })
     }
 
@@ -275,10 +271,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
 
         self.metrics
             .observe_request_duration(self.scheme, Operation::Delete, start_time.elapsed());
-        delete_res.map_err(|e| {
+        delete_res.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::Delete, e.kind());
-            e
         })
     }
 
@@ -291,10 +286,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
 
         self.metrics
             .observe_request_duration(self.scheme, Operation::List, start_time.elapsed());
-        list_res.map_err(|e| {
+        list_res.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::List, e.kind());
-            e
         })
     }
 
@@ -307,10 +301,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
 
         self.metrics
             .observe_request_duration(self.scheme, Operation::Batch, start_time.elapsed());
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::Batch, e.kind());
-            e
         })
     }
 
@@ -326,10 +319,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             Operation::Presign,
             start_time.elapsed(),
         );
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::Presign, e.kind());
-            e
         })
     }
 
@@ -345,13 +337,12 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             Operation::BlockingCreateDir,
             start_time.elapsed(),
         );
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics.increment_errors_total(
                 self.scheme,
                 Operation::BlockingCreateDir,
                 e.kind(),
             );
-            e
         })
     }
 
@@ -375,10 +366,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             )
         });
 
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::BlockingRead, e.kind());
-            e
         })
     }
 
@@ -402,10 +392,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             )
         });
 
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::BlockingWrite, e.kind());
-            e
         })
     }
 
@@ -421,10 +410,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             start_time.elapsed(),
         );
 
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::BlockingStat, e.kind());
-            e
         })
     }
 
@@ -440,10 +428,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             Operation::BlockingDelete,
             start_time.elapsed(),
         );
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::BlockingDelete, e.kind());
-            e
         })
     }
 
@@ -463,10 +450,9 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
             Operation::BlockingList,
             start_time.elapsed(),
         );
-        result.map_err(|e| {
+        result.inspect_err(|e| {
             self.metrics
                 .increment_errors_total(self.scheme, Operation::BlockingList, e.kind());
-            e
         })
     }
 }
@@ -497,17 +483,15 @@ impl<R: oio::Read> oio::Read for OperatorMetricsWrapper<R> {
         self.inner
             .read()
             .await
-            .map(|res| {
+            .inspect(|res| {
                 self.metrics
                     .observe_bytes_total(self.scheme, self.op, res.len());
                 self.metrics
                     .observe_request_duration(self.scheme, self.op, start.elapsed());
-                res
             })
-            .map_err(|err| {
+            .inspect_err(|err| {
                 self.metrics
                     .increment_errors_total(self.scheme, self.op, err.kind());
-                err
             })
     }
 }
@@ -518,82 +502,75 @@ impl<R: oio::BlockingRead> oio::BlockingRead for OperatorMetricsWrapper<R> {
 
         self.inner
             .read()
-            .map(|res| {
+            .inspect(|res| {
                 self.metrics
                     .observe_bytes_total(self.scheme, self.op, res.len());
                 self.metrics
                     .observe_request_duration(self.scheme, self.op, start.elapsed());
-                res
             })
-            .map_err(|err| {
+            .inspect_err(|err| {
                 self.metrics
                     .increment_errors_total(self.scheme, self.op, err.kind());
-                err
             })
     }
 }
 
 impl<R: oio::Write> oio::Write for OperatorMetricsWrapper<R> {
-    async fn write(&mut self, bs: Buffer) -> opendal::Result<usize> {
+    async fn write(&mut self, bs: Buffer) -> opendal::Result<()> {
         let start = Instant::now();
+        let size = bs.len();
 
         self.inner
             .write(bs)
             .await
-            .map(|res| {
-                self.metrics.observe_bytes_total(self.scheme, self.op, res);
+            .inspect(|_| {
+                self.metrics.observe_bytes_total(self.scheme, self.op, size);
                 self.metrics
                     .observe_request_duration(self.scheme, self.op, start.elapsed());
-                res
             })
-            .map_err(|err| {
+            .inspect_err(|err| {
                 self.metrics
                     .increment_errors_total(self.scheme, self.op, err.kind());
-                err
             })
     }
 
     async fn close(&mut self) -> opendal::Result<()> {
-        self.inner.close().await.map_err(|err| {
+        self.inner.close().await.inspect_err(|err| {
             self.metrics
                 .increment_errors_total(self.scheme, self.op, err.kind());
-            err
         })
     }
 
     async fn abort(&mut self) -> opendal::Result<()> {
-        self.inner.abort().await.map_err(|err| {
+        self.inner.abort().await.inspect_err(|err| {
             self.metrics
                 .increment_errors_total(self.scheme, self.op, err.kind());
-            err
         })
     }
 }
 
 impl<R: oio::BlockingWrite> oio::BlockingWrite for OperatorMetricsWrapper<R> {
-    fn write(&mut self, bs: Buffer) -> opendal::Result<usize> {
+    fn write(&mut self, bs: Buffer) -> opendal::Result<()> {
         let start = Instant::now();
+        let size = bs.len();
 
         self.inner
             .write(bs)
-            .map(|res| {
-                self.metrics.observe_bytes_total(self.scheme, self.op, res);
+            .inspect(|_| {
+                self.metrics.observe_bytes_total(self.scheme, self.op, size);
                 self.metrics
                     .observe_request_duration(self.scheme, self.op, start.elapsed());
-                res
             })
-            .map_err(|err| {
+            .inspect_err(|err| {
                 self.metrics
                     .increment_errors_total(self.scheme, self.op, err.kind());
-                err
             })
     }
 
     fn close(&mut self) -> opendal::Result<()> {
-        self.inner.close().map_err(|err| {
+        self.inner.close().inspect_err(|err| {
             self.metrics
                 .increment_errors_total(self.scheme, self.op, err.kind());
-            err
         })
     }
 }

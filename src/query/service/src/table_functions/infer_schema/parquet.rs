@@ -65,7 +65,6 @@ impl ParquetInferSchemaSource {
 impl AsyncSource for ParquetInferSchemaSource {
     const NAME: &'static str = INFER_SCHEMA;
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {

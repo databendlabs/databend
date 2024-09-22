@@ -29,13 +29,13 @@ error:
   --> SQL:1:1
   |
 1 | map(1, 'a')
-  | ^^^^^^^^^^^ no overload satisfies `map(UInt8, String)`
+  | ^^^^^^^^^^^ no function matches signature `map(UInt8, String)`, you might need to add explicit type casts.
 
-has tried possible overloads:
+candidate functions:
   map(Array(Nothing), Array(Nothing)) :: Map(Nothing)                 : unable to unify `UInt8` with `Array(Nothing)`
   map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL  : unable to unify `UInt8` with `Array(Nothing)`
   map(Array(T0), Array(T1)) :: Map(T0, T1)                            : unable to unify `UInt8` with `Array(T0)`
-  map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL             : unable to unify `UInt8` with `Array(T0)`
+... and 1 more
 
 
 
@@ -549,7 +549,7 @@ error:
   --> SQL:1:1
   |
 1 | map_delete({})
-  | ^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Nothing))`
+  | ^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Nothing))`, you might need to add explicit type casts.
 
 
 
@@ -557,7 +557,7 @@ error:
   --> SQL:1:1
   |
 1 | map_delete({}, NULL, NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Nothing), NULL, NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Nothing), NULL, NULL)`, you might need to add explicit type casts.
 
 
 
@@ -565,7 +565,7 @@ error:
   --> SQL:1:1
   |
 1 | map_delete({}, ['k3'], ['k2'])
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Nothing), Array(String), Array(String))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Nothing), Array(String), Array(String))`, you might need to add explicit type casts.
 
 
 
@@ -656,7 +656,7 @@ error:
   --> SQL:1:1
   |
 1 | map_delete(map([a_col, b_col], [d_col, e_col]), 'a_k2', 'b_k3')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Int64, Int64), String, String)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Int64, Int64), String, String)`, you might need to add explicit type casts.
 
 
 
@@ -689,7 +689,7 @@ error:
   --> SQL:1:1
   |
 1 | map_delete(map([a_col, d_col], [b_col, e_col]), 224, 444)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `map_delete(Map(Int16, Int16), UInt8, UInt16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `map_delete(Map(Int16, Int16), UInt8, UInt16)`, you might need to add explicit type casts.
 
 
 

@@ -89,12 +89,7 @@ impl Binder {
             child
         };
 
-        let default_nulls_first = !self
-            .ctx
-            .get_settings()
-            .get_sql_dialect()
-            .unwrap()
-            .is_null_biggest();
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         let mut sort_items: Vec<SortItem> = vec![];
         if !window_plan.partition_by.is_empty() {
@@ -102,16 +97,19 @@ impl Binder {
                 sort_items.push(SortItem {
                     index: part.index,
                     asc: true,
-                    nulls_first: default_nulls_first,
+                    nulls_first: default_nulls_first(true),
                 });
             }
         }
 
         for order in window_plan.order_by.iter() {
+            let asc = order.asc.unwrap_or(true);
             sort_items.push(SortItem {
                 index: order.order_by_item.index,
-                asc: order.asc.unwrap_or(true),
-                nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                asc,
+                nulls_first: order
+                    .nulls_first
+                    .unwrap_or_else(|| default_nulls_first(asc)),
             });
         }
 
@@ -262,11 +260,25 @@ pub struct WindowInfo {
     pub window_functions_map: HashMap<String, usize>,
 }
 
+impl WindowInfo {
+    pub fn reorder(&mut self) {
+        self.window_functions
+            .sort_by(|a, b| b.order_by_items.len().cmp(&a.order_by_items.len()));
+
+        self.window_functions_map.clear();
+        for (i, window) in self.window_functions.iter().enumerate() {
+            self.window_functions_map
+                .insert(window.display_name.clone(), i);
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WindowFunctionInfo {
     pub span: Span,
     pub index: IndexType,
     pub func: WindowFuncType,
+    pub display_name: String,
     pub arguments: Vec<ScalarItem>,
     pub partition_by_items: Vec<ScalarItem>,
     pub order_by_items: Vec<WindowOrderByInfo>,
@@ -318,6 +330,7 @@ impl<'a> WindowRewriter<'a> {
                     replaced_args.push(replaced_arg.into());
                 }
                 WindowFuncType::Aggregate(AggregateFunction {
+                    span: agg.span,
                     display_name: agg.display_name.clone(),
                     func_name: agg.func_name.clone(),
                     distinct: agg.distinct,
@@ -352,6 +365,7 @@ impl<'a> WindowRewriter<'a> {
                     n: func.n,
                     arg: Box::new(replaced_arg.into()),
                     return_type: func.return_type.clone(),
+                    ignore_null: func.ignore_null,
                 })
             }
             func => func.clone(),
@@ -374,6 +388,7 @@ impl<'a> WindowRewriter<'a> {
 
         // resolve order by
         let mut order_by_items = vec![];
+
         for (i, order) in window.order_by.iter().enumerate() {
             let mut order_expr = order.expr.clone();
             let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
@@ -405,6 +420,7 @@ impl<'a> WindowRewriter<'a> {
         let window_info = WindowFunctionInfo {
             span: window.span,
             index,
+            display_name: window.display_name.clone(),
             func: func.clone(),
             arguments: window_args,
             partition_by_items,
@@ -420,6 +436,9 @@ impl<'a> WindowRewriter<'a> {
             window_infos.window_functions.len() - 1,
         );
 
+        // we want the window with more order by items resolve firstly
+        // thus we can eliminate some useless order by items
+        window_infos.reorder();
         let replaced_window = WindowFunc {
             span: window.span,
             display_name: window.display_name.clone(),
@@ -626,8 +645,8 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &mut SelectList,
     ) -> Result<()> {
+        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
         for item in select_list.items.iter_mut() {
-            let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
             rewriter.visit(&mut item.scalar)?;
         }
 

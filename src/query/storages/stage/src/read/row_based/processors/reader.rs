@@ -121,7 +121,6 @@ impl PrefetchAsyncSource for BytesReader {
         prefetched.len() >= self.prefetch_num
     }
 
-    #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.file_state.is_none() {
             let part = match self.table_ctx.get_partition() {

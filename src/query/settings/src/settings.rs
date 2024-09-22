@@ -31,7 +31,7 @@ use crate::settings_default::DefaultSettings;
 use crate::settings_default::SettingRange;
 use crate::SettingMode;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum ScopeLevel {
     Default,
     Local,
@@ -58,7 +58,7 @@ impl Debug for ScopeLevel {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
 pub struct ChangeValue {
     pub level: ScopeLevel,
     pub value: UserSettingValue,
@@ -72,7 +72,7 @@ pub struct Settings {
 }
 
 impl serde::Serialize for Settings {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         #[derive(serde::Serialize)]
         struct SerializeSettings<'a> {
@@ -90,7 +90,7 @@ impl serde::Serialize for Settings {
 }
 
 impl<'de> serde::Deserialize<'de> for Settings {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where D: Deserializer<'de> {
         #[derive(serde::Deserialize)]
         struct DeserializeSettings {

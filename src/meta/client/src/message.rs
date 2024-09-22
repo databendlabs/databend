@@ -31,7 +31,7 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use minitrace::Span;
+use fastrace::Span;
 use tonic::codegen::BoxStream;
 
 use crate::established_client::EstablishedClient;

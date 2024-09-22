@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::InputPort;
@@ -46,13 +44,10 @@ impl AsyncSink for UnionReceiveSink {
         Ok(())
     }
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         if let Some(sender) = self.sender.as_ref() {
-            if sender.send(data_block).await.is_err() {
-                return Err(ErrorCode::Internal("UnionReceiveSink sender failed"));
-            };
+            return Ok(sender.send(data_block).await.is_err());
         }
 
         Ok(false)

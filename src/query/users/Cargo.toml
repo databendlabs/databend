@@ -20,6 +20,7 @@ chrono = { workspace = true }
 cidr = { version = "0.2.2" }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-management = { workspace = true }
@@ -29,6 +30,7 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 enumflags2 = { workspace = true }
+itertools = "0.13.0"
 jwt-simple = "0.11"
 log = { workspace = true }
 p256 = "0.13"

@@ -105,7 +105,6 @@ build_exceptions! {
     BadBytes(1046),
     InitPrometheusFailure(1047),
     Overflow(1049),
-    AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
     SHA1CheckFailed(1057),
@@ -123,7 +122,6 @@ build_exceptions! {
     UnknownFormat(1074),
     UnknownCompressionType(1075),
     InvalidCompressionData(1076),
-    InvalidAuthInfo(1077),
     InvalidTimezone(1078),
     InvalidDate(1079),
     InvalidTimestamp(1080),
@@ -360,6 +358,7 @@ build_exceptions! {
     StreamAlreadyExists(2732),
     IllegalStream(2733),
     StreamVersionMismatched(2734),
+    WithOptionInvalid(2735),
 
     // dynamic error codes.
     IllegalDynamicTable(2740),
@@ -383,6 +382,16 @@ build_exceptions! {
 
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
+    WrongSharePrivileges(3112),
+
+    // dictionary
+    DictionaryAlreadyExists(3113),
+    UnknownDictionary(3114),
+    DictionarySourceError(3115),
+    // Procedure
+    UnknownProcedure(3130),
+    ProcedureAlreadyExists(3131),
+    IllegalProcedureFormat(3132),
 }
 
 // Storage errors [3001, 4000].
@@ -401,10 +410,24 @@ build_exceptions! {
     CurrentTransactionIsAborted(4002),
     TransactionTimeout(4003),
     InvalidSessionState(4004),
+
+    // recluster error codes
+    NoNeedToRecluster(4011),
+    NoNeedToCompact(4012),
+
+    RefreshTableInfoFailure(4012),
 }
 
 // Service errors [5001,6000].
 build_exceptions! {
-    // A task that already stopped and can not stopped twice.
+    // A task that already stopped and can not stop twice.
     AlreadyStopped(5002),
+
+    // auth related
+    AuthenticateFailure(5100),
+    // the flowing 4 code is used by clients
+    SessionTokenExpired(5101),
+    RefreshTokenExpired(5102),
+    SessionTokenNotFound(5103),
+    RefreshTokenNotFound(5104)
 }

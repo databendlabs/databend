@@ -23,9 +23,9 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 enumflags2 = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
 prost = { workspace = true }
 serde = "1.0.150"
 serde_json = { workspace = true }

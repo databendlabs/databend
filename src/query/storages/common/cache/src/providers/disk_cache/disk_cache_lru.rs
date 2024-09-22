@@ -18,13 +18,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
-use databend_common_cache::FileSize;
-use databend_common_cache::LruCache;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use log::error;
 use log::warn;
 use parking_lot::RwLock;
@@ -32,9 +29,12 @@ use parking_lot::RwLock;
 use crate::providers::disk_cache::DiskCache;
 use crate::CacheAccessor;
 
-impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Count>
-    for LruDiskCacheHolder
-{
+impl CacheAccessor for LruDiskCacheHolder {
+    type V = Bytes;
+    fn name(&self) -> &str {
+        "LruDiskCacheHolder"
+    }
+
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         let k = k.as_ref();
         {
@@ -82,13 +82,23 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
         })
     }
 
-    fn put(&self, key: String, value: Arc<Bytes>) {
+    fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
+        let Some(cached_value) = self.get(k) else {
+            metrics_inc_cache_miss_bytes(len, self.name());
+            return None;
+        };
+
+        Some(cached_value)
+    }
+
+    fn insert(&self, key: String, value: Bytes) -> Arc<Bytes> {
         let crc = crc32fast::hash(value.as_ref());
         let crc_bytes = crc.to_le_bytes();
         let mut cache = self.write();
         if let Err(e) = cache.insert_bytes(&key, &[value.as_ref(), &crc_bytes]) {
             error!("put disk cache item failed {}", e);
         }
+        Arc::new(value)
     }
 
     fn evict(&self, k: &str) -> bool {
@@ -108,19 +118,19 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
         cache.contains_key(k)
     }
 
-    fn size(&self) -> u64 {
+    fn bytes_size(&self) -> u64 {
         let cache = self.read();
         cache.size()
     }
 
-    fn capacity(&self) -> u64 {
+    fn items_capacity(&self) -> u64 {
         let cache = self.read();
-        cache.capacity()
+        cache.items_capacity()
     }
 
-    fn set_capacity(&self, capacity: u64) {
-        let mut cache = self.write();
-        cache.set_capacity(capacity)
+    fn bytes_capacity(&self) -> u64 {
+        let cache = self.read();
+        cache.bytes_capacity()
     }
 
     fn len(&self) -> usize {
@@ -152,7 +162,7 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
     }
 }
 
-pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
+pub type LruDiskCache = DiskCache;
 pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
 
 pub struct LruDiskCacheBuilder;
@@ -160,7 +170,7 @@ pub struct LruDiskCacheBuilder;
 impl LruDiskCacheBuilder {
     pub fn new_disk_cache(
         path: &PathBuf,
-        disk_cache_bytes_size: u64,
+        disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
     ) -> Result<LruDiskCacheHolder> {

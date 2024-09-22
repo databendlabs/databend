@@ -81,7 +81,7 @@ where
     ) -> Result<()> {
         match &self.value {
             Some(v) => {
-                if C::change_if(T::to_scalar_ref(v), other.clone()) {
+                if C::change_if(&T::to_scalar_ref(v), &other) {
                     self.value = Some(T::to_owned_scalar(other));
                 }
             }

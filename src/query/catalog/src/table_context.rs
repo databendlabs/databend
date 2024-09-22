@@ -26,12 +26,14 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -51,14 +53,16 @@ use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -76,6 +80,8 @@ use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+
+pub struct ContextError;
 
 #[derive(Debug)]
 pub struct ProcessInfo {
@@ -145,10 +151,12 @@ pub trait TableContext: Send + Sync {
     fn get_join_spill_progress(&self) -> Arc<Progress>;
     fn get_group_by_spill_progress(&self) -> Arc<Progress>;
     fn get_aggregate_spill_progress(&self) -> Arc<Progress>;
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress>;
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_join_spill_progress_value(&self) -> ProgressValues;
     fn get_group_by_spill_progress_value(&self) -> ProgressValues;
     fn get_aggregate_spill_progress_value(&self) -> ProgressValues;
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
@@ -168,8 +176,16 @@ pub trait TableContext: Send + Sync {
     fn set_can_scan_from_agg_index(&self, enable: bool);
     fn get_enable_sort_spill(&self) -> bool;
     fn set_enable_sort_spill(&self, enable: bool);
-    fn set_compaction_num_block_hint(&self, hint: u64);
-    fn get_compaction_num_block_hint(&self) -> u64;
+    fn set_compaction_num_block_hint(&self, _table_name: &str, _hint: u64) {
+        unimplemented!()
+    }
+    fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
+        unimplemented!()
+    }
+    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
+    fn set_lazy_mutation_delete(&self, lazy: bool);
+    fn get_lazy_mutation_delete(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
@@ -183,7 +199,7 @@ pub trait TableContext: Send + Sync {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
-    fn check_aborting(&self) -> Result<()>;
+    fn check_aborting(&self) -> Result<(), ContextError>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
@@ -195,12 +211,12 @@ pub trait TableContext: Send + Sync {
             }
 
             fn try_check_aborting(&self) -> Result<()> {
-                self.this.check_aborting()
+                self.this.check_aborting().with_context(|| "query aborted")
             }
         }
         Arc::new(Checker { this: self })
     }
-    fn get_error(&self) -> Option<ErrorCode>;
+    fn get_error(&self) -> Option<ErrorCode<ContextError>>;
     fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
@@ -254,6 +270,14 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
 
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>>;
+
     async fn filter_out_copied_files(
         &self,
         catalog_name: &str,
@@ -286,9 +310,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
 
-    fn add_merge_status(&self, merge_status: MergeStatus);
+    fn add_mutation_status(&self, mutation_status: MutationStatus);
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>>;
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
 
@@ -324,6 +348,11 @@ pub trait TableContext: Send + Sync {
     fn get_query_queued_duration(&self) -> Duration;
     fn set_query_queued_duration(&self, queued_duration: Duration);
 
+    fn set_variable(&self, key: String, value: Scalar);
+    fn unset_variable(&self, key: &str);
+    fn get_variable(&self, key: &str) -> Option<Scalar>;
+    fn get_all_variables(&self) -> HashMap<String, Scalar>;
+
     async fn load_datalake_schema(
         &self,
         _kind: &str,
@@ -348,4 +377,10 @@ pub trait TableContext: Send + Sync {
         tbl_name: &str,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
+
+    fn get_temp_table_prefix(&self) -> Result<String>;
+
+    fn session_state(&self) -> SessionState;
+
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
 }

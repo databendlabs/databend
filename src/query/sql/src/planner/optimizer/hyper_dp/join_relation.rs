@@ -13,22 +13,29 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use ahash::HashMap;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
+use crate::optimizer::dynamic_sample::dynamic_sample;
+use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::IndexType;
+use crate::MetadataRef;
 
 pub struct JoinRelation {
     s_expr: SExpr,
+    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
 
 impl JoinRelation {
-    pub fn new(s_expr: &SExpr) -> Self {
+    pub fn new(s_expr: &SExpr, sample_executor: Option<Arc<dyn QuerySampleExecutor>>) -> Self {
         Self {
             s_expr: s_expr.clone(),
+            sample_executor,
         }
     }
 
@@ -36,9 +43,25 @@ impl JoinRelation {
         self.s_expr.clone()
     }
 
-    pub fn cardinality(&self) -> Result<f64> {
-        let rel_expr = RelExpr::with_s_expr(&self.s_expr);
-        Ok(rel_expr.derive_cardinality()?.cardinality)
+    pub async fn cardinality(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        metadata: MetadataRef,
+    ) -> Result<f64> {
+        let card = if let Some(sample_executor) = &self.sample_executor {
+            dynamic_sample(
+                ctx.clone(),
+                metadata.clone(),
+                &self.s_expr,
+                sample_executor.clone(),
+            )
+            .await?
+            .cardinality
+        } else {
+            let rel_expr = RelExpr::with_s_expr(&self.s_expr);
+            rel_expr.derive_cardinality()?.cardinality
+        };
+        Ok(card)
     }
 }
 

@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -26,6 +25,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -85,10 +85,7 @@ impl HashJoinProbeState {
             row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
-        let marker_column = Column::Nullable(Box::new(NullableColumn {
-            column: boolean_column,
-            validity: validity.into(),
-        }));
+        let marker_column = NullableColumn::new_column(boolean_column, validity.into());
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
@@ -137,28 +134,25 @@ impl HashJoinProbeState {
 
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
-            other => Ok(Column::Nullable(Box::new(NullableColumn {
-                validity: Bitmap::new_constant(true, other.len()),
-                column: other,
-            }))),
+            other => {
+                let validity = Bitmap::new_constant(true, other.len());
+                Ok(Column::Nullable(Box::new(NullableColumn::new(
+                    other, validity,
+                ))))
+            }
         }
     }
 }
 
 impl HashJoinState {
     /// if all cols in the same row are all null, we mark this row as null.
-    pub(crate) fn init_markers(
-        &self,
-        cols: &[(Column, DataType)],
-        num_rows: usize,
-        markers: &mut [u8],
-    ) {
+    pub(crate) fn init_markers(&self, cols: InputColumns, num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()
-            .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
+            .any(|c| matches!(c, Column::Null { .. } | Column::Nullable(_)))
         {
             let mut valids = None;
-            for (col, _) in cols.iter() {
+            for col in cols.iter() {
                 match col {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
@@ -201,10 +195,7 @@ pub(crate) fn wrap_true_validity(
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        let col = Column::Nullable(Box::new(NullableColumn {
-            column: col,
-            validity,
-        }));
+        let col = NullableColumn::new_column(col, validity);
         BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }

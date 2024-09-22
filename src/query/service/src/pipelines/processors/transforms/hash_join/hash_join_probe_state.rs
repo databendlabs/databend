@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -42,11 +42,11 @@ use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
 use databend_common_sql::ColumnSet;
 use itertools::Itertools;
-use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::ProbeState;
+use super::ProcessState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
@@ -70,14 +70,13 @@ pub struct HashJoinProbeState {
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
     pub(crate) processor_count: usize,
-    /// It will be increased by 1 when a new hash join probe processor is created.
-    /// After the processor finish probe hash table, it will be decreased by 1.
-    /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
-    /// When the counter is 0, processors will go to next phase's work
-    pub(crate) probe_workers: AtomicUsize,
-    /// Wait all `probe_workers` finish
+    /// The counters will be increased by 1 when a new hash join build processor is created.
+    /// After the processor finished WaitProbe/NextRound step, it will be decreased by 1.
+    /// When the counter is 0, it means all processors have finished their work.
+    pub(crate) wait_probe_counter: AtomicUsize,
+    pub(crate) next_round_counter: AtomicUsize,
+    /// The barrier is used to synchronize probe side processors.
     pub(crate) barrier: Barrier,
-    pub(crate) barrier_count: AtomicUsize,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -92,16 +91,6 @@ pub struct HashJoinProbeState {
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
-
-    /// Spill related states
-    /// Record spill workers
-    pub(crate) spill_workers: AtomicUsize,
-    /// Record final probe workers
-    pub(crate) final_probe_workers: AtomicUsize,
-    /// Probe spilled partitions set
-    pub(crate) spill_partitions: RwLock<HashSet<u8>>,
-    /// Wait all processors to restore spilled data, then go to new probe
-    pub(crate) restore_barrier: Barrier,
 }
 
 impl HashJoinProbeState {
@@ -116,7 +105,6 @@ impl HashJoinProbeState {
         join_type: &JoinType,
         processor_count: usize,
         barrier: Barrier,
-        restore_barrier: Barrier,
     ) -> Result<Self> {
         if matches!(
             join_type,
@@ -139,39 +127,42 @@ impl HashJoinProbeState {
             func_ctx,
             hash_join_state,
             processor_count,
-            probe_workers: AtomicUsize::new(0),
-            spill_workers: AtomicUsize::new(0),
-            final_probe_workers: Default::default(),
+            wait_probe_counter: AtomicUsize::new(0),
+            next_round_counter: AtomicUsize::new(0),
             barrier,
-            restore_barrier,
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
             merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
-            spill_partitions: Default::default(),
-            barrier_count: AtomicUsize::new(0),
         })
     }
 
     /// Probe the hash table and retrieve matched rows as DataBlocks.
     pub fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner
-            | JoinType::LeftSemi
-            | JoinType::LeftAnti
-            | JoinType::RightSemi
-            | JoinType::RightAnti
-            | JoinType::Left
-            | JoinType::LeftMark
-            | JoinType::RightMark
-            | JoinType::LeftSingle
-            | JoinType::RightSingle
-            | JoinType::Right
-            | JoinType::Full => self.probe_join(input, probe_state),
             JoinType::Cross => self.cross_join(input, probe_state),
+            _ => self.probe_join(input, probe_state),
         }
+    }
+
+    pub fn next_probe(&self, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        let process_state = probe_state.process_state.as_ref().unwrap();
+        let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
+        with_join_hash_method!(|T| match hash_table {
+            HashJoinHashTable::T(table) => {
+                // Build `keys` and get the hashes of `keys`.
+                let keys = table
+                    .hash_method
+                    .build_keys_accessor(process_state.keys_state.clone())?;
+                // Continue to probe hash table and process data blocks.
+                self.result_blocks(probe_state, keys, &table.hash_table)
+            }
+            HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the hash table is uninitialized.",
+            )),
+        })
     }
 
     pub fn probe_join(
@@ -205,19 +196,13 @@ impl HashJoinProbeState {
         } else {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let mut probe_keys = self
-            .hash_join_state
-            .hash_join_desc
-            .probe_keys
+        let probe_keys = &self.hash_join_state.hash_join_desc.probe_keys;
+        let mut keys_columns = probe_keys
             .iter()
             .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, input_num_rows),
-                    return_type.clone(),
-                ))
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), input_num_rows))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -229,48 +214,54 @@ impl HashJoinProbeState {
                 .is_none()
         {
             self.hash_join_state.init_markers(
-                &probe_keys,
+                (&keys_columns).into(),
                 input_num_rows,
                 probe_state.markers.as_mut().unwrap(),
             );
         }
 
         let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
-        let mut valids = None;
-        if !Self::check_for_eliminate_valids(
+        let valids = if !Self::check_for_eliminate_valids(
             self.hash_join_state.hash_join_desc.from_correlated_subquery,
             &self.hash_join_state.hash_join_desc.join_type,
-        ) && probe_keys
-            .iter()
-            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-        {
-            for (index, (col, _)) in probe_keys.iter().enumerate() {
-                if is_null_equal[index] {
-                    continue;
-                }
-                let (is_all_null, tmp_valids) = col.validity();
-                if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, input_num_rows));
-                    break;
-                } else {
-                    valids = and_validities(valids, tmp_valids.cloned());
-                }
+        ) && probe_keys.iter().any(|expr| {
+            let ty = expr.data_type();
+            ty.is_nullable() || ty.is_null()
+        }) {
+            let valids = keys_columns
+                .iter()
+                .zip(is_null_equal.iter().copied())
+                .filter(|(_, is_null_equal)| !is_null_equal)
+                .map(|(col, _)| col.validity())
+                .try_fold(None, |valids, (is_all_null, tmp_valids)| {
+                    if is_all_null {
+                        ControlFlow::Break(Some(Bitmap::new_constant(false, input_num_rows)))
+                    } else {
+                        ControlFlow::Continue(and_validities(valids, tmp_valids.cloned()))
+                    }
+                });
+            match valids {
+                ControlFlow::Continue(valids) | ControlFlow::Break(valids) => valids,
             }
-        }
+        } else {
+            None
+        };
 
-        for (index, (col, ty)) in probe_keys.iter_mut().enumerate() {
-            if !is_null_equal[index] {
+        keys_columns
+            .iter_mut()
+            .zip(is_null_equal.iter().copied())
+            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
+            .for_each(|(col, _)| {
                 *col = col.remove_nullable();
-                *ty = ty.remove_nullable();
-            }
-        }
+            });
+        let probe_keys = (&keys_columns).into();
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
             input = input.project(&self.probe_projections);
         }
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
 
-        if self.hash_join_state.fast_return.load(Ordering::Relaxed)
+        if self.hash_join_state.fast_return.load(Ordering::Acquire)
             && matches!(
                 self.hash_join_state.hash_join_desc.join_type,
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
@@ -308,10 +299,17 @@ impl HashJoinProbeState {
                 // Build `keys` and get the hashes of `keys`.
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input_num_rows)?;
-                let keys = table
+                    .build_keys_state(probe_keys, input_num_rows)?;
+                table
                     .hash_method
-                    .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
+                    .build_keys_hashes(&keys_state, &mut probe_state.hashes);
+                let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
+
+                probe_state.process_state = Some(ProcessState {
+                    input,
+                    keys_state,
+                    next_idx: 0,
+                });
 
                 // Perform a round of hash table probe.
                 probe_state.probe_with_selection = prefer_early_filtering;
@@ -352,7 +350,7 @@ impl HashJoinProbeState {
                 probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
 
                 // Continue to probe hash table and process data blocks.
-                self.result_blocks(&input, keys, &table.hash_table, probe_state)
+                self.result_blocks(probe_state, keys, &table.hash_table)
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
@@ -389,89 +387,16 @@ impl HashJoinProbeState {
         ) && !with_conjunction
     }
 
-    pub fn probe_attach(&self) -> Result<usize> {
-        let mut worker_id = 0;
-        if self.hash_join_state.need_outer_scan()
-            || self.hash_join_state.need_mark_scan()
-            || self
-                .hash_join_state
-                .merge_into_need_target_partial_modified_scan()
-        {
-            worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
-        }
-        if self.hash_join_state.enable_spill {
-            worker_id = self.final_probe_workers.fetch_add(1, Ordering::Relaxed);
-            self.spill_workers.fetch_add(1, Ordering::Relaxed);
-        }
-
-        Ok(worker_id)
-    }
-
-    pub fn finish_final_probe(&self) -> Result<()> {
-        let old_count = self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
-        if old_count == 1 {
-            if self.join_type() != JoinType::Cross {
-                // If build side has spilled data, we need to wait build side to next round.
-                // Set partition id to `HashJoinState`
-                let mut spill_partitions = self.spill_partitions.write();
-                if let Some(id) = spill_partitions.iter().next().cloned() {
-                    spill_partitions.remove(&id);
-                    self.hash_join_state
-                        .partition_id
-                        .store(id as i8, Ordering::Relaxed);
-                } else {
-                    self.hash_join_state
-                        .partition_id
-                        .store(-1, Ordering::Relaxed);
-                }
-                info!(
-                    "next partition to read: {:?}, final probe done",
-                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
-                );
-            }
-            self.hash_join_state
-                .continue_build_watcher
-                .send(true)
-                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
-        }
-        Ok(())
+    pub fn probe_attach(&self) {
+        self.wait_probe_counter.fetch_add(1, Ordering::AcqRel);
+        self.next_round_counter.fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn probe_done(&self) -> Result<()> {
-        let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
+        let old_count = self.wait_probe_counter.fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;
-        }
-        Ok(())
-    }
-
-    pub fn finish_spill(&self) -> Result<()> {
-        self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
-        let old_count = self.spill_workers.fetch_sub(1, Ordering::Relaxed);
-        if old_count == 1 {
-            if self.join_type() != JoinType::Cross {
-                // Set partition id to `HashJoinState`
-                let mut spill_partitions = self.spill_partitions.write();
-                if let Some(id) = spill_partitions.iter().next().cloned() {
-                    spill_partitions.remove(&id);
-                    self.hash_join_state
-                        .partition_id
-                        .store(id as i8, Ordering::Relaxed);
-                } else {
-                    self.hash_join_state
-                        .partition_id
-                        .store(-1, Ordering::Relaxed);
-                };
-                info!(
-                    "next partition to read: {:?}, probe spill done",
-                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
-                );
-            }
-            self.hash_join_state
-                .continue_build_watcher
-                .send(true)
-                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         }
         Ok(())
     }
@@ -815,10 +740,7 @@ impl HashJoinProbeState {
             }
 
             let boolean_column = Column::Boolean(boolean_bit_map.into());
-            let marker_column = Column::Nullable(Box::new(NullableColumn {
-                column: boolean_column,
-                validity: validity.into(),
-            }));
+            let marker_column = NullableColumn::new_column(boolean_column, validity.into());
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.row_space.gather(
                 &build_indexes[0..build_indexes_idx],

@@ -18,7 +18,7 @@ killall databend-query
 sleep 2
 
 # Export all meta data from metasrv dir
-./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir .databend/meta1 >tests/metactl/meta.txt
+./target/${BUILD_PROFILE}/databend-metactl export --raft-dir .databend/meta1 >tests/metactl/meta.txt
 
 # Optional: run the test
 make metactl-test

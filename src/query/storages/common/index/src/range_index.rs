@@ -135,7 +135,7 @@ impl RangeIndex {
         }))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn apply_with_partition_columns(
         &self,
         stats: &StatisticsOfColumns,

@@ -19,9 +19,9 @@ use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_base::base::OrderedFloat;
 use ethnum::i256;
 use ethnum::U256;
-use ordered_float::OrderedFloat;
 
 use crate::RowPtr;
 
@@ -551,13 +551,13 @@ pub trait HashJoinHashtableLike {
 
     /// 1. `key` is the serialize probe key from one row
     /// 2. `ptr` pointers to the *RawEntry for of the bucket correlated to key.So before this method,
-    /// we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
-    /// for key
+    ///     we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
+    ///     for key
     /// 3. `vec_ptr` is RowPtr Array, we use this one to record the matched row in chunks
     /// 4. `occupied` is the length for vec_ptr
     /// 5. `capacity` is the capacity of vec_ptr
     /// 6. return matched rows count and next ptr which need to test in the future.
-    /// if the capacity is enough, the next ptr is zero, otherwise next ptr is valid.
+    ///    if the capacity is enough, the next ptr is zero, otherwise next ptr is valid.
     fn next_probe(
         &self,
         key: &Self::Key,
@@ -566,4 +566,7 @@ pub trait HashJoinHashtableLike {
         occupied: usize,
         capacity: usize,
     ) -> (usize, u64);
+
+    // Find the next matched ptr.
+    fn next_matched_ptr(&self, key: &Self::Key, ptr: u64) -> u64;
 }

@@ -26,6 +26,7 @@ use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -45,6 +46,25 @@ pub struct Sort {
     pub window_partition: Vec<ScalarItem>,
 }
 
+impl Sort {
+    pub fn used_columns(&self) -> ColumnSet {
+        self.items.iter().map(|item| item.index).collect()
+    }
+
+    pub fn sort_items_exclude_partition(&self) -> Vec<SortItem> {
+        self.items
+            .iter()
+            .filter(|item| {
+                !self
+                    .window_partition
+                    .iter()
+                    .any(|partition| partition.index == item.index)
+            })
+            .cloned()
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SortItem {
     pub index: IndexType,
@@ -55,10 +75,6 @@ pub struct SortItem {
 impl Operator for Sort {
     fn rel_op(&self) -> RelOp {
         RelOp::Sort
-    }
-
-    fn arity(&self) -> usize {
-        1
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {

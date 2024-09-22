@@ -70,6 +70,8 @@ fn test_agg() {
     test_agg_group_array_moving_avg(file, eval_aggr);
     test_agg_group_array_moving_sum(file, eval_aggr);
     test_agg_histogram(file, eval_aggr);
+    test_agg_json_array_agg(file, eval_aggr);
+    test_agg_json_object_agg(file, eval_aggr);
 }
 
 #[test]
@@ -107,6 +109,8 @@ fn test_agg_group_by() {
     test_agg_bitmap(file, simulate_two_groups_group_by);
     test_agg_group_array_moving_avg(file, eval_aggr);
     test_agg_group_array_moving_sum(file, eval_aggr);
+    test_agg_json_array_agg(file, eval_aggr);
+    test_agg_json_object_agg(file, eval_aggr);
 }
 
 fn gen_bitmap_data() -> Column {
@@ -781,4 +785,100 @@ fn test_agg_histogram(file: &mut impl Write, simulator: impl AggregationSimulato
     );
     run_agg_ast(file, "histogram(a)", get_example().as_slice(), simulator);
     run_agg_ast(file, "histogram(a, 1)", get_example().as_slice(), simulator);
+}
+
+fn test_agg_json_array_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "json_array_agg(1)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg('a')",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(NULL)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(all_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(dt)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(event1)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_array_agg(dec)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_json_object_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "json_object_agg('k', 'a')",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_object_agg(s, a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_object_agg(s_null, b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_object_agg(a, b)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "json_object_agg(s, dec)",
+        get_example().as_slice(),
+        simulator,
+    );
 }

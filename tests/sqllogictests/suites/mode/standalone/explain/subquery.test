@@ -179,12 +179,12 @@ HashJoin
 │           ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │           ├── group by: []
 │           ├── aggregate functions: [count(), any(number)]
-│           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── group by: []
 │               ├── aggregate functions: [count(), any(number)]
 │               ├── estimated rows: 1.00
+│               ├── rank limit: 1
 │               └── Filter
 │                   ├── output columns: [numbers.number (#1)]
 │                   ├── filters: [numbers.number (#1) = 0]
@@ -426,7 +426,7 @@ HashJoin
     ├── output columns: [t.number (#0)]
     ├── join type: INNER
     ├── build keys: [t1.number (#1)]
-    ├── probe keys: [t.number (#0)]
+    ├── probe keys: [number (#0)]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── TableScan(Build)
@@ -523,7 +523,7 @@ query T
 explain select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
-├── output columns: [t.i (#0), exists (select * from t where i > 10) (#2)]
+├── output columns: [t.i (#0), EXISTS (SELECT * FROM t WHERE i > 10) (#2)]
 ├── expressions: [exists_scalar (#4)]
 ├── estimated rows: 4.00
 └── HashJoin

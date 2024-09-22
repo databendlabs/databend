@@ -13,7 +13,7 @@ doctest = false
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 derive-visitor = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 
 [dev-dependencies]
 goldenfile = "1.4"

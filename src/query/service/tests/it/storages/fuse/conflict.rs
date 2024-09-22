@@ -22,6 +22,7 @@ use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SnapshotChanges;
 use databend_common_storages_fuse::operations::SnapshotGenerator;
+use databend_storages_common_session::TxnManager;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -54,7 +55,7 @@ fn test_unresolvable_delete_conflict() {
         merged_statistics: Statistics::default(),
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
+    let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -62,6 +63,9 @@ fn test_unresolvable_delete_conflict() {
         None,
         Some(Arc::new(latest_snapshot)),
         None,
+        TxnManager::init(),
+        0,
+        "test",
     );
     assert!(result.is_err());
 }
@@ -143,7 +147,7 @@ fn test_resolvable_delete_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
+    let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -151,6 +155,9 @@ fn test_resolvable_delete_conflict() {
         None,
         Some(Arc::new(latest_snapshot)),
         None,
+        TxnManager::init(),
+        0,
+        "test",
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -247,7 +254,8 @@ fn test_resolvable_replace_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Replace);
+    let mut generator =
+        MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Replace);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -255,6 +263,9 @@ fn test_resolvable_replace_conflict() {
         None,
         Some(Arc::new(latest_snapshot)),
         None,
+        TxnManager::init(),
+        0,
+        "test",
     );
     let snapshot = result.unwrap();
     let expected = vec![

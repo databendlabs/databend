@@ -187,6 +187,7 @@ impl MergeIntoOperationAggregator {
                 table_schema,
                 table.get_table_info().ident.seq,
                 true,
+                false,
             )?)
         } else {
             None

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -25,13 +26,13 @@ use crate::processors::transforms::Transform;
 use crate::processors::transforms::Transformer;
 
 pub struct TransformSortPartial {
-    limit: Option<usize>,
+    limit: LimitType,
     sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
 }
 
 impl TransformSortPartial {
     pub fn new(
-        limit: Option<usize>,
+        limit: LimitType,
         sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     ) -> Self {
         Self {
@@ -43,7 +44,7 @@ impl TransformSortPartial {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        limit: Option<usize>,
+        limit: LimitType,
         sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Transformer::create(input, output, TransformSortPartial {
@@ -58,6 +59,6 @@ impl Transform for TransformSortPartial {
     const NAME: &'static str = "SortPartialTransform";
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
-        DataBlock::sort(&block, &self.sort_columns_descriptions, self.limit)
+        DataBlock::sort_with_type(&block, &self.sort_columns_descriptions, self.limit)
     }
 }

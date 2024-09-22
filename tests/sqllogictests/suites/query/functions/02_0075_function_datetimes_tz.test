@@ -1,0 +1,730 @@
+statement ok
+set enable_strict_datetime_parser = 0;
+
+statement ok
+unset enable_query_result_cache;
+
+statement ok
+drop table if exists tt all
+
+statement ok
+set timezone='UTC'
+
+query T
+select to_timestamp(1630320462000000)
+----
+2021-08-30 10:47:42.000000
+
+query T
+select to_timestamp('2000-01-01 00:00:00')
+----
+2000-01-01 00:00:00.000000
+
+# Asia/Shanghai: +8:00
+statement ok
+set timezone='Asia/Shanghai'
+
+query T
+select to_timestamp(1630320462000000)
+----
+2021-08-30 18:47:42.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00')
+----
+2000-01-01 12:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00+08:00')
+----
+2000-01-01 12:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00+08')
+----
+2000-01-01 12:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00-08')
+----
+2000-01-02 04:00:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00+0811')
+----
+2000-01-01 11:49:00.000000
+
+query T
+select to_timestamp('2000-01-01 12:00:00-0811')
+----
+2000-01-02 04:11:00.000000
+
+statement error 1006
+select to_timestamp('2000-01-01 12:00:00-08112')
+
+statement error 1006
+select to_timestamp('2000-01-01 12:00:00-081')
+
+statement error 1006
+select to_timestamp('2000-01-01 12:00:00+08:')
+
+statement ok
+set timezone = 'UTC'
+
+statement ok
+create table tt (a timestamp)
+
+statement ok
+insert into table tt values ('2021-04-30 22:48:00'), (to_timestamp('2021-04-30 22:48:00'))
+
+query T
+select * from tt
+----
+2021-04-30 22:48:00.000000
+2021-04-30 22:48:00.000000
+
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query T
+select * from tt
+----
+2021-05-01 06:48:00.000000
+2021-05-01 06:48:00.000000
+
+
+statement ok
+drop table tt
+
+statement ok
+set timezone = 'UTC'
+
+query I
+select to_yyyymm(to_timestamp(1619820000000000))
+----
+202104
+
+query I
+select to_yyyymmdd(to_timestamp(1619820000000000))
+----
+20210430
+
+query I
+select to_yyyymmddhhmmss(to_timestamp(1619820000000000))
+----
+20210430220000
+
+query T
+select to_start_of_month(to_timestamp(1619820000000000))
+----
+2021-04-01
+
+query I
+select to_month(to_timestamp(1619820000000000))
+----
+4
+
+query I
+select to_day_of_year(to_timestamp(1619820000000000))
+----
+120
+
+query I
+select to_day_of_month(to_timestamp(1619820000000000))
+----
+30
+
+query I
+select to_day_of_week(to_timestamp(1619820000000000))
+----
+5
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query I
+select to_yyyymm(to_timestamp(1619820000000000))
+----
+202105
+
+query I
+select to_yyyymmdd(to_timestamp(1619820000000000))
+----
+20210501
+
+query I
+select to_yyyymmddhhmmss(to_timestamp(1619820000000000))
+----
+20210501060000
+
+query T
+select to_start_of_month(to_timestamp(1619820000000000))
+----
+2021-05-01
+
+query I
+select to_month(to_timestamp(1619820000000000))
+----
+5
+
+query I
+select to_day_of_year(to_timestamp(1619820000000000))
+----
+121
+
+query I
+select to_day_of_month(to_timestamp(1619820000000000))
+----
+1
+
+query I
+select to_day_of_week(to_timestamp(1619820000000000))
+----
+6
+
+query T
+select '==UTC=='
+----
+==UTC==
+
+statement ok
+set timezone = 'UTC'
+
+query T
+select to_start_of_second(to_timestamp(1619822911999000))
+----
+2021-04-30 22:48:31.000000
+
+query T
+select to_start_of_minute(to_timestamp(1619822911999000))
+----
+2021-04-30 22:48:00.000000
+
+query T
+select to_start_of_five_minutes(to_timestamp(1619822911999000))
+----
+2021-04-30 22:45:00.000000
+
+query T
+select to_start_of_ten_minutes(to_timestamp(1619822911999000))
+----
+2021-04-30 22:40:00.000000
+
+query T
+select to_start_of_fifteen_minutes(to_timestamp(1619822911999000))
+----
+2021-04-30 22:45:00.000000
+
+query T
+select time_slot(to_timestamp(1619822911999000))
+----
+2021-04-30 22:30:00.000000
+
+query T
+select to_start_of_hour(to_timestamp(1619822911999000))
+----
+2021-04-30 22:00:00.000000
+
+query T
+select to_start_of_day(to_timestamp(1619822911999000))
+----
+2021-04-30 00:00:00.000000
+
+query T
+select to_start_of_week(to_timestamp(1619822911999000))
+----
+2021-04-25
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query T
+select to_start_of_second(to_timestamp(1619822911999000))
+----
+2021-05-01 06:48:31.000000
+
+query T
+select to_start_of_minute(to_timestamp(1619822911999000))
+----
+2021-05-01 06:48:00.000000
+
+query T
+select to_start_of_five_minutes(to_timestamp(1619822911999000))
+----
+2021-05-01 06:45:00.000000
+
+query T
+select to_start_of_ten_minutes(to_timestamp(1619822911999000))
+----
+2021-05-01 06:40:00.000000
+
+query T
+select to_start_of_fifteen_minutes(to_timestamp(1619822911999000))
+----
+2021-05-01 06:45:00.000000
+
+query T
+select time_slot(to_timestamp(1619822911999000))
+----
+2021-05-01 06:30:00.000000
+
+query T
+select to_start_of_hour(to_timestamp(1619822911999000))
+----
+2021-05-01 06:00:00.000000
+
+query T
+select to_start_of_day(to_timestamp(1619822911999000))
+----
+2021-05-01 00:00:00.000000
+
+query T
+select to_start_of_week(to_timestamp(1619822911999000))
+----
+2021-04-25
+
+statement ok
+set timezone = 'UTC'
+
+query T
+select add_months(to_timestamp(1619822911999000), 1)
+----
+2021-05-30 22:48:31.999000
+
+query T
+select to_timestamp(1583013600000000)
+----
+2020-02-29 22:00:00.000000
+
+
+query T
+select add_years(to_timestamp(1583013600000000), 1)
+----
+2021-02-28 22:00:00.000000
+
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query T
+select add_months(to_timestamp(1619822911999000), 1)
+----
+2021-06-01 14:48:31.999000
+
+query T
+select to_timestamp(1583013600000000)
+----
+2020-03-01 06:00:00.000000
+
+query T
+select add_years(to_timestamp(1583013600000000), 1)
+----
+2021-03-01 14:00:00.000000
+
+statement ok
+set timezone= 'UTC';
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(c1 timestamp);
+
+statement ok
+insert into t values('2017-12-01 22:46:53.000000'), ('2017-12-02 22:46:53.000000');
+
+
+query TT
+select c1, to_date(c1) from t;
+----
+2017-12-01 22:46:53.000000 2017-12-01
+2017-12-02 22:46:53.000000 2017-12-02
+
+statement ok
+set timezone='Asia/Shanghai'
+
+query TT
+select c1, to_date(c1) from t;
+----
+2017-12-02 06:46:53.000000 2017-12-02
+2017-12-03 06:46:53.000000 2017-12-03
+
+statement ok
+drop table if exists t;
+
+statement ok
+set timezone = 'UTC';
+
+query TT
+select to_date('2020-12-22') dt, to_timestamp(dt);
+----
+2020-12-22 2020-12-22 00:00:00.000000
+
+query TT
+select '2017-12-02 06:46:53.000000'::timestamp ts, to_date(ts);
+----
+2017-12-02 06:46:53.000000 2017-12-02
+
+statement ok
+set timezone = 'Asia/Shanghai';
+
+query TT
+select to_date('2020-12-22') dt, to_timestamp(dt);
+----
+2020-12-22 2020-12-22 00:00:00.000000
+
+query TT
+select '2017-12-02 06:46:53.000000'::timestamp ts, to_date(ts);
+----
+2017-12-02 06:46:53.000000 2017-12-02
+
+statement ok
+unset timezone;
+
+statement ok
+create table t(c1 date);
+
+statement ok
+insert into t values('2022-02-02');
+
+query T
+select c1, to_timestamp(c1) from t
+----
+2022-02-02 2022-02-02 00:00:00.000000
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select c1, to_timestamp(c1) from t
+----
+2022-02-02 2022-02-02 00:00:00.000000
+
+statement ok
+drop table t;
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+SET timezone ='America/Toronto';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+set timezone = 'UTC';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+set timezone='Europe/London';
+
+statement error 1006
+----
+select to_date(to_timestamp('2021-03-28 01:00'));
+
+statement error 1006
+----
+select '2021-03-28 01:59:59'::timestamp;
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select to_date('1941-03-15');
+----
+1941-03-15
+
+statement ok
+set enable_dst_hour_fix=1;
+
+query T
+select to_date('1941-03-15 00:00:00');
+----
+1941-03-15
+
+statement ok
+unset enable_dst_hour_fix;
+
+query T
+select to_date('1941-03-15 02:00:00');
+----
+1941-03-15
+
+statement ok
+set parse_datetime_ignore_remainder=1;
+
+statement ok
+set timezone='UTC';
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
+----
+2022-02-04 00:58:59.000000
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H');
+----
+2022-02-04 08:00:00.000000
+
+statement error 1006
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+
+query T
+select try_to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+----
+NULL
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时');
+----
+2022-02-04 08:00:00.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0900', '%Y年%m月%d日，%H时');
+----
+2022-02-04 08:00:00.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
+----
+2022-02-04 08:58:59.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0900', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
+----
+2022-02-04 07:58:59.000000
+
+statement ok
+set timezone='America/Los_Angeles';
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H');
+----
+2022-02-04 08:00:00.000000
+
+statement error 1006
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+
+query T
+select try_to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+----
+NULL
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时');
+----
+2022-02-04 08:00:00.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
+----
+2022-02-03 16:58:59.000000
+
+statement ok
+set timezone='UTC';
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H');
+----
+2022-02-04 08:00:00.000000
+
+statement error 1006
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+
+query T
+select try_to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+----
+NULL
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时');
+----
+2022-02-04 08:00:00.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
+----
+2022-02-04 00:58:59.000000
+
+statement ok
+unset timezone;
+
+statement ok
+unset parse_datetime_ignore_remainder;
+
+statement ok
+set timezone='Asia/Shanghai';
+
+statement ok
+unset enable_dst_hour_fix;
+
+statement error 1006
+select to_timestamp('1947-04-15 00:00:00')
+
+query T
+select try_to_timestamp('1947-04-15 00:00:00')
+----
+NULL
+
+statement error 1006
+select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+
+query T
+select try_to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+NULL
+
+query T
+select to_date('1947-04-15')
+----
+1947-04-15
+
+statement ok
+set enable_dst_hour_fix=1;
+
+query T
+select to_date('1941-03-15 00:00:00');
+----
+1941-03-15
+
+statement ok
+unset enable_dst_hour_fix;
+
+query T
+select to_timestamp('1990-09-16 01:00:00');
+----
+1990-09-16 01:00:00.000000
+
+query T
+select to_timestamp('1990-09-16 01:00:00', '%Y-%m-%d %H:%M:%S');
+----
+1990-09-16 01:00:00.000000
+
+statement ok
+set enable_dst_hour_fix = 1;
+
+query T
+select to_timestamp('1990-09-16 01:00:00');
+----
+1990-09-16 01:00:00.000000
+
+query T
+select to_timestamp('1990-09-16 01:00:00', '%Y-%m-%d %H:%M:%S');
+----
+1990-09-16 01:00:00.000000
+
+query T
+select to_datetime('1947-04-15 00:00:00')
+----
+1947-04-15 01:00:00.000000
+
+query T
+select to_datetime('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+1947-04-15 01:00:00.000000
+
+query T
+select to_date('1947-04-15 00:00:00')
+----
+1947-04-15
+
+query T
+select to_date('1947-04-15')
+----
+1947-04-15
+
+statement ok
+set enable_strict_datetime_parser = 0;
+
+query T
+select to_date('2017-5-23 0:00:00')
+----
+2017-05-23
+
+query T
+select to_date('2018-1-22')
+----
+2018-01-22
+
+query T
+select to_date('2021/10/14')
+----
+2021-10-14
+
+query T
+select to_date('20201231')
+----
+2020-12-31
+
+query T
+select to_date('2017-3-16 0:00:00')
+----
+2017-03-16
+
+statement ok
+unset timezone;
+
+statement ok
+set enable_strict_datetime_parser = 0;
+
+query T
+select to_timestamp('2017-02-03 14:55:08 ');
+----
+2017-02-03 14:55:08.000000
+
+statement error 1006
+select to_timestamp('1684275059752');
+
+statement ok
+set timezone='UTC';
+
+query T
+select to_monday(to_date('1919-04-13','%Y-%m-%d'));
+----
+1919-04-07
+
+query T
+select to_year(to_date('1919-04-13','%Y-%m-%d'));
+----
+1919
+
+statement ok
+set timezone='Asia/Shanghai';
+
+statement ok
+set enable_dst_hour_fix=1;
+
+query T
+select to_monday(to_date('1919-04-13','%Y-%m-%d'));
+----
+1919-04-07
+
+query T
+select to_year(to_date('1919-04-13','%Y-%m-%d'));
+----
+1919
+
+statement ok
+unset timezone;
+
+statement ok
+unset enable_dst_hour_fix;
+
+statement ok
+unset enable_strict_datetime_parser;

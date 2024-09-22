@@ -22,7 +22,7 @@ use databend_common_meta_sled_store::sled;
 use databend_common_tracing::closure_name;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
-use minitrace::prelude::*;
+use fastrace::prelude::*;
 
 pub struct RaftTestContext {
     pub raft_config: RaftConfig,
@@ -74,5 +74,5 @@ fn setup_test() {
 }
 
 fn shutdown_test() {
-    minitrace::flush();
+    fastrace::flush();
 }

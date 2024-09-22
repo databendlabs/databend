@@ -236,7 +236,7 @@ impl PipelineExecutor {
         Ok(())
     }
 
-    pub fn finish(&self, cause: Option<ErrorCode>) {
+    pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.finish(cause),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => match cause {
@@ -249,7 +249,7 @@ impl PipelineExecutor {
                 None => {
                     query_wrapper
                         .graph
-                        .should_finish(Ok(()))
+                        .should_finish::<()>(Ok(()))
                         .expect("executor cannot send error message");
                 }
             },

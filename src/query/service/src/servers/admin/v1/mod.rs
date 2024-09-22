@@ -22,3 +22,4 @@ pub mod settings;
 pub mod stream_status;
 pub mod system;
 pub mod tenant_tables;
+pub mod user_functions;

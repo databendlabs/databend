@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -30,12 +32,12 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::QueryContext;
@@ -72,7 +74,7 @@ impl Session {
         })
     }
 
-    pub fn to_minitrace_properties(&self) -> Vec<(String, String)> {
+    pub fn to_fastrace_properties(&self) -> Vec<(String, String)> {
         let mut properties = vec![
             ("session_id".to_string(), self.id.clone()),
             ("session_database".to_string(), self.get_current_database()),
@@ -120,9 +122,6 @@ impl Session {
                 shutdown_fun();
             }
         }
-
-        let http_queries_manager = HttpQueryManager::instance();
-        http_queries_manager.kill_session(&self.id);
     }
 
     pub fn kill(&self) {
@@ -137,7 +136,7 @@ impl Session {
         self.kill(/* shutdown io stream */);
     }
 
-    pub fn force_kill_query(&self, cause: ErrorCode) {
+    pub fn force_kill_query<C>(&self, cause: ErrorCode<C>) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.kill(cause);
         }
@@ -219,7 +218,7 @@ impl Session {
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
-    // granted by external authenticator, it will over write the current user's granted roles, and
+    // granted by external authenticator, it will overwrite the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(
@@ -344,6 +343,13 @@ impl Session {
         self.session_ctx.set_txn_mgr(txn_mgr)
     }
 
+    pub fn temp_tbl_mgr(&self) -> TempTblMgrRef {
+        self.session_ctx.temp_tbl_mgr()
+    }
+    pub fn set_temp_tbl_mgr(&self, temp_tbl_mgr: TempTblMgrRef) {
+        self.session_ctx.set_temp_tbl_mgr(temp_tbl_mgr)
+    }
+
     pub fn set_query_priority(&self, priority: u8) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.set_priority(priority);
@@ -354,6 +360,40 @@ impl Session {
         match self.session_ctx.get_query_context_shared() {
             None => vec![],
             Some(x) => x.get_query_profiles(),
+        }
+    }
+
+    pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.session_ctx.get_all_variables()
+    }
+
+    pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
+        self.session_ctx.set_all_variables(variables)
+    }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.session_ctx.get_client_session_id()
+    }
+
+    pub fn set_client_session_id(&mut self, id: String) {
+        self.session_ctx.set_client_session_id(id)
+    }
+    pub fn get_temp_table_prefix(&self) -> Result<String> {
+        let typ = self.typ.read().clone();
+        match typ {
+            SessionType::MySQL => Ok(self.id.clone()),
+            SessionType::HTTPQuery => {
+                if let Some(id) = self.get_client_session_id() {
+                    Ok(id)
+                } else {
+                    Err(ErrorCode::BadArguments(
+                        "can not use temp table in http handler if token is not used",
+                    ))
+                }
+            }
+            t => Err(ErrorCode::BadArguments(format!(
+                "can not use temp table in session type {t}"
+            ))),
         }
     }
 }

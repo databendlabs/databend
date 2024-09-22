@@ -75,8 +75,10 @@ impl AsyncSystemTable for BackgroundJobTable {
         let mut last_updated = Vec::with_capacity(jobs.len());
         let mut creator = Vec::with_capacity(jobs.len());
         let mut create_time = Vec::with_capacity(jobs.len());
-        for (_, name, job) in jobs {
+        for (name, seq_job) in jobs {
             names.push(name);
+            let (_seq, job) = (seq_job.seq, seq_job.data);
+
             let job_type = job.job_params.as_ref().map(|x| x.job_type.clone());
             if let Some(job_type) = job_type {
                 job_types.push(Some(job_type.to_string()));

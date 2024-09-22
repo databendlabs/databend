@@ -191,5 +191,3 @@ select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order 
 query TT
 select * from t where c = 12;
 ----
-
-

@@ -23,7 +23,9 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
 
 [build-dependencies]
 

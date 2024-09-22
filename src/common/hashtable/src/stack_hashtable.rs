@@ -22,7 +22,6 @@ use super::container::StackContainer;
 use super::table0::Entry;
 use super::table0::Table0;
 use super::table0::Table0Iter;
-use super::table0::Table0IterMut;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
@@ -202,20 +201,6 @@ impl<'a, K, V> Iterator for StackHashtableIter<'a, K, V>
 where K: Keyable
 {
     type Item = &'a Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
-pub struct StackHashtableIterMut<'a, K, V> {
-    inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,
-}
-
-impl<'a, K, V> Iterator for StackHashtableIterMut<'a, K, V>
-where K: Keyable
-{
-    type Item = &'a mut Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()

@@ -450,8 +450,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> databend_common_except
         let data_value_min = Scalar::String(min_expr.clone());
         let data_value_max = Scalar::String(max_expr.clone());
 
-        let trimmed_min = data_value_min.clone().trim_min(STATS_STRING_PREFIX_LEN);
-        let trimmed_max = data_value_max.clone().trim_max(STATS_STRING_PREFIX_LEN);
+        let trimmed_min = data_value_min.clone().trim_min();
+        let trimmed_max = data_value_max.clone().trim_max();
 
         let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
 
@@ -539,7 +539,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval()
 
         if meaningless_to_collect_max {
             // no stats will be collected
-            assert!(stats_of_columns.get(&0).is_none())
+            assert!(!stats_of_columns.contains_key(&0))
         } else {
             // Finally:
             // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"

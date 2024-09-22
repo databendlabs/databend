@@ -20,6 +20,7 @@ use std::time::Duration;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -57,7 +58,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -144,7 +144,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |ctx| {
-            let mut rng = rand::rngs::SmallRng::from_entropy();
+            let mut rng = if ctx.func_ctx.random_function_seed {
+                rand::rngs::SmallRng::seed_from_u64(1)
+            } else {
+                rand::rngs::SmallRng::from_entropy()
+            };
             let rand_nums = (0..ctx.num_rows)
                 .map(|_| rng.gen::<F64>())
                 .collect::<Vec<_>>();

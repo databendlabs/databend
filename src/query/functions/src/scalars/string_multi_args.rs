@@ -829,10 +829,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
     }
     match len {
         Some(_) => {
-            let col = Column::Nullable(Box::new(NullableColumn {
-                validity: validity.into(),
-                column: Column::String(builder.build()),
-            }));
+            let col = NullableColumn::new_column(Column::String(builder.build()), validity.into());
             Value::Column(col)
         }
         _ => match validity.pop() {

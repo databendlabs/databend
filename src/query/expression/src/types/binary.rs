@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
+use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -167,6 +169,11 @@ impl ValueType for BinaryType {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.data().len() + col.offsets().len() * 8
     }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(rhs)
+    }
 }
 
 impl ArgType for BinaryType {
@@ -245,6 +252,7 @@ impl BinaryColumn {
         BinaryIterator {
             data: &self.data,
             offsets: self.offsets.windows(2),
+            _t: PhantomData,
         }
     }
 
@@ -274,18 +282,33 @@ impl BinaryColumn {
     }
 }
 
-pub struct BinaryIterator<'a> {
-    pub(crate) data: &'a [u8],
-    pub(crate) offsets: std::slice::Windows<'a, u64>,
+pub type BinaryIterator<'a> = BinaryLikeIterator<'a, &'a [u8]>;
+
+pub trait BinaryLike<'a> {
+    fn from(value: &'a [u8]) -> Self;
 }
 
-impl<'a> Iterator for BinaryIterator<'a> {
-    type Item = &'a [u8];
+impl<'a> BinaryLike<'a> for &'a [u8] {
+    fn from(value: &'a [u8]) -> Self {
+        value
+    }
+}
+
+pub struct BinaryLikeIterator<'a, T>
+where T: BinaryLike<'a>
+{
+    pub(crate) data: &'a [u8],
+    pub(crate) offsets: std::slice::Windows<'a, u64>,
+    pub(crate) _t: PhantomData<T>,
+}
+
+impl<'a, T: BinaryLike<'a>> Iterator for BinaryLikeIterator<'a, T> {
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.offsets
             .next()
-            .map(|range| &self.data[(range[0] as usize)..(range[1] as usize)])
+            .map(|range| T::from(&self.data[(range[0] as usize)..(range[1] as usize)]))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -293,9 +316,9 @@ impl<'a> Iterator for BinaryIterator<'a> {
     }
 }
 
-unsafe impl<'a> TrustedLen for BinaryIterator<'a> {}
+unsafe impl<'a, T: BinaryLike<'a>> TrustedLen for BinaryLikeIterator<'a, T> {}
 
-unsafe impl<'a> std::iter::TrustedLen for BinaryIterator<'a> {}
+unsafe impl<'a, T: BinaryLike<'a>> std::iter::TrustedLen for BinaryLikeIterator<'a, T> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinaryColumnBuilder {

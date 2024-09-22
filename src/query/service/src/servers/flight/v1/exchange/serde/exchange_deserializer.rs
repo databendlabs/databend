@@ -118,16 +118,16 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformExchangeDeserializer";
 
-    fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<DataBlock> {
+    fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<Vec<DataBlock>> {
         match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
-            DataPacket::MergeStatus { .. } => unreachable!(),
+            DataPacket::MutationStatus { .. } => unreachable!(),
             DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::DataCacheMetrics(_) => unreachable!(),
-            DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
+            DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
         }
     }
 }
@@ -149,14 +149,14 @@ impl Debug for ExchangeDeserializeMeta {
 }
 
 impl serde::Serialize for ExchangeDeserializeMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         unimplemented!("Unimplemented serialize ExchangeSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ExchangeSourceMeta")
     }

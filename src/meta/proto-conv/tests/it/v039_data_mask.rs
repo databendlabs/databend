@@ -14,7 +14,7 @@
 
 use chrono::TimeZone;
 use chrono::Utc;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

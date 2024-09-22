@@ -113,3 +113,38 @@ query T
 select c_variant   FROM fuse_compat_table;
 ----
 [1,{"a":1,"b":{"c":2}}]
+
+
+# Modify columns, but keep the version table [meta]data as it is
+statement ok
+ALTER TABLE fuse_compat_table DROP COLUMN c_int;
+
+statement ok
+ALTER TABLE fuse_compat_table_2 DROP COLUMN c_int;
+
+statement ok
+ALTER TABLE fuse_compat_table ADD COLUMN brand_new uint64;
+
+statement ok
+ALTER TABLE fuse_compat_table_2 ADD COLUMN brand_new uint64;
+
+
+# Let's see if nothing broken
+query T
+select count() FROM fuse_compat_table where brand_new = 100;
+----
+0
+
+query T
+select * FROM fuse_compat_table ignore_result;
+----
+
+
+query T
+select count() FROM fuse_compat_table_2 where brand_new = 100;
+----
+0
+
+query T
+select * FROM fuse_compat_table_2 ignore_result;
+----

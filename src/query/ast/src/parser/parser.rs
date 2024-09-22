@@ -50,7 +50,7 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 }
 
 /// Parse a SQL string into `Statement`s.
-#[minitrace::trace]
+#[fastrace::trace]
 pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Option<String>)> {
     let stmt = run_parser(tokens, dialect, ParseMode::Default, false, statement)?;
 

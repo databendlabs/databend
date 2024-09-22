@@ -22,6 +22,7 @@ use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::ClientWriteError;
 use databend_common_meta_types::Cmd;
@@ -33,7 +34,6 @@ use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RaftError;
-use databend_common_meta_types::SeqV;
 use databend_common_metrics::count::Count;
 use futures::StreamExt;
 use log::debug;
@@ -65,7 +65,7 @@ pub struct MetaLeader<'a> {
 
 #[async_trait::async_trait]
 impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle(
         &self,
         req: ForwardRequest<ForwardRequestBody>,
@@ -109,7 +109,7 @@ impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
 
 #[async_trait::async_trait]
 impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle(
         &self,
         req: ForwardRequest<MetaGrpcReadReq>,
@@ -174,7 +174,7 @@ impl<'a> MetaLeader<'a> {
     /// - Adds the node to membership to let it become a voter.
     ///
     /// If the node is already in cluster membership, it still returns Ok.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn join(&self, req: JoinRequest) -> Result<(), RaftError<ClientWriteError>> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
@@ -215,7 +215,7 @@ impl<'a> MetaLeader<'a> {
     /// - Remove the node from cluster.
     ///
     /// If the node is not in cluster membership, it still returns Ok.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaOperationError> {
         let node_id = req.node_id;
 
@@ -258,7 +258,7 @@ impl<'a> MetaLeader<'a> {
     /// Write a log through local raft node and return the states before and after applying the log.
     ///
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn write(
         &self,
         mut entry: LogEntry,

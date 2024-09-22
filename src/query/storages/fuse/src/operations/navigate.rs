@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use chrono::DateTime;
-use chrono::Duration;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::AbortChecker;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
@@ -41,7 +41,7 @@ use crate::FuseTable;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn navigate_to_point(
         &self,
@@ -155,7 +155,9 @@ impl FuseTable {
         // Find the instant which matches the given `time_point`.
         let mut instant = None;
         while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            abort_checker.try_check_aborting()?;
+            abort_checker
+                .try_check_aborting()
+                .with_context(|| "failed to find snapshot")?;
             if pred(snapshot_with_version.0.as_ref()) {
                 instant = Some(snapshot_with_version);
                 break;
@@ -172,7 +174,7 @@ impl FuseTable {
     }
 
     /// Load the table instance by the snapshot
-    fn load_table_by_snapshot(
+    pub fn load_table_by_snapshot(
         &self,
         snapshot: &TableSnapshot,
         format_version: u64,
@@ -220,8 +222,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention =
-            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+        let retention = self.get_data_retention_period(ctx.as_ref())?;
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {

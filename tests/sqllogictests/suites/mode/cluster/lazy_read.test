@@ -58,12 +58,12 @@ explain select * from t_lazy where a < 100 limit 2
 RowFetch
 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── columns to fetch: [b, c, d, e]
-├── estimated rows: 1.00
+├── estimated rows: 0.00
 └── Limit
     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
     ├── limit: 2
     ├── offset: 0
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.00
     └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── exchange type: Merge
@@ -71,11 +71,11 @@ RowFetch
             ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
             ├── limit: 2
             ├── offset: 0
-            ├── estimated rows: 1.00
+            ├── estimated rows: 0.00
             └── Filter
                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
                 ├── filters: [t_lazy.a (#0) < 100]
-                ├── estimated rows: 1.00
+                ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t_lazy
                     ├── output columns: [a (#0), _row_id (#7)]
@@ -127,7 +127,7 @@ Limit
 ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── limit: 2
 ├── offset: 0
-├── estimated rows: 1.00
+├── estimated rows: 0.00
 └── Exchange
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── exchange type: Merge
@@ -135,11 +135,11 @@ Limit
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
         ├── limit: 2
         ├── offset: 0
-        ├── estimated rows: 1.00
+        ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
             ├── filters: [t_lazy.a (#0) < 100]
-            ├── estimated rows: 1.00
+            ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_lazy
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]

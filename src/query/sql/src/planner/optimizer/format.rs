@@ -67,13 +67,16 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Window(_) => "WindowFunc".to_string(),
         RelOperator::CteScan(_) => "CteScan".to_string(),
         RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
-        RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
+        RelOperator::ConstantTableScan(s) => s.name().to_string(),
         RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
         RelOperator::CacheScan(_) => "CacheScan".to_string(),
         RelOperator::Udf(_) => "Udf".to_string(),
         RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
-        RelOperator::MergeInto(_) => "MergeInto".to_string(),
+        RelOperator::Mutation(_) => "MergeInto".to_string(),
+        RelOperator::MutationSource(_) => "MutationSource".to_string(),
+        RelOperator::Recluster(_) => "Recluster".to_string(),
+        RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
     }
 }
 

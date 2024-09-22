@@ -55,7 +55,7 @@ impl Settings {
         unsafe { self.unchecked_try_get_string(key) }
     }
 
-    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
+    unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
             None => match self.configs.get(key) {
@@ -302,8 +302,8 @@ impl Settings {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
-    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
-        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    pub fn get_enforce_shuffle_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_shuffle_join")? != 0)
     }
 
     pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {
@@ -351,6 +351,14 @@ impl Settings {
         Ok(self.try_get_u64("hide_options_in_show_create_table")? != 0)
     }
 
+    pub fn get_enable_planner_cache(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_planner_cache")? != 0)
+    }
+
+    pub fn get_enable_experimental_procedure(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_procedure")? != 0)
+    }
+
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_query_result_cache")? != 0)
     }
@@ -381,6 +389,26 @@ impl Settings {
 
     pub fn get_aggregate_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_window_partition_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_window_num_partitions(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_num_partitions")? as usize)
+    }
+
+    pub fn get_window_spill_unit_size_mb(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_spill_unit_size_mb")? as usize)
+    }
+
+    pub fn get_window_partition_sort_block_size(&self) -> Result<u64> {
+        self.try_get_u64("window_partition_sort_block_size")
     }
 
     pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
@@ -480,6 +508,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
+    pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
+    }
+
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
@@ -488,12 +520,20 @@ impl Settings {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
 
+    pub fn get_enable_compact_after_multi_table_insert(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_compact_after_multi_table_insert")? != 0)
+    }
+
     pub fn get_auto_compaction_imperfect_blocks_threshold(&self) -> Result<u64> {
         self.try_get_u64("auto_compaction_imperfect_blocks_threshold")
     }
 
     pub fn set_auto_compaction_imperfect_blocks_threshold(&self, val: u64) -> Result<()> {
         self.try_set_u64("auto_compaction_imperfect_blocks_threshold", val)
+    }
+
+    pub fn get_auto_compaction_segments_limit(&self) -> Result<u64> {
+        self.try_get_u64("auto_compaction_segments_limit")
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
@@ -561,6 +601,21 @@ impl Settings {
         self.try_get_string("numeric_cast_option")
     }
 
+    pub fn get_nulls_first(&self) -> impl Fn(bool) -> bool {
+        match self
+            .try_get_string("default_order_by_null")
+            .unwrap_or("nulls_last".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "nulls_last" => |_| false,
+            "nulls_first" => |_| true,
+            "nulls_first_on_asc_last_on_desc" => |asc: bool| asc,
+            "nulls_last_on_asc_first_on_desc" => |asc: bool| !asc,
+            _ => |_| false,
+        }
+    }
+
     pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("external_server_connect_timeout_secs")
     }
@@ -571,6 +626,10 @@ impl Settings {
 
     pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_batch_rows")
+    }
+
+    pub fn get_external_server_request_retry_times(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_retry_times")
     }
 
     pub fn get_create_query_flight_client_with_current_rt(&self) -> Result<bool> {
@@ -600,6 +659,10 @@ impl Settings {
 
     pub fn get_parse_datetime_ignore_remainder(&self) -> Result<bool> {
         Ok(self.try_get_u64("parse_datetime_ignore_remainder")? != 0)
+    }
+
+    pub fn get_enable_strict_datetime_parser(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_strict_datetime_parser")? != 0)
     }
 
     pub fn get_enable_dst_hour_fix(&self) -> Result<bool> {
@@ -656,5 +719,33 @@ impl Settings {
 
     pub fn get_enable_loser_tree_merge_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
+    }
+
+    pub fn get_enable_parallel_multi_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parallel_multi_merge_sort")? == 1)
+    }
+
+    pub fn get_format_null_as_str(&self) -> Result<bool> {
+        Ok(self.try_get_u64("format_null_as_str")? == 1)
+    }
+
+    pub fn get_enable_last_snapshot_location_hint(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_last_snapshot_location_hint")? == 1)
+    }
+
+    pub fn get_max_data_retention_period_in_days() -> u64 {
+        DefaultSettings::data_retention_time_in_days_max()
+    }
+
+    pub fn get_random_function_seed(&self) -> Result<bool> {
+        Ok(self.try_get_u64("random_function_seed")? == 1)
+    }
+
+    pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {
+        self.try_get_u64("dynamic_sample_time_budget_ms")
+    }
+
+    pub fn get_max_spill_io_requests(&self) -> Result<u64> {
+        self.try_get_u64("max_spill_io_requests")
     }
 }

@@ -33,20 +33,11 @@ mod reader;
 mod schema;
 mod stream;
 
-pub use error::OutOfSpecKind;
-
-#[cfg(feature = "io_ipc_read_async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io_ipc_read_async")))]
-pub mod stream_async;
-
-#[cfg(feature = "io_ipc_read_async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io_ipc_read_async")))]
-pub mod file_async;
-
 #[cfg(feature = "io_flight")]
 pub(crate) use common::read_dictionary;
 #[cfg(feature = "io_flight")]
 pub(crate) use common::read_record_batch;
+pub use error::OutOfSpecKind;
 pub use file::read_batch;
 pub use file::read_file_dictionaries;
 pub use file::read_file_metadata;

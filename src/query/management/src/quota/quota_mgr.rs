@@ -23,13 +23,13 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_app::tenant::TenantQuotaIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use super::quota_api::QuotaApi;
 use crate::serde::check_and_upgrade_to_pb;
@@ -70,6 +70,9 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
                         Quota::new_limit(func_name!(), 0)
                     };
 
+                    // Now WRITE_PB control quota upgrade json to pb.
+                    // And in set_quota default is write with json.
+                    // So we directly use false, until in set_quota write date with PB
                     let u = check_and_upgrade_to_pb(
                         &mut quota,
                         &self.key(),
@@ -100,7 +103,7 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
             let value = serde_json::to_vec(quota)?;
             let res = self
                 .kv_api
-                .upsert_kv(UpsertKV::update(&self.key(), &value).with(seq))
+                .upsert_kv(UpsertKV::update(self.key(), &value).with(seq))
                 .await?;
             match res.result {
                 Some(SeqV { seq: s, .. }) => Ok(s),

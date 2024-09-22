@@ -15,5 +15,8 @@
 mod columnar;
 mod single_file_partition;
 
+mod cast;
+
+pub use cast::load_can_auto_cast_to;
 pub use columnar::*;
 pub use single_file_partition::SingleFilePartition;

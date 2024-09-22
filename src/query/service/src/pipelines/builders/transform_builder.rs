@@ -25,9 +25,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use databend_common_pipeline_transforms::processors::BlockCompactor;
-use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -38,6 +40,7 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
@@ -88,16 +91,28 @@ impl PipelineBuilder {
         Ok(|input, output| Ok(TransformDummy::create(input, output)))
     }
 
-    pub(crate) fn block_compact_transform_builder(
+    pub(crate) fn block_compact_task_builder(
         &self,
         block_thresholds: BlockThresholds,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |transform_input_port, transform_output_port| {
-            Ok(ProcessorPtr::create(TransformCompact::try_create(
+            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(block_thresholds),
-            )?))
+                BlockCompactBuilder::new(block_thresholds),
+            )))
+        })
+    }
+
+    pub(crate) fn block_compact_transform_builder(
+        &self,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        Ok(move |transform_input_port, transform_output_port| {
+            Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+                transform_input_port,
+                transform_output_port,
+                TransformCompactBlock::default(),
+            )))
         })
     }
 
@@ -140,8 +155,15 @@ impl PipelineBuilder {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let aggregator =
-                TableMutationAggregator::new(fuse_table, ctx.clone(), vec![], MutationKind::Insert);
+            let aggregator = TableMutationAggregator::create(
+                fuse_table,
+                ctx.clone(),
+                vec![],
+                vec![],
+                vec![],
+                Statistics::default(),
+                MutationKind::Insert,
+            );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

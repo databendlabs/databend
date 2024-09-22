@@ -16,7 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use minitrace::func_name;
+use fastrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;

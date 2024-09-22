@@ -62,9 +62,10 @@ impl Dataframe {
             catalog: None,
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
 
         let settings = query_ctx.get_settings();
@@ -83,12 +84,11 @@ impl Dataframe {
         let (s_expr, bind_context) = if db == Some("system") && table_name == "one" {
             let catalog = CATALOG_DEFAULT;
             let database = "system";
-            let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder.resolve_data_source(
-                tenant.tenant_name(),
                 catalog,
                 database,
                 "one",
+                None,
                 None,
                 query_ctx.clone().get_abort_checker(),
             )?;
@@ -104,7 +104,7 @@ impl Dataframe {
                 false,
             );
 
-            binder.bind_base_table(&bind_context, database, table_index, None)
+            binder.bind_base_table(&bind_context, database, table_index, None, &None)
         } else {
             binder.bind_table_reference(&mut bind_context, &table)
         }?;
@@ -159,8 +159,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
 
         Ok(self)
     }
@@ -213,8 +213,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -279,8 +279,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -325,8 +325,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -406,7 +406,6 @@ impl Dataframe {
             &self.bind_context,
             order_items,
             &select_list,
-            &mut scalar_items,
             self.s_expr,
         )?;
 
@@ -417,9 +416,8 @@ impl Dataframe {
             self.s_expr,
         )?;
         self.s_expr = self
-            .bind_context
-            .add_internal_column_into_expr(self.s_expr.clone())?;
-
+            .binder
+            .add_internal_column_into_expr(&mut self.bind_context, self.s_expr.clone())?;
         Ok(self)
     }
 
@@ -466,9 +464,10 @@ impl Dataframe {
                 catalog: None,
                 alias: None,
                 temporal: None,
-                consume: false,
+                with_options: None,
                 pivot: None,
                 unpivot: None,
+                sample: None,
             };
             table_ref.push(table);
         }

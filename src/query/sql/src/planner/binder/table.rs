@@ -21,6 +21,9 @@ use chrono::Utc;
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::Sample;
+use databend_common_ast::ast::SampleConfig;
+use databend_common_ast::ast::SampleLevel;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
@@ -138,7 +141,7 @@ impl Binder {
         );
 
         let (s_expr, mut bind_context) =
-            self.bind_base_table(bind_context, "system", table_index, None)?;
+            self.bind_base_table(bind_context, "system", table_index, None, &None)?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -147,14 +150,28 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+    fn bind_cte_scan(
+        &mut self,
+        cte_info: &CteInfo,
+        mut bind_context: BindContext,
+    ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
         let mut offsets = vec![];
-        for (idx, column) in cte_info.columns.iter().enumerate() {
+        let mut materialized_indexes = vec![];
+        for (idx, column) in bind_context.columns.iter_mut().enumerate() {
+            let materialized_index = column.index;
+            materialized_indexes.push(materialized_index);
+            column.index = self.metadata.write().add_derived_column(
+                column.column_name.clone(),
+                *column.data_type.clone(),
+                None,
+            );
+            self.m_cte_materialized_indexes
+                .insert(column.index, materialized_index);
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
@@ -165,13 +182,14 @@ impl Binder {
             CteScan {
                 cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
+                materialized_indexes,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
                 stat: Arc::new(StatInfo::default()),
             }
             .into(),
         ));
-        Ok(cte_scan)
+        Ok((cte_scan, bind_context))
     }
 
     pub(crate) fn bind_cte(
@@ -202,11 +220,13 @@ impl Binder {
             cte_map_ref: Box::default(),
             in_grouping: false,
             view_info: None,
-            srfs: Default::default(),
+            srfs: vec![],
+            have_async_func: false,
+            have_udf_script: false,
+            have_udf_server: false,
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
-            allow_internal_columns: true,
             window_definitions: DashMap::new(),
         };
 
@@ -290,8 +310,7 @@ impl Binder {
                 cte_info.used_count += 1;
             });
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        let s_expr = self.bind_cte_scan(&cte_info)?;
-        Ok((s_expr, new_bind_context))
+        self.bind_cte_scan(&cte_info, new_bind_context)
     }
 
     pub(crate) fn bind_r_cte_scan(
@@ -416,6 +435,7 @@ impl Binder {
         database_name: &str,
         table_index: IndexType,
         change_type: Option<ChangeType>,
+        sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
@@ -469,6 +489,7 @@ impl Binder {
                     columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Arc::new(Statistics::default()),
                     change_type,
+                    sample: table_sample(sample)?,
                     ..Default::default()
                 }
                 .into(),
@@ -479,11 +500,11 @@ impl Binder {
 
     pub fn resolve_data_source(
         &self,
-        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        max_batch_size: Option<u64>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
@@ -493,7 +514,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table(catalog_name, database_name, table_name)
+                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {
@@ -630,7 +651,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, name);
         databend_common_base::runtime::block_on(async move {
             let stream = self.ctx.get_table(&catalog, &database, &name).await?;
-            if stream.engine() != "STREAM" {
+            if !stream.is_stream() {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{database}.{name} is not STREAM",
                 )));
@@ -649,7 +670,7 @@ impl Binder {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.txn_mgr())
+            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.session_state())
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
@@ -657,4 +678,17 @@ impl Binder {
 
         Ok(index_metas)
     }
+}
+
+fn table_sample(sample: &Option<Sample>) -> Result<Option<Sample>> {
+    if let Some(sample) = sample {
+        if sample.sample_level == SampleLevel::BLOCK {
+            if let SampleConfig::RowsNum(_) = sample.sample_conf {
+                return Err(ErrorCode::SyntaxException(
+                    "BLOCK sampling doesn't support fixed rows.".to_string(),
+                ));
+            }
+        }
+    }
+    Ok(sample.clone())
 }

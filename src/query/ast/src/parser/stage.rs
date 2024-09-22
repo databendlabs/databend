@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom_rule::rule;
 
 use crate::ast::FileFormatOptions;
 use crate::ast::FileFormatValue;
@@ -27,7 +28,6 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
-use crate::rule;
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
@@ -187,21 +187,6 @@ pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
     map(
         rule! { FILE_FORMAT ~ ^"=" ~ ^"(" ~ ^#format_options ~ ^")" },
         |(_, _, _, opts, _)| opts,
-    )(i)
-}
-
-// parse: (k = v ...)* into a map
-pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
-    map(
-        rule! {
-            "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string ~ ","? )* ~ ^")"
-        },
-        |(_, opts, _)| {
-            BTreeMap::from_iter(
-                opts.iter()
-                    .map(|(k, _, v, _)| (k.name.to_lowercase(), v.clone())),
-            )
-        },
     )(i)
 }
 

@@ -226,7 +226,6 @@ impl ShowGrantsSource {
 impl AsyncSource for ShowGrantsSource {
     const NAME: &'static str = "show_grants";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
@@ -576,7 +575,7 @@ async fn show_object_grant(
                 .get_database(&tenant, db_name)
                 .await?
                 .get_db_info()
-                .ident
+                .database_id
                 .db_id;
             let table_id = catalog.get_table(&tenant, db_name, name).await?.get_id();
             if !visibility_checker.check_table_visibility(
@@ -609,7 +608,7 @@ async fn show_object_grant(
                 .get_database(&tenant, name)
                 .await?
                 .get_db_info()
-                .ident
+                .database_id
                 .db_id;
             if !visibility_checker.check_database_visibility(catalog_name, name, db_id) {
                 return Err(ErrorCode::PermissionDenied(format!(

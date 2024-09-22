@@ -346,10 +346,7 @@ impl Binder {
                             Aggregate {
                                 mode: AggregateMode::Initial,
                                 group_items,
-                                aggregate_functions: vec![],
-                                from_distinct: false,
-                                limit: None,
-                                grouping_sets: None,
+                                ..Default::default()
                             }
                             .into(),
                         ),

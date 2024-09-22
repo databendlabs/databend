@@ -16,7 +16,6 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bstr = "1.9.1"
 csv-core = "0.1.11"
-dashmap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-compress = { workspace = true }

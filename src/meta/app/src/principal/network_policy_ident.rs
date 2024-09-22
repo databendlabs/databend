@@ -25,6 +25,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::NetworkPolicy;
+    use crate::principal::NetworkPolicyIdent;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
@@ -38,7 +39,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for NetworkPolicy {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = NetworkPolicyIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

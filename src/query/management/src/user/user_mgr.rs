@@ -26,11 +26,11 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -89,7 +89,7 @@ impl UserMgr {
 #[async_trait::async_trait]
 impl UserApi for UserMgr {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn add_user(
         &self,
         user_info: UserInfo,
@@ -117,7 +117,7 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
         let key = self.user_key(&user.username, &user.hostname);
 
@@ -139,7 +139,7 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
         let values = self.get_raw_users().await?;
         let mut r = vec![];
@@ -152,7 +152,7 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_raw_users(&self) -> Result<ListKVReply> {
         let user_prefix = self.user_prefix();
         Ok(self.kv_api.prefix_list_kv(user_prefix.as_str()).await?)

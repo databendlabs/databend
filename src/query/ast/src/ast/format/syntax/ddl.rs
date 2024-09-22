@@ -15,6 +15,7 @@
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
+use super::inline_comma;
 use super::query::pretty_query;
 use super::query::pretty_table;
 use crate::ast::format::syntax::interweave_comma;
@@ -24,11 +25,14 @@ use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
+use crate::ast::ClusterType;
+use crate::ast::CreateDictionaryStmt;
 use crate::ast::CreateOption;
 use crate::ast::CreateStreamStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
+use crate::ast::TableType;
 use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
@@ -38,10 +42,10 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if stmt.transient {
-            RcDoc::space().append(RcDoc::text("TRANSIENT"))
-        } else {
-            RcDoc::nil()
+        .append(match stmt.table_type {
+            TableType::Transient => RcDoc::space().append(RcDoc::text("TRANSIENT")),
+            TableType::Temporary => RcDoc::space().append(RcDoc::text("TEMPORARY")),
+            TableType::Normal => RcDoc::nil(),
         })
         .append(RcDoc::space().append(RcDoc::text("TABLE")))
         .append(match stmt.create_option {
@@ -76,11 +80,15 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(if !stmt.cluster_by.is_empty() {
+        .append(if let Some(cluster_by) = stmt.cluster_by {
             RcDoc::line()
                 .append(RcDoc::text("CLUSTER BY "))
+                .append(match cluster_by.cluster_type {
+                    ClusterType::Linear => RcDoc::text("LINEAR"),
+                    ClusterType::Hilbert => RcDoc::text("HILBERT"),
+                })
                 .append(parenthesized(
-                    interweave_comma(stmt.cluster_by.into_iter().map(pretty_expr)).group(),
+                    interweave_comma(cluster_by.cluster_exprs.into_iter().map(pretty_expr)).group(),
                 ))
         } else {
             RcDoc::nil()
@@ -206,8 +214,12 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             .append(RcDoc::text(column.to_string())),
         AlterTableAction::AlterTableClusterKey { cluster_by } => RcDoc::line()
             .append(RcDoc::text("CLUSTER BY "))
+            .append(match cluster_by.cluster_type {
+                ClusterType::Linear => RcDoc::text("LINEAR"),
+                ClusterType::Hilbert => RcDoc::text("HILBERT"),
+            })
             .append(parenthesized(
-                interweave_comma(cluster_by.into_iter().map(pretty_expr)).group(),
+                interweave_comma(cluster_by.cluster_exprs.into_iter().map(pretty_expr)).group(),
             )),
         AlterTableAction::DropTableClusterKey => {
             RcDoc::line().append(RcDoc::text("DROP CLUSTER KEY"))
@@ -407,6 +419,82 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
         })
         .append(if let Some(comment) = stmt.comment {
             RcDoc::space().append(RcDoc::text(format!("COMMENT = '{comment}'")))
+        } else {
+            RcDoc::nil()
+        })
+}
+
+pub(crate) fn pretty_create_dictionary(stmt: CreateDictionaryStmt) -> RcDoc<'static> {
+    RcDoc::text("CREATE")
+        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+            RcDoc::space().append(RcDoc::text("OR REPLACE"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(RcDoc::space().append(RcDoc::text("DICTIONARY")))
+        .append(match stmt.create_option {
+            CreateOption::Create => RcDoc::nil(),
+            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            CreateOption::CreateOrReplace => RcDoc::nil(),
+        })
+        .append(
+            RcDoc::space()
+                .append(if let Some(catalog) = stmt.catalog {
+                    RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
+                } else {
+                    RcDoc::nil()
+                })
+                .append(if let Some(database) = stmt.database {
+                    RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                } else {
+                    RcDoc::nil()
+                })
+                .append(RcDoc::text(stmt.dictionary_name.to_string())),
+        )
+        .append(parenthesized(
+            interweave_comma(
+                stmt.columns
+                    .iter()
+                    .map(|column| RcDoc::text(column.to_string())),
+            )
+            .group(),
+        ))
+        .append(if !stmt.primary_keys.is_empty() {
+            RcDoc::line().append(RcDoc::text("PRIMARY KEY ")).append(
+                inline_comma(
+                    stmt.primary_keys
+                        .iter()
+                        .map(|k| -> RcDoc<'static> { RcDoc::text(k.to_string()) }),
+                )
+                .group(),
+            )
+        } else {
+            RcDoc::nil()
+        })
+        .append(RcDoc::text("SOURCE "))
+        .append(parenthesized(
+            RcDoc::text(stmt.source_name.to_string()).append(parenthesized(
+                if !stmt.source_options.is_empty() {
+                    RcDoc::line()
+                        .append(interweave_comma(stmt.source_options.iter().map(
+                            |(k, v)| {
+                                RcDoc::text(k.clone())
+                                    .append(RcDoc::space())
+                                    .append(RcDoc::text("="))
+                                    .append(RcDoc::space())
+                                    .append(RcDoc::text("'"))
+                                    .append(RcDoc::text(v.clone()))
+                                    .append(RcDoc::text("'"))
+                            },
+                        )))
+                        .group()
+                } else {
+                    RcDoc::nil()
+                },
+            )),
+        ))
+        .append(if let Some(comment) = stmt.comment {
+            RcDoc::text("COMMENT ").append(RcDoc::text(comment))
         } else {
             RcDoc::nil()
         })

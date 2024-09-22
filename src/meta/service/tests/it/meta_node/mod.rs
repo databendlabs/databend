@@ -15,6 +15,5 @@
 pub(crate) mod meta_node_kv_api;
 pub(crate) mod meta_node_kv_api_expire;
 pub(crate) mod meta_node_lifecycle;
-pub(crate) mod meta_node_raft_api;
 pub(crate) mod meta_node_replication;
 pub(crate) mod meta_node_request_forwarding;

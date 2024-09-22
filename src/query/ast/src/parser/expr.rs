@@ -19,6 +19,7 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
@@ -33,7 +34,6 @@ use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
-use crate::rule;
 
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
@@ -104,7 +104,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     ExprElement::MapAccess {
                         accessor: MapAccessor::Colon { key },
                     } => {
-                        if !key.is_quoted() && !key.is_hole {
+                        if !key.is_quoted() && !key.is_hole() {
                             *elem = ExprElement::Hole {
                                 name: key.to_string(),
                             };
@@ -182,6 +182,7 @@ pub enum ExprElement {
     UnaryOp {
         op: UnaryOperator,
     },
+    VariableAccess(String),
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
@@ -409,6 +410,7 @@ impl ExprElement {
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
+            ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }
 }
@@ -640,6 +642,20 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::Hole { name } => Expr::Hole {
                 span: transform_span(elem.span.tokens),
                 name,
+            },
+            ExprElement::VariableAccess(name) => Expr::FunctionCall {
+                span: transform_span(elem.span.tokens),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier::from_name(transform_span(elem.span.tokens), "getvariable"),
+                    args: vec![Expr::Literal {
+                        span: transform_span(elem.span.tokens),
+                        value: Literal::String(name),
+                    }],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                },
             },
             _ => unreachable!(),
         };
@@ -1003,7 +1019,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ (OVER ~ #window_spec_ident)
+            ~ #window_function
         },
         |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
@@ -1011,7 +1027,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
-                window: Some(window.1),
+                window: Some(window),
                 lambda: None,
             },
         },
@@ -1065,6 +1081,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let json_op = map(json_op, |op| ExprElement::JsonOp { op });
+    let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
@@ -1231,55 +1248,57 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
-    let (rest, (span, elem)) = consumed(alt((
-        // Note: each `alt` call supports maximum of 21 parsers
-        rule!(
-            #is_null : "`... IS [NOT] NULL`"
-            | #in_list : "`[NOT] IN (<expr>, ...)`"
-            | #in_subquery : "`[NOT] IN (SELECT ...)`"
-            | #exists : "`[NOT] EXISTS (SELECT ...)`"
-            | #between : "`[NOT] BETWEEN ... AND ...`"
-            | #binary_op : "<operator>"
-            | #json_op : "<operator>"
-            | #unary_op : "<operator>"
-            | #cast : "`CAST(... AS ...)`"
-            | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
-            | #date_expr: "`DATE <str_literal>`"
-            | #timestamp_expr: "`TIMESTAMP <str_literal>`"
-            | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
-            | #pg_cast : "`::<type_name>`"
-            | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-            | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-            | #position : "`POSITION(... IN ...)`"
-        ),
-        rule!(
-            #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-            | #trim : "`TRIM(...)`"
-            | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #chain_function_call : "x.function(...)"
-            | #list_comprehensions: "[expr for x in ... [if ...]]"
-            | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call_with_lambda : "`function(..., x -> ...)`"
-            | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-            | #function_call_with_params : "`function(...)(...)`"
-            | #function_call : "`function(...)`"
-            | #case : "`CASE ... END`"
-            | #tuple : "`(<expr> [, ...])`"
-            | #subquery : "`(SELECT ...)`"
-            | #column_ref : "<column>"
-            | #dot_access : "<dot_access>"
-            | #map_access : "[<key>] | .<key> | :<key>"
-            | #literal : "<literal>"
-            | #current_timestamp: "CURRENT_TIMESTAMP"
-            | #array : "`[<expr>, ...]`"
-            | #map_expr : "`{ <literal> : <expr>, ... }`"
-        ),
-    )))(i)?;
-
-    Ok((rest, WithSpan { span, elem }))
+    map(
+        consumed(alt((
+            // Note: each `alt` call supports maximum of 21 parsers
+            rule!(
+                #is_null : "`... IS [NOT] NULL`"
+                | #in_list : "`[NOT] IN (<expr>, ...)`"
+                | #in_subquery : "`[NOT] IN (SELECT ...)`"
+                | #exists : "`[NOT] EXISTS (SELECT ...)`"
+                | #between : "`[NOT] BETWEEN ... AND ...`"
+                | #binary_op : "<operator>"
+                | #json_op : "<operator>"
+                | #unary_op : "<operator>"
+                | #cast : "`CAST(... AS ...)`"
+                | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #date_expr: "`DATE <str_literal>`"
+                | #timestamp_expr: "`TIMESTAMP <str_literal>`"
+                | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+                | #pg_cast : "`::<type_name>`"
+                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
+                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+                | #position : "`POSITION(... IN ...)`"
+                | #variable_access: "`$<ident>`"
+            ),
+            rule!(
+                #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
+                | #trim : "`TRIM(...)`"
+                | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
+                | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+                | #chain_function_call : "x.function(...)"
+                | #list_comprehensions: "[expr for x in ... [if ...]]"
+                | #count_all_with_window : "`COUNT(*) OVER ...`"
+                | #function_call_with_lambda : "`function(..., x -> ...)`"
+                | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+                | #function_call_with_params : "`function(...)(...)`"
+                | #function_call : "`function(...)`"
+                | #case : "`CASE ... END`"
+                | #tuple : "`(<expr> [, ...])`"
+                | #subquery : "`(SELECT ...)`"
+                | #column_ref : "<column>"
+                | #dot_access : "<dot_access>"
+                | #map_access : "[<key>] | .<key> | :<key>"
+                | #literal : "<literal>"
+                | #current_timestamp: "CURRENT_TIMESTAMP"
+                | #array : "`[<expr>, ...]`"
+                | #map_expr : "`{ <literal> : <expr>, ... }`"
+            ),
+        ))),
+        |(span, elem)| WithSpan { span, elem },
+    )(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
@@ -1602,6 +1621,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
+    let ty_geography = value(TypeName::Geography, rule! { GEOGRAPHY });
     map_res(
         alt((
             rule! {
@@ -1631,6 +1651,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_geometry
+            | #ty_geography
             | #ty_nullable
             ) ~ #nullable? : "type name" },
         )),
@@ -1751,7 +1772,7 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
     let point_pos = text.find('.');
-    let e_pos = text.find(|c| c == 'e' || c == 'E');
+    let e_pos = text.find(['e', 'E']);
     let (i_part, f_part, e_part) = match (point_pos, e_pos) {
         (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
         (Some(p), None) => (&text[..p], &text[(p + 1)..], None),
@@ -1801,7 +1822,7 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
     let contains_underscore = text.contains('_');
     if contains_underscore {
-        let text = text.replace(|p| p == '_', "");
+        let text = text.replace('_', "");
         return parse_uint(&text, radix);
     }
 

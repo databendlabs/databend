@@ -114,7 +114,6 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
         let mut others_required = join
             .non_equi_conditions
             .iter()
@@ -126,7 +125,7 @@ impl PhysicalPlanBuilder {
                 others_required.insert(*column);
             }
         }
-        let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
+
         // Include columns referenced in left conditions and right conditions.
         let left_required: HashSet<usize> = join
             .equi_conditions
@@ -140,7 +139,7 @@ impl PhysicalPlanBuilder {
         let right_required: HashSet<usize> = join
             .equi_conditions
             .iter()
-            .fold(required, |acc, v| {
+            .fold(required.clone(), |acc, v| {
                 acc.union(&v.right.used_columns()).cloned().collect()
             })
             .union(&others_required)
@@ -157,10 +156,10 @@ impl PhysicalPlanBuilder {
                 self.build_hash_join(
                     join,
                     s_expr,
+                    required,
+                    others_required,
                     left_required,
                     right_required,
-                    pre_column_projections,
-                    column_projections,
                     stat_info,
                 )
                 .await

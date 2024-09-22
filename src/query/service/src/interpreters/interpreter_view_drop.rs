@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropViewPlan;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -92,7 +93,13 @@ impl Interpreter for DropViewInterpreter {
                     tenant: self.plan.tenant.clone(),
                     table_name: self.plan.view_name.clone(),
                     tb_id: table.get_id(),
-                    db_id: db.get_db_info().ident.db_id,
+                    db_id: db.get_db_info().database_id.db_id,
+                    engine: table.engine().to_string(),
+                    session_id: table
+                        .options()
+                        .get(OPT_KEY_TEMP_PREFIX)
+                        .cloned()
+                        .unwrap_or_default(),
                 })
                 .await?;
         };

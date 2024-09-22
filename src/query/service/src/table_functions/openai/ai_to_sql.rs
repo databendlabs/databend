@@ -168,7 +168,6 @@ impl GPT2SQLSource {
 impl AsyncSource for GPT2SQLSource {
     const NAME: &'static str = "gpt_to_sql";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
@@ -185,7 +184,14 @@ impl AsyncSource for GPT2SQLSource {
         // SELECT
         let database = self.ctx.get_current_database();
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(CATALOG_DEFAULT).await?;
+
+        // Disable table info refreshing.
+        // Attached tables may not be able to refresh table info successfully.
+        let catalog = self
+            .ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .disable_table_info_refresh()?;
 
         let mut template = vec![];
         template.push("### Postgres SQL tables, with their properties:".to_string());

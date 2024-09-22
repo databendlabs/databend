@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,9 +24,9 @@ use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 use log::info;
@@ -241,7 +240,6 @@ impl Interpreter for InsertInterpreter {
             None,
             vec![],
             self.plan.overwrite,
-            AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 

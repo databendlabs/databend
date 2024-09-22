@@ -30,15 +30,8 @@ use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::CommonRows;
-use super::sort::Cursor;
-use super::sort::DateConverter;
-use super::sort::DateRows;
 use super::sort::Rows;
 use super::sort::SortedStream;
-use super::sort::StringConverter;
-use super::sort::StringRows;
-use super::sort::TimestampConverter;
-use super::sort::TimestampRows;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
@@ -88,7 +81,7 @@ impl<R: Rows> TransformSortMerge<R> {
 impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
-    fn add_block(&mut self, block: DataBlock, init_cursor: Cursor<R>) -> Result<()> {
+    fn add_block(&mut self, block: DataBlock, init_rows: R, _input_index: usize) -> Result<()> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
@@ -101,7 +94,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
 
         self.num_bytes += block.memory_size();
         self.num_rows += block.num_rows();
-        self.buffer.push(Some((block, init_cursor.to_column())));
+        self.buffer.push(Some((block, init_rows.to_column())));
 
         Ok(())
     }
@@ -211,17 +204,6 @@ impl SortedStream for BlockStream {
     }
 }
 
-pub(super) type MergeSortDateImpl = TransformSortMerge<DateRows>;
-pub(super) type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
-
-pub(super) type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
-pub(super) type MergeSortTimestamp =
-    TransformSortMergeBase<MergeSortTimestampImpl, TimestampRows, TimestampConverter>;
-
-pub(super) type MergeSortStringImpl = TransformSortMerge<StringRows>;
-pub(super) type MergeSortString =
-    TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
-
 pub(super) type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
 pub(super) type MergeSortCommon =
     TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
@@ -233,12 +215,13 @@ pub fn sort_merge(
     data_blocks: Vec<DataBlock>,
     sort_spilling_batch_bytes: usize,
     enable_loser_tree: bool,
+    have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
     let sort_desc = Arc::new(sort_desc);
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),
         sort_desc.clone(),
-        false,
+        have_order_col,
         false,
         0,
         0,

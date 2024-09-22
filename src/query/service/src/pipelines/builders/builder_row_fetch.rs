@@ -26,13 +26,6 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
-        debug_assert!(matches!(
-            &*row_fetch.input,
-            PhysicalPlan::Limit(_)
-                | PhysicalPlan::HashJoin(_)
-                | PhysicalPlan::MergeIntoSplit(_)
-                | PhysicalPlan::ExchangeSource(_)
-        ));
         self.build_pipeline(&row_fetch.input)?;
         let processor = row_fetch_processor(
             self.ctx.clone(),
@@ -41,7 +34,7 @@ impl PipelineBuilder {
             row_fetch.cols_to_fetch.clone(),
             row_fetch.need_wrap_nullable,
         )?;
-        if !matches!(&*row_fetch.input, PhysicalPlan::MergeIntoSplit(_)) {
+        if !matches!(&*row_fetch.input, PhysicalPlan::MutationSplit(_)) {
             self.main_pipeline.add_transform(processor)?;
         } else {
             let output_len = self.main_pipeline.output_len();

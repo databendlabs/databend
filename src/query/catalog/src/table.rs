@@ -36,16 +36,20 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::plan::ReclusterParts;
 use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
@@ -152,8 +156,9 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_key: String,
+        cluster_type: String,
     ) -> Result<()> {
-        let (_, _) = (ctx, cluster_key);
+        let (_, _, _) = (ctx, cluster_key, cluster_type);
 
         Err(ErrorCode::UnsupportedEngineParams(format!(
             "Altering table cluster keys is not supported for the '{}' engine.",
@@ -210,13 +215,8 @@ pub trait Table: Sync + Send {
     }
 
     /// Assembly the pipeline of appending data to storage
-    fn append_data(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        append_mode: AppendMode,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, append_mode);
+    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let (_, _) = (ctx, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'append_data' operation is not available for the table '{}'. Current table engine: '{}'.",
@@ -276,9 +276,10 @@ pub trait Table: Sync + Send {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let (_, _) = (ctx, change_type);
+        let (_, _, _) = (ctx, require_fresh, change_type);
 
         Ok(None)
     }
@@ -291,6 +292,18 @@ pub trait Table: Sync + Send {
         let _ = ctx;
 
         Ok(Box::new(DummyColumnStatisticsProvider))
+    }
+
+    /// - Returns `Some(_)`
+    ///    if table has accurate columns ranges information,
+    /// - Otherwise returns `None`.
+    #[async_backtrace::framed]
+    async fn accurate_columns_ranges(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _column_ids: &[ColumnId],
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
+        Ok(None)
     }
 
     #[async_backtrace::framed]
@@ -309,14 +322,14 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
+        with_options: &str,
     ) -> Result<String> {
-        let (_, _, _, _) = (ctx, database_name, table_name, consume);
+        let (_, _, _, _) = (ctx, database_name, table_name, with_options);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -370,9 +383,8 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<u64> {
-        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
+    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
+        let (_, _, _) = (ctx, push_downs, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'recluster' operation is not supported for the table '{}'. Table engine: '{}'.",
@@ -409,6 +421,24 @@ pub trait Table: Sync + Send {
     }
 
     fn is_read_only(&self) -> bool {
+        false
+    }
+
+    fn is_temp(&self) -> bool {
+        let is_temp = self
+            .get_table_info()
+            .options()
+            .contains_key(OPT_KEY_TEMP_PREFIX);
+        let is_id_temp = is_temp_table_id(self.get_id());
+        assert_eq!(is_temp, is_id_temp);
+        is_temp
+    }
+
+    fn is_stream(&self) -> bool {
+        self.engine() == "STREAM"
+    }
+
+    fn use_own_sample_block(&self) -> bool {
         false
     }
 }
@@ -504,13 +534,6 @@ pub enum CompactTarget {
     Segments,
 }
 
-pub enum AppendMode {
-    // From INSERT and RECUSTER operation
-    Normal,
-    // From COPY, Streaming load operation
-    Copy,
-}
-
 pub trait ColumnStatisticsProvider: Send {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
@@ -518,6 +541,11 @@ pub trait ColumnStatisticsProvider: Send {
 
     // returns the num rows of the table, if any.
     fn num_rows(&self) -> Option<u64>;
+
+    // return histogram if any
+    fn histogram(&self, _column_id: ColumnId) -> Option<Histogram> {
+        None
+    }
 }
 
 pub struct DummyColumnStatisticsProvider;
@@ -570,7 +598,7 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CompactionLimits {
     pub segment_limit: Option<usize>,
     pub block_limit: Option<usize>,
@@ -600,4 +628,16 @@ impl CompactionLimits {
             block_limit: v,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Bound {
+    pub value: Scalar,
+    pub may_be_truncated: bool,
+}
+
+#[derive(Debug)]
+pub struct ColumnRange {
+    pub min: Bound,
+    pub max: Bound,
 }

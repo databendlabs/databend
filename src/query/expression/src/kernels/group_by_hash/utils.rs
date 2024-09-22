@@ -24,10 +24,11 @@ use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::InputColumns;
 
 /// The serialize_size is equal to the number of bytes required by serialization.
 pub fn serialize_group_columns(
-    columns: &[Column],
+    columns: InputColumns,
     num_rows: usize,
     serialize_size: usize,
 ) -> BinaryColumn {
@@ -78,6 +79,13 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
         Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             let value = unsafe { v.index_unchecked(row) };
+            let len = value.len();
+            store_advance::<u64>(&(len as u64), row_space);
+            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
+        }
+        Column::Geography(v) => {
+            let value = unsafe { v.index_unchecked(row) };
+            let value = borsh::to_vec(&value.0).unwrap();
             let len = value.len();
             store_advance::<u64>(&(len as u64), row_space);
             copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);

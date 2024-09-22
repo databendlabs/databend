@@ -24,6 +24,9 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use serde::de::Error;
+
+use crate::meta::v0;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -58,7 +61,10 @@ pub struct ClusterStatistics {
     pub max: Vec<Scalar>,
     pub level: i32,
 
-    // currently it's only used in native engine
+    #[serde(
+        serialize_with = "serialize_index_scalar_option_vec",
+        deserialize_with = "deserialize_index_scalar_option_vec"
+    )]
     pub pages: Option<Vec<Scalar>>,
 }
 
@@ -206,16 +212,22 @@ impl ClusterStatistics {
 }
 
 impl Statistics {
-    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
-        let col_stats = v0
-            .col_stats
-            .into_iter()
-            .filter_map(|(k, v)| {
-                let t = fields[k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(&v, t);
-                stats.map(|s| (k, s))
+    pub(crate) fn convert_column_stats(
+        v0: &HashMap<ColumnId, v0::statistics::ColumnStatistics>,
+        fields: &[TableField],
+    ) -> HashMap<ColumnId, ColumnStatistics> {
+        fields
+            .iter()
+            .filter_map(|f| {
+                v0.get(&f.column_id).and_then(|v| {
+                    ColumnStatistics::from_v0(v, f.data_type()).map(|v2| (f.column_id, v2))
+                })
             })
-            .collect();
+            .collect()
+    }
+
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
+        let col_stats = Self::convert_column_stats(&v0.col_stats, fields);
         Self {
             row_count: v0.row_count,
             block_count: v0.block_count,
@@ -241,8 +253,9 @@ fn serialize_index_scalar<S>(scalar: &Scalar, serializer: S) -> Result<S::Ok, S:
 where S: serde::Serializer {
     match IndexScalar::try_from(scalar.clone()) {
         Ok(index_scalar) => serde::Serialize::serialize(&index_scalar, serializer),
-        Err(_) => Err(serde::ser::Error::custom(format!(
-            "Failed to convert {scalar} to IndexScalar"
+        Err(e) => Err(serde::ser::Error::custom(format!(
+            "Failed to convert scalar to IndexScalar: {:?}",
+            e
         ))),
     }
 }
@@ -254,7 +267,8 @@ where S: serde::Serializer {
 fn deserialize_index_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
 where D: serde::Deserializer<'de> {
     let index_scalar = <IndexScalar as serde::Deserialize>::deserialize(deserializer)?;
-    Ok(Scalar::from(index_scalar))
+    Scalar::try_from(index_scalar)
+        .map_err(|e| D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e)))
 }
 
 /// Serializes a vector of `Scalar` values by first converting each to `IndexScalar`.
@@ -267,17 +281,17 @@ where D: serde::Deserializer<'de> {
 /// `IndexScalar`.
 fn serialize_index_scalar_vec<S>(scalars: &[Scalar], serializer: S) -> Result<S::Ok, S::Error>
 where S: serde::Serializer {
-    let mut index_scalars = Vec::with_capacity(scalars.len());
-    for scalar in scalars {
-        match IndexScalar::try_from(scalar.clone()) {
-            Ok(index_scalar) => index_scalars.push(index_scalar),
-            Err(_) => {
-                return Err(serde::ser::Error::custom(format!(
-                    "Failed to convert {scalar} to IndexScalar"
-                )));
-            }
-        }
-    }
+    let index_scalars = scalars
+        .iter()
+        .map(|scalar| {
+            IndexScalar::try_from(scalar.clone()).map_err(|e| {
+                serde::ser::Error::custom(format!(
+                    "Failed to convert Scalar to IndexScalar: {:?}",
+                    e
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     serde::Serialize::serialize(&index_scalars, serializer)
 }
 
@@ -291,9 +305,46 @@ where D: serde::Deserializer<'de> {
         <Vec<IndexScalar> as serde::Deserialize>::deserialize(deserializer)?;
     index_scalars
         .into_iter()
-        .map(Scalar::try_from)
+        .map(|index_scalar| {
+            Scalar::try_from(index_scalar).map_err(|e| {
+                D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e))
+            })
+        })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(serde::de::Error::custom)
+}
+
+fn serialize_index_scalar_option_vec<S>(
+    scalars: &Option<Vec<Scalar>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match scalars {
+        Some(scalars) => serialize_index_scalar_vec(scalars, serializer),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_index_scalar_option_vec<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<Scalar>>, D::Error>
+where D: serde::Deserializer<'de> {
+    <Option<Vec<IndexScalar>> as serde::Deserialize>::deserialize(deserializer)?
+        .map(|index_scalars| {
+            index_scalars
+                .into_iter()
+                .map(|index_scalar| {
+                    Scalar::try_from(index_scalar).map_err(|e| {
+                        D::Error::custom(format!(
+                            "Failed to convert IndexScalar to Scalar: {:?}",
+                            e
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()
 }
 
 /// Deserializes the `col_stats` field of the `BlockMeta` and `Statistics` struct.
