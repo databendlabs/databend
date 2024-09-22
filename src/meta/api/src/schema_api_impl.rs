@@ -90,7 +90,6 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseInfo;
-use databend_common_meta_app::schema::DatabaseInfoFilter;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
@@ -636,9 +635,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_database_history(
+    async fn get_tenant_history_databases(
         &self,
         req: ListDatabaseReq,
+        include_non_retainable: bool,
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
@@ -693,10 +693,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         let now = Utc::now();
-
-        // Returns not only retainable subjects, also non-retainable subjects.
-        let include_non_retainable =
-            matches!(&req.filter, Some(DatabaseInfoFilter::IncludeNonRetainable));
 
         let dbs = dbs
             .into_values()
@@ -2702,11 +2698,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         if let TableInfoFilter::DroppedTableOrDroppedDatabase(retention_boundary) = &req.filter {
             let db_infos = self
-                .get_database_history(ListDatabaseReq {
-                    tenant: req.inner.tenant().clone(),
-                    // need to get all db(include drop db)
-                    filter: Some(DatabaseInfoFilter::IncludeNonRetainable),
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: req.inner.tenant().clone(),
+                    },
+                    true,
+                )
                 .await?;
 
             let mut vacuum_table_infos = vec![];
