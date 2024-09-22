@@ -34,7 +34,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
@@ -173,11 +173,10 @@ impl ToReadDataSourcePlan for dyn Table {
             let tenant = ctx.get_tenant();
 
             if let Some(column_mask_policy) = &table_meta.column_mask_policy {
-                let license_manager = get_license_manager();
-                let ret = license_manager
-                    .manager
-                    .check_enterprise_enabled(ctx.get_license_key(), DataMask);
-                if ret.is_err() {
+                if LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(ctx.get_license_key(), DataMask)
+                    .is_err()
+                {
                     None
                 } else {
                     let mut mask_policy_map = BTreeMap::new();

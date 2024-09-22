@@ -37,7 +37,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::AggregateIndex;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
@@ -149,9 +149,8 @@ impl Binder {
                 && table.support_index()
                 && !matches!(table.engine(), "VIEW" | "STREAM")
             {
-                let license_manager = get_license_manager();
-                if license_manager
-                    .manager
+                #[allow(clippy::collapsible_if)]
+                if LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), AggregateIndex)
                     .is_ok()
                 {
