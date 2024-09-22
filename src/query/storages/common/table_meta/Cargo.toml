@@ -10,6 +10,7 @@ edition = { workspace = true }
 dev = ["snap"]
 
 [dependencies]
+arrow = { workspace = true }
 bincode = "1.3.3"
 chrono = { workspace = true }
 databend-common-arrow = { workspace = true }

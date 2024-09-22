@@ -39,6 +39,7 @@ use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
@@ -177,23 +178,55 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
     );
 
     let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
+    for _ in 0..cache_number {
+        let uuid = Uuid::new_v4();
+        let block_metas = segment_info
+            .blocks
+            .iter()
+            .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
+            .collect::<Vec<_>>();
+        let statistics = segment_info.summary.clone();
+        let segment_info = SegmentInfo::new(block_metas, statistics);
+        cache.insert(format!("{}", uuid.simple()), segment_info);
+    }
+    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number); 
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn test_columnar_segment_info_size() -> databend_common_exception::Result<()> {
+    let cache_number = 3000;
+    let num_block_per_seg = 1000;
+
+    let segment_info = build_test_segment_info(num_block_per_seg)?;
+
+    let sys = System::new_all();
+    let pid = get_current_pid().unwrap();
+    let process = sys.process(pid).unwrap();
+    let base_memory_usage = process.memory();
+    let scenario = format!(
+        "{} SegmentInfo, {} block per seg ",
+        cache_number, num_block_per_seg
+    );
+
+    eprintln!(
+        "scenario {}, pid {}, base memory {}",
+        scenario, pid, base_memory_usage
+    );
+
+    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
     {
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
-            let block_metas = segment_info
-                .blocks
-                .iter()
-                .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
-                .collect::<Vec<_>>();
-            let statistics = segment_info.summary.clone();
-            let segment_info = SegmentInfo::new(block_metas, statistics);
             cache.insert(
                 format!("{}", uuid.simple()),
-                CompactSegmentInfo::try_from(segment_info)?,
+                ColumnarSegmentInfo::try_from(segment_info.clone())?,
             );
         }
     }
-    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
+    show_memory_usage("ColumnarSegmentInfoCache", base_memory_usage, cache_number);
 
     Ok(())
 }

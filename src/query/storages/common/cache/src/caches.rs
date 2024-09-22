@@ -23,6 +23,7 @@ use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -173,6 +174,24 @@ impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
         CacheValue {
             mem_bytes: std::mem::size_of::<CompactSegmentInfo>()
                 + value.raw_block_metas.bytes.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<SegmentInfo> for CacheValue<SegmentInfo> {
+    fn from(value: SegmentInfo) -> Self {
+        CacheValue {
+            mem_bytes: 0, // TODO
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<ColumnarSegmentInfo> for CacheValue<ColumnarSegmentInfo> {
+    fn from(value: ColumnarSegmentInfo) -> Self {
+        CacheValue {
+            mem_bytes: 0, // TODO
             inner: Arc::new(value),
         }
     }

@@ -16,6 +16,18 @@ use std::io::Cursor;
 use std::io::Read;
 use std::sync::Arc;
 
+use arrow::array::Array;
+use arrow::array::RecordBatch;
+use arrow::array::StringArray;
+use arrow::array::StructArray;
+use arrow::array::TimestampNanosecondArray;
+use arrow::array::UInt64Array;
+use arrow::array::UInt8Array;
+use arrow::datatypes::DataType;
+use arrow::datatypes::Field;
+use arrow::datatypes::Schema;
+use arrow::datatypes::TimeUnit;
+use databend_common_arrow::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use serde::Deserialize;
@@ -38,7 +50,7 @@ use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct SegmentInfo {
     /// format version of SegmentInfo table meta data
     ///
@@ -306,4 +318,82 @@ impl TryFrom<SegmentInfo> for CompactSegmentInfo {
             raw_block_metas: bytes,
         })
     }
+}
+
+pub struct ColumnarSegmentInfo {
+    pub format_version: FormatVersion,
+    pub summary: Statistics,
+    pub blocks: RecordBatch,
+}
+
+impl TryFrom<SegmentInfo> for ColumnarSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: SegmentInfo) -> std::result::Result<Self, Self::Error> {
+        let record_batch = block_metas_to_columnar(&value.blocks)?;
+        Ok(Self {
+            format_version: value.format_version,
+            summary: value.summary,
+            blocks: record_batch,
+        })
+    }
+}
+
+fn block_metas_to_columnar(blocks: &[Arc<BlockMeta>]) -> Result<RecordBatch> {
+    let mut row_counts = Vec::with_capacity(blocks.len());
+    let mut block_sizes = Vec::with_capacity(blocks.len());
+    let mut file_sizes = Vec::with_capacity(blocks.len());
+    let mut locations = Vec::with_capacity(blocks.len());
+    let mut bloom_filter_index_locations = Vec::with_capacity(blocks.len());
+    let mut bloom_filter_index_sizes = Vec::with_capacity(blocks.len());
+    let mut inverted_index_sizes = Vec::with_capacity(blocks.len());
+    let mut compressions = Vec::with_capacity(blocks.len());
+    let mut create_ons = Vec::with_capacity(blocks.len());
+
+    for block in blocks {
+        row_counts.push(block.row_count);
+        block_sizes.push(block.block_size);
+        file_sizes.push(block.file_size);
+        locations.push(format!("{}{}", block.location.0, block.location.1));
+        bloom_filter_index_locations.push(
+            block
+                .bloom_filter_index_location
+                .as_ref()
+                .map(|l| format!("{}{}", l.0, l.1)),
+        );
+        bloom_filter_index_sizes.push(block.bloom_filter_index_size);
+        inverted_index_sizes.push(block.inverted_index_size);
+        compressions.push(block.compression as u8);
+        create_ons.push(block.create_on.map(|t| t.timestamp_nanos_opt().unwrap()));
+    }
+
+    let schema = Schema::new(vec![
+        Field::new("row_count", DataType::UInt64, false),
+        Field::new("block_size", DataType::UInt64, false),
+        Field::new("file_size", DataType::UInt64, false),
+        Field::new("location", DataType::Utf8, false),
+        Field::new("bloom_filter_index_location", DataType::Utf8, true),
+        Field::new("bloom_filter_index_size", DataType::UInt64, false),
+        Field::new("inverted_index_size", DataType::UInt64, true),
+        Field::new("compression", DataType::UInt8, false),
+        Field::new(
+            "create_on",
+            DataType::Timestamp(TimeUnit::Nanosecond, None),
+            true,
+        ),
+    ]);
+
+    let columns: Vec<Arc<dyn Array>> = vec![
+        Arc::new(UInt64Array::from(row_counts)),
+        Arc::new(UInt64Array::from(block_sizes)),
+        Arc::new(UInt64Array::from(file_sizes)),
+        Arc::new(StringArray::from(locations)),
+        Arc::new(StringArray::from(bloom_filter_index_locations)),
+        Arc::new(UInt64Array::from(bloom_filter_index_sizes)),
+        Arc::new(UInt64Array::from(inverted_index_sizes)),
+        Arc::new(UInt8Array::from(compressions)),
+        Arc::new(TimestampNanosecondArray::from(create_ons)),
+    ];
+    let record_batch = RecordBatch::try_new(Arc::new(schema), columns)?;
+    Ok(record_batch)
 }
