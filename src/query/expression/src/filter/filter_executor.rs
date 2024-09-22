@@ -22,8 +22,10 @@ use crate::filter::SelectExpr;
 use crate::filter::Selector;
 use crate::DataBlock;
 use crate::Evaluator;
+use crate::Expr;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
+use crate::SelectExprBuilder;
 
 // FilterExecutor is used to filter `DataBlock` by `SelectExpr`.
 pub struct FilterExecutor {
@@ -41,14 +43,15 @@ pub struct FilterExecutor {
 
 impl FilterExecutor {
     pub fn new(
-        select_expr: SelectExpr,
+        expr: Expr,
         func_ctx: FunctionContext,
-        has_or: bool,
         max_block_size: usize,
         projections: Option<HashSet<usize>>,
         fn_registry: &'static FunctionRegistry,
         keep_order: bool,
     ) -> Self {
+        let (select_expr, has_or) = SelectExprBuilder::new().build(&expr).into();
+
         let true_selection = vec![0; max_block_size];
         let false_selection = if has_or {
             vec![0; max_block_size]

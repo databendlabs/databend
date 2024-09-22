@@ -119,11 +119,9 @@ impl ProbeState {
             JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
         ) && let Some(predicate) = other_predicate
         {
-            let (select_expr, has_or) = SelectExprBuilder::new().build(&predicate).into();
             let filter_executor = FilterExecutor::new(
-                select_expr,
+                predicate,
                 func_ctx.clone(),
-                has_or,
                 max_block_size,
                 None,
                 &BUILTIN_FUNCTIONS,
