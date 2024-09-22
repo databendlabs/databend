@@ -173,9 +173,10 @@ impl ToReadDataSourcePlan for dyn Table {
             let tenant = ctx.get_tenant();
 
             if let Some(column_mask_policy) = &table_meta.column_mask_policy {
-                let ret = LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(ctx.get_license_key(), DataMask);
-                if ret.is_err() {
+                if LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(ctx.get_license_key(), DataMask)
+                    .is_err()
+                {
                     None
                 } else {
                     let mut mask_policy_map = BTreeMap::new();
