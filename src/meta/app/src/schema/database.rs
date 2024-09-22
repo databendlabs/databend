@@ -313,10 +313,10 @@ impl GetDatabaseReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DatabaseInfoFilter {
-    // include all dropped databases
-    IncludeDropped,
+    /// Include all databases, even those that are before retention boundary time.
+    IncludeNonRetainable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
