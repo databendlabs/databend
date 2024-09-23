@@ -188,6 +188,25 @@ pub trait KVPbApi: KVApi {
         }
     }
 
+    /// Same as [`get_pb_values`](Self::get_pb_values) but collect the result in a `Vec` instead of a stream.
+    fn get_pb_values_vec<K, I>(
+        &self,
+        keys: I,
+    ) -> impl Future<Output = Result<Vec<Option<SeqV<K::ValueType>>>, Self::Error>> + Send
+    where
+        K: kvapi::Key + 'static,
+        K::ValueType: FromToProto + Send + 'static,
+        I: IntoIterator<Item = K> + Send,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        async move {
+            self.get_pb_values(keys)
+                .await?
+                .try_collect::<Vec<_>>()
+                .await
+        }
+    }
+
     /// Same as `get_pb_stream` but does not return keys, only values.
     ///
     /// It guaranteed to return the same number of results as the input keys.
@@ -334,6 +353,26 @@ pub trait KVPbApi: KVApi {
                 });
 
             Ok(strm.boxed())
+        }
+    }
+
+    /// Same as [`list_pb`](Self::list_pb)` but collect the result in a `Vec` instead of a stream.
+    fn list_pb_vec<K>(
+        &self,
+        prefix: &DirName<K>,
+    ) -> impl Future<Output = Result<Vec<(K, SeqV<K::ValueType>)>, Self::Error>> + Send
+    where
+        K: kvapi::Key + Send + Sync + 'static,
+        K::ValueType: FromToProto + Send,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        async move {
+            let strm = self.list_pb(prefix).await?;
+            let kvs = strm
+                .map_ok(|itm| (itm.key, itm.seqv))
+                .try_collect::<Vec<_>>()
+                .await?;
+            Ok(kvs)
         }
     }
 

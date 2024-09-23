@@ -190,11 +190,14 @@ impl ScalarExpr {
                     .into_option()?;
                 Some(Range { start, end })
             }),
+            ScalarExpr::WindowFunction(expr) => expr.span,
+            ScalarExpr::AggregateFunction(expr) => expr.span,
+            ScalarExpr::LambdaFunction(expr) => expr.span,
             ScalarExpr::CastExpr(expr) => expr.span.or(expr.argument.span()),
             ScalarExpr::SubqueryExpr(expr) => expr.span,
             ScalarExpr::UDFCall(expr) => expr.span,
             ScalarExpr::UDFLambdaCall(expr) => expr.span,
-            _ => None,
+            ScalarExpr::AsyncFunctionCall(expr) => expr.span,
         }
     }
 
@@ -222,6 +225,10 @@ impl ScalarExpr {
                 Ok(())
             }
             fn visit_udf_lambda_call(&mut self, _: &'a UDFLambdaCall) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
+            }
+            fn visit_async_function_call(&mut self, _: &'a AsyncFunctionCall) -> Result<()> {
                 self.evaluable = false;
                 Ok(())
             }
@@ -595,8 +602,11 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct AggregateFunction {
+    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    pub span: Span,
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<Scalar>,

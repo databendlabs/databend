@@ -141,6 +141,8 @@ use log::info;
 
 use crate::deserialize_struct;
 use crate::kv_app_error::KVAppError;
+use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::UpsertPB;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
@@ -288,6 +290,7 @@ impl SchemaApiTestSuite {
         suite.database_list(&b.build().await).await?;
         suite.database_list_in_diff_tenant(&b.build().await).await?;
         suite.database_rename(&b.build().await).await?;
+        suite.get_tenant_history_database(&b.build().await).await?;
         suite
             .database_drop_undrop_list_history(&b.build().await)
             .await?;
@@ -920,7 +923,6 @@ impl SchemaApiTestSuite {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
                     tenant: tenant.clone(),
-                    filter: None,
                 })
                 .await?;
 
@@ -965,7 +967,6 @@ impl SchemaApiTestSuite {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
                     tenant: tenant1.clone(),
-                    filter: None,
                 })
                 .await?;
             let got = dbs.iter().map(|x| x.database_id.db_id).collect::<Vec<_>>();
@@ -977,7 +978,6 @@ impl SchemaApiTestSuite {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
                     tenant: tenant2.clone(),
-                    filter: None,
                 })
                 .await?;
             let want: Vec<u64> = vec![*db_id_3];
@@ -1089,6 +1089,63 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
+    async fn get_tenant_history_database<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant_get_tenant_history_database";
+        let db_name_1 = "db1_get_tenant_history_database";
+        let db_name_2 = "db2_get_tenant_history_database";
+
+        let mut util1 = Util::new(mt, tenant_name, db_name_1, "", "eng");
+        let mut util2 = Util::new(mt, tenant_name, db_name_2, "", "eng");
+
+        info!("--- create dropped db1 and db2; db2 is non-retainable");
+        {
+            util1.create_db().await?;
+            util1.drop_db().await?;
+
+            util2.create_db().await?;
+            util2.drop_db().await?;
+
+            info!("--- update db2's drop_on");
+            {
+                let dbid2 = util2.db_id;
+                let db2 = mt.as_kv_api().get_pb(&DatabaseId { db_id: dbid2 }).await?;
+                let mut db2 = db2.unwrap().data;
+                db2.drop_on = Some(Utc::now() - Duration::days(1000));
+
+                mt.as_kv_api()
+                    .upsert_pb(&UpsertPB::update(DatabaseId { db_id: dbid2 }, db2))
+                    .await?;
+            }
+        }
+        let res = mt
+            .get_tenant_history_databases(
+                ListDatabaseReq {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                },
+                false,
+            )
+            .await?;
+
+        assert_eq!(1, res.len());
+
+        let res = mt
+            .get_tenant_history_databases(
+                ListDatabaseReq {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                },
+                true,
+            )
+            .await?;
+
+        assert_eq!(2, res.len());
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
     async fn database_drop_undrop_list_history<MT: SchemaApi>(
         &self,
         mt: &MT,
@@ -1119,10 +1176,12 @@ impl SchemaApiTestSuite {
             assert_eq!(1, *res.db_id, "first database id is 1");
 
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
@@ -1138,10 +1197,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
@@ -1156,10 +1217,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
@@ -1178,10 +1241,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
@@ -1203,10 +1268,12 @@ impl SchemaApiTestSuite {
             let _res = mt.create_database(req).await?;
 
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
                 name: db_name_ident.to_string_key(),
@@ -1231,10 +1298,12 @@ impl SchemaApiTestSuite {
             let _res = mt.create_database(req).await?;
 
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
@@ -1258,10 +1327,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
@@ -1286,10 +1357,12 @@ impl SchemaApiTestSuite {
             })
             .await?;
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
@@ -2098,7 +2171,7 @@ impl SchemaApiTestSuite {
             let db_id_list: DbIdList = deserialize_struct(&seqv.data)?;
             assert_eq!(db_id_list.id_list[0], util.db_id);
         }
-        // test get_database_history can return db without db_id_list
+        // test get_tenant_history_databases can return db without db_id_list
         {
             let tenant2_name = "tenant2";
             let tenant2 = Tenant::new_literal(tenant2_name);
@@ -2116,13 +2189,15 @@ impl SchemaApiTestSuite {
                 .await?;
 
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant2_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant2_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
 
-            // check if get_database_history return db_id
+            // check if get_tenant_history_databases return db_id
             let mut found = false;
             for db_info in res {
                 if db_info.database_id.db_id == util.db_id {
@@ -3276,10 +3351,12 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
 
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
 
             // assert not return out of retention time data
@@ -3295,10 +3372,12 @@ impl SchemaApiTestSuite {
             upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
             let res = mt
-                .get_database_history(ListDatabaseReq {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
-                })
+                .get_tenant_history_databases(
+                    ListDatabaseReq {
+                        tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    },
+                    false,
+                )
                 .await?;
 
             // assert not return out of retention time data
@@ -6961,7 +7040,6 @@ impl SchemaApiTestSuite {
             let res = node_b
                 .list_databases(ListDatabaseReq {
                     tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    filter: None,
                 })
                 .await;
             debug!("get database list: {:?}", res);

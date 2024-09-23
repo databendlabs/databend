@@ -330,6 +330,7 @@ impl<'a> WindowRewriter<'a> {
                     replaced_args.push(replaced_arg.into());
                 }
                 WindowFuncType::Aggregate(AggregateFunction {
+                    span: agg.span,
                     display_name: agg.display_name.clone(),
                     func_name: agg.func_name.clone(),
                     distinct: agg.distinct,
