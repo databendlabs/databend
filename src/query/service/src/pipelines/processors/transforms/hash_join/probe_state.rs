@@ -14,7 +14,6 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::filter::FilterExecutor;
-use databend_common_expression::filter::SelectExprBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;

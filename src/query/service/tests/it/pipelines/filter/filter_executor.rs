@@ -22,7 +22,6 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::SelectExprBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 use rand::Rng;

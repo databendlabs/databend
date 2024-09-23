@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use crate::filter::like::generate_like_pattern;
-use crate::filter::like::LikePattern;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
 use crate::types::DataType;
@@ -36,7 +34,7 @@ pub enum SelectExpr {
     // Compare operations: ((Equal | NotEqual | Gt | Lt | Gte | Lte), args, data type of args).
     Compare((SelectOp, Vec<Expr>, Vec<DataType>)),
     // Like operation: (column ref, like pattern, like str, is not like).
-    Like((Expr, LikePattern, String, bool)),
+    Like((Expr, String, bool)),
     // Other operations: for example, like, is_null, is_not_null, etc.
     Others(Expr),
     // Boolean column: (column id, data type of column).
@@ -169,11 +167,10 @@ impl SelectExprBuilder {
                             if matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String))
                                 && let Scalar::String(like_str) = scalar
                             {
-                                let like_pattern = generate_like_pattern(like_str.as_bytes());
+                                let like_str = like_str.clone();
                                 SelectExprBuildResult::new(SelectExpr::Like((
                                     column.clone(),
-                                    like_pattern,
-                                    like_str.clone(),
+                                    like_str,
                                     not,
                                 )))
                                 .can_reorder(can_reorder)

@@ -57,6 +57,7 @@ regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
+multiversion = "0.7.4"
 sha1 = "0.10.5"
 sha2 = { workspace = true }
 simdutf8 = "0.1.4"

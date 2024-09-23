@@ -12,51 +12,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use memchr::arch::all::rabinkarp;
 use memchr::memchr;
-use memchr::memmem;
+use memchr::memmem::Finder;
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub enum LikePattern {
+#[derive(Debug, Clone)]
+pub enum LikePattern<'a> {
     // e.g. 'Arrow'.
-    OrdinalStr,
+    OrdinalStr(&'a [u8]),
     // e.g. '%rrow'.
-    StartOfPercent,
+    StartOfPercent(&'a [u8]),
     // e.g. 'Arrow%'.
-    EndOfPercent,
+    EndOfPercent(&'a [u8]),
     // e.g. '%Arrow%'.
-    SurroundByPercent,
+    SurroundByPercentLong(Finder<'a>, &'a [u8]),
+    // for haystack.len() < 64
+    SurroundByPercent(rabinkarp::Finder, &'a [u8]),
     // e.g. 'A%row', 'A_row', 'A\\%row'.
-    ComplexPattern,
+    ComplexPattern(&'a [u8]),
     // Only includes %, e.g. 'A%r%w'.
     // SimplePattern is composed of: (has_start_percent, has_end_percent, segments).
     SimplePattern((bool, bool, Vec<Vec<u8>>)),
+    Constant(bool),
 }
 
-impl LikePattern {
-    #[inline(always)]
-    pub fn ordinal_str(str: &[u8], pat: &[u8]) -> bool {
-        str == pat
+impl<'a> PartialEq for LikePattern<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (LikePattern::OrdinalStr(a), LikePattern::OrdinalStr(b)) => a == b,
+            (LikePattern::StartOfPercent(a), LikePattern::StartOfPercent(b)) => a == b,
+            (LikePattern::EndOfPercent(a), LikePattern::EndOfPercent(b)) => a == b,
+            (
+                LikePattern::SurroundByPercentLong(_, a),
+                LikePattern::SurroundByPercentLong(_, b),
+            ) => a == b,
+            (LikePattern::SurroundByPercent(_, a), LikePattern::SurroundByPercent(_, b)) => a == b,
+            (LikePattern::ComplexPattern(a), LikePattern::ComplexPattern(b)) => a == b,
+            (LikePattern::SimplePattern((a, b, c)), LikePattern::SimplePattern((d, e, f))) => {
+                a == d && b == e && c == f
+            }
+            (LikePattern::Constant(a), LikePattern::Constant(b)) => a == b,
+            _ => false,
+        }
     }
+}
 
-    #[inline(always)]
-    pub fn end_of_percent(str: &[u8], pat: &[u8]) -> bool {
-        // fast path, can use starts_with
-        str.starts_with(&pat[..pat.len() - 1])
-    }
-
-    #[inline(always)]
-    pub fn start_of_percent(str: &[u8], pat: &[u8]) -> bool {
-        // fast path, can use ends_with
-        str.ends_with(&pat[1..])
-    }
-
-    #[inline(always)]
-    pub fn surround_by_percent(str: &[u8], pat: &[u8]) -> bool {
-        if pat.len() > 2 {
-            memmem::find(str, &pat[1..pat.len() - 1]).is_some()
-        } else {
-            // true for empty '%%' pattern, which follows pg/mysql way
-            true
+impl<'a> LikePattern<'a> {
+    pub fn compare(&self, haystack: &[u8]) -> bool {
+        match self {
+            LikePattern::OrdinalStr(s) => haystack == *s,
+            LikePattern::StartOfPercent(s) => haystack.starts_with(*s),
+            LikePattern::EndOfPercent(s) => haystack.ends_with(*s),
+            LikePattern::SurroundByPercentLong(s, _) => s.find(haystack).is_some(),
+            LikePattern::SurroundByPercent(s, ref needle) => s.find(haystack, needle).is_some(),
+            LikePattern::ComplexPattern(s) => Self::complex_pattern(haystack, *s),
+            LikePattern::SimplePattern((has_start_percent, has_end_percent, segments)) => {
+                Self::simple_pattern(haystack, *has_start_percent, *has_end_percent, segments)
+            }
+            LikePattern::Constant(b) => *b,
         }
     }
 
@@ -183,10 +196,10 @@ pub fn is_like_pattern_escape(c: char) -> bool {
 /// 'a\\%row'
 /// '\\%' will be escaped to a percent. Need transform to `a%row`.
 #[inline]
-pub fn generate_like_pattern(pattern: &[u8]) -> LikePattern {
+pub fn generate_like_pattern<'a>(pattern: &'a [u8]) -> LikePattern<'a> {
     let len = pattern.len();
     if len == 0 {
-        return LikePattern::OrdinalStr;
+        return LikePattern::Constant(true);
     }
 
     let mut index = 0;
@@ -204,7 +217,7 @@ pub fn generate_like_pattern(pattern: &[u8]) -> LikePattern {
 
     while index < len {
         match pattern[index] {
-            b'_' => return LikePattern::ComplexPattern,
+            b'_' => return LikePattern::ComplexPattern(pattern),
             b'%' => {
                 percent_num += 1;
                 if index > first_non_percent {
@@ -220,7 +233,7 @@ pub fn generate_like_pattern(pattern: &[u8]) -> LikePattern {
                 if index < len - 1 {
                     index += 1;
                     if is_like_pattern_escape(pattern[index] as char) {
-                        return LikePattern::ComplexPattern;
+                        return LikePattern::ComplexPattern(pattern);
                     }
                 }
             }
@@ -230,10 +243,21 @@ pub fn generate_like_pattern(pattern: &[u8]) -> LikePattern {
     }
 
     match percent_num {
-        0 => LikePattern::OrdinalStr,
-        1 if has_start_percent => LikePattern::StartOfPercent,
-        1 if has_end_percent => LikePattern::EndOfPercent,
-        2 if has_start_percent && has_end_percent => LikePattern::SurroundByPercent,
+        0 => LikePattern::OrdinalStr(pattern),
+        1 if has_start_percent => LikePattern::StartOfPercent(&pattern[1..]),
+        1 if has_end_percent => LikePattern::EndOfPercent(&pattern[..pattern.len() - 1]),
+        2 if has_start_percent && has_end_percent => {
+            let needle = &pattern[1..len - 1];
+            if needle.is_empty() {
+                LikePattern::Constant(true)
+            } else if needle.len() >= 64 {
+                let finder = Finder::new(needle);
+                LikePattern::SurroundByPercentLong(finder, needle)
+            } else {
+                let finder = rabinkarp::Finder::new(needle);
+                LikePattern::SurroundByPercent(finder, needle)
+            }
+        }
         _ => {
             if simple_pattern {
                 if first_non_percent < len {
@@ -241,7 +265,7 @@ pub fn generate_like_pattern(pattern: &[u8]) -> LikePattern {
                 }
                 LikePattern::SimplePattern((has_start_percent, has_end_percent, segments))
             } else {
-                LikePattern::ComplexPattern
+                LikePattern::ComplexPattern(pattern)
             }
         }
     }
@@ -314,10 +338,22 @@ fn test_generate_like_pattern() {
         "warehouse".as_bytes().to_vec(),
     ];
     let test_cases = vec![
-        ("databend", LikePattern::OrdinalStr),
-        ("%databend", LikePattern::StartOfPercent),
-        ("databend%", LikePattern::EndOfPercent),
-        ("%databend%", LikePattern::SurroundByPercent),
+        ("databend", LikePattern::OrdinalStr("databend".as_bytes())),
+        (
+            "%databend",
+            LikePattern::StartOfPercent("databend".as_bytes()),
+        ),
+        (
+            "databend%",
+            LikePattern::EndOfPercent("databend".as_bytes()),
+        ),
+        (
+            "%databend%",
+            LikePattern::SurroundByPercent(
+                rabinkarp::Finder::new("databend".as_bytes()),
+                "databend".as_bytes(),
+            ),
+        ),
         (
             "databend%cloud%data%warehouse",
             LikePattern::SimplePattern((false, false, segments.clone())),
@@ -334,12 +370,18 @@ fn test_generate_like_pattern() {
             "%databend%cloud%data%warehouse%",
             LikePattern::SimplePattern((true, true, segments)),
         ),
-        ("databend_cloud%data%warehouse", LikePattern::ComplexPattern),
+        (
+            "databend_cloud%data%warehouse",
+            LikePattern::ComplexPattern("databend_cloud%data%warehouse".as_bytes()),
+        ),
         (
             "databend\\%cloud%data%warehouse",
-            LikePattern::ComplexPattern,
+            LikePattern::ComplexPattern("databend\\%cloud%data%warehouse".as_bytes()),
         ),
-        ("databend%cloud_data%warehouse", LikePattern::ComplexPattern),
+        (
+            "databend%cloud_data%warehouse",
+            LikePattern::ComplexPattern("databend%cloud_data%warehouse".as_bytes()),
+        ),
     ];
     for (pattern, pattern_type) in test_cases {
         assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes()));

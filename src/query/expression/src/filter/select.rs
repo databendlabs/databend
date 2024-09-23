@@ -36,7 +36,6 @@ use crate::types::VariantType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
-use crate::LikePattern;
 use crate::Scalar;
 use crate::Selector;
 use crate::Value;
@@ -306,8 +305,7 @@ impl<'a> Selector<'a> {
         &self,
         mut column: Column,
         data_type: &DataType,
-        like_pattern: &LikePattern,
-        like_str: &[u8],
+        like_str: &str,
         not: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
@@ -325,22 +323,8 @@ impl<'a> Selector<'a> {
         }
         // It's safe to unwrap because the column's data type is `DataType::String`.
         let column = column.into_string().unwrap();
-
-        // To unite the function signature, we define a dummy function for `LikePattern::SimplePattern`.
-        let dummy_function = |_: &[u8], _: &[u8]| -> bool { false };
-        let cmp = match like_pattern {
-            LikePattern::OrdinalStr => LikePattern::ordinal_str,
-            LikePattern::StartOfPercent => LikePattern::start_of_percent,
-            LikePattern::EndOfPercent => LikePattern::end_of_percent,
-            LikePattern::SurroundByPercent => LikePattern::surround_by_percent,
-            LikePattern::ComplexPattern => LikePattern::complex_pattern,
-            _ => dummy_function,
-        };
-
-        self.select_like_adapt::<_>(
-            cmp,
+        self.select_like_adapt(
             column,
-            like_pattern,
             like_str,
             not,
             validity,

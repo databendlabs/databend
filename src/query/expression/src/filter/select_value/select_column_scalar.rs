@@ -17,9 +17,9 @@ use databend_common_exception::Result;
 
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
+use crate::generate_like_pattern;
 use crate::types::string::StringColumn;
 use crate::types::ValueType;
-use crate::LikePattern;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
@@ -162,17 +162,10 @@ impl<'a> Selector<'a> {
 
     // Select indices by like pattern.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_like<
-        C: Fn(&[u8], &[u8]) -> bool,
-        const FALSE: bool,
-        const SIMPLE_PATTERN: bool,
-        const NOT: bool,
-    >(
+    pub(crate) fn select_column_like<const FALSE: bool, const NOT: bool>(
         &self,
-        cmp: C,
         column: StringColumn,
-        like_pattern: &LikePattern,
-        like_str: &[u8],
+        like_str: &str,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
@@ -184,15 +177,7 @@ impl<'a> Selector<'a> {
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
-        let dummy_vec = vec![];
-        let (has_start_percent, has_end_percent, segments) =
-            if let LikePattern::SimplePattern((has_start_percent, has_end_percent, segments)) =
-                like_pattern
-            {
-                (*has_start_percent, *has_end_percent, segments)
-            } else {
-                (false, false, &dummy_vec)
-            };
+        let like_pattern = generate_like_pattern(like_str.as_bytes());
 
         match select_strategy {
             SelectStrategy::True => unsafe {
@@ -203,32 +188,13 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = if NOT {
-                                if SIMPLE_PATTERN {
-                                    validity.get_bit_unchecked(idx as usize)
-                                        && !LikePattern::simple_pattern(
-                                            column.index_unchecked_bytes(idx as usize),
-                                            has_start_percent,
-                                            has_end_percent,
-                                            segments,
-                                        )
-                                } else {
-                                    validity.get_bit_unchecked(idx as usize)
-                                        && !cmp(
-                                            column.index_unchecked_bytes(idx as usize),
-                                            like_str,
-                                        )
-                                }
-                            } else if SIMPLE_PATTERN {
                                 validity.get_bit_unchecked(idx as usize)
-                                    && LikePattern::simple_pattern(
-                                        column.index_unchecked_bytes(idx as usize),
-                                        has_start_percent,
-                                        has_end_percent,
-                                        segments,
-                                    )
+                                    && !like_pattern
+                                        .compare(column.index_unchecked_bytes(idx as usize))
                             } else {
                                 validity.get_bit_unchecked(idx as usize)
-                                    && cmp(column.index_unchecked_bytes(idx as usize), like_str)
+                                    && like_pattern
+                                        .compare(column.index_unchecked_bytes(idx as usize))
                             };
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -242,25 +208,9 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
                             let ret = if NOT {
-                                if SIMPLE_PATTERN {
-                                    !LikePattern::simple_pattern(
-                                        column.index_unchecked_bytes(idx as usize),
-                                        has_start_percent,
-                                        has_end_percent,
-                                        segments,
-                                    )
-                                } else {
-                                    !cmp(column.index_unchecked_bytes(idx as usize), like_str)
-                                }
-                            } else if SIMPLE_PATTERN {
-                                LikePattern::simple_pattern(
-                                    column.index_unchecked_bytes(idx as usize),
-                                    has_start_percent,
-                                    has_end_percent,
-                                    segments,
-                                )
+                                !like_pattern.compare(column.index_unchecked_bytes(idx as usize))
                             } else {
-                                cmp(column.index_unchecked_bytes(idx as usize), like_str)
+                                like_pattern.compare(column.index_unchecked_bytes(idx as usize))
                             };
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -280,32 +230,13 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = if NOT {
-                                if SIMPLE_PATTERN {
-                                    validity.get_bit_unchecked(idx as usize)
-                                        && !LikePattern::simple_pattern(
-                                            column.index_unchecked_bytes(idx as usize),
-                                            has_start_percent,
-                                            has_end_percent,
-                                            segments,
-                                        )
-                                } else {
-                                    validity.get_bit_unchecked(idx as usize)
-                                        && !cmp(
-                                            column.index_unchecked_bytes(idx as usize),
-                                            like_str,
-                                        )
-                                }
-                            } else if SIMPLE_PATTERN {
                                 validity.get_bit_unchecked(idx as usize)
-                                    && LikePattern::simple_pattern(
-                                        column.index_unchecked_bytes(idx as usize),
-                                        has_start_percent,
-                                        has_end_percent,
-                                        segments,
-                                    )
+                                    && !like_pattern
+                                        .compare(column.index_unchecked_bytes(idx as usize))
                             } else {
                                 validity.get_bit_unchecked(idx as usize)
-                                    && cmp(column.index_unchecked_bytes(idx as usize), like_str)
+                                    && like_pattern
+                                        .compare(column.index_unchecked_bytes(idx as usize))
                             };
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -319,25 +250,9 @@ impl<'a> Selector<'a> {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
                             let ret = if NOT {
-                                if SIMPLE_PATTERN {
-                                    !LikePattern::simple_pattern(
-                                        column.index_unchecked_bytes(idx as usize),
-                                        has_start_percent,
-                                        has_end_percent,
-                                        segments,
-                                    )
-                                } else {
-                                    !cmp(column.index_unchecked_bytes(idx as usize), like_str)
-                                }
-                            } else if SIMPLE_PATTERN {
-                                LikePattern::simple_pattern(
-                                    column.index_unchecked_bytes(idx as usize),
-                                    has_start_percent,
-                                    has_end_percent,
-                                    segments,
-                                )
+                                !like_pattern.compare(column.index_unchecked_bytes(idx as usize))
                             } else {
-                                cmp(column.index_unchecked_bytes(idx as usize), like_str)
+                                like_pattern.compare(column.index_unchecked_bytes(idx as usize))
                             };
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -354,32 +269,13 @@ impl<'a> Selector<'a> {
                     Some(validity) => {
                         for idx in 0u32..count as u32 {
                             let ret = if NOT {
-                                if SIMPLE_PATTERN {
-                                    validity.get_bit_unchecked(idx as usize)
-                                        && !LikePattern::simple_pattern(
-                                            column.index_unchecked_bytes(idx as usize),
-                                            has_start_percent,
-                                            has_end_percent,
-                                            segments,
-                                        )
-                                } else {
-                                    validity.get_bit_unchecked(idx as usize)
-                                        && !cmp(
-                                            column.index_unchecked_bytes(idx as usize),
-                                            like_str,
-                                        )
-                                }
-                            } else if SIMPLE_PATTERN {
                                 validity.get_bit_unchecked(idx as usize)
-                                    && LikePattern::simple_pattern(
-                                        column.index_unchecked_bytes(idx as usize),
-                                        has_start_percent,
-                                        has_end_percent,
-                                        segments,
-                                    )
+                                    && !like_pattern
+                                        .compare(column.index_unchecked_bytes(idx as usize))
                             } else {
                                 validity.get_bit_unchecked(idx as usize)
-                                    && cmp(column.index_unchecked_bytes(idx as usize), like_str)
+                                    && like_pattern
+                                        .compare(column.index_unchecked_bytes(idx as usize))
                             };
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;
@@ -392,25 +288,9 @@ impl<'a> Selector<'a> {
                     None => {
                         for idx in 0u32..count as u32 {
                             let ret = if NOT {
-                                if SIMPLE_PATTERN {
-                                    !LikePattern::simple_pattern(
-                                        column.index_unchecked_bytes(idx as usize),
-                                        has_start_percent,
-                                        has_end_percent,
-                                        segments,
-                                    )
-                                } else {
-                                    !cmp(column.index_unchecked_bytes(idx as usize), like_str)
-                                }
-                            } else if SIMPLE_PATTERN {
-                                LikePattern::simple_pattern(
-                                    column.index_unchecked_bytes(idx as usize),
-                                    has_start_percent,
-                                    has_end_percent,
-                                    segments,
-                                )
+                                !like_pattern.compare(column.index_unchecked_bytes(idx as usize))
                             } else {
-                                cmp(column.index_unchecked_bytes(idx as usize), like_str)
+                                like_pattern.compare(column.index_unchecked_bytes(idx as usize))
                             };
                             *true_selection.get_unchecked_mut(true_idx) = idx;
                             true_idx += ret as usize;

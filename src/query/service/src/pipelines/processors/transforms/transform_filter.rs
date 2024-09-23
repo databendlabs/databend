@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
 use databend_common_expression::filter::FilterExecutor;
-use databend_common_expression::filter::SelectExpr;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
