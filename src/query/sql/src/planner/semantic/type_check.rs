@@ -1763,6 +1763,7 @@ impl<'a> TypeChecker<'a> {
 
         let display_name = format!("{:#}", expr);
         let new_agg_func = AggregateFunction {
+            span,
             display_name,
             func_name,
             distinct: false,
@@ -3261,7 +3262,7 @@ impl<'a> TypeChecker<'a> {
                     return None;
                 }
                 let mut asc = true;
-                let mut nulls_first = true;
+                let mut nulls_first = None;
                 if args.len() >= 2 {
                     let box (arg, _) = self.resolve(args[1]).ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
@@ -3291,9 +3292,9 @@ impl<'a> TypeChecker<'a> {
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
                         if let Scalar::String(nulls_order) = arg.value {
                             if nulls_order.eq_ignore_ascii_case("nulls first") {
-                                nulls_first = true;
+                                nulls_first = Some(true);
                             } else if nulls_order.eq_ignore_ascii_case("nulls last") {
-                                nulls_first = false;
+                                nulls_first = Some(false);
                             } else {
                                 return Some(Err(ErrorCode::SemanticError(
                                     "Null sorting order must be either NULLS FIRST or NULLS LAST",
@@ -3310,6 +3311,12 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                 }
+
+                let nulls_first = nulls_first.unwrap_or_else(|| {
+                    let default_nulls_first = self.ctx.get_settings().get_nulls_first();
+                    default_nulls_first(asc)
+                });
+
                 let func_name = match (asc, nulls_first) {
                     (true, true) => "array_sort_asc_null_first",
                     (false, true) => "array_sort_desc_null_first",

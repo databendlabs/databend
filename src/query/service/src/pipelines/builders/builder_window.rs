@@ -22,14 +22,13 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipe;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
-use crate::pipelines::processors::transforms::TransformWindowPartitionScatter;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
+use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
@@ -149,11 +148,13 @@ impl PipelineBuilder {
         let window_spill_settings = WindowSpillSettings::new(settings.clone(), num_processors)?;
 
         let plan_schema = window_partition.output_schema()?;
+
         let partition_by = window_partition
             .partition_by
             .iter()
             .map(|index| plan_schema.index_of(&index.to_string()))
             .collect::<Result<Vec<_>>>()?;
+
         let sort_desc = window_partition
             .order_by
             .iter()
@@ -167,59 +168,34 @@ impl PipelineBuilder {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
+
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
 
-        // 1. Build window partition scatter processors.
-        let mut pipe_items = Vec::with_capacity(num_processors);
-        for _ in 0..num_processors {
-            let processor = TransformWindowPartitionScatter::new(
-                num_processors,
-                num_partitions,
-                partition_by.clone(),
-            )?;
-            pipe_items.push(processor.into_pipe_item());
-        }
-        self.main_pipeline.add_pipe(Pipe::create(
+        self.main_pipeline.exchange(
             num_processors,
-            num_processors * num_processors,
-            pipe_items,
-        ));
+            WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+        );
 
-        // 2. Build shuffle processor.
-        let mut rule = Vec::with_capacity(num_processors * num_processors);
-        for i in 0..num_processors * num_processors {
-            rule.push(
-                (i * num_processors + i / num_processors) % (num_processors * num_processors),
-            );
-        }
-        self.main_pipeline.reorder_inputs(rule);
-
-        // 3. Build window partition collect processors.
         let processor_id = AtomicUsize::new(0);
-        let mut pipe_items = Vec::with_capacity(num_processors);
-        for _ in 0..num_processors {
-            let processor = TransformWindowPartitionCollect::new(
-                self.ctx.clone(),
-                processor_id.fetch_add(1, std::sync::atomic::Ordering::AcqRel),
-                num_processors,
-                num_partitions,
-                window_spill_settings.clone(),
-                sort_desc.clone(),
-                plan_schema.clone(),
-                max_block_size,
-                sort_block_size,
-                sort_spilling_batch_bytes,
-                enable_loser_tree,
-                have_order_col,
-            )?;
-            pipe_items.push(processor.into_pipe_item());
-        }
-        self.main_pipeline.add_pipe(Pipe::create(
-            num_processors * num_processors,
-            num_processors,
-            pipe_items,
-        ));
-
-        Ok(())
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Box::new(
+                TransformWindowPartitionCollect::new(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    processor_id.fetch_add(1, std::sync::atomic::Ordering::AcqRel),
+                    num_processors,
+                    num_partitions,
+                    window_spill_settings.clone(),
+                    sort_desc.clone(),
+                    plan_schema.clone(),
+                    max_block_size,
+                    sort_block_size,
+                    sort_spilling_batch_bytes,
+                    enable_loser_tree,
+                    have_order_col,
+                )?,
+            )))
+        })
     }
 }

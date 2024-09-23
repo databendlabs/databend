@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom_rule::rule;
 
 use crate::ast::FileFormatOptions;
 use crate::ast::FileFormatValue;
@@ -27,7 +28,6 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
-use crate::rule;
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);

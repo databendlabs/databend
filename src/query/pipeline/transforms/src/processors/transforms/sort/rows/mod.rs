@@ -15,6 +15,8 @@
 mod common;
 mod simple;
 
+use std::fmt::Debug;
+
 pub use common::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -39,9 +41,9 @@ where Self: Sized
 
 /// Rows can be compared.
 pub trait Rows
-where Self: Sized + Clone
+where Self: Sized + Clone + Debug
 {
-    type Item<'a>: Ord
+    type Item<'a>: Ord + Debug
     where Self: 'a;
     type Type: ArgType;
 
@@ -68,4 +70,14 @@ where Self: Sized + Clone
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    fn first(&self) -> Self::Item<'_> {
+        self.row(0)
+    }
+
+    fn last(&self) -> Self::Item<'_> {
+        self.row(self.len() - 1)
+    }
+
+    fn slice(&self, range: std::ops::Range<usize>) -> Self;
 }
