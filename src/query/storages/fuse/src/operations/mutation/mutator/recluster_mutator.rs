@@ -213,6 +213,7 @@ impl ReclusterMutator {
 
             let mut total_rows = 0;
             let mut total_bytes = 0;
+            let mut small_blocks = Vec::new();
             let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
             for i in indices.iter() {
                 if let Some(stats) = &blocks[*i].cluster_stats {
@@ -225,6 +226,13 @@ impl ReclusterMutator {
                         .and_modify(|v| v.1.push(*i))
                         .or_insert((vec![], vec![*i]));
                 }
+                // Record block fragments for compact.
+                if self.block_thresholds.check_too_small(
+                    blocks[*i].row_count as usize,
+                    blocks[*i].block_size as usize,
+                ) {
+                    small_blocks.push(*i);
+                }
                 total_rows += blocks[*i].row_count;
                 total_bytes += blocks[*i].block_size;
             }
@@ -232,7 +240,7 @@ impl ReclusterMutator {
             // If the statistics of blocks are too small, just merge them into one block.
             if self
                 .block_thresholds
-                .check_for_recluster(total_rows as usize, total_bytes as usize)
+                .check_for_compact(total_rows as usize, total_bytes as usize)
             {
                 debug!(
                     "recluster: the statistics of blocks are too small, just merge them into one block"
@@ -252,10 +260,13 @@ impl ReclusterMutator {
                 break;
             }
 
-            let selected_idx =
+            let mut selected_idx =
                 self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
             if selected_idx.is_empty() {
-                continue;
+                if level != 0 || small_blocks.len() < 2 {
+                    continue;
+                }
+                selected_idx = IndexSet::from_iter(small_blocks);
             }
 
             let mut task_bytes = 0;
