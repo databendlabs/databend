@@ -295,6 +295,10 @@ impl<A: Access> LayeredAccess for MetricsLayerAccessor<A> {
     async fn batch(&self, args: OpBatch) -> opendal::Result<RpBatch> {
         self.metrics
             .increment_request_total(self.scheme, Operation::Batch);
+        for (_, op) in args.operation() {
+            self.metrics
+                .increment_request_total(self.scheme, op.operation());
+        }
         let start_time = Instant::now();
 
         let result = self.inner.batch(args).await;
