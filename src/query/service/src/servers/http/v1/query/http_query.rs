@@ -130,7 +130,7 @@ impl Debug for HttpQueryRequest {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
-            .field("sql", &short_sql(self.sql.clone()))
+            .field("sql", &short_sql(self.sql.clone(), 1000))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
