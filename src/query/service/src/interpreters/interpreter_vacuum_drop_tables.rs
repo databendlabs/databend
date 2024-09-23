@@ -24,7 +24,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -68,7 +68,7 @@ impl VacuumDropTablesInterpreter {
                 DroppedId::Db { .. } => {
                     drop_db_ids.push(drop_id);
                 }
-                DroppedId::Table(_, _, _) => {
+                DroppedId::Table { .. } => {
                     drop_db_table_ids.push(drop_id);
                 }
             }
@@ -112,9 +112,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
@@ -185,7 +183,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                         } else {
                             for (table_id, table_name) in tables.iter() {
                                 if !failed_tables.contains(table_id) {
-                                    success_dropped_ids.push(DroppedId::Table(
+                                    success_dropped_ids.push(DroppedId::new_table(
                                         *db_id,
                                         *table_id,
                                         table_name.clone(),
@@ -194,8 +192,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
                             }
                         }
                     }
-                    DroppedId::Table(_, table_id, _) => {
-                        if !failed_tables.contains(table_id) {
+                    DroppedId::Table { name: _, id } => {
+                        if !failed_tables.contains(&id.table_id) {
                             success_dropped_ids.push(drop_id);
                         }
                     }
