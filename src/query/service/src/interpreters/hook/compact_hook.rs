@@ -148,13 +148,17 @@ async fn compact_table(
     )?;
 
     let mut build_res = if do_recluster {
-        let limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
+        // To ensure that newly ingested blocks are executed.
+        let segment_limit = std::cmp::max(
+            Some(ctx.get_settings().get_auto_compaction_segments_limit()? as usize),
+            compaction_limits.block_limit,
+        );
         let recluster = RelOperator::Recluster(Recluster {
             catalog: compact_target.catalog,
             database: compact_target.database,
             table: compact_target.table,
             filters: None,
-            limit: Some(limit as usize),
+            limit: segment_limit,
         });
         let s_expr = SExpr::create_leaf(Arc::new(recluster));
         let recluster_interpreter =
