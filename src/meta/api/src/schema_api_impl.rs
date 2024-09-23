@@ -2753,7 +2753,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     });
                 } else {
                     for (table_info, db_id) in table_infos.iter().take(capacity) {
-                        vacuum_ids.push(DroppedId::Table(
+                        vacuum_ids.push(DroppedId::new_table(
                             *db_id,
                             table_info.ident.table_id,
                             table_info.name.clone(),
@@ -2803,7 +2803,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut drop_table_infos = vec![];
 
         for (table_info, db_id) in table_infos.iter().take(the_limit) {
-            drop_ids.push(DroppedId::Table(
+            drop_ids.push(DroppedId::new_table(
                 *db_id,
                 table_info.ident.table_id,
                 table_info.name.clone(),
@@ -2826,8 +2826,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     db_name,
                     tables: _,
                 } => gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?,
-                DroppedId::Table(db_id, table_id, table_name) => {
-                    gc_dropped_table_by_id(self, &req.tenant, db_id, table_id, table_name).await?
+                DroppedId::Table { name, id } => {
+                    gc_dropped_table_by_id(
+                        self,
+                        &req.tenant,
+                        name.db_id,
+                        id.table_id,
+                        name.table_name.clone(),
+                    )
+                    .await?
                 }
             }
         }
@@ -3613,8 +3620,7 @@ async fn batch_filter_table_info(
         .iter()
         .map(|(_f, _db, table_id, _table_name)| TableId::new(*table_id));
 
-    let strm = kv_api.get_pb_values(table_id_idents).await?;
-    let seq_metas = strm.try_collect::<Vec<_>>().await?;
+    let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
     for (seq_meta, (filter, db_info, table_id, table_name)) in seq_metas
         .into_iter()
