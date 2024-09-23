@@ -822,6 +822,7 @@ fn test_statement() {
         r#"describe PROCEDURE p1()"#,
         r#"describe PROCEDURE p1(string, timestamp)"#,
         r#"drop PROCEDURE p1()"#,
+        r#"drop PROCEDURE if exists p1()"#,
         r#"drop PROCEDURE p1(int, string)"#,
         r#"call PROCEDURE p1()"#,
         r#"call PROCEDURE p1(1, 'x', '2022-02-02'::Date)"#,
