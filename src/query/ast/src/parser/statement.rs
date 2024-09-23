@@ -2137,10 +2137,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let drop_procedure = map(
         rule! {
-            DROP ~ PROCEDURE ~ #ident ~ #procedure_type_name
+            DROP ~ PROCEDURE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #procedure_type_name
         },
-        |(_, _, name, args)| {
+        |(_, _, opt_if_exists, name, args)| {
             Statement::DropProcedure(DropProcedureStmt {
+                if_exists: opt_if_exists.is_some(),
                 name: ProcedureIdentity {
                     name: name.to_string(),
                     args_type: if args.is_empty() {
