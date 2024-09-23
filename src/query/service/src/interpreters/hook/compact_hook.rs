@@ -90,16 +90,13 @@ async fn do_hook_compact(
                     block_limit: Some(compaction_num_block_hint as usize),
                 }
             }
-            _ =>
-            // for mutations other than Insertions, we use an empirical value of 3 segments as the
-            // limit for compaction. to be refined later.
-                {
-                    let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
-                    CompactionLimits {
-                        segment_limit: Some(auto_compaction_segments_limit as usize),
-                        block_limit: None,
-                    }
+            _ => {
+                let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
+                CompactionLimits {
+                    segment_limit: Some(auto_compaction_segments_limit as usize),
+                    block_limit: None,
                 }
+            }
         };
 
         let op_name = &trace_ctx.operation_name;
@@ -151,12 +148,13 @@ async fn compact_table(
     )?;
 
     let mut build_res = if do_recluster {
+        let limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
         let recluster = RelOperator::Recluster(Recluster {
             catalog: compact_target.catalog,
             database: compact_target.database,
             table: compact_target.table,
             filters: None,
-            limit: compaction_limits.segment_limit,
+            limit: Some(limit as usize),
         });
         let s_expr = SExpr::create_leaf(Arc::new(recluster));
         let recluster_interpreter =
