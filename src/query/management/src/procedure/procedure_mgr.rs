@@ -104,6 +104,13 @@ impl ProcedureMgr {
                 vec![ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
             })
             .await?;
+        if dropped.is_none() {
+            if req.if_exists {
+                // Ok
+            } else {
+                return Err(AppError::from(name_ident.unknown_error("drop procedure")).into());
+            }
+        }
         Ok(dropped)
     }
 

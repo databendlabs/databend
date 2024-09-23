@@ -81,12 +81,11 @@ impl Binder {
     }
 
     pub async fn bind_drop_procedure(&mut self, stmt: &DropProcedureStmt) -> Result<Plan> {
-        let DropProcedureStmt { name } = stmt;
+        let DropProcedureStmt { name, if_exists } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        // TODO: need parser name: ProcedureNameIdent = name + args
         Ok(Plan::DropProcedure(Box::new(DropProcedurePlan {
-            if_exists: false,
+            if_exists: *if_exists,
             tenant: tenant.to_owned(),
             name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
         })))

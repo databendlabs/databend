@@ -23030,6 +23030,23 @@ DROP PROCEDURE p1()
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
+        if_exists: false,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+drop PROCEDURE if exists p1()
+---------- Output ---------
+DROP PROCEDURE IF EXISTS p1()
+---------- AST ------------
+DropProcedure(
+    DropProcedureStmt {
+        if_exists: true,
         name: ProcedureIdentity {
             name: "p1",
             args_type: "",
@@ -23045,6 +23062,7 @@ DROP PROCEDURE p1(Int32,STRING)
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
+        if_exists: false,
         name: ProcedureIdentity {
             name: "p1",
             args_type: "Int32,STRING",
