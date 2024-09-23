@@ -25,9 +25,7 @@ pub enum LikePattern<'a> {
     // e.g. 'Arrow%'.
     EndOfPercent(&'a [u8]),
     // e.g. '%Arrow%'.
-    SurroundByPercentLong(Finder<'a>, &'a [u8]),
-    // for haystack.len() < 64
-    SurroundByPercent(rabinkarp::Finder, &'a [u8]),
+    SurroundByPercent(rabinkarp::Finder, Finder<'a>, &'a [u8]),
     // e.g. 'A%row', 'A_row', 'A\\%row'.
     ComplexPattern(&'a [u8]),
     // Only includes %, e.g. 'A%r%w'.
@@ -42,11 +40,9 @@ impl<'a> PartialEq for LikePattern<'a> {
             (LikePattern::OrdinalStr(a), LikePattern::OrdinalStr(b)) => a == b,
             (LikePattern::StartOfPercent(a), LikePattern::StartOfPercent(b)) => a == b,
             (LikePattern::EndOfPercent(a), LikePattern::EndOfPercent(b)) => a == b,
-            (
-                LikePattern::SurroundByPercentLong(_, a),
-                LikePattern::SurroundByPercentLong(_, b),
-            ) => a == b,
-            (LikePattern::SurroundByPercent(_, a), LikePattern::SurroundByPercent(_, b)) => a == b,
+            (LikePattern::SurroundByPercent(_, _, a), LikePattern::SurroundByPercent(_, _, b)) => {
+                a == b
+            }
             (LikePattern::ComplexPattern(a), LikePattern::ComplexPattern(b)) => a == b,
             (LikePattern::SimplePattern((a, b, c)), LikePattern::SimplePattern((d, e, f))) => {
                 a == d && b == e && c == f
@@ -58,13 +54,22 @@ impl<'a> PartialEq for LikePattern<'a> {
 }
 
 impl<'a> LikePattern<'a> {
+    #[inline]
     pub fn compare(&self, haystack: &[u8]) -> bool {
         match self {
             LikePattern::OrdinalStr(s) => haystack == *s,
-            LikePattern::StartOfPercent(s) => haystack.starts_with(*s),
-            LikePattern::EndOfPercent(s) => haystack.ends_with(*s),
-            LikePattern::SurroundByPercentLong(s, _) => s.find(haystack).is_some(),
-            LikePattern::SurroundByPercent(s, ref needle) => s.find(haystack, needle).is_some(),
+            // '%abc'
+            LikePattern::StartOfPercent(s) => haystack.ends_with(*s),
+            // 'abc%'
+            LikePattern::EndOfPercent(s) => haystack.starts_with(*s),
+            // '%abc%'
+            LikePattern::SurroundByPercent(small, large, ref needle) => {
+                if haystack.len() < 64 {
+                    small.find(haystack, needle).is_some()
+                } else {
+                    large.find(haystack).is_some()
+                }
+            }
             LikePattern::ComplexPattern(s) => Self::complex_pattern(haystack, *s),
             LikePattern::SimplePattern((has_start_percent, has_end_percent, segments)) => {
                 Self::simple_pattern(haystack, *has_start_percent, *has_end_percent, segments)
@@ -250,12 +255,10 @@ pub fn generate_like_pattern<'a>(pattern: &'a [u8]) -> LikePattern<'a> {
             let needle = &pattern[1..len - 1];
             if needle.is_empty() {
                 LikePattern::Constant(true)
-            } else if needle.len() >= 64 {
-                let finder = Finder::new(needle);
-                LikePattern::SurroundByPercentLong(finder, needle)
             } else {
-                let finder = rabinkarp::Finder::new(needle);
-                LikePattern::SurroundByPercent(finder, needle)
+                let small_finder = rabinkarp::Finder::new(needle);
+                let large_finder = Finder::new(needle);
+                LikePattern::SurroundByPercent(small_finder, large_finder, needle)
             }
         }
         _ => {
@@ -351,6 +354,7 @@ fn test_generate_like_pattern() {
             "%databend%",
             LikePattern::SurroundByPercent(
                 rabinkarp::Finder::new("databend".as_bytes()),
+                Finder::new("databend".as_bytes()),
                 "databend".as_bytes(),
             ),
         ),

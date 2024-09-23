@@ -448,7 +448,13 @@ fn register_like(registry: &mut FunctionRegistry) {
             LikePattern::OrdinalStr(_)
             | LikePattern::StartOfPercent(_)
             | LikePattern::EndOfPercent(_)
-            | LikePattern::Constant(_) => pattern_type.compare(val),
+            | LikePattern::Constant(_) => {
+                if let Some(s) = jsonb::as_str(val) {
+                    pattern_type.compare(s.as_bytes())
+                } else {
+                    false
+                }
+            }
 
             _ => jsonb::traverse_check_string(val, |v| pattern_type.compare(v)),
         }),

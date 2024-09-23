@@ -3578,7 +3578,6 @@ dependencies = [
  "libm",
  "match-template",
  "md-5",
- "memchr",
  "multiversion",
  "naive-cityhash",
  "num-traits",
