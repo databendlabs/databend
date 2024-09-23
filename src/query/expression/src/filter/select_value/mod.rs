@@ -28,7 +28,6 @@ mod select_column;
 mod select_column_scalar;
 mod select_scalar;
 
-
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_type_values_cmp<T: ValueType>(
