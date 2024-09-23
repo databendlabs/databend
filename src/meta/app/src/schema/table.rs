@@ -36,6 +36,7 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
+use super::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -891,21 +892,15 @@ impl GetTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
-    pub inner: DatabaseNameIdent,
-}
-
-impl Deref for ListTableReq {
-    type Target = DatabaseNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    pub tenant: Tenant,
+    pub database_id: DatabaseId,
 }
 
 impl ListTableReq {
-    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListTableReq {
+    pub fn new(tenant: &Tenant, database_id: DatabaseId) -> ListTableReq {
         ListTableReq {
-            inner: DatabaseNameIdent::new(tenant, db_name),
+            tenant: tenant.clone(),
+            database_id,
         }
     }
 }

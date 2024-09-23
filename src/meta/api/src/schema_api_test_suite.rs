@@ -3988,6 +3988,8 @@ impl SchemaApiTestSuite {
             )]))
         };
 
+        let db_id;
+
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
@@ -4003,6 +4005,7 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
 
             assert_eq!(1, *res.db_id, "first database id is 1");
+            db_id = res.db_id;
         }
 
         let created_on = Utc::now();
@@ -4030,7 +4033,7 @@ impl SchemaApiTestSuite {
             assert!(table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
 
             assert_eq!(res.len(), 1);
@@ -4048,7 +4051,7 @@ impl SchemaApiTestSuite {
             upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
 
             assert_eq!(res.len(), 0);
@@ -4672,6 +4675,8 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
+        let db_id;
+
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
@@ -4687,6 +4692,8 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
 
             assert_eq!(1, *res.db_id, "first database id is 1");
+
+            db_id = res.db_id;
         }
 
         let created_on = Utc::now();
@@ -4707,7 +4714,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4743,7 +4750,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4765,7 +4772,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4796,7 +4803,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4823,7 +4830,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4855,7 +4862,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
@@ -4876,7 +4883,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4913,7 +4920,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let _res = mt.create_table(req.clone()).await?;
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -4960,7 +4967,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -4997,7 +5004,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .get_tables_history(ListTableReq::new(&tenant, db_name))
+                .get_tables_history(ListTableReq::new(&tenant, db_id), db_name)
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -5920,21 +5927,13 @@ impl SchemaApiTestSuite {
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
         let db_name = "db1";
 
-        info!("--- list table on unknown db");
-        {
-            let res = mt.list_tables(ListTableReq::new(&tenant, db_name)).await;
-            debug!("list table on unknown db res: {:?}", res);
-            assert!(res.is_err());
-
-            let code = ErrorCode::from(res.unwrap_err()).code();
-            assert_eq!(ErrorCode::UNKNOWN_DATABASE, code);
-        }
-
         info!("--- prepare db");
         {
             let res = self.create_database(mt, &tenant, db_name, "eng1").await?;
             assert_eq!(1, *res.db_id, "first database id is 1");
         }
+
+        let db_id = DatabaseId::new(1u64);
 
         info!("--- create 2 tables: tb1 tb2");
         {
@@ -5984,10 +5983,10 @@ impl SchemaApiTestSuite {
 
             info!("--- get_tables");
             {
-                let res = mt.list_tables(ListTableReq::new(&tenant, db_name)).await?;
+                let res = mt.list_tables(ListTableReq::new(&tenant, db_id)).await?;
                 assert_eq!(tb_ids.len(), res.len());
-                assert_eq!(tb_ids[0], res[0].ident.table_id);
-                assert_eq!(tb_ids[1], res[1].ident.table_id);
+                assert_eq!(tb_ids[0], res[0].1.table_id);
+                assert_eq!(tb_ids[1], res[1].1.table_id);
             }
         }
 
@@ -6035,7 +6034,7 @@ impl SchemaApiTestSuite {
         info!("--- get_tables");
         {
             let res = mt
-                .list_tables(ListTableReq::new(&util.tenant(), util.db_name()))
+                .list_tables(ListTableReq::new(&util.tenant(), util.db_id()))
                 .await?;
             assert_eq!(n, res.len());
         }
@@ -7039,6 +7038,7 @@ impl SchemaApiTestSuite {
         let db_name = "db1";
 
         let mut tb_ids = vec![];
+        let db_id;
 
         {
             let req = CreateDatabaseReq {
@@ -7052,6 +7052,7 @@ impl SchemaApiTestSuite {
             let res = node_a.create_database(req).await;
             info!("create database res: {:?}", res);
             assert!(res.is_ok());
+            db_id = res.unwrap().db_id;
 
             let tables = vec!["tb1", "tb2"];
             let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -7090,16 +7091,14 @@ impl SchemaApiTestSuite {
 
         info!("--- list tables from node_b");
         {
-            let res = node_b
-                .list_tables(ListTableReq::new(&tenant, db_name))
-                .await;
+            let res = node_b.list_tables(ListTableReq::new(&tenant, db_id)).await;
             debug!("get table list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "table list len is 2");
-            assert_eq!(tb_ids[0], res[0].ident.table_id, "tb1 id");
-            assert_eq!("tb1", res[0].name, "tb1.name is tb1");
-            assert_eq!(tb_ids[1], res[1].ident.table_id, "tb2 id");
-            assert_eq!("tb2", res[1].name, "tb2.name is tb2");
+            assert_eq!(tb_ids[0], res[0].1.table_id, "tb1 id");
+            assert_eq!("tb1", res[0].0, "tb1.name is tb1");
+            assert_eq!(tb_ids[1], res[1].1.table_id, "tb2 id");
+            assert_eq!("tb2", res[1].0, "tb2.name is tb2");
         }
 
         Ok(())
@@ -7619,6 +7618,10 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 
     fn db_name(&self) -> String {
         self.db_name.clone()
+    }
+
+    fn db_id(&self) -> DatabaseId {
+        DatabaseId::new(self.db_id)
     }
 
     fn tbl_name(&self) -> String {

@@ -202,6 +202,7 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_keys;
+use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::name_value_api::NameValueApi;
@@ -218,7 +219,6 @@ use crate::util::db_id_has_to_exist;
 use crate::util::deserialize_id_get_response;
 use crate::util::deserialize_struct_get_response;
 use crate::util::get_table_by_id_or_err;
-use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
@@ -1569,29 +1569,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn get_tables_history(
         &self,
         req: ListTableReq,
+        db_name: &str,
     ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant_dbname = &req.inner;
-
-        // Get db by name to ensure presence
-        let res = get_db_or_err(
-            self,
-            tenant_dbname,
-            format!("get_tables_history: {}", tenant_dbname.display()),
-        )
-        .await;
-
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
         // List tables by tenant, db_id, table_name.
         let table_id_history_ident = TableIdHistoryIdent {
-            database_id: *seq_db_id.data,
+            database_id: req.database_id.db_id,
             table_name: "dummy".to_string(),
         };
 
@@ -1605,7 +1589,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .iter()
             .map(|table_id_list_key| {
                 TableIdHistoryIdent {
-                    database_id: *seq_db_id.data,
+                    database_id: req.database_id.db_id,
                     table_name: table_id_list_key.table_name.clone(),
                 }
                 .to_string_key()
@@ -1640,11 +1624,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     .map(|(table_id, seqv)| {
                         Arc::new(TableInfo {
                             ident: TableIdent::new(table_id.table_id, seqv.seq()),
-                            desc: format!(
-                                "'{}'.'{}'",
-                                tenant_dbname.database_name(),
-                                table_id_list_key.table_name,
-                            ),
+                            desc: format!("'{}'.'{}'", db_name, table_id_list_key.table_name,),
                             name: table_id_list_key.table_name.to_string(),
                             meta: seqv.data,
                             db_type: DatabaseType::NormalDB,
@@ -1661,29 +1641,38 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    async fn list_tables(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<(String, TableId, SeqV<TableMeta>)>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant_dbname = &req.inner;
-
-        // Get db by name to ensure presence
-        let res = get_db_or_err(
-            self,
-            tenant_dbname,
-            format!("list_tables: {}", tenant_dbname.display()),
-        )
-        .await;
-
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
+        let dbid_tbname = DBIdTableName {
+            db_id: req.database_id.db_id,
+            // Use empty name to scan all tables
+            table_name: "".to_string(),
         };
 
-        let tb_infos = list_tables_from_unshare_db(self, *seq_db_id.data, tenant_dbname).await?;
+        let (names, ids) = list_u64_value(self, &dbid_tbname).await?;
 
-        Ok(tb_infos)
+        let ids = ids
+            .into_iter()
+            .map(|id| TableId { table_id: id })
+            .collect::<Vec<_>>();
+
+        let mut seq_metas = vec![];
+        for chunk in ids.chunks(DEFAULT_MGET_SIZE) {
+            let got = self.get_pb_values_vec(chunk.to_vec()).await?;
+            seq_metas.extend(got);
+        }
+
+        let res = names
+            .into_iter()
+            .zip(ids)
+            .zip(seq_metas)
+            .filter_map(|((n, id), seq_meta)| seq_meta.map(|x| (n.table_name, id, x)))
+            .collect::<Vec<_>>();
+        Ok(res)
     }
 
     #[logcall::logcall]
