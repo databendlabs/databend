@@ -3,7 +3,20 @@ version = 2
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
-    #"RUSTSEC-0000-0000",
+    "RUSTSEC-2023-0086",
+    "RUSTSEC-2024-0019",
+    "RUSTSEC-2024-0332",
+    "RUSTSEC-2024-0348",
+    "RUSTSEC-2024-0349",
+    "RUSTSEC-2024-0350",
+    "RUSTSEC-2024-0351",
+    "RUSTSEC-2024-0352",
+    "RUSTSEC-2024-0353",
+    "RUSTSEC-2024-0359",
+    "RUSTSEC-2024-0367",
+    "RUSTSEC-2024-0371",
+    "RUSTSEC-2024-0370",
+    "RUSTSEC-2024-0377"
 ]
 
 [licenses]

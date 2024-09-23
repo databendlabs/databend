@@ -207,7 +207,7 @@ struct Args {
     #[clap(
         long,
         action = ArgAction::Set,
-        num_args = 0..=1, require_equals = true, default_missing_value = "local",
+        num_args = 0..=1, require_equals = true, default_missing_value = "server",
         help = "Only show execution time without results, will implicitly set output format to `null`."
     )]
     time: Option<TimeOption>,

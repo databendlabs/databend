@@ -73,6 +73,15 @@ impl<'a> FormatDisplay<'a> {
 }
 
 impl<'a> FormatDisplay<'a> {
+    fn running_secs(&self) -> f64 {
+        // prefer to show server running time
+        if let Some(ref stats) = self.stats {
+            stats.running_time_ms / 1000.0
+        } else {
+            self.start.elapsed().as_secs_f64()
+        }
+    }
+
     async fn display_progress(&mut self, ss: &ServerStats) {
         if self.settings.show_progress {
             let pb = self.progress.take();
@@ -293,7 +302,7 @@ impl<'a> FormatDisplay<'a> {
             if rows <= 1 {
                 rows_str = rows_str.trim_end_matches('s');
             }
-            let rows_speed = total_rows as f64 / self.start.elapsed().as_secs_f64();
+            let rows_speed = total_rows as f64 / self.running_secs();
             if rows_speed <= 1.0 {
                 rows_speed_str = rows_speed_str.trim_end_matches('s');
             }
@@ -302,13 +311,13 @@ impl<'a> FormatDisplay<'a> {
                 rows,
                 rows_str,
                 kind,
-                self.start.elapsed().as_secs_f64(),
+                self.running_secs(),
                 humanize_count(total_rows as f64),
                 rows_str,
                 HumanBytes(total_bytes as u64),
                 humanize_count(rows_speed),
                 rows_speed_str,
-                HumanBytes((total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
+                HumanBytes((total_bytes as f64 / self.running_secs()) as u64),
             );
             eprintln!();
         }

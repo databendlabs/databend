@@ -943,7 +943,7 @@ pub fn parse_decimal(text: &str, size: DecimalSize) -> Result<NumberValue> {
     }
     let text = &text[start..];
     let point_pos = text.find('.');
-    let e_pos = text.find(|c| c == 'e' || c == 'E');
+    let e_pos = text.find(|c| ['E', 'e'].contains(&c));
     let (i_part, f_part, e_part) = match (point_pos, e_pos) {
         (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
         (Some(p), None) => (&text[..p], &text[(p + 1)..], None),

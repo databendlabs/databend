@@ -27,7 +27,7 @@ glob = "0.3"
 hex = "0.4.3"
 itertools = "0.12"
 jsonb = "0.4.1"
-lexical-core = "0.8"
+lexical-core = "1.0.1"
 memchr = "2.7"
 roaring = { version = "0.10", features = ["serde"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }

@@ -660,7 +660,7 @@ impl RouteHintGenerator {
         let uuid = uuid::Uuid::new_v4();
         let current = format!("rh:{}:{:06}", uuid, nonce);
         let mut guard = self.current.lock().unwrap();
-        *guard = current.clone();
+        guard.clone_from(&current);
         current
     }
 }
