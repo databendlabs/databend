@@ -41,8 +41,8 @@ pub fn is_builtin_function(name: &str) -> bool {
         || ASYNC_FUNCTIONS.contains(&name)
 }
 
-// The arguments of the search function, async function and udf function are fetched from meta,
-// may be modified by the user at any time, not suitable for caching
+// The arguments of the search function, async function and udf are fetched from meta,
+// which may be modified by user at any time, not suitable for caching.
 pub fn is_cacheable_function(name: &str) -> bool {
     BUILTIN_FUNCTIONS.contains(name)
         || AggregateFunctionFactory::instance().contains(name)
