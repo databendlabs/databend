@@ -218,7 +218,6 @@ use crate::txn_op_put;
 use crate::util::db_id_has_to_exist;
 use crate::util::deserialize_id_get_response;
 use crate::util::deserialize_struct_get_response;
-use crate::util::get_table_by_id_or_err;
 use crate::util::mget_pb_values;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
@@ -2107,7 +2106,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // If table seq is not changed before and after listing, we can be sure the list of copied
         // files is consistent to this version of the table.
 
-        let (mut seq_1, _tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
+        let mut seq_1 = self.get_seq(&table_id).await?;
 
         let mut trials = txn_backoff(None, func_name!());
         let copied_files = loop {
@@ -2120,7 +2119,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let dir_name = DirName::new(copied_file_ident);
             let copied_files = self.list_pb_vec(&dir_name).await?;
 
-            let (seq_2, _tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
+            let seq_2 = self.get_seq(&table_id).await?;
 
             if seq_1 == seq_2 {
                 debug!(
