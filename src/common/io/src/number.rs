@@ -128,7 +128,7 @@ enum NumFlag {
     Multi,
     PlusPost,
     MinusPost,
-    EEEE,
+    Eeee,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -173,7 +173,7 @@ struct NumDesc {
 impl NumDesc {
     fn prepare(&mut self, n: &FormatNode) -> std::result::Result<(), &'static str> {
         if let FormatNode::Action(key) = n {
-            if self.flag.contains(NumFlag::EEEE) && !matches!(key.id, NumPoz::TkE) {
+            if self.flag.contains(NumFlag::Eeee) && !matches!(key.id, NumPoz::TkE) {
                 return Err("\"EEEE\" must be the last pattern used");
             }
 
@@ -193,7 +193,7 @@ impl NumDesc {
                     } else {
                         self.pre += 1;
                     }
-                    return Ok(());
+                    Ok(())
                 }
 
                 NumPoz::Tk0 => {
@@ -341,7 +341,7 @@ impl NumDesc {
                 }
 
                 NumPoz::TkE => {
-                    if self.flag.contains(NumFlag::EEEE) {
+                    if self.flag.contains(NumFlag::Eeee) {
                         return Err("cannot use \"EEEE\" twice");
                     }
 
@@ -360,7 +360,7 @@ impl NumDesc {
                         );
                     }
 
-                    self.flag.insert(NumFlag::EEEE);
+                    self.flag.insert(NumFlag::Eeee);
                     Ok(())
                 }
 
@@ -484,35 +484,28 @@ impl NumProc {
             } else {
                 // Write Decimal point
                 if self.number.get(self.number_p).is_some_and(|c| *c == '.') {
-                    if !self.last_relevant_is_dot() {
-                        self.inout.push_str(&self.decimal) /* Write DEC/D */
-                    }
-                    // Ora 'n' -- FM9.9 --> 'n.'
-                    else if self.desc.flag.contains(NumFlag::FillMode)
-                        && self.last_relevant_is_dot()
+                    if !self.last_relevant_is_dot()
+                        || self.desc.flag.contains(NumFlag::FillMode) && self.last_relevant_is_dot()
+                    // Ora 'n' -- FM9.9 --> 'n.'s
                     {
                         self.inout.push_str(&self.decimal) /* Write DEC/D */
                     }
-                } else {
-                    if self.last_relevant.is_some_and(|(_, i)| self.number_p > i)
-                        && !matches!(id, NumPoz::Tk0)
-                    {
+                } else if self.last_relevant.is_some_and(|(_, i)| self.number_p > i)
+                    && !matches!(id, NumPoz::Tk0)
+                {
+                }
+                // '0.1' -- 9.9 --> '  .1'
+                else if self.is_predec_space() {
+                    if self.desc.flag.contains(NumFlag::FillMode) {
+                        self.inout.push(' ');
                     }
-                    // '0.1' -- 9.9 --> '  .1'
-                    else if self.is_predec_space() {
-                        if self.desc.flag.contains(NumFlag::FillMode) {
-                            self.inout.push(' ');
-                        }
-                        // '0' -- FM9.9 --> '0.'
-                        else if self.last_relevant_is_dot() {
-                            self.inout.push('0')
-                        }
-                    } else {
-                        if self.number_p < self.number.len() {
-                            self.inout.push(self.number[self.number_p]); /* Write DIGIT */
-                            self.num_in = true
-                        }
+                    // '0' -- FM9.9 --> '0.'
+                    else if self.last_relevant_is_dot() {
+                        self.inout.push('0')
                     }
+                } else if self.number_p < self.number.len() {
+                    self.inout.push(self.number[self.number_p]); /* Write DIGIT */
+                    self.num_in = true
                 }
                 if self.number_p < self.number.len() {
                     self.number_p += 1;
@@ -567,7 +560,7 @@ impl NumProc {
                 _ => {}
             }
         }
-        self.last_relevant = n.map(|n| (*self.number.iter().nth(n).unwrap(), n));
+        self.last_relevant = n.map(|n| (*self.number.get(n).unwrap(), n));
     }
 
     fn last_relevant_is_dot(&self) -> bool {
@@ -689,14 +682,14 @@ fn num_processor(
     np.inout
 }
 
-fn i32_to_char(value: i32, fmt: &str) -> Result<String> {
+pub fn i32_to_char(value: i32, fmt: &str) -> Result<String> {
     let mut desc = NumDesc::default();
     let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
 
     let sign = value >= 0;
     let (numstr, out_pre_spaces) = if desc.flag.contains(NumFlag::Roman) {
         unimplemented!()
-    } else if desc.flag.contains(NumFlag::EEEE) {
+    } else if desc.flag.contains(NumFlag::Eeee) {
         // we can do it easily because f32 won't lose any precision
         let orgnum = format!("{:+.*e}", desc.post, value as f32);
 

@@ -34,6 +34,7 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
+use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberColumn;
@@ -45,6 +46,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -58,6 +60,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
+use databend_common_io::number::i32_to_char;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -73,6 +76,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_inet_ntoa(registry);
     register_run_diff(registry);
     register_grouping(registry);
+    register_num_to_char(registry);
 
     registry.properties.insert(
         "rand".to_string(),
@@ -382,6 +386,34 @@ fn register_grouping(registry: &mut FunctionRegistry) {
             },
         }))
     })
+}
+
+fn register_num_to_char(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_2_arg::<Int32Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Int32Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                match i32_to_char(value, fmt) {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    )
 }
 
 /// Compute `grouping` by `grouping_id` and `cols`.
