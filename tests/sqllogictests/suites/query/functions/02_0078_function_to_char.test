@@ -1,0 +1,4 @@
+query T
+select to_char(123,'0099');
+----
+ 0123
