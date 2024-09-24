@@ -162,6 +162,9 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         if !udf.udf_type.match_type(self.script_udf) {
             return Ok(());
         }
+        if self.udf_functions_map.contains_key(&udf.display_name) {
+            return Ok(());
+        }
 
         let mut udf_arguments = Vec::with_capacity(udf.arguments.len());
 
