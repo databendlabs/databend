@@ -133,7 +133,6 @@ use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -2092,8 +2091,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // It is not atomic, but it is safe because it deletes only the files that matches the seq.
 
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let ctx = func_name!();
 
         let table_id = TableId {
             table_id: req.table_id,
