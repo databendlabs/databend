@@ -24,7 +24,9 @@ use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_cache::TempDirManager;
+use log::warn;
 use opendal::Buffer;
+use rand::Rng;
 
 use crate::sessions::QueryContext;
 
@@ -68,5 +70,14 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    TempDirManager::instance().drop_disk_spill_dir(&query_ctx.get_id())
+    let mgr = TempDirManager::instance();
+
+    if mgr.drop_disk_spill_dir(&query_ctx.get_id())? && rand::thread_rng().gen_ratio(1, 10) {
+        let deleted = mgr.drop_disk_spill_dir_unknown(5)?;
+        if !deleted.is_empty() {
+            warn!("Deleted residual temporary directories: {:?}", deleted)
+        }
+    }
+
+    Ok(())
 }

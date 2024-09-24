@@ -119,17 +119,21 @@ impl TempDirManager {
         Some(Arc::new(dir))
     }
 
-    pub fn drop_disk_spill_dir(self: &Arc<TempDirManager>, query_id: &str) -> Result<()> {
-        let path = self.root.as_ref().unwrap().join(query_id).into_boxed_path();
+    pub fn drop_disk_spill_dir(self: &Arc<TempDirManager>, query_id: &str) -> Result<bool> {
+        let path = match self.root.as_ref() {
+            None => return Ok(false),
+            Some(root) => root.join(query_id).into_boxed_path(),
+        };
+
         let mut group = self.group.lock().unwrap();
         if group.dirs.remove(&path).is_some() {
-            if let Err(e) = remove_dir_all(&path) {
-                if !matches!(e.kind(), ErrorKind::NotFound) {
-                    Err(e)?;
-                }
+            match remove_dir_all(&path) {
+                Ok(_) => return Ok(true),
+                Err(e) if matches!(e.kind(), ErrorKind::NotFound) => {}
+                res => res?,
             }
         }
-        Ok(())
+        Ok(false)
     }
 
     pub fn drop_disk_spill_dir_unknown(
@@ -146,10 +150,10 @@ impl TempDirManager {
                         Err(_) => None,
                         Ok(entry) => {
                             let path = entry.path().into_boxed_path();
-                            if !group.dirs.contains_key(&path) {
-                                Some(path)
-                            } else {
+                            if group.dirs.contains_key(&path) {
                                 None
+                            } else {
+                                Some(path)
                             }
                         }
                     })
