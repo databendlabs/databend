@@ -27,6 +27,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
@@ -161,7 +162,7 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, _) = build_test_segment_info(num_block_per_seg)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -189,7 +190,7 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
         let segment_info = SegmentInfo::new(block_metas, statistics);
         cache.insert(format!("{}", uuid.simple()), segment_info);
     }
-    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number); 
+    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
 
     Ok(())
 }
@@ -200,7 +201,7 @@ async fn test_columnar_segment_info_size() -> databend_common_exception::Result<
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, table_schema) = build_test_segment_info(num_block_per_seg)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -222,7 +223,10 @@ async fn test_columnar_segment_info_size() -> databend_common_exception::Result<
             let uuid = Uuid::new_v4();
             cache.insert(
                 format!("{}", uuid.simple()),
-                ColumnarSegmentInfo::try_from(segment_info.clone())?,
+                ColumnarSegmentInfo::try_from_segment_info_and_schema(
+                    segment_info.clone(),
+                    &table_schema,
+                )?,
             );
         }
     }
@@ -238,7 +242,7 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, _) = build_test_segment_info(num_block_per_seg)?;
     let segment_info_bytes = CompactSegmentInfo::try_from(segment_info)?;
 
     let sys = System::new_all();
@@ -278,7 +282,7 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, _) = build_test_segment_info(num_block_per_seg)?;
     let segment_raw = CompactSegmentInfo::try_from(&segment_info)?;
 
     let sys = System::new_all();
@@ -313,7 +317,7 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
 
 fn build_test_segment_info(
     num_blocks_per_seg: usize,
-) -> databend_common_exception::Result<SegmentInfo> {
+) -> databend_common_exception::Result<(SegmentInfo, TableSchema)> {
     let col_meta = ColumnMeta::Parquet(SingleColumnMeta {
         offset: 0,
         len: 0,
@@ -342,6 +346,21 @@ fn build_test_segment_info(
     let col_metas = (0..num_string_columns + num_number_columns)
         .map(|id| (id as ColumnId, col_meta.clone()))
         .collect::<HashMap<_, _>>();
+
+    let mut fields = vec![];
+    for id in 0..num_string_columns {
+        fields.push(TableField::new(
+            &format!("col_{}", id),
+            TableDataType::String,
+        ));
+    }
+    for id in num_string_columns..num_string_columns + num_number_columns {
+        fields.push(TableField::new(
+            &format!("col_{}", id),
+            TableDataType::Number(NumberDataType::Int32),
+        ));
+    }
+    let table_schema = TableSchema::new(fields);
 
     assert_eq!(num_number_columns + num_string_columns, col_metas.len());
 
@@ -386,7 +405,7 @@ fn build_test_segment_info(
         cluster_stats: None,
     };
 
-    Ok(SegmentInfo::new(block_metas, statistics))
+    Ok((SegmentInfo::new(block_metas, statistics), table_schema))
 }
 
 #[allow(dead_code)]
