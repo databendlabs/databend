@@ -132,6 +132,38 @@ impl TempDirManager {
         Ok(())
     }
 
+    pub fn drop_disk_spill_dir_unknown(
+        self: &Arc<TempDirManager>,
+        limit: usize,
+    ) -> Result<Vec<Box<Path>>> {
+        match self.root.as_ref() {
+            None => Ok(vec![]),
+            Some(root) => {
+                let read_dir = std::fs::read_dir(root)?;
+                let group = self.group.lock().unwrap();
+                let to_delete = read_dir
+                    .filter_map(|entry| match entry {
+                        Err(_) => None,
+                        Ok(entry) => {
+                            let path = entry.path().into_boxed_path();
+                            if !group.dirs.contains_key(&path) {
+                                Some(path)
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .take(limit)
+                    .collect::<Vec<_>>();
+                drop(group);
+                for path in &to_delete {
+                    remove_dir_all(path)?;
+                }
+                Ok(to_delete)
+            }
+        }
+    }
+
     fn insufficient_disk(&self, size: u64) -> Result<bool> {
         let stat = statvfs(self.root.as_ref().unwrap().as_ref())
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
@@ -324,6 +356,42 @@ mod tests {
         mgr.drop_disk_spill_dir("some_query")?;
 
         remove_dir_all("test_data")?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_drop_disk_spill_dir_unknown() -> Result<()> {
+        let thread = std::thread::current();
+        GlobalInstance::init_testing(thread.name().unwrap());
+
+        let config = SpillConfig {
+            path: "test_data2".to_string(),
+            max_disk_ratio: 0.99.into(),
+            global_bytes_limit: 1 << 30,
+        };
+
+        TempDirManager::init(&config, "test_tenant")?;
+
+        let mgr = TempDirManager::instance();
+        mgr.get_disk_spill_dir(1 << 30, "some_query").unwrap();
+
+        create_dir("test_data2/test_tenant/unknown_query1")?;
+        create_dir("test_data2/test_tenant/unknown_query2")?;
+
+        let mut deleted = mgr.drop_disk_spill_dir_unknown(10)?;
+
+        deleted.sort();
+
+        assert_eq!(
+            vec![
+                PathBuf::from("test_data2/test_tenant/unknown_query1").into_boxed_path(),
+                PathBuf::from("test_data2/test_tenant/unknown_query2").into_boxed_path(),
+            ],
+            deleted
+        );
+
+        remove_dir_all("test_data2")?;
 
         Ok(())
     }
