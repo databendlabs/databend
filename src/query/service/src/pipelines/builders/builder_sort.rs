@@ -106,8 +106,8 @@ impl PipelineBuilder {
             self.main_pipeline.try_resize(max_threads)?;
         }
 
-        let builder =
-            SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc).with_limit(limit);
+        let builder = SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc)?
+            .with_limit(limit);
 
         match after_exchange {
             Some(true) => {
@@ -147,7 +147,7 @@ pub struct SortPipelineBuilder {
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     limit: Option<usize>,
-    block_size: Option<usize>,
+    block_size: usize,
     remove_order_col_at_last: bool,
 }
 
@@ -156,15 +156,16 @@ impl SortPipelineBuilder {
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         sort_desc: Arc<Vec<SortColumnDescription>>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        Ok(Self {
             ctx,
             schema,
             sort_desc,
             limit: None,
-            block_size: None,
+            block_size,
             remove_order_col_at_last: false,
-        }
+        })
     }
 
     pub fn with_limit(mut self, limit: Option<usize>) -> Self {
@@ -174,7 +175,7 @@ impl SortPipelineBuilder {
 
     // The expected output block size, the actual output block size will be equal to or less than the given value.
     pub fn with_block_size_hit(mut self, block_size: usize) -> Self {
-        self.block_size = Some(block_size);
+        self.block_size = self.block_size.min(block_size);
         self
     }
 
@@ -259,7 +260,6 @@ impl SortPipelineBuilder {
 
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
         let spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-        let block_size = settings.get_max_block_size()? as usize;
 
         pipeline.add_transform(|input, output| {
             let builder = TransformSortMergeBuilder::create(
@@ -267,7 +267,7 @@ impl SortPipelineBuilder {
                 output,
                 sort_merge_output_schema.clone(),
                 self.sort_desc.clone(),
-                block_size,
+                self.block_size,
             )
             .with_limit(self.limit)
             .with_order_col_generated(order_col_generated)
@@ -312,12 +312,6 @@ impl SortPipelineBuilder {
     pub fn build_multi_merge(self, pipeline: &mut Pipeline) -> Result<()> {
         // Multi-pipelines merge sort
         let settings = self.ctx.get_settings();
-
-        let block_size = match self.block_size {
-            Some(block_size) => block_size.min(settings.get_max_block_size()? as usize),
-            None => settings.get_max_block_size()? as usize,
-        };
-
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
         let max_threads = settings.get_max_threads()? as usize;
         if settings.get_enable_parallel_multi_merge_sort()? {
@@ -325,7 +319,7 @@ impl SortPipelineBuilder {
                 pipeline,
                 self.schema.clone(),
                 max_threads,
-                block_size,
+                self.block_size,
                 self.limit,
                 self.sort_desc,
                 self.remove_order_col_at_last,
@@ -335,7 +329,7 @@ impl SortPipelineBuilder {
             try_add_multi_sort_merge(
                 pipeline,
                 self.schema.clone(),
-                block_size,
+                self.block_size,
                 self.limit,
                 self.sort_desc,
                 self.remove_order_col_at_last,
