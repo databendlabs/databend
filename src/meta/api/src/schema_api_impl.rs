@@ -2113,14 +2113,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let copied_files = loop {
             trials.next().unwrap()?.await;
 
-            let copied_files = list_table_copied_files(self, table_id.table_id).await?;
+            let copied_file_ident = TableCopiedFileNameIdent {
+                table_id: table_id.table_id,
+                file: "dummy".to_string(),
+            };
+            let dir_name = DirName::new(copied_file_ident);
+            let copied_files = self.list_pb_vec(&dir_name).await?;
 
             let (seq_2, _tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
 
             if seq_1 == seq_2 {
                 debug!(
-                    "list all copied file of table {}: {:?}",
-                    table_id.table_id, copied_files
+                    "list all copied file of table {}: {} files",
+                    table_id.table_id,
+                    copied_files.len()
                 );
                 break copied_files;
             } else {
@@ -2130,64 +2136,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // 2. Remove the copied files only when the seq of a copied file has not changed.
         //
-        // During running this step with several small transaction, other transactions may be
-        // modifying the table.
-        //
-        // - We assert the table seq is not changed in each transaction.
         // - We do not assert the seq of each copied file in each transaction, since we only delete
         //   non-changed ones.
 
         for chunk in copied_files.chunks(chunk_size as usize) {
-            let str_keys: Vec<_> = chunk.iter().map(|f| f.to_string_key()).collect();
-
-            // Load the `seq` of every copied file
-            let seqs = {
-                let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
-                    mget_pb_values(self, &str_keys).await?;
-
-                seq_infos.into_iter().map(|(seq, _)| seq)
+            let txn = TxnRequest {
+                condition: vec![],
+                if_then: chunk
+                    .iter()
+                    .map(|(name, seq_file)| {
+                        TxnOp::delete_exact(name.to_string_key(), Some(seq_file.seq()))
+                    })
+                    .collect(),
+                else_then: vec![],
             };
 
-            let mut if_then = vec![];
-            for (copied_seq, copied_str_key) in seqs.zip(str_keys) {
-                if copied_seq == 0 {
-                    continue;
-                }
-
-                if_then.push(TxnOp::delete_exact(copied_str_key, Some(copied_seq)));
-            }
-
-            let mut trials = txn_backoff(None, func_name!());
-            loop {
-                trials.next().unwrap()?.await;
-
-                let (tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
-
-                let mut if_then = if_then.clone();
-
-                // Update to increase table meta seq, so that to assert no other process modify the table
-                if_then.push(txn_op_put(&table_id, serialize_struct(&tb_meta)?));
-
-                let txn_req = TxnRequest {
-                    condition: vec![txn_cond_seq(&table_id, Eq, tb_meta_seq)],
-                    if_then,
-                    else_then: vec![],
-                };
-
-                debug!("submit chunk delete copied files: {:?}", txn_req);
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-                debug!(
-                    id :? =(&table_id),
-                    succ = succ,
-                    ctx = ctx;
-                    ""
-                );
-
-                if succ {
-                    break;
-                }
-            }
+            let (_succ, _responses) = send_txn(self, txn).await?;
         }
 
         Ok(TruncateTableReply {})
@@ -3459,23 +3423,6 @@ async fn remove_copied_files_for_dropped_table(
         send_txn(kv_api, txn).await?;
     }
     unreachable!()
-}
-
-/// List the copied file identities belonging to a table.
-async fn list_table_copied_files(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    table_id: u64,
-) -> Result<Vec<TableCopiedFileNameIdent>, MetaError> {
-    let copied_file_ident = TableCopiedFileNameIdent {
-        table_id,
-        file: "dummy".to_string(),
-    };
-
-    let dir_name = DirName::new(copied_file_ident);
-
-    let copied_files = list_keys(kv_api, &dir_name).await?;
-
-    Ok(copied_files)
 }
 
 /// Get the retention boundary time before which the data can be permanently removed.
