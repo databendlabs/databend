@@ -32,7 +32,7 @@ parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }
-tantivy-common = { git = "https://github.com/b41sh/tantivy", rev = "37aeac0", package = "tantivy-common" }
+tantivy-common = { workspace = true }
 tantivy-fst = "0.5"
 thiserror = { workspace = true }
 xorfilter-rs = { workspace = true, features = ["cbordata"] }
