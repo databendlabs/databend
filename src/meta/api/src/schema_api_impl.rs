@@ -2753,7 +2753,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     });
                 } else {
                     for (table_info, db_id) in table_infos.iter().take(capacity) {
-                        vacuum_ids.push(DroppedId::Table(
+                        vacuum_ids.push(DroppedId::new_table(
                             *db_id,
                             table_info.ident.table_id,
                             table_info.name.clone(),
@@ -2803,7 +2803,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut drop_table_infos = vec![];
 
         for (table_info, db_id) in table_infos.iter().take(the_limit) {
-            drop_ids.push(DroppedId::Table(
+            drop_ids.push(DroppedId::new_table(
                 *db_id,
                 table_info.ident.table_id,
                 table_info.name.clone(),
@@ -2826,8 +2826,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     db_name,
                     tables: _,
                 } => gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?,
-                DroppedId::Table(db_id, table_id, table_name) => {
-                    gc_dropped_table_by_id(self, &req.tenant, db_id, table_id, table_name).await?
+                DroppedId::Table { name, id } => {
+                    gc_dropped_table_by_id(
+                        self,
+                        &req.tenant,
+                        name.db_id,
+                        id.table_id,
+                        name.table_name.clone(),
+                    )
+                    .await?
                 }
             }
         }
@@ -3606,19 +3613,17 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
 #[fastrace::trace]
 async fn batch_filter_table_info(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    filter_db_info_with_table_name_list: &[(&TableInfoFilter, &Arc<DatabaseInfo>, u64, &String)],
+    args: &[(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)],
     filter_tb_infos: &mut Vec<(Arc<TableInfo>, u64)>,
 ) -> Result<(), KVAppError> {
-    let table_id_idents = filter_db_info_with_table_name_list
+    let table_id_idents = args
         .iter()
         .map(|(_f, _db, table_id, _table_name)| TableId::new(*table_id));
 
-    let strm = kv_api.get_pb_values(table_id_idents).await?;
-    let seq_metas = strm.try_collect::<Vec<_>>().await?;
+    let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
-    for (seq_meta, (filter, db_info, table_id, table_name)) in seq_metas
-        .into_iter()
-        .zip(filter_db_info_with_table_name_list.iter())
+    for (seq_meta, (filter, db_info, table_id, table_name)) in
+        seq_metas.into_iter().zip(args.iter())
     {
         let Some(seq_meta) = seq_meta else {
             error!(
@@ -3665,42 +3670,12 @@ async fn get_gc_table_info(
     limit: usize,
     table_id_list: &TableFilterInfoList<'_>,
 ) -> Result<Vec<(Arc<TableInfo>, u64)>, KVAppError> {
+    let table_id_list = &table_id_list[..std::cmp::min(limit, table_id_list.len())];
+
     let mut filter_tb_infos = vec![];
 
-    let mut filter_db_info_with_table_name_list: Vec<(
-        &TableInfoFilter,
-        &Arc<DatabaseInfo>,
-        u64,
-        &String,
-    )> = vec![];
-
-    for (filter, db_info, table_id, table_name) in table_id_list {
-        filter_db_info_with_table_name_list.push((filter, db_info, *table_id, table_name));
-        if filter_db_info_with_table_name_list.len() < DEFAULT_MGET_SIZE {
-            continue;
-        }
-
-        batch_filter_table_info(
-            kv_api,
-            &filter_db_info_with_table_name_list,
-            &mut filter_tb_infos,
-        )
-        .await?;
-
-        filter_db_info_with_table_name_list.clear();
-
-        if filter_tb_infos.len() >= limit {
-            return Ok(filter_tb_infos);
-        }
-    }
-
-    if !filter_db_info_with_table_name_list.is_empty() {
-        batch_filter_table_info(
-            kv_api,
-            &filter_db_info_with_table_name_list,
-            &mut filter_tb_infos,
-        )
-        .await?;
+    for chunk in table_id_list.chunks(DEFAULT_MGET_SIZE) {
+        batch_filter_table_info(kv_api, chunk, &mut filter_tb_infos).await?;
     }
 
     Ok(filter_tb_infos)

@@ -68,7 +68,7 @@ impl VacuumDropTablesInterpreter {
                 DroppedId::Db { .. } => {
                     drop_db_ids.push(drop_id);
                 }
-                DroppedId::Table(_, _, _) => {
+                DroppedId::Table { .. } => {
                     drop_db_table_ids.push(drop_id);
                 }
             }
@@ -183,7 +183,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                         } else {
                             for (table_id, table_name) in tables.iter() {
                                 if !failed_tables.contains(table_id) {
-                                    success_dropped_ids.push(DroppedId::Table(
+                                    success_dropped_ids.push(DroppedId::new_table(
                                         *db_id,
                                         *table_id,
                                         table_name.clone(),
@@ -192,8 +192,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
                             }
                         }
                     }
-                    DroppedId::Table(_, table_id, _) => {
-                        if !failed_tables.contains(table_id) {
+                    DroppedId::Table { name: _, id } => {
+                        if !failed_tables.contains(&id.table_id) {
                             success_dropped_ids.push(drop_id);
                         }
                     }

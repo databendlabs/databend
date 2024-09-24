@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::assert_ne;
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -290,7 +289,8 @@ impl SchemaApiTestSuite {
         suite.database_list(&b.build().await).await?;
         suite.database_list_in_diff_tenant(&b.build().await).await?;
         suite.database_rename(&b.build().await).await?;
-        suite.get_tenant_history_database(&b.build().await).await?;
+
+        suite.get_tenant_history_databases(&b.build().await).await?;
         suite
             .database_drop_undrop_list_history(&b.build().await)
             .await?;
@@ -1089,11 +1089,11 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn get_tenant_history_database<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
+    async fn get_tenant_history_databases<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant_name = "tenant_get_tenant_history_database";
+        let tenant_name = "tenant_get_tenant_history_databases";
         let db_name_1 = "db1_get_tenant_history_database";
         let db_name_2 = "db2_get_tenant_history_database";
 
@@ -4163,7 +4163,7 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_1.push(DroppedId::Table(
+                drop_ids_1.push(DroppedId::new_table(
                     *res.db_id,
                     resp.table_id,
                     table_name.table_name.clone(),
@@ -4270,8 +4270,16 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_1.push(DroppedId::Table(*db_id, resp.table_id, "tb1".to_string()));
-                drop_ids_2.push(DroppedId::Table(*db_id, resp.table_id, "tb1".to_string()));
+                drop_ids_1.push(DroppedId::new_table(
+                    *db_id,
+                    resp.table_id,
+                    "tb1".to_string(),
+                ));
+                drop_ids_2.push(DroppedId::new_table(
+                    *db_id,
+                    resp.table_id,
+                    "tb1".to_string(),
+                ));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
@@ -4299,7 +4307,11 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_2.push(DroppedId::Table(*db_id, resp.table_id, "tb2".to_string()));
+                drop_ids_2.push(DroppedId::new_table(
+                    *db_id,
+                    resp.table_id,
+                    "tb2".to_string(),
+                ));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
@@ -4334,61 +4346,6 @@ impl SchemaApiTestSuite {
             }
         }
 
-        fn cmp_dropped_id(l: &DroppedId, r: &DroppedId) -> Ordering {
-            match (l, r) {
-                (
-                    DroppedId::Table(left_db_id, left_table_id, _),
-                    DroppedId::Table(right_db_id, right_table_id, _),
-                ) => {
-                    if left_db_id != right_db_id {
-                        left_db_id.cmp(right_db_id)
-                    } else {
-                        left_table_id.cmp(right_table_id)
-                    }
-                }
-                (
-                    DroppedId::Db {
-                        db_id: left_db_id, ..
-                    },
-                    DroppedId::Db {
-                        db_id: right_db_id, ..
-                    },
-                ) => left_db_id.cmp(right_db_id),
-                (
-                    DroppedId::Db {
-                        db_id: left_db_id,
-                        db_name: _,
-                        tables: _,
-                    },
-                    DroppedId::Table(right_db_id, _, _),
-                ) => left_db_id.cmp(right_db_id),
-                (
-                    DroppedId::Table(left_db_id, _, _),
-                    DroppedId::Db {
-                        db_id: right_db_id,
-                        db_name: _,
-                        tables: _,
-                    },
-                ) => left_db_id.cmp(right_db_id),
-            }
-        }
-        fn is_dropped_id_eq(l: &DroppedId, r: &DroppedId) -> bool {
-            match (l, r) {
-                (
-                    DroppedId::Db {
-                        db_id: left_db_id,
-                        db_name: left_db_name,
-                        tables: _,
-                    },
-                    DroppedId::Db {
-                        db_id: right_db_id,
-                        db_name: right_db_name,
-                        tables: _,
-                    },
-                ) => left_db_id == right_db_id && left_db_name == right_db_name,
-                _ => l == r,
-            }
-        }
         // case 1: test AllDroppedTables with filter time
         {
             let now = Utc::now();
@@ -4398,13 +4355,19 @@ impl SchemaApiTestSuite {
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
-            // sort drop id by table id
-            let mut sort_drop_ids = resp.drop_ids;
-            sort_drop_ids.sort_by(cmp_dropped_id);
-            assert_eq!(sort_drop_ids.len(), drop_ids_1.len());
-            for (id1, id2) in sort_drop_ids.iter().zip(drop_ids_1.iter()) {
-                assert!(is_dropped_id_eq(id1, id2));
-            }
+
+            let got = resp
+                .drop_ids
+                .iter()
+                .map(|x| x.cmp_key())
+                .collect::<BTreeSet<_>>();
+
+            let want = drop_ids_1
+                .iter()
+                .map(|x| x.cmp_key())
+                .collect::<BTreeSet<_>>();
+
+            assert_eq!(got, want);
 
             let expected: BTreeSet<String> = [
                 "'db1'.'tb1'".to_string(),
@@ -4430,13 +4393,19 @@ impl SchemaApiTestSuite {
                 limit: None,
             };
             let resp = mt.get_drop_table_infos(req).await?;
-            // sort drop id by table id
-            let mut sort_drop_ids = resp.drop_ids;
-            sort_drop_ids.sort_by(cmp_dropped_id);
-            assert_eq!(sort_drop_ids.len(), drop_ids_2.len());
-            for (id1, id2) in sort_drop_ids.iter().zip(drop_ids_2.iter()) {
-                assert!(is_dropped_id_eq(id1, id2));
-            }
+
+            let got = resp
+                .drop_ids
+                .iter()
+                .map(|x| x.cmp_key())
+                .collect::<BTreeSet<_>>();
+
+            let want = drop_ids_2
+                .iter()
+                .map(|x| x.cmp_key())
+                .collect::<BTreeSet<_>>();
+
+            assert_eq!(got, want);
 
             let expected: BTreeSet<String> = [
                 "'db1'.'tb1'".to_string(),
@@ -4512,7 +4481,11 @@ impl SchemaApiTestSuite {
                 };
                 let resp = mt.create_table(req.clone()).await?;
 
-                drop_ids.push(DroppedId::Table(db_id, resp.table_id, table_name.clone()));
+                drop_ids.push(DroppedId::new_table(
+                    db_id,
+                    resp.table_id,
+                    table_name.clone(),
+                ));
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
@@ -4644,8 +4617,8 @@ impl SchemaApiTestSuite {
             let drop_ids_set: HashSet<u64> = drop_ids
                 .iter()
                 .map(|l| {
-                    if let DroppedId::Table(_, table_id, _) = l {
-                        *table_id
+                    if let DroppedId::Table { name: _, id } = l {
+                        id.table_id
                     } else {
                         unreachable!()
                     }
@@ -4653,8 +4626,8 @@ impl SchemaApiTestSuite {
                 .collect();
 
             for id in resp.drop_ids {
-                if let DroppedId::Table(_, table_id, _) = id {
-                    assert!(drop_ids_set.contains(&table_id));
+                if let DroppedId::Table { name: _, id } = id {
+                    assert!(drop_ids_set.contains(&id.table_id));
                 } else {
                     unreachable!()
                 }

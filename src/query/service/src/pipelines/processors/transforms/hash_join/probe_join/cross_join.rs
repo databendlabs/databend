@@ -35,8 +35,19 @@ impl HashJoinProbeState {
         if build_num_rows == 0 || input_num_rows == 0 {
             return Ok(vec![]);
         }
-        let probe_block = input.project(&self.probe_projections);
+        let mut probe_block = input.project(&self.probe_projections);
         let build_block = DataBlock::concat(build_blocks)?;
+        if build_num_rows == 1 {
+            for col in build_block.columns() {
+                let value_ref = col.value.as_ref();
+                let scalar = unsafe { value_ref.index_unchecked(0) };
+                probe_block.add_column(BlockEntry::new(
+                    col.data_type.clone(),
+                    Value::Scalar(scalar.to_owned()),
+                ));
+            }
+            return Ok(vec![probe_block]);
+        }
         let mut result_blocks = Vec::with_capacity(input_num_rows);
         for i in 0..input_num_rows {
             result_blocks.push(self.merge_with_constant_block(
