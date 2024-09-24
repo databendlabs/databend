@@ -197,7 +197,7 @@ async fn compact_table(
         let s_expr = SExpr::create_leaf(Arc::new(recluster));
         let recluster_interpreter =
             ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-        // recluster has been done in ReclusterTableInterpreter.
+        // Recluster will be done in `ReclusterTableInterpreter::execute2` directly, we do not need to use `PipelineCompleteExecutor` to execute it
         let build_res = recluster_interpreter.execute2().await?;
         assert!(build_res.main_pipeline.is_empty());
     }
