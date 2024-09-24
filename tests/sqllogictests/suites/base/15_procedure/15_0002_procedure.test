@@ -26,6 +26,23 @@ call procedure p1();
 2
 
 statement ok
+CREATE or replace PROCEDURE  p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 10;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+query T
+call procedure p1();
+----
+12
+
+statement ok
 CREATE PROCEDURE p1(x UInt8, sum UInt8) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
     FOR x IN x TO x + 3 DO
@@ -38,6 +55,18 @@ $$;
 statement error 3131
 CREATE PROCEDURE p1(x UInt8, sum UInt8) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
     FOR x IN x TO x + 3 DO
         sum := sum + x;
     END FOR;

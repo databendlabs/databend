@@ -82,9 +82,16 @@ impl ProcedureMgr {
                     procedure_id: *existent.data,
                 }),
                 CreateOption::CreateOrReplace => {
-                    unreachable!(
-                        "create_procedure: CreateOrReplace should never conflict with existent"
-                    );
+                    let res = self
+                        .kv_api
+                        .update_id_value(name_ident, meta.clone())
+                        .await?;
+
+                    if let Some((id, _meta)) = res {
+                        Ok(CreateProcedureReply { procedure_id: *id })
+                    } else {
+                        Err(AppError::from(name_ident.unknown_error(func_name!())).into())
+                    }
                 }
             },
         }
