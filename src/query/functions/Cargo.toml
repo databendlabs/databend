@@ -47,6 +47,7 @@ lexical-core = "0.8.5"
 libm = "0.2.6"
 match-template = { workspace = true }
 md-5 = "0.10.5"
+multiversion = "0.7.4"
 naive-cityhash = "0.2.0"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
@@ -56,7 +57,6 @@ regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
-multiversion = "0.7.4"
 sha1 = "0.10.5"
 sha2 = { workspace = true }
 simdutf8 = "0.1.4"

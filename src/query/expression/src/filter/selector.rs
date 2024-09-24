@@ -29,6 +29,7 @@ use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
 use crate::Expr;
+use crate::LikePattern;
 use crate::Scalar;
 use crate::Value;
 
@@ -122,9 +123,9 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             )?,
-            SelectExpr::Like((column_ref, like_str, not)) => self.process_like(
+            SelectExpr::Like((column_ref, like_pattern, not)) => self.process_like(
                 column_ref,
-                like_str.as_str(),
+                like_pattern.as_ref(),
                 *not,
                 true_selection,
                 false_selection,
@@ -325,7 +326,7 @@ impl<'a> Selector<'a> {
     fn process_like(
         &self,
         column_ref: &Expr,
-        like_str: &str,
+        like_pattern: &LikePattern,
         not: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
@@ -353,7 +354,7 @@ impl<'a> Selector<'a> {
         self.select_like(
             column,
             &data_type,
-            like_str,
+            like_pattern,
             not,
             true_selection,
             false_selection,

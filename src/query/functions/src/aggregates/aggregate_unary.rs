@@ -207,7 +207,7 @@ where
         let column = T::try_downcast_column(&columns[0]).unwrap();
         let state: &mut S = place.get::<S>();
         match validity {
-            Some(bitmap) => {
+            Some(bitmap) if bitmap.unset_bits() > 0 => {
                 let column_iter = T::iter_column(&column);
                 for (value, is_valid) in column_iter.zip(bitmap.iter()) {
                     if is_valid {
@@ -216,7 +216,7 @@ where
                 }
                 Ok(())
             }
-            None => state.add_batch(column, self.function_data.as_deref()),
+            _ => state.add_batch(column, self.function_data.as_deref()),
         }
     }
 

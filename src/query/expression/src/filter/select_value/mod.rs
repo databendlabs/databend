@@ -19,6 +19,7 @@ use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ValueType;
 use crate::with_mapped_cmp_method;
+use crate::LikePattern;
 use crate::SelectOp;
 use crate::SelectStrategy;
 use crate::Selector;
@@ -230,7 +231,7 @@ impl<'a> Selector<'a> {
     pub(crate) fn select_like_adapt(
         &self,
         column: StringColumn,
-        like_str: &str,
+        like_pattern: &LikePattern,
         not: bool,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
@@ -244,7 +245,7 @@ impl<'a> Selector<'a> {
         match has_false {
             true => self.select_like_not::<true>(
                 column,
-                like_str,
+                like_pattern,
                 not,
                 validity,
                 true_selection,
@@ -256,7 +257,7 @@ impl<'a> Selector<'a> {
             ),
             false => self.select_like_not::<false>(
                 column,
-                like_str,
+                like_pattern,
                 not,
                 validity,
                 true_selection,
@@ -273,7 +274,7 @@ impl<'a> Selector<'a> {
     pub(crate) fn select_like_not<const FALSE: bool>(
         &self,
         column: StringColumn,
-        like_str: &str,
+        like_pattern: &LikePattern,
         not: bool,
         validity: Option<Bitmap>,
         true_selection: &mut [u32],
@@ -286,7 +287,7 @@ impl<'a> Selector<'a> {
         if not {
             self.select_column_like::<FALSE, true>(
                 column,
-                like_str,
+                like_pattern,
                 validity,
                 true_selection,
                 false_selection,
@@ -298,7 +299,7 @@ impl<'a> Selector<'a> {
         } else {
             self.select_column_like::<FALSE, false>(
                 column,
-                like_str,
+                like_pattern,
                 validity,
                 true_selection,
                 false_selection,

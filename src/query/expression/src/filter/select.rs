@@ -36,6 +36,7 @@ use crate::types::VariantType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::LikePattern;
 use crate::Scalar;
 use crate::Selector;
 use crate::Value;
@@ -305,7 +306,7 @@ impl<'a> Selector<'a> {
         &self,
         mut column: Column,
         data_type: &DataType,
-        like_str: &str,
+        like_pattern: &LikePattern,
         not: bool,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
@@ -325,7 +326,7 @@ impl<'a> Selector<'a> {
         let column = column.into_string().unwrap();
         self.select_like_adapt(
             column,
-            like_str,
+            like_pattern,
             not,
             validity,
             true_selection,

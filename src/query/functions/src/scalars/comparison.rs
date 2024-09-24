@@ -464,7 +464,7 @@ fn register_like(registry: &mut FunctionRegistry) {
         "like",
         |_, lhs, rhs| {
             if rhs.max.as_ref() == Some(&rhs.min) {
-                let pattern_type = generate_like_pattern(rhs.min.as_bytes());
+                let pattern_type = generate_like_pattern(rhs.min.as_bytes(), 1);
 
                 if matches!(pattern_type, LikePattern::OrdinalStr(_)) {
                     return lhs.domain_eq(rhs);
@@ -523,24 +523,57 @@ fn vectorize_like(
 {
     move |arg1, arg2, _ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let pattern_type = generate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
             Value::Scalar(func(arg1.as_bytes(), &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = StringType::iter_column(&arg1);
-
-            let pattern_type = generate_like_pattern(arg2.as_bytes());
             let mut builder = MutableBitmap::with_capacity(arg1.len());
-            for arg1 in arg1_iter {
-                builder.push(func(arg1.as_bytes(), &pattern_type));
+            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.current_buffer_len());
+            if let LikePattern::SurroundByPercent(searcher) = pattern_type {
+                let needle_byte_len = searcher.needle().len();
+                let data = arg1.data().as_slice();
+                let offsets = arg1.offsets().as_slice();
+                let mut idx = 0;
+                let mut pos = (*offsets.first().unwrap()) as usize;
+                let end = (*offsets.last().unwrap()) as usize;
+
+                while pos < end {
+                    if let Some(p) = searcher.search(&data[pos..end]) {
+                        // data: {3x}googlex|{3x}googlex|{3x}googlex
+                        // needle_size: 6
+                        // offsets: 0, 10, 20, 30
+                        // (pos, p):  (0,    3) , (10, 3), (20, 3), ()
+                        while offsets[idx + 1] as usize <= pos + p {
+                            builder.push(false);
+                            idx += 1;
+                        }
+                        // check if the substring is in bound
+                        builder.push(pos + p + needle_byte_len <= offsets[idx + 1] as usize);
+                        pos = offsets[idx + 1] as usize;
+                        idx += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                while idx < arg1.len() {
+                    builder.push(false);
+                    idx += 1;
+                }
+            } else {
+                for arg1 in arg1_iter {
+                    builder.push(func(arg1.as_bytes(), &pattern_type));
+                }
             }
+
             Value::Column(builder.into())
         }
         (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
-                let pattern_type = generate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
                 builder.push(func(arg1.as_bytes(), &pattern_type));
             }
             Value::Column(builder.into())
@@ -550,7 +583,7 @@ fn vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = generate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
                 builder.push(func(arg1.as_bytes(), &pattern_type));
             }
             Value::Column(builder.into())
@@ -564,13 +597,13 @@ fn variant_vectorize_like(
 {
     move |arg1, arg2, _ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
-            let pattern_type = generate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
             Value::Scalar(func(arg1, &pattern_type))
         }
         (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
             let arg1_iter = VariantType::iter_column(&arg1);
 
-            let pattern_type = generate_like_pattern(arg2.as_bytes());
+            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.current_buffer_len());
             let mut builder = MutableBitmap::with_capacity(arg1.len());
             for arg1 in arg1_iter {
                 builder.push(func(arg1, &pattern_type));
@@ -581,7 +614,7 @@ fn variant_vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for arg2 in arg2_iter {
-                let pattern_type = generate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
                 builder.push(func(arg1, &pattern_type));
             }
             Value::Column(builder.into())
@@ -591,7 +624,7 @@ fn variant_vectorize_like(
             let arg2_iter = StringType::iter_column(&arg2);
             let mut builder = MutableBitmap::with_capacity(arg2.len());
             for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = generate_like_pattern(arg2.as_bytes());
+                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
                 builder.push(func(arg1, &pattern_type));
             }
             Value::Column(builder.into())
