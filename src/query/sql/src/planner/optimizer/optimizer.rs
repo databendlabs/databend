@@ -453,8 +453,12 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
         .run(&s_expr)
         .await?;
 
+    // Pull up and infer filter.
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
+    // Run post rewrite rules
+    s_expr = RecursiveOptimizer::new(&[RuleID::SplitAggregate], &opt_ctx).run(&s_expr)?;
 
     // Cost based optimization
     let mut dphyp_optimized = false;
