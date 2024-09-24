@@ -19,6 +19,9 @@ use std::sync::LazyLock;
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
+use databend_common_ast::ast::ShowDictionariesStmt;
+use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -29,11 +32,16 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::DictionaryMeta;
 use itertools::Itertools;
 
+use crate::binder::bind_context;
+use crate::normalize_identifier;
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
+use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDictionaryPlan;
+use crate::BindContext;
 use crate::Binder;
+use crate::SelectBuilder;
 
 pub const DICT_OPT_KEY_SQL_HOST: &str = "host";
 pub const DICT_OPT_KEY_SQL_PORT: &str = "port";
@@ -386,5 +394,71 @@ impl Binder {
                 schema,
             },
         )))
+    }
+
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_dictionaries(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowDictionariesStmt,
+    ) -> Result<Plan> {
+        let ShowDictionariesStmt {
+            catalog,
+            database,
+            full,
+            limit,
+        } = stmt;
+
+        let database = self.check_database_exist(catalog, database).await?;
+        let mut select_builder = SelectBuilder::from("system.dictionaries");
+
+        if *full  {
+            select_builder
+                .with_column("name AS Dictionaries")
+                .with_column("database AS Database")
+                .with_column("catalog AS Catalog")
+                .with_column("owner")
+                .with_column("created_on AS create_time")
+                .with_column("dictionary_query");
+        } else {
+            select_builder.with_column(format!("name AS `Dictionaries_in_{database}`"));
+        }
+
+        select_builder
+            .with_order_by("catalog")
+            .with_order_by("database")
+            .with_order_by("name");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
+
+        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        let query = match limit {
+            None => select_builder.build(),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.build()
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+                select_builder.build()
+            }
+        };
+        debug!("show dictionaries rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowDictionaries(catalog_name, database)
+        )
+        .await
     }
 }

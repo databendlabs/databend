@@ -401,6 +401,8 @@ pub enum RewriteKind {
 
     Call,
     ShowProcedures,
+
+    ShowDictionaries(String, String),
 }
 
 impl Plan {

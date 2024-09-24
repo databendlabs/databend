@@ -26,6 +26,8 @@ use crate::ast::ColumnDefinition;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 
+use super::ShowLimit;
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDictionaryStmt {
     pub create_option: CreateOption,
@@ -121,5 +123,34 @@ impl Display for ShowCreateDictionaryStmt {
                 .chain(&self.database)
                 .chain(Some(&self.dictionary_name)),
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowDictionariesStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub full: bool,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowDictionariesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW")?;
+        if self.full {
+            write!(f, " FULL")?;
+        }
+        write!(f, " DICTIONARIES")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.")?;
+            }
+            write!(f, "{database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, "{limit}")?;
+        }
+        Ok(())
     }
 }
