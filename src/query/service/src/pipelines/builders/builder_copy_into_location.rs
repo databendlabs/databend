@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
@@ -42,7 +41,6 @@ impl PipelineBuilder {
             None,
             vec![],
             false,
-            AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )
     }

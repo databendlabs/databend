@@ -179,8 +179,8 @@ impl ValueType for VariantType {
     }
 
     #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
     }
 }
 

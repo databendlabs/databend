@@ -87,6 +87,29 @@ impl AsyncFunctionRewriter {
                 let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
                 Ok(new_expr)
             }
+            RelOperator::Filter(mut plan) => {
+                for scalar in &mut plan.predicates {
+                    self.visit(scalar)?;
+                }
+                let child_expr = self.create_async_func_expr(s_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                Ok(new_expr)
+            }
+            RelOperator::Mutation(mut plan) => {
+                for matched_evaluator in plan.matched_evaluators.iter_mut() {
+                    if let Some(condition) = matched_evaluator.condition.as_mut() {
+                        self.visit(condition)?;
+                    }
+                    if let Some(update) = matched_evaluator.update.as_mut() {
+                        for (_, scalar) in update.iter_mut() {
+                            self.visit(scalar)?;
+                        }
+                    }
+                }
+                let child_expr = self.create_async_func_expr(s_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                Ok(new_expr)
+            }
             _ => Ok(s_expr),
         }
     }
@@ -136,6 +159,12 @@ impl<'a> VisitorMut<'a> for AsyncFunctionRewriter {
     }
 
     fn visit_async_function_call(&mut self, async_func: &'a mut AsyncFunctionCall) -> Result<()> {
+        if self
+            .async_functions_map
+            .contains_key(&async_func.display_name)
+        {
+            return Ok(());
+        }
         for (i, arg) in async_func.arguments.iter_mut().enumerate() {
             self.visit(arg)?;
 

@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod transform_window_partition_bucket;
-mod transform_window_partition_scatter;
-mod transform_window_partition_sort;
-mod transform_window_partition_spill_reader;
-mod transform_window_partition_spill_writer;
+mod transform_window_partition_collect;
+mod window_partition_buffer;
+mod window_partition_exchange;
 mod window_partition_meta;
 
-pub use transform_window_partition_bucket::*;
-pub use transform_window_partition_scatter::*;
-pub use transform_window_partition_sort::*;
-pub use transform_window_partition_spill_reader::*;
-pub use transform_window_partition_spill_writer::*;
+pub use transform_window_partition_collect::*;
+pub use window_partition_buffer::*;
+pub use window_partition_exchange::*;
 pub use window_partition_meta::*;

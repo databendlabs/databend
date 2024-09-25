@@ -18,22 +18,15 @@ use std::io::Write;
 
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::QuotedIdent;
-use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
-use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Backtrace;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::IResult;
-use databend_common_ast::parser::Input;
-use databend_common_ast::parser::ParseMode;
-use databend_common_ast::rule;
+use databend_common_ast::parser::*;
 use goldenfile::Mint;
+use nom_rule::rule;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
@@ -831,6 +824,7 @@ fn test_statement() {
         r#"drop PROCEDURE p1()"#,
         r#"drop PROCEDURE p1(int, string)"#,
         r#"call PROCEDURE p1()"#,
+        r#"call PROCEDURE p1(1, 'x', '2022-02-02'::Date)"#,
         r#"show PROCEDURES like 'p1%'"#,
         r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
             BEGIN

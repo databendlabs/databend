@@ -28,7 +28,8 @@ use databend_common_storages_fuse::TableContext;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
-use crate::spillers::SpillBuffer;
+use crate::spillers::PartitionBuffer;
+use crate::spillers::PartitionBufferFetchOption;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
@@ -37,7 +38,8 @@ use crate::spillers::SpillerType;
 /// it is used for both build side and probe side.
 pub struct HashJoinSpiller {
     spiller: Spiller,
-    spill_buffer: SpillBuffer,
+    partition_buffer: PartitionBuffer,
+    partition_threshold: usize,
     join_type: JoinType,
     is_build_side: bool,
     func_ctx: FunctionContext,
@@ -56,7 +58,7 @@ impl HashJoinSpiller {
         hash_keys: Vec<Expr>,
         hash_method: HashMethodKind,
         spill_partition_bits: usize,
-        spill_buffer_threshold: usize,
+        partition_buffer_threshold: usize,
         is_build_side: bool,
     ) -> Result<Self> {
         // Create a Spiller for spilling build side data.
@@ -72,13 +74,19 @@ impl HashJoinSpiller {
         };
         let spiller = Spiller::create(ctx.clone(), operator, spill_config, spiller_type)?;
 
-        // Create a SpillBuffer to buffer data before spilling.
-        let spill_buffer = SpillBuffer::create(1 << spill_partition_bits, spill_buffer_threshold);
+        let num_partitions = (1 << spill_partition_bits) as usize;
+        // The memory threshold of each partition, we will spill the partition data
+        // if the partition memory size exceeds the threshold.
+        let partition_threshold = partition_buffer_threshold * 1024 * 1024 / num_partitions;
+
+        // Create a PartitionBuffer to buffer data before spilling.
+        let partition_buffer = PartitionBuffer::create(num_partitions);
 
         let join_type = join_state.join_type();
         Ok(Self {
             spiller,
-            spill_buffer,
+            partition_buffer,
+            partition_threshold,
             spill_partition_bits,
             hash_keys,
             hash_method,
@@ -100,8 +108,8 @@ impl HashJoinSpiller {
             self.partition_data_block(&data_block, &join_type, self.spill_partition_bits)?;
         for (partition_id, data_block) in partition_data_blocks.into_iter().enumerate() {
             if !data_block.is_empty() {
-                self.spill_buffer
-                    .add_partition_data(partition_id, data_block);
+                self.partition_buffer
+                    .add_data_block(partition_id, data_block);
             }
         }
         Ok(())
@@ -111,11 +119,13 @@ impl HashJoinSpiller {
     pub(crate) async fn spill(
         &mut self,
         data_blocks: &[DataBlock],
-        partition_need_to_spill: Option<&HashSet<u8>>,
+        partition_need_to_spill: Option<&HashSet<usize>>,
     ) -> Result<Vec<DataBlock>> {
         let join_type = self.join_type.clone();
         let mut unspilled_data_blocks = vec![];
         let data_block = DataBlock::concat(data_blocks)?;
+        let fetch_option =
+            PartitionBufferFetchOption::PickPartitionWithThreshold(self.partition_threshold);
         for (partition_id, data_block) in self
             .partition_data_block(&data_block, &join_type, self.spill_partition_bits)?
             .into_iter()
@@ -123,16 +133,20 @@ impl HashJoinSpiller {
         {
             if !data_block.is_empty() {
                 if let Some(partition_need_to_spill) = partition_need_to_spill
-                    && !partition_need_to_spill.contains(&(partition_id as u8))
+                    && !partition_need_to_spill.contains(&(partition_id))
                 {
                     unspilled_data_blocks.push(data_block);
                     continue;
                 }
-                self.spill_buffer
-                    .add_partition_data(partition_id, data_block);
-                if let Some(data_block) = self.spill_buffer.pick_data_to_spill(partition_id)? {
+                self.partition_buffer
+                    .add_data_block(partition_id, data_block);
+                if let Some(data_blocks) = self
+                    .partition_buffer
+                    .fetch_data_blocks(partition_id, &fetch_option)?
+                {
+                    let data_block = DataBlock::concat(&data_blocks)?;
                     self.spiller
-                        .spill_with_partition(partition_id as u8, data_block)
+                        .spill_with_partition(partition_id, data_block)
                         .await?;
                 }
             }
@@ -141,13 +155,18 @@ impl HashJoinSpiller {
     }
 
     // Restore data blocks from SpillBuffer and spilled files.
-    pub(crate) async fn restore(&mut self, partition_id: u8) -> Result<Vec<DataBlock>> {
+    pub(crate) async fn restore(&mut self, partition_id: usize) -> Result<Vec<DataBlock>> {
         let mut data_blocks = vec![];
         // 1. restore data from SpillBuffer.
+        let option = if self.can_pick_buffer() {
+            PartitionBufferFetchOption::PickPartitionWithThreshold(0)
+        } else {
+            PartitionBufferFetchOption::ReadPartition
+        };
         if self.need_read_buffer()
             && let Some(buffer_blocks) = self
-                .spill_buffer
-                .read_partition_data(partition_id, self.can_pick_buffer())
+                .partition_buffer
+                .fetch_data_blocks(partition_id, &option)?
         {
             data_blocks.extend(buffer_blocks);
         }
@@ -217,9 +236,9 @@ impl HashJoinSpiller {
         Ok(hashes)
     }
 
-    pub(crate) fn spilled_partitions(&self) -> HashSet<u8> {
+    pub(crate) fn spilled_partitions(&self) -> HashSet<usize> {
         let mut partition_ids = self.spiller.spilled_partitions();
-        for partition_id in self.spill_buffer.buffered_partitions() {
+        for partition_id in self.partition_buffer.partition_ids() {
             partition_ids.insert(partition_id);
         }
         partition_ids
@@ -227,7 +246,7 @@ impl HashJoinSpiller {
 
     pub fn has_next_restore_file(&self) -> bool {
         self.next_restore_file < self.spiller.spilled_files().len()
-            || (self.next_restore_file == 0 && !self.spill_buffer.empty_partition(0))
+            || (self.next_restore_file == 0 && !self.partition_buffer.is_partition_empty(0))
     }
 
     pub fn reset_next_restore_file(&mut self) {

@@ -20,7 +20,7 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use highway::HighwayHash;
 use http::StatusCode;
@@ -43,6 +43,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
@@ -211,7 +212,7 @@ async fn query_final_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
@@ -230,7 +231,10 @@ async fn query_final_handler(
             .await?
         {
             Some(query) => {
-                let mut response = query.get_response_state_only().await;
+                let mut response = query
+                    .get_response_state_only()
+                    .await
+                    .map_err(HttpErrorCode::server_error)?;
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
@@ -250,7 +254,7 @@ async fn query_cancel_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
@@ -282,7 +286,7 @@ async fn query_state_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
@@ -292,7 +296,10 @@ async fn query_state_handler(
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
-                    let response = query.get_response_state_only().await;
+                    let response = query
+                        .get_response_state_only()
+                        .await
+                        .map_err(HttpErrorCode::server_error)?;
                     Ok(QueryResponse::from_internal(query_id, response, false))
                 }
             }
@@ -309,13 +316,22 @@ async fn query_page_handler(
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(full_name!(), ctx, &query_id);
+    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                if query.user_name != ctx.user_name {
+                    return Err(poem::error::Error::from_string(
+                        format!(
+                            "wrong user, query {} expect {}, got {}",
+                            query_id, query.user_name, ctx.user_name
+                        ),
+                        StatusCode::UNAUTHORIZED,
+                    ));
+                }
                 query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
@@ -341,7 +357,7 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let root = get_http_tracing_span(full_name!(), ctx, &ctx.query_id);
+    let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {

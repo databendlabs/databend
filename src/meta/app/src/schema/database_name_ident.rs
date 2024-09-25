@@ -15,10 +15,10 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-pub type DatabaseNameIdent = TIdent<Resource>;
-pub type DatabaseNameIdentRaw = TIdentRaw<Resource>;
+pub type DatabaseNameIdent = TIdent<DatabaseNameRsc>;
+pub type DatabaseNameIdentRaw = TIdentRaw<DatabaseNameRsc>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::DatabaseNameRsc;
 
 impl DatabaseNameIdent {
     pub fn database_name(&self) -> &str {
@@ -42,8 +42,8 @@ mod kvapi_impl {
     use crate::schema::DatabaseId;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct DatabaseNameRsc;
+    impl TenantResource for DatabaseNameRsc {
         const PREFIX: &'static str = "__fd_database";
         const TYPE: &'static str = "DatabaseNameIdent";
         const HAS_TENANT: bool = true;

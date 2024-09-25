@@ -19,6 +19,7 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
@@ -36,7 +37,6 @@ use crate::parser::statement::set_table_option;
 use crate::parser::statement::top_n;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
-use crate::rule;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(

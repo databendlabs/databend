@@ -75,6 +75,14 @@ impl DataBlock {
     ) -> Result<(Self, DataSchema)> {
         assert_eq!(schema.num_fields(), batch.num_columns());
 
+        if schema.fields().len() != batch.num_columns() {
+            return Err(ErrorCode::Internal(format!(
+                "conversion from RecordBatch to DataBlock failed, schema fields len: {}, RecordBatch columns len: {}",
+                schema.fields().len(),
+                batch.num_columns()
+            )));
+        }
+
         if batch.num_columns() == 0 {
             return Ok((DataBlock::new(vec![], batch.num_rows()), schema.clone()));
         }

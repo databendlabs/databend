@@ -374,7 +374,7 @@ impl TransformHashJoinBuild {
         self.is_spill_happened
     }
 
-    fn partition_to_restore(&self) -> u8 {
+    fn partition_to_restore(&self) -> usize {
         self.build_state
             .hash_join_state
             .partition_id

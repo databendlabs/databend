@@ -61,7 +61,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
                         Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
-                    _ => (Scalar::Null, Scalar::Null),
+                    _ => return None,
                 }
             }
             Statistics::Int64(s) => {
@@ -92,7 +92,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(max), *size)),
                         Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i128(min), *size)),
                     ),
-                    _ => (Scalar::Null, Scalar::Null),
+                    _ => return None,
                 }
             }
             Statistics::Int96(s) => {
@@ -124,12 +124,12 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         decode_decimal256_from_bytes(max, *size),
                         decode_decimal256_from_bytes(min, *size),
                     ),
-                    _ => (Scalar::Null, Scalar::Null),
+                    _ => return None,
                 }
             }
         }
     } else {
-        (Scalar::Null, Scalar::Null)
+        return None;
     };
     Some(ColumnStatistics::new(
         min,

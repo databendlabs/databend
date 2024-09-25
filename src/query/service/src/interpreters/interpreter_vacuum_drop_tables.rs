@@ -24,7 +24,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -65,11 +65,11 @@ impl VacuumDropTablesInterpreter {
         let mut drop_db_table_ids = vec![];
         for drop_id in drop_ids {
             match drop_id {
-                DroppedId::Db(db_id, db_name) => {
-                    drop_db_ids.push(DroppedId::Db(db_id, db_name));
+                DroppedId::Db { .. } => {
+                    drop_db_ids.push(drop_id);
                 }
-                DroppedId::Table(db_id, table_id, table_name) => {
-                    drop_db_table_ids.push(DroppedId::Table(db_id, table_id, table_name));
+                DroppedId::Table { .. } => {
+                    drop_db_table_ids.push(drop_id);
                 }
             }
         }
@@ -112,9 +112,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
@@ -128,9 +126,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
         );
         // if database if empty, vacuum all tables
         let filter = if self.plan.database.is_empty() {
-            TableInfoFilter::AllDroppedTables(Some(retention_time))
+            TableInfoFilter::DroppedTableOrDroppedDatabase(Some(retention_time))
         } else {
-            TableInfoFilter::Dropped(Some(retention_time))
+            TableInfoFilter::DroppedTables(Some(retention_time))
         };
 
         let tenant = self.ctx.get_tenant();
@@ -146,7 +144,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?}, drop_ids: {:?}",
             self.plan.database,
             tables.len(),
-            drop_ids.len()
+            drop_ids
         );
 
         // TODO buggy, table as catalog obj should be allowed to drop
@@ -159,7 +157,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let files_opt = handler
+        let (files_opt, failed_dbs, failed_tables) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
                 tables,
@@ -172,7 +170,40 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .await?;
         // gc meta data only when not dry run
         if self.plan.option.dry_run.is_none() {
-            self.gc_drop_tables(catalog, drop_ids).await?;
+            let mut success_dropped_ids = vec![];
+            for drop_id in drop_ids {
+                match &drop_id {
+                    DroppedId::Db {
+                        db_id,
+                        db_name,
+                        tables,
+                    } => {
+                        if !failed_dbs.contains(db_name) {
+                            success_dropped_ids.push(drop_id);
+                        } else {
+                            for (table_id, table_name) in tables.iter() {
+                                if !failed_tables.contains(table_id) {
+                                    success_dropped_ids.push(DroppedId::new_table(
+                                        *db_id,
+                                        *table_id,
+                                        table_name.clone(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    DroppedId::Table { name: _, id } => {
+                        if !failed_tables.contains(&id.table_id) {
+                            success_dropped_ids.push(drop_id);
+                        }
+                    }
+                }
+            }
+            info!(
+                "failed dbs:{:?}, failed_tables:{:?}, success_drop_ids:{:?}",
+                failed_dbs, failed_tables, success_dropped_ids
+            );
+            self.gc_drop_tables(catalog, success_dropped_ids).await?;
         }
 
         match files_opt {

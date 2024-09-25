@@ -83,7 +83,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -132,9 +131,15 @@ pub trait SchemaApi: Send + Sync {
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, KVAppError>;
 
-    async fn get_database_history(
+    /// Retrieves all databases for a specific tenant, including those marked as dropped.
+    ///
+    /// * `include_non_retainable` -
+    /// If true, includes databases that are beyond the retention period.
+    /// If false, excludes such databases from the result.
+    async fn get_tenant_history_databases(
         &self,
         req: ListDatabaseReq,
+        include_non_retainable: bool,
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
 
     // index
@@ -189,12 +194,9 @@ pub trait SchemaApi: Send + Sync {
         req: CommitTableMetaReq,
     ) -> Result<CommitTableMetaReply, KVAppError>;
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<(), KVAppError>;
 
-    async fn undrop_table_by_id(
-        &self,
-        req: UndropTableByIdReq,
-    ) -> Result<UndropTableReply, KVAppError>;
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<(), KVAppError>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError>;
 

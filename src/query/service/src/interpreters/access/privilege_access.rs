@@ -1260,6 +1260,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DescDatamaskPolicy(_) => {}
             Plan::Begin => {}
             Plan::ExecuteImmediate(_)
+            | Plan::CallProcedure(_)
             | Plan::CreateProcedure(_)
             | Plan::DropProcedure(_)
             /*| Plan::ShowCreateProcedure(_)
@@ -1334,7 +1335,9 @@ async fn has_priv(
     }
     if db_name.to_lowercase() == "system" {
         if let Some(table_name) = table_name {
-            return Ok(SYSTEM_TABLES_ALLOW_LIST.contains(&table_name));
+            if SYSTEM_TABLES_ALLOW_LIST.contains(&table_name) {
+                return Ok(true);
+            }
         }
     }
 

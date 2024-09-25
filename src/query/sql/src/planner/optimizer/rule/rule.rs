@@ -26,30 +26,33 @@ use crate::optimizer::SExpr;
 
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
-        RuleID::NormalizeScalarFilter,
-        RuleID::EliminateFilter,
         RuleID::EliminateSort,
-        RuleID::MergeFilter,
+        RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
+        // Filter
+        RuleID::EliminateFilter,
+        RuleID::MergeFilter,
+        RuleID::NormalizeScalarFilter,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
+        RuleID::PushDownFilterSort,
+        RuleID::PushDownFilterEvalScalar,
+        // Limit
+        RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterProjectSet,
         RuleID::PushDownLimit,
         RuleID::PushDownLimitUnion,
+        RuleID::PushDownSortEvalScalar,
         RuleID::PushDownLimitEvalScalar,
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitWindow,
-        RuleID::PushDownLimitAggregate,
+        RuleID::RulePushDownRankLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
-        RuleID::PushDownFilterSort,
-        RuleID::PushDownFilterEvalScalar,
-        RuleID::PushDownFilterJoin,
-        RuleID::PushDownFilterProjectSet,
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,
-        RuleID::SplitAggregate,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
@@ -75,6 +78,7 @@ pub trait Rule {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum RuleID {
     // Rewrite rules
+    EliminateUnion,
     NormalizeScalarFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
@@ -90,8 +94,9 @@ pub enum RuleID {
     PushDownLimitEvalScalar,
     PushDownLimitSort,
     PushDownLimitWindow,
-    PushDownLimitAggregate,
+    RulePushDownRankLimitAggregate,
     PushDownLimitScan,
+    PushDownSortEvalScalar,
     PushDownSortScan,
     SemiToInnerJoin,
     EliminateEvalScalar,
@@ -125,10 +130,11 @@ impl Display for RuleID {
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::PushDownLimitEvalScalar => write!(f, "PushDownLimitEvalScalar"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
-            RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
+            RuleID::RulePushDownRankLimitAggregate => write!(f, "RulePushDownRankLimitAggregate"),
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
+            RuleID::PushDownSortEvalScalar => write!(f, "PushDownSortEvalScalar"),
             RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
             RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
@@ -147,6 +153,7 @@ impl Display for RuleID {
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
             RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
+            RuleID::EliminateUnion => write!(f, "EliminateUnion"),
         }
     }
 }

@@ -214,173 +214,153 @@ EvalScalar
 query T
 explain select avg(b) from explain_agg_t1 group by a order by avg(b);
 ----
-EvalScalar
-├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4)]
-├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+Sort
+├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
-└── Sort
-    ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-    ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
+└── EvalScalar
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
-    └── EvalScalar
-        ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-        ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    └── AggregateFinal
+        ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: [sum(b), count()]
         ├── estimated rows: 0.00
-        └── AggregateFinal
-            ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        └── AggregatePartial
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
-            └── AggregatePartial
-                ├── group by: [a]
-                ├── aggregate functions: [sum(b), count()]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 
 query T
 explain select avg(b) + 1 from explain_agg_t1 group by a order by avg(b);
 ----
-EvalScalar
-├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4)]
-├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
+Sort
+├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
-└── Sort
-    ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-    ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
+└── EvalScalar
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
-    └── EvalScalar
-        ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-        ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    └── AggregateFinal
+        ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: [sum(b), count()]
         ├── estimated rows: 0.00
-        └── AggregateFinal
-            ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        └── AggregatePartial
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
-            └── AggregatePartial
-                ├── group by: [a]
-                ├── aggregate functions: [sum(b), count()]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select avg(b), avg(b) + 1 from explain_agg_t1 group by a order by avg(b);
 ----
-EvalScalar
-├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5)]
-├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
+Sort
+├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
+├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
-└── Sort
-    ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
-    ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
+└── EvalScalar
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
-    └── EvalScalar
-        ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
-        ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    └── AggregateFinal
+        ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: [sum(b), count()]
         ├── estimated rows: 0.00
-        └── AggregateFinal
-            ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        └── AggregatePartial
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
-            └── AggregatePartial
-                ├── group by: [a]
-                ├── aggregate functions: [sum(b), count()]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select avg(b) + 1, avg(b) from explain_agg_t1 group by a order by avg(b);
 ----
-EvalScalar
-├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
-├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+Sort
+├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
+├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
-└── Sort
-    ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
-    ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
+└── EvalScalar
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
     ├── estimated rows: 0.00
-    └── EvalScalar
-        ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
-        ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
+    └── AggregateFinal
+        ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: [sum(b), count()]
         ├── estimated rows: 0.00
-        └── AggregateFinal
-            ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        └── AggregatePartial
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
-            └── AggregatePartial
-                ├── group by: [a]
-                ├── aggregate functions: [sum(b), count()]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select avg(b), avg(b) + 1 from explain_agg_t1 group by a order by avg(b) + 1;
 ----
-EvalScalar
-├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5)]
-├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
+Sort
+├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
+├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 ASC NULLS LAST]
 ├── estimated rows: 0.00
-└── Sort
-    ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
-    ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 ASC NULLS LAST]
+└── EvalScalar
+    ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
+    ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL), sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1, sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
     ├── estimated rows: 0.00
-    └── EvalScalar
-        ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
-        ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL) + 1]
+    └── AggregateFinal
+        ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: [sum(b), count()]
         ├── estimated rows: 0.00
-        └── AggregateFinal
-            ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
+        └── AggregatePartial
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
-            └── AggregatePartial
-                ├── group by: [a]
-                ├── aggregate functions: [sum(b), count()]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 drop table explain_agg_t1;
@@ -470,6 +450,70 @@ EvalScalar
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 0.00
+
+query T
+EXPLAIN SELECT referer, isrefresh, count() FROM t GROUP BY referer, isrefresh order by referer, isrefresh desc limit 10;
+----
+Limit
+├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+├── limit: 10
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+    ├── sort keys: [referer ASC NULLS LAST, isrefresh DESC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+        ├── group by: [referer, isrefresh]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── group by: [referer, isrefresh]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: 0.00
+            ├── rank limit: 10
+            └── TableScan
+                ├── table: default.default.t
+                ├── output columns: [referer (#0), isrefresh (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
+
+query T
+EXPLAIN SELECT referer, isrefresh, count() FROM t GROUP BY referer, isrefresh limit 3, 10;
+----
+Limit
+├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+├── limit: 10
+├── offset: 3
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+    ├── sort keys: [referer ASC NULLS LAST, isrefresh ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
+        ├── group by: [referer, isrefresh]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── group by: [referer, isrefresh]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: 0.00
+            ├── rank limit: 13
+            └── TableScan
+                ├── table: default.default.t
+                ├── output columns: [referer (#0), isrefresh (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 DROP TABLE IF EXISTS t;

@@ -449,6 +449,7 @@ impl SubqueryRewriter {
                     group_items: vec![],
                     aggregate_functions: vec![ScalarItem {
                         scalar: AggregateFunction {
+                            span: subquery.span,
                             display_name: "count(*)".to_string(),
                             func_name: "count".to_string(),
                             distinct: false,
@@ -459,10 +460,7 @@ impl SubqueryRewriter {
                         .into(),
                         index: agg_func_index,
                     }],
-                    from_distinct: false,
-                    mode: AggregateMode::Initial,
-                    limit: None,
-                    grouping_sets: None,
+                    ..Default::default()
                 };
 
                 let compare = FunctionCall {
@@ -644,6 +642,7 @@ impl SubqueryRewriter {
         // For some cases, empty result set will be occur, we should return null instead of empty set.
         // So let wrap an expression: `if(count()=0, null, any(subquery.output_column)`
         let count_func = ScalarExpr::AggregateFunction(AggregateFunction {
+            span: subquery.span,
             func_name: "count".to_string(),
             distinct: false,
             params: vec![],
@@ -655,6 +654,7 @@ impl SubqueryRewriter {
             display_name: "count".to_string(),
         });
         let any_func = ScalarExpr::AggregateFunction(AggregateFunction {
+            span: subquery.span,
             func_name: "any".to_string(),
             distinct: false,
             params: vec![],
@@ -692,9 +692,7 @@ impl SubqueryRewriter {
                             index: any_idx,
                         },
                     ],
-                    from_distinct: false,
-                    limit: None,
-                    grouping_sets: None,
+                    ..Default::default()
                 }
                 .into(),
             ),

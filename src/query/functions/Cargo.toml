@@ -28,7 +28,7 @@ databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
-dtparse = { git = "https://github.com/TCeason/dtparse.git", rev = "de0a15b" }
+dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "de0a15b" }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geo-types = "0.7.13"
@@ -47,14 +47,10 @@ lexical-core = "0.8.5"
 libm = "0.2.6"
 match-template = { workspace = true }
 md-5 = "0.10.5"
-memchr = { version = "2", default-features = false }
+multiversion = "0.7.4"
 naive-cityhash = "0.2.0"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
-ordered-float = { workspace = true, features = [
-    "serde",
-    "rand",
-] }
 proj4rs = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }

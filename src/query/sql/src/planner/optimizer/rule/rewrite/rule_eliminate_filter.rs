@@ -17,16 +17,15 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Scalar;
 use itertools::Itertools;
 
 use crate::optimizer::extract::Matcher;
+use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::plans::ConstantExpr;
 use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
 use crate::plans::Operator;
@@ -73,18 +72,7 @@ impl Rule for RuleEliminateFilter {
             .collect::<Vec<ScalarExpr>>();
 
         // Rewrite false filter to be empty scan
-        if predicates.iter().any(|predicate| {
-            matches!(
-                predicate,
-                ScalarExpr::ConstantExpr(ConstantExpr {
-                    value: Scalar::Boolean(false),
-                    ..
-                }) | ScalarExpr::ConstantExpr(ConstantExpr {
-                    value: Scalar::Null,
-                    ..
-                })
-            )
-        }) {
+        if predicates.iter().any(is_falsy) {
             let output_columns = eval_scalar
                 .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
                 .output_columns

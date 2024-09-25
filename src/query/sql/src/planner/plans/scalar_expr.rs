@@ -82,7 +82,9 @@ impl PartialEq for ScalarExpr {
     #[recursive::recursive]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => l.eq(r),
+            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => {
+                l.column.index == r.column.index && l.column.table_index == r.column.table_index
+            }
             (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
             (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
             (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
@@ -102,7 +104,10 @@ impl Hash for ScalarExpr {
     #[recursive::recursive]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            ScalarExpr::BoundColumnRef(v) => v.hash(state),
+            ScalarExpr::BoundColumnRef(v) => {
+                v.column.index.hash(state);
+                v.column.table_index.hash(state);
+            }
             ScalarExpr::ConstantExpr(v) => v.hash(state),
             ScalarExpr::WindowFunction(v) => v.hash(state),
             ScalarExpr::AggregateFunction(v) => v.hash(state),
@@ -185,11 +190,14 @@ impl ScalarExpr {
                     .into_option()?;
                 Some(Range { start, end })
             }),
+            ScalarExpr::WindowFunction(expr) => expr.span,
+            ScalarExpr::AggregateFunction(expr) => expr.span,
+            ScalarExpr::LambdaFunction(expr) => expr.span,
             ScalarExpr::CastExpr(expr) => expr.span.or(expr.argument.span()),
             ScalarExpr::SubqueryExpr(expr) => expr.span,
             ScalarExpr::UDFCall(expr) => expr.span,
             ScalarExpr::UDFLambdaCall(expr) => expr.span,
-            _ => None,
+            ScalarExpr::AsyncFunctionCall(expr) => expr.span,
         }
     }
 
@@ -217,6 +225,10 @@ impl ScalarExpr {
                 Ok(())
             }
             fn visit_udf_lambda_call(&mut self, _: &'a UDFLambdaCall) -> Result<()> {
+                self.evaluable = false;
+                Ok(())
+            }
+            fn visit_async_function_call(&mut self, _: &'a AsyncFunctionCall) -> Result<()> {
                 self.evaluable = false;
                 Ok(())
             }
@@ -590,8 +602,11 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct AggregateFunction {
+    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    pub span: Span,
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<Scalar>,

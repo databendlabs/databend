@@ -242,6 +242,7 @@ impl<'a> AggregateRewriter<'a> {
         );
 
         let replaced_agg = AggregateFunction {
+            span: aggregate.span,
             display_name: aggregate.display_name.clone(),
             func_name: aggregate.func_name.clone(),
             distinct: aggregate.distinct,
@@ -471,7 +472,8 @@ impl Binder {
             group_items: agg_info.group_items.clone(),
             aggregate_functions: agg_info.aggregate_functions.clone(),
             from_distinct: false,
-            limit: None,
+            rank_limit: None,
+
             grouping_sets: agg_info.grouping_sets.as_ref().map(|g| GroupingSets {
                 grouping_id_index: g.grouping_id_column.index,
                 sets: g.sets.clone(),
@@ -686,9 +688,7 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
             )
         };
 
