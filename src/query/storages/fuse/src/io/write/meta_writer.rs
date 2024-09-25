@@ -11,11 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -24,8 +22,6 @@ use opendal::Operator;
 
 #[async_trait::async_trait]
 pub trait MetaWriter<T> {
-    /// If meta has a `to_bytes` function, such as `SegmentInfo` and `TableSnapshot`
-    /// We should not use `write_meta`. Instead, use `write_meta_data`
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()>;
 }
 
@@ -42,24 +38,25 @@ where T: Marshal + Sync + Send
 
 #[async_trait::async_trait]
 pub trait CachedMetaWriter<T> {
-    /// If meta has a `to_bytes` function, such as `SegmentInfo` and `TableSnapshot`
-    /// We should not use `write_meta_through_cache`. Instead, use `write_meta_data_through_cache`
-    async fn write_meta_through_cache(self, data_accessor: &Operator, location: &str)
-    -> Result<()>;
+    async fn write_meta_through_cache(
+        &self,
+        data_accessor: &Operator,
+        location: &str,
+    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     #[async_backtrace::framed]
     async fn write_meta_through_cache(
-        self,
+        &self,
         data_accessor: &Operator,
         location: &str,
     ) -> Result<()> {
         let bytes = self.marshal()?;
         data_accessor.write(location, bytes.clone()).await?;
-        if let Some(cache) = CompactSegmentInfo::cache() {
-            cache.insert(location.to_owned(), CompactSegmentInfo::try_from(&self)?);
+        if let Some(cache) = SegmentInfo::cache() {
+            cache.insert(location.to_owned(), self.try_into()?);
         }
         Ok(())
     }
