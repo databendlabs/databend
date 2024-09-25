@@ -55,10 +55,11 @@ impl Interpreter for CreateProcedureInterpreter {
         let tenant = self.plan.tenant.clone();
 
         let create_procedure_req: CreateProcedureReq = self.plan.clone().into();
-        let _ = UserApiProvider::instance()
-            .add_procedure(&tenant, create_procedure_req)
-            .await?;
+        let overriding = self.plan.create_option.is_overriding();
 
+        let _ = UserApiProvider::instance()
+            .add_procedure(&tenant, create_procedure_req, overriding)
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }
