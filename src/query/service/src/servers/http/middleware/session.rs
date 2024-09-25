@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
@@ -28,10 +26,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_metrics::http::metrics_incr_http_request_count;
-use databend_common_metrics::http::metrics_incr_http_response_panics_count;
-use databend_common_metrics::http::metrics_incr_http_slow_request_count;
-use databend_common_metrics::http::metrics_observe_http_response_duration;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -57,13 +51,13 @@ use poem::Request;
 use poem::Response;
 use uuid::Uuid;
 
-use super::v1::HttpQueryContext;
-use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::SessionClaim;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -436,69 +430,6 @@ pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<Stri
         .collect()
 }
 
-pub struct MetricsMiddleware {
-    api: String,
-}
-
-impl MetricsMiddleware {
-    pub fn new(api: impl Into<String>) -> Self {
-        Self { api: api.into() }
-    }
-}
-
-impl<E: Endpoint> Middleware<E> for MetricsMiddleware {
-    type Output = MetricsMiddlewareEndpoint<E>;
-
-    fn transform(&self, ep: E) -> Self::Output {
-        MetricsMiddlewareEndpoint {
-            ep,
-            api: self.api.clone(),
-        }
-    }
-}
-
-pub struct MetricsMiddlewareEndpoint<E> {
-    api: String,
-    ep: E,
-}
-
-impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
-    type Output = Response;
-
-    async fn call(&self, req: Request) -> poem::error::Result<Self::Output> {
-        let start_time = Instant::now();
-        let method = req.method().to_string();
-        let output = self.ep.call(req).await?;
-        let resp = output.into_response();
-        let status_code = resp.status().to_string();
-        let duration = start_time.elapsed();
-        metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
-        metrics_observe_http_response_duration(method.clone(), self.api.clone(), duration);
-        if duration.as_secs_f64() > 60.0 {
-            // TODO: replace this into histogram
-            metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
-        }
-        Ok(resp)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct PanicHandler {}
-
-impl PanicHandler {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl poem::middleware::PanicHandler for PanicHandler {
-    type Response = (StatusCode, &'static str);
-
-    fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
-        metrics_incr_http_response_panics_count();
-        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
-    }
-}
 pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
     let resp = match next.call(req).await {
         Ok(resp) => resp.into_response(),
