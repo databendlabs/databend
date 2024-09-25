@@ -28,7 +28,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
@@ -120,21 +119,6 @@ where K: kvapi::Key {
     } else {
         Ok((key, None))
     }
-}
-
-/// Get value that are encoded with FromToProto.
-///
-/// It returns seq number and the data.
-pub async fn get_pb_value<K>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    k: &K,
-) -> Result<(u64, Option<K::ValueType>), MetaError>
-where
-    K: kvapi::Key,
-    K::ValueType: FromToProto,
-{
-    let res = kv_api.get_pb(k).await?;
-    Ok((res.seq(), res.into_value()))
 }
 
 /// Batch get values that are encoded with FromToProto.
