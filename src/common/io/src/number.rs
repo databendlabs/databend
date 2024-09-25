@@ -774,12 +774,13 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
     // Sign
 
     // MI/PL/SG - write sign itself and not in number
-    if np.desc.flag.contains(NumFlag::Plus | NumFlag::Minus) {
-        if np.desc.flag.contains(NumFlag::Plus) && !np.desc.flag.contains(NumFlag::Minus) {
-            np.sign_wrote = false; /* need sign */
-        } else {
-            np.sign_wrote = true; /* needn't sign */
-        }
+    if np.desc.flag.intersects(NumFlag::Plus | NumFlag::Minus) {
+        // if np.desc.flag.contains(NumFlag::Plus) && !np.desc.flag.contains(NumFlag::Minus) {
+        //     np.sign_wrote = false; /* need sign */
+        // } else {
+        // TODO: Why is this not the same as the postgres implementation?
+        np.sign_wrote = true; /* needn't sign */
+    // }
     } else {
         if np.sign && np.desc.flag.contains(NumFlag::FillMode) {
             np.desc.flag.remove(NumFlag::Bracket)
@@ -840,15 +841,37 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
                 id @ (NumPoz::Tk9 | NumPoz::Tk0 | NumPoz::TkDec | NumPoz::TkD) => {
                     np.numpart_to_char(id)
                 }
+
                 NumPoz::TkComma => {
                     if np.num_in {
-                        np.inout.push(',')
-                    } else if np.desc.flag.contains(NumFlag::FillMode) {
+                        np.inout.push(',');
                         continue;
-                    } else {
+                    }
+                    if !np.desc.flag.contains(NumFlag::FillMode) {
                         np.inout.push(' ')
                     }
                 }
+
+                NumPoz::TkMI => {
+                    if np.sign {
+                        if !np.desc.flag.contains(NumFlag::FillMode) {
+                            np.inout.push(' ');
+                        }
+                    } else {
+                        np.inout.push('-');
+                    }
+                }
+
+                NumPoz::TkPL => {
+                    if np.sign {
+                        np.inout.push('+');
+                    } else if !np.desc.flag.contains(NumFlag::FillMode) {
+                        np.inout.push(' ');
+                    }
+                }
+
+                NumPoz::TkSG => np.inout.push(if np.sign { '+' } else { '-' }),
+
                 NumPoz::TkPR => (),
                 NumPoz::TkFM => (),
                 _ => unimplemented!(),
@@ -946,9 +969,24 @@ mod tests {
 
         assert_eq!(" 4 8 5", i64_to_char(485, "9 9 9")?);
         assert_eq!(" 1,485", i64_to_char(1485, "9,999")?);
-        // assert_eq!(" 1 485", i64_to_char(1485, "9G999")?);
 
         assert_eq!("Good number: 485", i64_to_char(485, "\"Good number:\"999")?);
+
+        assert_eq!("+485", i64_to_char(485, "SG999")?);
+        assert_eq!("-485", i64_to_char(-485, "SG999")?);
+        assert_eq!("4-85", i64_to_char(-485, "9SG99")?);
+
+        assert_eq!("+485", i64_to_char(485, "PL999")?);
+        assert_eq!(" 485", i64_to_char(-485, "PL999")?);
+
+        assert_eq!("48+5", i64_to_char(485, "99PL9")?);
+        assert_eq!("48 5", i64_to_char(-485, "99PL9")?);
+
+        assert_eq!("485-", i64_to_char(-485, "999MI")?);
+        assert_eq!("485 ", i64_to_char(485, "999MI")?);
+        assert_eq!("485", i64_to_char(485, "FM999MI")?);
+
+        // assert_eq!(" 1 485", i64_to_char(1485, "9G999")?);
 
         Ok(())
     }
@@ -979,18 +1017,13 @@ mod tests {
         // assert_eq!(" 148,500", f64_to_char(148.5, "999D999")?);
         // assert_eq!(" 3 148,500", f64_to_char(3148.5, "9G999D999")?);
         // assert_eq!("485-", f64_to_char(-485, "999S")?);
-        // assert_eq!("485-", f64_to_char(-485, "999MI")?);
-        // assert_eq!("485 ", f64_to_char(485, "999MI")?);
-        // assert_eq!("485", f64_to_char(485, "FM999MI")?);
-        // assert_eq!("+485", f64_to_char(485, "PL999")?);
-        // assert_eq!("+485", f64_to_char(485, "SG999")?);
-        // assert_eq!("-485", f64_to_char(-485, "SG999")?);
-        // assert_eq!("4-85", f64_to_char(-485, "9SG99")?);
-        // assert_eq!("<485>", f64_to_char(-485, "999PR")?);
+
         // assert_eq!("DM 485", f64_to_char(485, "L999")?);
+
         // assert_eq!("        CDLXXXV", f64_to_char(485, "RN")?);
         // assert_eq!("CDLXXXV", f64_to_char(485, "FMRN")?);
         // assert_eq!("V", f64_to_char(5.2, "FMRN")?);
+
         // assert_eq!(" 482nd", f64_to_char(482, "999th")?);
 
         // assert_eq!(" 12000", f64_to_char(12, "99V999")?);
