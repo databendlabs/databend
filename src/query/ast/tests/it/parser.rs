@@ -827,6 +827,24 @@ fn test_statement() {
         r#"call PROCEDURE p1()"#,
         r#"call PROCEDURE p1(1, 'x', '2022-02-02'::Date)"#,
         r#"show PROCEDURES like 'p1%'"#,
+        r#"create or replace PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE if not exists p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
         r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
             BEGIN
                 LET sum := 0;

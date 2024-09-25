@@ -2067,10 +2067,25 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
     let create_procedure = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
         },
-        |(_, opt_or_replace, _, name, args, _, return_type, _, _, opt_comment, _, script)| {
-            let create_option = parse_create_option(opt_or_replace.is_some(), false)?;
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            name,
+            args,
+            _,
+            return_type,
+            _,
+            _,
+            opt_comment,
+            _,
+            script,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
             let name = ProcedureIdentity {
                 name: name.to_string(),
