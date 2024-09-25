@@ -89,7 +89,12 @@ impl EndpointKind {
             EndpointKind::Verify => Ok(None),
             EndpointKind::Refresh => Ok(Some(TokenType::Refresh)),
             EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout => {
-                Ok(Some(TokenType::Session))
+                if GlobalConfig::instance().query.management_mode {
+                    // allow gateway to use "select 1" to verify token in request header.
+                    Ok(None)
+                } else {
+                    Ok(Some(TokenType::Session))
+                }
             }
             _ => Err(ErrorCode::AuthenticateFailure(format!(
                 "should not use databend token for {self:?}",
