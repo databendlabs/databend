@@ -89,12 +89,7 @@ impl Binder {
             child
         };
 
-        let default_nulls_first = !self
-            .ctx
-            .get_settings()
-            .get_sql_dialect()
-            .unwrap()
-            .is_null_biggest();
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         let mut sort_items: Vec<SortItem> = vec![];
         if !window_plan.partition_by.is_empty() {
@@ -102,16 +97,19 @@ impl Binder {
                 sort_items.push(SortItem {
                     index: part.index,
                     asc: true,
-                    nulls_first: default_nulls_first,
+                    nulls_first: default_nulls_first(true),
                 });
             }
         }
 
         for order in window_plan.order_by.iter() {
+            let asc = order.asc.unwrap_or(true);
             sort_items.push(SortItem {
                 index: order.order_by_item.index,
-                asc: order.asc.unwrap_or(true),
-                nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                asc,
+                nulls_first: order
+                    .nulls_first
+                    .unwrap_or_else(|| default_nulls_first(asc)),
             });
         }
 
@@ -332,6 +330,7 @@ impl<'a> WindowRewriter<'a> {
                     replaced_args.push(replaced_arg.into());
                 }
                 WindowFuncType::Aggregate(AggregateFunction {
+                    span: agg.span,
                     display_name: agg.display_name.clone(),
                     func_name: agg.func_name.clone(),
                     distinct: agg.distinct,

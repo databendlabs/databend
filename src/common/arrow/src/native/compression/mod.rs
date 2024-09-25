@@ -32,20 +32,21 @@ pub static SAMPLE_SIZE: usize = 64;
 
 /// Compression codec
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Compression {
-    None,
-    Lz4,
-    Zstd,
-    Snappy,
+    None = 0,
+    Lz4 = 1,
+    Zstd = 2,
+    Snappy = 3,
 
     // start from 10 for none common compression
-    Rle,
-    Dict,
-    OneValue,
-    Freq,
-    Bitpacking,
-    DeltaBitpacking,
-    Patas,
+    Rle = 10,
+    Dict = 11,
+    OneValue = 12,
+    Freq = 13,
+    Bitpacking = 14,
+    DeltaBitpacking = 15,
+    Patas = 16,
 }
 
 impl Default for Compression {
@@ -85,23 +86,17 @@ impl Compression {
             Compression::None | Compression::Lz4 | Compression::Zstd | Compression::Snappy
         )
     }
-}
 
-impl From<Compression> for u8 {
-    fn from(value: Compression) -> Self {
-        match value {
-            Compression::None => 0,
-            Compression::Lz4 => 1,
-            Compression::Zstd => 2,
-            Compression::Snappy => 3,
-            Compression::Rle => 10,
-            Compression::Dict => 11,
-            Compression::OneValue => 12,
-            Compression::Freq => 13,
-            Compression::Bitpacking => 14,
-            Compression::DeltaBitpacking => 15,
-            Compression::Patas => 16,
-        }
+    pub fn all_not_raw_encodings() -> Vec<Self> {
+        vec![
+            Compression::Rle,
+            Compression::Dict,
+            Compression::OneValue,
+            Compression::Freq,
+            Compression::Bitpacking,
+            Compression::DeltaBitpacking,
+            Compression::Patas,
+        ]
     }
 }
 

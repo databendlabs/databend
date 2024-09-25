@@ -74,13 +74,6 @@ pub trait CachedObject<T> {
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<CompactSegmentInfo> for CompactSegmentInfo {
-    type Cache = CompactSegmentInfoCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_table_segment_cache()
-    }
-}
-
 impl CachedObject<CompactSegmentInfo> for SegmentInfo {
     type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {

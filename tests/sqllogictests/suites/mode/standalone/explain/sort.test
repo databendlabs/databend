@@ -75,12 +75,14 @@ query T
 explain pipeline select a, b from t1 order by a;
 ----
 CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortMerge × 4
-      SortPartialTransform × 4
-        Merge to Resize × 4
-          DeserializeDataTransform × 1
-            SyncReadParquetDataSource × 1
+  Merge to KWayMergeCombiner × 1
+    KWayMergeWorker × 4
+      KWayMergePartitioner × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 
 # Sort spilling
@@ -91,13 +93,15 @@ query T
 explain pipeline select a, b from t1 order by a;
 ----
 CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortSpill × 4
-      TransformSortMerge × 4
-        SortPartialTransform × 4
-          Merge to Resize × 4
-            DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+  Merge to KWayMergeCombiner × 1
+    KWayMergeWorker × 4
+      KWayMergePartitioner × 1
+        TransformSortSpill × 4
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 statement ok
 set sort_spilling_memory_ratio = 0;
@@ -107,13 +111,15 @@ query T
 explain pipeline select a + 1, b from t1 order by a + 1;
 ----
 CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortMerge × 4
-      SortPartialTransform × 4
-        Merge to Resize × 4
-          CompoundBlockOperator(Map) × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataSource × 1
+  Merge to KWayMergeCombiner × 1
+    KWayMergeWorker × 4
+      KWayMergePartitioner × 1
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              CompoundBlockOperator(Map) × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 
 # Sort spilling
@@ -124,14 +130,16 @@ query T
 explain pipeline select a + 1, b from t1 order by a + 1;
 ----
 CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortSpill × 4
-      TransformSortMerge × 4
-        SortPartialTransform × 4
-          Merge to Resize × 4
-            CompoundBlockOperator(Map) × 1
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+  Merge to KWayMergeCombiner × 1
+    KWayMergeWorker × 4
+      KWayMergePartitioner × 1
+        TransformSortSpill × 4
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                CompoundBlockOperator(Map) × 1
+                  DeserializeDataTransform × 1
+                    SyncReadParquetDataSource × 1
 
 statement ok
 drop table if exists t1;

@@ -27,6 +27,7 @@ use crate::optimizer::SExpr;
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
         RuleID::EliminateSort,
+        RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
         // Filter
         RuleID::EliminateFilter,
@@ -52,7 +53,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,
-        RuleID::SplitAggregate,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
@@ -78,6 +78,7 @@ pub trait Rule {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum RuleID {
     // Rewrite rules
+    EliminateUnion,
     NormalizeScalarFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
@@ -152,6 +153,7 @@ impl Display for RuleID {
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
             RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
+            RuleID::EliminateUnion => write!(f, "EliminateUnion"),
         }
     }
 }

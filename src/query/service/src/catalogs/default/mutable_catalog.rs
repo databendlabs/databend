@@ -118,6 +118,7 @@ use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
 use fastrace::func_name;
 use log::info;
+use log::warn;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -247,15 +248,21 @@ impl Catalog for MutableCatalog {
             .meta
             .list_databases(ListDatabaseReq {
                 tenant: tenant.clone(),
-                filter: None,
             })
             .await?;
 
-        dbs.iter().try_fold(vec![], |mut acc, item| {
-            let db = self.build_db_instance(item)?;
-            acc.push(db);
-            Ok(acc)
-        })
+        dbs.iter()
+            .try_fold(vec![], |mut acc, item: &Arc<DatabaseInfo>| {
+                let db_result = self.build_db_instance(item);
+                match db_result {
+                    Ok(db) => acc.push(db),
+                    Err(err) => {
+                        // Ignore the error and continue, allow partial failure.
+                        warn!("Failed to build database '{:?}': {:?}", item, err);
+                    }
+                }
+                Ok(acc)
+            })
     }
 
     #[async_backtrace::framed]

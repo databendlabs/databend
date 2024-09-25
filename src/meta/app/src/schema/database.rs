@@ -313,16 +313,9 @@ impl GetDatabaseReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum DatabaseInfoFilter {
-    // include all dropped databases
-    IncludeDropped,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDatabaseReq {
     pub tenant: Tenant,
-    pub filter: Option<DatabaseInfoFilter>,
 }
 
 impl ListDatabaseReq {

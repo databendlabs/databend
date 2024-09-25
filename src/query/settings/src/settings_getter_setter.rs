@@ -601,6 +601,21 @@ impl Settings {
         self.try_get_string("numeric_cast_option")
     }
 
+    pub fn get_nulls_first(&self) -> impl Fn(bool) -> bool {
+        match self
+            .try_get_string("default_order_by_null")
+            .unwrap_or("nulls_last".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "nulls_last" => |_| false,
+            "nulls_first" => |_| true,
+            "nulls_first_on_asc_last_on_desc" => |asc: bool| asc,
+            "nulls_last_on_asc_first_on_desc" => |asc: bool| !asc,
+            _ => |_| false,
+        }
+    }
+
     pub fn get_external_server_connect_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("external_server_connect_timeout_secs")
     }
@@ -704,6 +719,10 @@ impl Settings {
 
     pub fn get_enable_loser_tree_merge_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
+    }
+
+    pub fn get_enable_parallel_multi_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parallel_multi_merge_sort")? == 1)
     }
 
     pub fn get_format_null_as_str(&self) -> Result<bool> {

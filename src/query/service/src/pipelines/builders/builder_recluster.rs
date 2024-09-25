@@ -116,18 +116,6 @@ impl PipelineBuilder {
                     });
                 }
 
-                // merge sort
-                let final_block_size =
-                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
-                let partial_block_size = if self.main_pipeline.output_len() > 1 {
-                    std::cmp::min(
-                        final_block_size,
-                        self.ctx.get_settings().get_max_block_size()? as usize,
-                    )
-                } else {
-                    final_block_size
-                };
-
                 // construct output fields
                 let output_fields = cluster_stats_gen.out_fields.clone();
                 let schema = DataSchemaRefExt::create(output_fields);
@@ -142,11 +130,14 @@ impl PipelineBuilder {
                     })
                     .collect();
 
+                // merge sort
+                let sort_block_size =
+                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
+
                 self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
-                        .with_partial_block_size(partial_block_size)
-                        .with_final_block_size(final_block_size)
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
+                        .with_block_size_hit(sort_block_size)
                         .remove_order_col_at_last();
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 

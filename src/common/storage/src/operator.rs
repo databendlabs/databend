@@ -47,6 +47,7 @@ use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
+use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
@@ -137,7 +138,11 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
             timeout_layer
         })
         // Add retry
-        .layer(RetryLayer::new().with_jitter())
+        .layer(
+            RetryLayer::new()
+                .with_jitter()
+                .with_notify(DatabendRetryInterceptor),
+        )
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
         // Add logging
@@ -406,6 +411,17 @@ fn new_storage_http_client() -> Result<HttpClient> {
     }
 
     Ok(HttpClient::build(builder)?)
+}
+
+pub struct DatabendRetryInterceptor;
+
+impl RetryInterceptor for DatabendRetryInterceptor {
+    fn intercept(&self, err: &opendal::Error, dur: Duration) {
+        warn!(
+            target: "opendal::layers::retry",
+            "will retry after {:.2}s because: {:?}",
+            dur.as_secs_f64(), err)
+    }
 }
 
 /// DataOperator is the operator to access persist data services.

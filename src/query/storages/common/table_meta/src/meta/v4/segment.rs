@@ -249,10 +249,6 @@ pub struct CompactSegmentInfo {
 }
 
 impl CompactSegmentInfo {
-    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        Self::from_reader(Cursor::new(bytes))
-    }
-
     pub fn from_reader(mut r: impl Read) -> Result<Self> {
         let SegmentHeader {
             version,

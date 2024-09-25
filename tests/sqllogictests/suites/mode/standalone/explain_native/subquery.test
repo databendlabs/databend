@@ -77,7 +77,7 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [is_true(2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL))]
+├── filters: [is_true((2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL)))]
 ├── estimated rows: 1.00
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]

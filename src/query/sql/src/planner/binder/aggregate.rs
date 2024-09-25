@@ -242,6 +242,7 @@ impl<'a> AggregateRewriter<'a> {
         );
 
         let replaced_agg = AggregateFunction {
+            span: aggregate.span,
             display_name: aggregate.display_name.clone(),
             func_name: aggregate.func_name.clone(),
             distinct: aggregate.distinct,
@@ -687,9 +688,7 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
             )
         };
 

@@ -318,3 +318,8 @@ SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
 
 statement ok
 unset max_set_operator_count;
+
+query I
+select * from numbers(100) union all select * from numbers(100) ignore_result;
+----
+

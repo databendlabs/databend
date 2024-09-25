@@ -131,9 +131,15 @@ pub trait SchemaApi: Send + Sync {
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, KVAppError>;
 
-    async fn get_database_history(
+    /// Retrieves all databases for a specific tenant, including those marked as dropped.
+    ///
+    /// * `include_non_retainable` -
+    /// If true, includes databases that are beyond the retention period.
+    /// If false, excludes such databases from the result.
+    async fn get_tenant_history_databases(
         &self,
         req: ListDatabaseReq,
+        include_non_retainable: bool,
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
 
     // index
@@ -205,9 +211,16 @@ pub trait SchemaApi: Send + Sync {
     async fn get_tables_history(
         &self,
         req: ListTableReq,
+        db_name: &str,
     ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    /// List all tables in the database.
+    ///
+    /// Returns a list of `(table_name, table_id, table_meta)` tuples.
+    async fn list_tables(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<(String, TableId, SeqV<TableMeta>)>, KVAppError>;
 
     /// Return TableMeta by table_id.
     ///

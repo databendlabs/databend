@@ -133,9 +133,10 @@ impl DataBlock {
                 c.check_valid()?;
                 if c.len() != num_rows {
                     return Err(ErrorCode::Internal(format!(
-                        "DataBlock corrupted, column length mismatch, col: {}, num_rows: {}",
+                        "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {}, datatype: {}",
                         c.len(),
-                        num_rows
+                        num_rows,
+                        c.data_type()
                     )));
                 }
             }

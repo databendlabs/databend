@@ -58,6 +58,12 @@ select id, dict_get(d2, 'name', id), dict_get(d2, 'age', id), dict_get(d2, 'sala
 4 Tom 55 3000.55 0
 5 NULL NULL NULL NULL
 
+query ITI
+select id, name, dict_get(d2, 'age', id) as age from t2 where age > 35
+----
+3 Lily 41
+4 Tom 55
+
 statement ok
 CREATE OR REPLACE DICTIONARY d3(id int, name string, age uint16, salary float, active bool) PRIMARY KEY name SOURCE(mysql(host='localhost' port='3106' username='root' password='123456' db='test' table='user'));
 

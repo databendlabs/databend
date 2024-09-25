@@ -52,5 +52,4 @@ pub use write::CachedMetaWriter;
 pub use write::InvertedIndexBuilder;
 pub use write::InvertedIndexWriter;
 pub use write::MetaWriter;
-pub use write::SegmentWriter;
 pub use write::WriteSettings;

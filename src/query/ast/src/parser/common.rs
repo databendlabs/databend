@@ -19,6 +19,7 @@ use nom::multi::many1;
 use nom::sequence::terminated;
 use nom::Offset;
 use nom::Slice;
+use nom_rule::rule;
 use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
@@ -36,20 +37,10 @@ use crate::parser::query::with_options;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
-use crate::rule;
 use crate::Range;
 use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
-
-#[macro_export]
-macro_rules! rule {
-    ($($tt:tt)*) => { nom_rule::rule!(
-        $crate::parser::match_text,
-        $crate::parser::match_token,
-        $($tt)*)
-    }
-}
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.text() == text) {

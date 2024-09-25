@@ -36,6 +36,7 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
+use super::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -118,6 +119,15 @@ impl Display for TableNameIdent {
 pub struct DBIdTableName {
     pub db_id: u64,
     pub table_name: String,
+}
+
+impl DBIdTableName {
+    pub fn new(db_id: u64, table_name: impl ToString) -> Self {
+        DBIdTableName {
+            db_id,
+            table_name: table_name.to_string(),
+        }
+    }
 }
 
 impl Display for DBIdTableName {
@@ -448,6 +458,12 @@ impl TableIdList {
         TableIdList::default()
     }
 
+    pub fn new_with_ids(ids: impl IntoIterator<Item = u64>) -> TableIdList {
+        TableIdList {
+            id_list: ids.into_iter().collect(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.id_list.len()
     }
@@ -468,7 +484,7 @@ impl TableIdList {
         self.id_list.pop()
     }
 
-    pub fn last(&mut self) -> Option<&u64> {
+    pub fn last(&self) -> Option<&u64> {
         self.id_list.last()
     }
 }
@@ -876,21 +892,15 @@ impl GetTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
-    pub inner: DatabaseNameIdent,
-}
-
-impl Deref for ListTableReq {
-    type Target = DatabaseNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    pub tenant: Tenant,
+    pub database_id: DatabaseId,
 }
 
 impl ListTableReq {
-    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListTableReq {
+    pub fn new(tenant: &Tenant, database_id: DatabaseId) -> ListTableReq {
         ListTableReq {
-            inner: DatabaseNameIdent::new(tenant, db_name),
+            tenant: tenant.clone(),
+            database_id,
         }
     }
 }
@@ -928,8 +938,29 @@ pub enum DroppedId {
         db_name: String,
         tables: Vec<(u64, String)>,
     },
-    // db id, table id, table name
-    Table(u64, u64, String),
+    Table {
+        name: DBIdTableName,
+        id: TableId,
+    },
+}
+
+impl DroppedId {
+    pub fn new_table(db_id: u64, table_id: u64, table_name: impl ToString) -> DroppedId {
+        DroppedId::Table {
+            name: DBIdTableName::new(db_id, table_name),
+            id: TableId::new(table_id),
+        }
+    }
+
+    /// Build a string contains essential information for comparison.
+    ///
+    /// Only used for testing.
+    pub fn cmp_key(&self) -> String {
+        match self {
+            DroppedId::Db { db_id, db_name, .. } => format!("db:{}-{}", db_id, db_name),
+            DroppedId::Table { name, id } => format!("table:{:?}-{:?}", name, id),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

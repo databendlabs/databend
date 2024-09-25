@@ -62,8 +62,8 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
-        total_rows <= self.max_rows_per_block && total_bytes <= self.max_bytes_per_block
+    pub fn check_too_small(&self, row_count: usize, block_size: usize) -> bool {
+        row_count < self.min_rows_per_block / 2 && block_size < self.max_bytes_per_block / 2
     }
 
     #[inline]
