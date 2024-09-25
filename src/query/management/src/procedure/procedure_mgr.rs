@@ -22,7 +22,6 @@ use databend_common_meta_app::principal::procedure::ProcedureInfo;
 use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
 use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
-use databend_common_meta_app::principal::DropProcedureReq;
 use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ListProcedureReq;
@@ -31,7 +30,6 @@ use databend_common_meta_app::principal::ProcedureIdToNameIdent;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -74,26 +72,7 @@ impl ProcedureMgr {
 
         match create_res {
             Ok(id) => Ok(CreateProcedureReply { procedure_id: *id }),
-            Err(existent) => match req.create_option {
-                CreateOption::Create => {
-                    Err(AppError::from(name_ident.exist_error(func_name!())).into())
-                }
-                CreateOption::CreateIfNotExists => Ok(CreateProcedureReply {
-                    procedure_id: *existent.data,
-                }),
-                CreateOption::CreateOrReplace => {
-                    let res = self
-                        .kv_api
-                        .update_id_value(name_ident, meta.clone())
-                        .await?;
-
-                    if let Some((id, _meta)) = res {
-                        Ok(CreateProcedureReply { procedure_id: *id })
-                    } else {
-                        Err(AppError::from(name_ident.unknown_error(func_name!())).into())
-                    }
-                }
-            },
+            Err(_) => Err(AppError::from(name_ident.exist_error(func_name!())).into()),
         }
     }
 
@@ -101,20 +80,34 @@ impl ProcedureMgr {
     #[async_backtrace::framed]
     pub async fn drop_procedure(
         &self,
-        req: DropProcedureReq,
+        name_ident: &ProcedureNameIdent,
     ) -> Result<Option<(SeqV<ProcedureId>, SeqV<ProcedureMeta>)>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let name_ident = req.name_ident;
+        debug!(name_ident :? =(name_ident); "SchemaApi: {}", func_name!());
         let dropped = self
             .kv_api
-            .remove_id_value(&name_ident, |id| {
+            .remove_id_value(name_ident, |id| {
                 vec![ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
             })
             .await?;
-        if dropped.is_none() && !req.if_exists {
-            return Err(AppError::from(name_ident.unknown_error("drop procedure")).into());
-        }
         Ok(dropped)
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn update_procedure(
+        &self,
+        procedure_ident: &ProcedureNameIdent,
+        meta: ProcedureMeta,
+    ) -> Result<ProcedureId, KVAppError> {
+        debug!(procedure_ident :? = (&procedure_ident), meta :? = (meta); "SchemaApi: {}", func_name!());
+
+        let res = self.kv_api.update_id_value(procedure_ident, meta).await?;
+
+        if let Some((id, _meta)) = res {
+            Ok(id)
+        } else {
+            Err(AppError::from(procedure_ident.unknown_error(func_name!())).into())
+        }
     }
 
     #[fastrace::trace]

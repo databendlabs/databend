@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::CreateProcedureReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateProcedurePlan;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -55,10 +57,28 @@ impl Interpreter for CreateProcedureInterpreter {
         let tenant = self.plan.tenant.clone();
 
         let create_procedure_req: CreateProcedureReq = self.plan.clone().into();
-        let _ = UserApiProvider::instance()
-            .add_procedure(&tenant, create_procedure_req)
-            .await?;
 
+        let reply = UserApiProvider::instance()
+            .add_procedure(&tenant, create_procedure_req)
+            .await;
+        if let Err(e) = reply {
+            if e.code() == ErrorCode::PROCEDURE_ALREADY_EXISTS {
+                return match self.plan.create_option {
+                    CreateOption::Create => Err(ErrorCode::ProcedureAlreadyExists(format!(
+                        "Procedure '{}' already exists",
+                        self.plan.name,
+                    ))),
+                    CreateOption::CreateIfNotExists => Ok(PipelineBuildResult::create()),
+                    CreateOption::CreateOrReplace => {
+                        let _reply = UserApiProvider::instance()
+                            .update_procedure(&tenant, &self.plan.name, self.plan.meta.clone())
+                            .await?;
+                        Ok(PipelineBuildResult::create())
+                    }
+                };
+            }
+            return Err(e);
+        }
         Ok(PipelineBuildResult::create())
     }
 }

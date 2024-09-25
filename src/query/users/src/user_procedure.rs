@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
 use databend_common_meta_app::principal::DropProcedureReq;
 use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::ProcedureMeta;
+use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 
 use crate::UserApiProvider;
@@ -26,10 +30,15 @@ use crate::UserApiProvider;
 impl UserApiProvider {
     // Add a new Procedure.
     #[async_backtrace::framed]
-    pub async fn add_procedure(&self, tenant: &Tenant, req: CreateProcedureReq) -> Result<()> {
+    pub async fn add_procedure(
+        &self,
+        tenant: &Tenant,
+        req: CreateProcedureReq,
+    ) -> Result<CreateProcedureReply> {
         let procedure_api = self.procedure_api(tenant);
-        let _ = procedure_api.create_procedure(req).await?;
-        Ok(())
+        let replay = procedure_api.create_procedure(req).await?;
+
+        Ok(replay)
     }
 
     #[async_backtrace::framed]
@@ -49,7 +58,30 @@ impl UserApiProvider {
     // Drop a Procedure by name.
     #[async_backtrace::framed]
     pub async fn drop_procedure(&self, tenant: &Tenant, req: DropProcedureReq) -> Result<()> {
-        let _ = self.procedure_api(tenant).drop_procedure(req).await?;
+        let dropped = self
+            .procedure_api(tenant)
+            .drop_procedure(&req.name_ident)
+            .await?;
+        if dropped.is_none() && !req.if_exists {
+            return Err(ErrorCode::UnknownProcedure(format!(
+                "Unknown procedure '{}' while drop procedure",
+                req.name_ident
+            )));
+        }
+        Ok(())
+    }
+
+    // Update a Procedure by name.
+    #[async_backtrace::framed]
+    pub async fn update_procedure(
+        &self,
+        tenant: &Tenant,
+        name_ident: &ProcedureNameIdent,
+        meta: ProcedureMeta,
+    ) -> Result<()> {
+        self.procedure_api(tenant)
+            .update_procedure(name_ident, meta)
+            .await?;
         Ok(())
     }
 }
