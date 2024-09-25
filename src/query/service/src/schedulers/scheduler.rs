@@ -17,6 +17,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::EmptySink;
 use databend_common_sql::optimizer::QuerySampleExecutor;
 use futures_util::TryStreamExt;
 
@@ -46,6 +48,11 @@ pub async fn build_query_pipeline(
     if matches!(plan, PhysicalPlan::UnionAll { .. }) {
         // Union doesn't need to add extra processor to project the result.
         // It will be handled in union processor.
+        if ignore_result {
+            build_res
+                .main_pipeline
+                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        }
         return Ok(build_res);
     }
     let input_schema = plan.output_schema()?;
