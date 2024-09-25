@@ -61,7 +61,8 @@ use crate::servers::http::v1::SessionClaim;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
-
+const USER_AGENT: &str = "User-Agent";
+const TRACE_PARENT: &str = "traceparent";
 #[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
@@ -75,6 +76,7 @@ pub enum EndpointKind {
 }
 
 impl EndpointKind {
+    /// avoid the cost of get user from meta
     pub fn need_user_info(&self) -> bool {
         !matches!(self, EndpointKind::NoAuth | EndpointKind::PollQuery)
     }
@@ -91,9 +93,6 @@ impl EndpointKind {
         }
     }
 }
-
-const USER_AGENT: &str = "User-Agent";
-const TRACE_PARENT: &str = "traceparent";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
@@ -159,14 +158,14 @@ fn get_credential(
     let client_ip = get_client_ip(req);
     if std_auth_headers.is_empty() {
         if matches!(kind, HttpHandlerKind::Clickhouse) {
-            auth_clickhouse_name_password(req, client_ip)
+            get_clickhouse_name_password(req, client_ip)
         } else {
             Err(ErrorCode::AuthenticateFailure(
                 "No authorization header detected",
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, client_ip, endpoint_kind)
+        get_credential_from_header(&std_auth_headers, client_ip, endpoint_kind)
     }
 }
 
@@ -174,7 +173,7 @@ fn get_credential(
 /// not found, fallback to the remote address, which might be local proxy's ip address.
 /// please note that when it comes with network policy, we need make sure the incoming
 /// traffic comes from a trustworthy proxy instance.
-pub fn get_client_ip(req: &Request) -> Option<String> {
+fn get_client_ip(req: &Request) -> Option<String> {
     let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
     for &header in headers.iter() {
         if let Some(value) = req.headers().get(header) {
@@ -197,7 +196,7 @@ pub fn get_client_ip(req: &Request) -> Option<String> {
     client_ip
 }
 
-fn auth_by_header(
+fn get_credential_from_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
     endpoint_kind: EndpointKind,
@@ -240,7 +239,7 @@ fn auth_by_header(
     }
 }
 
-fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Result<Credential> {
+fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Result<Credential> {
     let (user, key) = (
         req.headers().get("X-CLICKHOUSE-USER"),
         req.headers().get("X-CLICKHOUSE-KEY"),
