@@ -149,7 +149,7 @@ impl KeyWord {
 enum FormatNode {
     End,
     Action(KeyWord),
-    Char(Vec<char>),
+    Char(String),
     Separator,
     Space,
 }
@@ -293,6 +293,7 @@ impl NumDesc {
                     }
                     Ok(())
                 }
+
                 NumPoz::TkPL => {
                     if self.flag.contains(NumFlag::LSign) {
                         return Err("cannot use \"S\" and \"PL\" together");
@@ -304,6 +305,7 @@ impl NumDesc {
                     }
                     Ok(())
                 }
+
                 NumPoz::TkSG => {
                     if self.flag.contains(NumFlag::LSign) {
                         return Err("cannot use \"S\" and \"SG\" together");
@@ -311,6 +313,7 @@ impl NumDesc {
                     self.flag.insert(NumFlag::Plus | NumFlag::Minus);
                     Ok(())
                 }
+
                 NumPoz::TkPR => {
                     if self
                         .flag
@@ -322,6 +325,7 @@ impl NumDesc {
                     self.flag.insert(NumFlag::Bracket);
                     Ok(())
                 }
+
                 NumPoz::Tkrn | NumPoz::TkRN => {
                     self.flag.insert(NumFlag::Roman);
                     Ok(())
@@ -355,14 +359,14 @@ impl NumDesc {
                             | NumFlag::Roman
                             | NumFlag::Multi,
                     ) {
-                        return Err(
-                            "\"EEEE\" may only be used together with digit and decimal point patterns.",
-                        );
+                        return Err("\"EEEE\" is incompatible with other formats");
                     }
 
                     self.flag.insert(NumFlag::Eeee);
                     Ok(())
                 }
+
+                NumPoz::TkComma => Ok(()),
 
                 _ => unreachable!(),
             }
@@ -370,6 +374,131 @@ impl NumDesc {
             unreachable!()
         }
     }
+
+    fn i64_to_num_part(&self, value: i64) -> Result<NumPart> {
+        if self.flag.contains(NumFlag::Roman) {
+            return Err(ErrorCode::Unimplemented("to_char RN (Roman numeral)"));
+        }
+
+        if self.flag.contains(NumFlag::Eeee) {
+            // we can do it easily because f64 won't lose any precision
+            let number = format!("{:+.*e}", self.post, value as f64);
+
+            // Swap a leading positive sign for a space.
+            let number = number.replace("+", " ");
+
+            return Ok(NumPart {
+                sign: value >= 0,
+                number,
+                out_pre_spaces: 0,
+            });
+        }
+
+        if self.flag.contains(NumFlag::Multi) {
+            return Err(ErrorCode::Unimplemented("to_char V (multiplies)"));
+        }
+
+        let mut orgnum = if value == i64::MIN {
+            format!("{}", -(i64::MIN as i128))
+        } else {
+            format!("{}", value.abs())
+        };
+
+        let numstr_pre_len = orgnum.len();
+
+        // post-decimal digits?  Pad out with zeros.
+        if self.post > 0 {
+            orgnum.push('.');
+            orgnum.push_str(&"0".repeat(self.post))
+        }
+
+        let (number, out_pre_spaces) = match numstr_pre_len.cmp(&self.pre) {
+            // needs padding?
+            std::cmp::Ordering::Less => (orgnum, self.pre - numstr_pre_len),
+            // overflowed prefix digit format?
+            std::cmp::Ordering::Greater => {
+                (["#".repeat(self.pre), "#".repeat(self.post)].join("."), 0)
+            }
+            std::cmp::Ordering::Equal => (orgnum, 0),
+        };
+
+        Ok(NumPart {
+            sign: value >= 0,
+            number,
+            out_pre_spaces,
+        })
+    }
+
+    fn f64_to_num_part(&mut self, value: f64) -> Result<NumPart> {
+        if self.flag.contains(NumFlag::Roman) {
+            return Err(ErrorCode::Unimplemented("to_char RN (Roman numeral)"));
+        }
+
+        if self.flag.contains(NumFlag::Eeee) {
+            let number = if value.is_normal() {
+                let orgnum = format!("{:+.*e}", self.post, value);
+                // Swap a leading positive sign for a space.
+                orgnum.replace("+", " ")
+            } else {
+                // Allow 6 characters for the leading sign, the decimal point,
+                // "e", the exponent's sign and two exponent digits.
+                let mut orgnum = String::with_capacity(self.pre + self.post + 6);
+                orgnum.push(' ');
+                orgnum.push_str(&"#".repeat(self.pre));
+                orgnum.push('.');
+                orgnum.push_str(&"#".repeat(self.post + 4));
+                orgnum
+            };
+            return Ok(NumPart {
+                sign: !value.is_sign_negative(),
+                number,
+                out_pre_spaces: 0,
+            });
+        }
+
+        if self.flag.contains(NumFlag::Multi) {
+            return Err(ErrorCode::Unimplemented("to_char V (multiplies)"));
+        }
+
+        let orgnum = format!("{:.0}", value.abs());
+        let numstr_pre_len = orgnum.len();
+
+        const FLT_DIG: usize = 6;
+        // adjust post digits to fit max float digits
+        if numstr_pre_len >= FLT_DIG {
+            self.post = 0;
+        } else if numstr_pre_len + self.post > FLT_DIG {
+            self.post = FLT_DIG - numstr_pre_len;
+        }
+        let orgnum = format!("{:.*}", self.post, value.abs());
+
+        let numstr_pre_len = match orgnum.find('.') {
+            Some(p) => p,
+            None => orgnum.len(),
+        };
+
+        let (number, out_pre_spaces) = match numstr_pre_len.cmp(&self.pre) {
+            // needs padding?
+            std::cmp::Ordering::Less => (orgnum, self.pre - numstr_pre_len),
+            // overflowed prefix digit format?
+            std::cmp::Ordering::Greater => {
+                (["#".repeat(self.pre), "#".repeat(self.post)].join("."), 0)
+            }
+            std::cmp::Ordering::Equal => (orgnum, 0),
+        };
+
+        Ok(NumPart {
+            sign: !value.is_sign_negative(),
+            number,
+            out_pre_spaces,
+        })
+    }
+}
+
+struct NumPart {
+    sign: bool,
+    number: String,
+    out_pre_spaces: usize,
 }
 
 fn parse_format(
@@ -379,23 +508,56 @@ fn parse_format(
 ) -> Result<Vec<FormatNode>> {
     let mut nodes = Vec::new();
     while !str.is_empty() {
-        match kw.iter().find(|k| str.starts_with(k.name)) {
-            Some(k) => {
-                let n = FormatNode::Action(k.clone());
-
-                if let Some(num) = num.as_mut() {
-                    num.prepare(&n).map_err(ErrorCode::SyntaxException)?;
-                }
-                str = &str[k.name.len()..];
-
-                nodes.push(n)
-            }
-            None => Err(ErrorCode::SyntaxException(
-                "Currently only key words are supported".to_string(),
-            ))?,
+        if let Some(remain) = str.strip_prefix(' ') {
+            str = remain;
+            nodes.push(FormatNode::Space);
+            continue;
         }
+
+        if str.starts_with('"') {
+            let (offset, literal) =
+                parse_literal_string(str).map_err(|e| ErrorCode::SyntaxException(e.to_string()))?;
+            nodes.push(FormatNode::Char(literal));
+            str = &str[offset..];
+            continue;
+        }
+
+        if let Some(k) = kw.iter().find(|k| str.starts_with(k.name)) {
+            let n = FormatNode::Action(k.clone());
+
+            if let Some(num) = num.as_mut() {
+                num.prepare(&n).map_err(ErrorCode::SyntaxException)?;
+            }
+            str = &str[k.name.len()..];
+
+            nodes.push(n);
+            continue;
+        }
+
+        Err(ErrorCode::SyntaxException(
+            "Currently only key words are supported".to_string(),
+        ))?;
     }
     Ok(nodes)
+}
+
+fn parse_literal_string(data: &str) -> std::result::Result<(usize, String), enquote::Error> {
+    let mut escape = false;
+    for (i, ch) in data.char_indices() {
+        if i == 0 {
+            continue;
+        }
+        match ch {
+            '"' if !escape => {
+                let end = i + 1;
+                return enquote::unquote(&data[..end]).map(|s| (end, s));
+            }
+            '\\' if !escape => escape = true,
+            _ if escape => escape = false,
+            _ => {}
+        }
+    }
+    Err(enquote::Error::UnexpectedEOF)
 }
 
 struct NumProc {
@@ -496,7 +658,7 @@ impl NumProc {
                 }
                 // '0.1' -- 9.9 --> '  .1'
                 else if self.is_predec_space() {
-                    if self.desc.flag.contains(NumFlag::FillMode) {
+                    if !self.desc.flag.contains(NumFlag::FillMode) {
                         self.inout.push(' ');
                     }
                     // '0' -- FM9.9 --> '0.'
@@ -568,13 +730,12 @@ impl NumProc {
     }
 }
 
-fn num_processor(
-    nodes: &[FormatNode],
-    desc: NumDesc,
-    number: String,
-    out_pre_spaces: usize,
-    sign: bool,
-) -> String {
+fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Result<String> {
+    let NumPart {
+        sign,
+        number,
+        out_pre_spaces,
+    } = num_part;
     let mut np = NumProc {
         desc,
         sign,
@@ -599,6 +760,10 @@ fn num_processor(
 
     if np.desc.zero_start > 0 {
         np.desc.zero_start -= 1;
+    }
+
+    if np.desc.flag.contains(NumFlag::Eeee) {
+        return Ok(String::from_iter(np.number.iter()));
     }
 
     // Roman correction
@@ -662,7 +827,10 @@ fn num_processor(
     }
 
     // Locale
-    // 	NUM_prepare_locale(Np);
+    if np.desc.need_locale {
+        // 	NUM_prepare_locale(Np);
+        return Err(ErrorCode::Unimplemented("to_char uses locale S/L/D/G"));
+    }
 
     // Processor direct cycle
     for n in nodes.iter() {
@@ -672,58 +840,51 @@ fn num_processor(
                 id @ (NumPoz::Tk9 | NumPoz::Tk0 | NumPoz::TkDec | NumPoz::TkD) => {
                     np.numpart_to_char(id)
                 }
+                NumPoz::TkComma => {
+                    if np.num_in {
+                        np.inout.push(',')
+                    } else if np.desc.flag.contains(NumFlag::FillMode) {
+                        continue;
+                    } else {
+                        np.inout.push(' ')
+                    }
+                }
+                NumPoz::TkPR => (),
+                NumPoz::TkFM => (),
                 _ => unimplemented!(),
             },
             FormatNode::End => break,
+            FormatNode::Char(character) => {
+                // In TO_CHAR, non-pattern characters in the format are copied to
+                // the output.
+                np.inout.push_str(character)
+            }
+            FormatNode::Space => np.inout.push(' '),
             _ => unimplemented!(),
         }
     }
 
-    np.inout
+    Ok(np.inout)
 }
 
-pub fn i32_to_char(value: i32, fmt: &str) -> Result<String> {
+pub fn i64_to_char(value: i64, fmt: &str) -> Result<String> {
+    // TODO: We should cache FormatNode
     let mut desc = NumDesc::default();
     let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
 
-    let sign = value >= 0;
-    let (numstr, out_pre_spaces) = if desc.flag.contains(NumFlag::Roman) {
-        unimplemented!()
-    } else if desc.flag.contains(NumFlag::Eeee) {
-        // we can do it easily because f32 won't lose any precision
-        let orgnum = format!("{:+.*e}", desc.post, value as f32);
+    let num_part = desc.i64_to_num_part(value)?;
 
-        // Swap a leading positive sign for a space.
-        let orgnum = orgnum.replace("+", "_");
+    num_processor(&nodes, desc, num_part)
+}
 
-        (orgnum, 0)
-    } else {
-        let mut orgnum = if desc.flag.contains(NumFlag::Multi) {
-            unimplemented!()
-        } else {
-            format!("{}", value.abs())
-        };
+pub fn f64_to_char(value: f64, fmt: &str) -> Result<String> {
+    // TODO: We should cache FormatNode
+    let mut desc = NumDesc::default();
+    let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
 
-        let numstr_pre_len = orgnum.len();
+    let num_part = desc.f64_to_num_part(value)?;
 
-        // post-decimal digits?  Pad out with zeros.
-        if desc.post > 0 {
-            orgnum.push('.');
-            orgnum.push_str(&"0".repeat(desc.post))
-        }
-
-        match numstr_pre_len.cmp(&desc.pre) {
-            // needs padding?
-            std::cmp::Ordering::Less => (orgnum, desc.pre - numstr_pre_len),
-            std::cmp::Ordering::Equal => (orgnum, 0),
-            std::cmp::Ordering::Greater => {
-                // overflowed prefix digit format?
-                (["#".repeat(desc.pre), "#".repeat(desc.post)].join("."), 0)
-            }
-        }
-    };
-
-    Ok(num_processor(&nodes, desc, numstr, out_pre_spaces, sign))
+    num_processor(&nodes, desc, num_part)
 }
 
 #[cfg(test)]
@@ -731,32 +892,110 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_i32() -> Result<()> {
-        assert_eq!(" 123", i32_to_char(123, "999")?);
-        assert_eq!("-123", i32_to_char(-123, "999")?);
+    fn test_i64() -> Result<()> {
+        assert_eq!(" 123", i64_to_char(123, "999")?);
+        assert_eq!("-123", i64_to_char(-123, "999")?);
 
-        assert_eq!(" 0123", i32_to_char(123, "0999")?);
-        assert_eq!("-0123", i32_to_char(-123, "0999")?);
+        assert_eq!(" 0123", i64_to_char(123, "0999")?);
+        assert_eq!("-0123", i64_to_char(-123, "0999")?);
 
-        assert_eq!("   123", i32_to_char(123, "99999")?);
-        assert_eq!("  -123", i32_to_char(-123, "99999")?);
+        assert_eq!("   123", i64_to_char(123, "99999")?);
+        assert_eq!("  -123", i64_to_char(-123, "99999")?);
 
-        assert_eq!("    0123", i32_to_char(123, "9990999")?);
-        assert_eq!("   -0123", i32_to_char(-123, "9990999")?);
+        assert_eq!("    0123", i64_to_char(123, "9990999")?);
+        assert_eq!("   -0123", i64_to_char(-123, "9990999")?);
 
-        assert_eq!("   12345", i32_to_char(12345, "9990999")?);
-        assert_eq!("  -12345", i32_to_char(-12345, "9990999")?);
+        assert_eq!("    0123 ", i64_to_char(123, "9990999PR")?);
+        assert_eq!("   <0123>", i64_to_char(-123, "9990999PR")?);
 
-        assert_eq!(" ##", i32_to_char(123, "99")?);
-        assert_eq!("-##", i32_to_char(-123, "99")?);
+        assert_eq!("   12345", i64_to_char(12345, "9990999")?);
+        assert_eq!("  -12345", i64_to_char(-12345, "9990999")?);
 
-        assert_eq!(" ##.", i32_to_char(123, "99.")?);
-        assert_eq!("-##.", i32_to_char(-123, "99.")?);
+        assert_eq!("    0012.0", i64_to_char(12, "9990999.9")?);
+        assert_eq!("   -0012.0", i64_to_char(-12, "9990999.9")?);
+        assert_eq!("0012.", i64_to_char(12, "FM9990999.9")?);
+        assert_eq!("-0012.", i64_to_char(-12, "FM9990999.9")?);
 
-        assert_eq!(" ##.#", i32_to_char(123, "99.0")?);
-        assert_eq!("-##.#", i32_to_char(-123, "99.0")?);
+        assert_eq!(" ##", i64_to_char(123, "99")?);
+        assert_eq!("-##", i64_to_char(-123, "99")?);
 
-        assert_eq!("    0012.0", i32_to_char(12, "9990999.9")?);
+        assert_eq!(" ##.", i64_to_char(123, "99.")?);
+        assert_eq!("-##.", i64_to_char(-123, "99.")?);
+
+        assert_eq!(" ##.#", i64_to_char(123, "99.0")?);
+        assert_eq!("-##.#", i64_to_char(-123, "99.0")?);
+
+        assert_eq!(
+            "  9223372036854775807",
+            i64_to_char(i64::MAX, "99999999999999999999")?
+        );
+        assert_eq!(
+            " -9223372036854775808",
+            i64_to_char(i64::MIN, "99999999999999999999")?
+        );
+        assert_eq!(
+            " -9223372036854775807",
+            i64_to_char(i64::MIN + 1, "99999999999999999999")?
+        );
+
+        // Regarding the way the exponent part of the scientific notation is formatted,
+        // there is a slight difference between the rust implementation and the c implementation.
+        //  1.23456000e+05
+        assert_eq!(" 1.23456000e5", i64_to_char(123456, "9.99999999EEEE")?);
+        assert_eq!("-1.23456e5", i64_to_char(-123456, "9.99999EEEE")?);
+
+        assert_eq!(" 4 8 5", i64_to_char(485, "9 9 9")?);
+        assert_eq!(" 1,485", i64_to_char(1485, "9,999")?);
+        // assert_eq!(" 1 485", i64_to_char(1485, "9G999")?);
+
+        assert_eq!("Good number: 485", i64_to_char(485, "\"Good number:\"999")?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_f64() -> Result<()> {
+        assert_eq!(" 12.34", f64_to_char(12.34, "99.99")?);
+        assert_eq!("-12.34", f64_to_char(-12.34, "99.99")?);
+        assert_eq!("   .10", f64_to_char(0.1, "99.99")?);
+        assert_eq!("  -.10", f64_to_char(-0.1, "99.99")?);
+
+        assert_eq!(" 4.86e-4", f64_to_char(0.0004859, "9.99EEEE")?);
+        assert_eq!("-4.86e-4", f64_to_char(-0.0004859, "9.99EEEE")?);
+
+        assert_eq!(" 0.1", f64_to_char(0.1, "0.9")?);
+        assert_eq!("-.1", f64_to_char(-0.1, "FM9.99")?);
+        assert_eq!("-0.1", f64_to_char(-0.1, "FM90.99")?);
+
+        assert_eq!(" 148.500", f64_to_char(148.5, "999.999")?);
+        assert_eq!("148.5", f64_to_char(148.5, "FM999.999")?);
+        assert_eq!("148.500", f64_to_char(148.5, "FM999.990")?);
+
+        assert_eq!(
+            "Pre: 485 Post: .800",
+            f64_to_char(485.8, "\"Pre:\"999\" Post:\" .999")?
+        );
+
+        // assert_eq!(" 148,500", f64_to_char(148.5, "999D999")?);
+        // assert_eq!(" 3 148,500", f64_to_char(3148.5, "9G999D999")?);
+        // assert_eq!("485-", f64_to_char(-485, "999S")?);
+        // assert_eq!("485-", f64_to_char(-485, "999MI")?);
+        // assert_eq!("485 ", f64_to_char(485, "999MI")?);
+        // assert_eq!("485", f64_to_char(485, "FM999MI")?);
+        // assert_eq!("+485", f64_to_char(485, "PL999")?);
+        // assert_eq!("+485", f64_to_char(485, "SG999")?);
+        // assert_eq!("-485", f64_to_char(-485, "SG999")?);
+        // assert_eq!("4-85", f64_to_char(-485, "9SG99")?);
+        // assert_eq!("<485>", f64_to_char(-485, "999PR")?);
+        // assert_eq!("DM 485", f64_to_char(485, "L999")?);
+        // assert_eq!("        CDLXXXV", f64_to_char(485, "RN")?);
+        // assert_eq!("CDLXXXV", f64_to_char(485, "FMRN")?);
+        // assert_eq!("V", f64_to_char(5.2, "FMRN")?);
+        // assert_eq!(" 482nd", f64_to_char(482, "999th")?);
+
+        // assert_eq!(" 12000", f64_to_char(12, "99V999")?);
+        // assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
+        // assert_eq!(" 125", f64_to_char(12.45, "99V9")?);
 
         Ok(())
     }

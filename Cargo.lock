@@ -3656,6 +3656,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "databend-common-base",
  "databend-common-exception",
+ "enquote",
  "enumflags2",
  "ethnum",
  "geo",

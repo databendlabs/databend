@@ -34,7 +34,6 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
-use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberColumn;
@@ -60,7 +59,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use databend_common_io::number::i32_to_char;
+use databend_common_io::number::f64_to_char;
+use databend_common_io::number::i64_to_char;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -389,10 +389,10 @@ fn register_grouping(registry: &mut FunctionRegistry) {
 }
 
 fn register_num_to_char(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_2_arg::<Int32Type, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<Int64Type, StringType, StringType, _, _>(
         "to_char",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Int32Type, StringType, StringType>(
+        vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(builder.len()) {
@@ -401,7 +401,33 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match i32_to_char(value, fmt) {
+                match i64_to_char(value, fmt) {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                match f64_to_char(*value, fmt) {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
