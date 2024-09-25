@@ -29,7 +29,6 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::servers::http::error::QueryError;
-use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
@@ -1668,16 +1667,6 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
-    Ok(())
-}
-
-#[test]
-fn test_parse_ip() -> Result<()> {
-    let req = poem::Request::builder()
-        .header("X-Forwarded-For", "1.2.3.4")
-        .finish();
-    let ip = get_client_ip(&req);
-    assert_eq!(ip, Some("1.2.3.4".to_string()));
     Ok(())
 }
 

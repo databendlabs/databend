@@ -26,6 +26,7 @@ pub use http_query_handlers::make_state_uri;
 pub use http_query_handlers::query_route;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
+pub use query::string_block::StringBlock;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
 pub use query::ExpiringState;

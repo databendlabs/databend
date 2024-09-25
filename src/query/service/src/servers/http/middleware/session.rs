@@ -454,3 +454,17 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
         .insert(HEADER_VERSION, QUERY_SEMVER.to_string().parse().unwrap());
     Ok(resp)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::servers::http::middleware::session::get_client_ip;
+
+    #[test]
+    fn test_parse_ip() {
+        let req = poem::Request::builder()
+            .header("X-Forwarded-For", "1.2.3.4")
+            .finish();
+        let ip = get_client_ip(&req);
+        assert_eq!(ip, Some("1.2.3.4".to_string()));
+    }
+}
