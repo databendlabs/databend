@@ -8,7 +8,19 @@ statement ok
 drop procedure if exists p1(UInt8, UInt8);
 
 statement ok
-CREATE PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE if not exists p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+CREATE PROCEDURE if not exists p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
     LET x := -1;
     LET sum := 0;
@@ -26,7 +38,7 @@ call procedure p1();
 2
 
 statement ok
-CREATE or replace PROCEDURE  p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+CREATE or replace PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
     LET x := -1;
     LET sum := 10;

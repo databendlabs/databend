@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::CreateProcedureReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateProcedurePlan;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -55,10 +57,18 @@ impl Interpreter for CreateProcedureInterpreter {
         let tenant = self.plan.tenant.clone();
 
         let create_procedure_req: CreateProcedureReq = self.plan.clone().into();
-        let _ = UserApiProvider::instance()
-            .add_procedure(&tenant, create_procedure_req)
-            .await?;
+        let overriding = self.plan.create_option.is_overriding();
 
+        if let Err(e) = UserApiProvider::instance()
+            .add_procedure(&tenant, create_procedure_req, overriding)
+            .await
+        {
+            if !(self.plan.create_option == CreateOption::CreateIfNotExists
+                && e.code() == ErrorCode::PROCEDURE_ALREADY_EXISTS)
+            {
+                return Err(e);
+            }
+        }
         Ok(PipelineBuildResult::create())
     }
 }
