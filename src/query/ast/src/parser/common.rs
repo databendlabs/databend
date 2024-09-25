@@ -97,12 +97,13 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
 }
 
 pub fn stage_name(i: Input) -> IResult<Identifier> {
+    let named_stage = rule! { #plain_identifier(|token| token.is_reserved_ident(false)) };
     let anonymous_stage = map(consumed(rule! { "~" }), |(span, _)| {
         Identifier::from_name(transform_span(span.tokens), "~")
     });
 
     rule!(
-        #ident
+        #named_stage
         | #anonymous_stage
     )(i)
 }
