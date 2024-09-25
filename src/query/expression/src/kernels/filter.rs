@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -37,12 +38,12 @@ use crate::DataBlock;
 use crate::Value;
 
 impl DataBlock {
-    pub fn filter_with_bitmap(self, bitmap: &Bitmap) -> Result<DataBlock> {
+    pub fn filter_with_bitmap(self, bitmap: &BooleanBuffer) -> Result<DataBlock> {
         if self.num_rows() == 0 {
             return Ok(self);
         }
 
-        let count_zeros = bitmap.unset_bits();
+        let count_zeros = bitmap.len() - bitmap.count_set_bits();
         match count_zeros {
             0 => Ok(self),
             _ => {
@@ -93,7 +94,7 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn filter(&self, bitmap: &Bitmap) -> Column {
+    pub fn filter(&self, bitmap: &BooleanBuffer) -> Column {
         let mut filter_visitor = FilterVisitor::new(bitmap);
         filter_visitor
             .visit_value(Value::Column(self.clone()))
@@ -109,14 +110,14 @@ impl Column {
 }
 
 struct FilterVisitor<'a> {
-    filter: &'a Bitmap,
+    filter: &'a BooleanBuffer,
     result: Option<Value<AnyType>>,
     num_rows: usize,
 }
 
 impl<'a> FilterVisitor<'a> {
-    pub fn new(filter: &'a Bitmap) -> Self {
-        let num_rows = filter.len() - filter.unset_bits();
+    pub fn new(filter: &'a BooleanBuffer) -> Self {
+        let num_rows = filter.count_set_bits();
         Self {
             filter,
             result: None,
@@ -255,7 +256,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         Ok(())
     }
 
-    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
+    fn visit_boolean(&mut self, bitmap: BooleanBuffer) -> Result<()> {
         let capacity = self.num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
         let mut builder_ptr = builder.as_mut_ptr();
@@ -275,7 +276,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                     // If `filter_length` > 0, the valid bits of this byte start at `filter_offset`, we also
                     // need to ensure that we cannot iterate more than `filter_length` bits.
                     if n >= filter_offset && n < filter_offset + filter_length {
-                        if bitmap.get_bit_unchecked(n - filter_offset) {
+                        if bitmap.value_unchecked(n - filter_offset) {
                             buf |= BIT_MASK[builder_idx % 8];
                         } else {
                             unset_bits += 1;
@@ -304,7 +305,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                     if continuous_selected > 0 {
                         if builder_idx % 8 != 0 {
                             while continuous_selected > 0 {
-                                if bitmap.get_bit_unchecked(bitmap_idx) {
+                                if bitmap.value_unchecked(bitmap_idx) {
                                     buf |= BIT_MASK[builder_idx % 8];
                                 } else {
                                     unset_bits += 1;
@@ -338,7 +339,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
 
                     while mask != 0 {
                         let n = mask.trailing_zeros() as usize;
-                        if bitmap.get_bit_unchecked(bitmap_idx + n) {
+                        if bitmap.value_unchecked(bitmap_idx + n) {
                             buf |= BIT_MASK[builder_idx % 8];
                         } else {
                             unset_bits += 1;
@@ -357,7 +358,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
             if continuous_selected > 0 {
                 if builder_idx % 8 != 0 {
                     while continuous_selected > 0 {
-                        if bitmap.get_bit_unchecked(bitmap_idx) {
+                        if bitmap.value_unchecked(bitmap_idx) {
                             buf |= BIT_MASK[builder_idx % 8];
                         } else {
                             unset_bits += 1;
@@ -390,7 +391,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
 
             for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
                 if is_selected {
-                    if bitmap.get_bit_unchecked(bitmap_idx + i) {
+                    if bitmap.value_unchecked(bitmap_idx + i) {
                         buf |= BIT_MASK[builder_idx % 8];
                     } else {
                         unset_bits += 1;

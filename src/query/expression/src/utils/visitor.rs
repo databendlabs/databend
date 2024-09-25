@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ::arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
@@ -47,7 +48,7 @@ pub trait ValueVisitor {
         self.visit_typed_column::<DecimalType<T>>(column)
     }
 
-    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
+    fn visit_boolean(&mut self, bitmap: BooleanBuffer) -> Result<()> {
         self.visit_typed_column::<BooleanType>(bitmap)
     }
 

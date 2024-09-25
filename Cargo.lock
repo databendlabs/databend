@@ -3434,11 +3434,9 @@ dependencies = [
 name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
- "arrow-array",
+ "arrow",
  "arrow-flight",
  "arrow-ord",
- "arrow-schema",
- "arrow-select",
  "async-backtrace",
  "base64 0.21.7",
  "borsh",

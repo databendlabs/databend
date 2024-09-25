@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::compute::merge_sort::MergeSlice;
@@ -853,7 +855,7 @@ impl Column {
         }
     }
 
-    pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {
+    pub fn take_block_vec_boolean_types(col: &[BooleanBuffer], indices: &[RowPtr]) -> BooleanBuffer {
         let num_rows = indices.len();
         // Fast path: avoid iterating column to generate a new bitmap.
         // If all [`Bitmap`] are all_true or all_false and `num_rows <= bitmap.len()`,
@@ -861,7 +863,7 @@ impl Column {
         let mut total_len = 0;
         let mut unset_bits = 0;
         for bitmap in col.iter() {
-            unset_bits += bitmap.unset_bits();
+            unset_bits += bitmap.len() - bitmap.count_set_bits();
             total_len += bitmap.len();
         }
         if unset_bits == total_len || unset_bits == 0 {
@@ -876,32 +878,13 @@ impl Column {
         }
 
         let capacity = num_rows.saturating_add(7) / 8;
-        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut unset_bits = 0;
-        let mut value = 0;
-        let mut i = 0;
+        let mut builder = BooleanBufferBuilder::new(capacity);
 
         for row_ptr in indices.iter() {
-            if col[row_ptr.chunk_index as usize].get_bit(row_ptr.row_index as usize) {
-                value |= BIT_MASK[i % 8];
-            } else {
-                unset_bits += 1;
-            }
-            i += 1;
-            if i % 8 == 0 {
-                builder.push(value);
-                value = 0;
-            }
-        }
-        if i % 8 != 0 {
-            builder.push(value);
+            builder.append(col[row_ptr.chunk_index as usize].value(row_ptr.row_index as usize));
         }
 
-        unsafe {
-            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
-                .ok()
-                .unwrap()
-        }
+        builder.finish()
     }
 
     fn take_block_vec_value_types<T: ValueType>(

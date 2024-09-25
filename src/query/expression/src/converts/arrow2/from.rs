@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
@@ -333,14 +334,14 @@ impl Column {
                         scale: *scale as u8,
                     }))
                 }
-                (DataType::Boolean, ArrowDataType::Boolean) => Column::Boolean(
-                    arrow_col
+                (DataType::Boolean, ArrowDataType::Boolean) => {
+                    let bitmap = arrow_col
                         .as_any()
                         .downcast_ref::<databend_common_arrow::arrow::array::BooleanArray>()
                         .expect("fail to read `Boolean` from arrow: array should be `BooleanArray`")
-                        .values()
-                        .clone(),
-                ),
+                        .values();
+                    Column::Boolean(bitmap.iter().collect())
+                }
                 (DataType::Binary, ArrowDataType::Binary) => {
                     let arrow_col = arrow_col
                         .as_any()
@@ -802,10 +803,12 @@ impl Column {
                 }
                 (DataType::Nullable(ty), _) => {
                     let column = Column::from_arrow(arrow_col, ty)?;
-                    let validity = arrow_col
-                        .validity()
-                        .cloned()
-                        .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
+                    let bitmap = arrow_col.validity();
+                    let validity = bitmap
+                        .map(|bitmap| {
+                            bitmap.iter().collect()
+                        })
+                        .unwrap_or_else(|| BooleanBuffer::new_set(arrow_col.len()));
                     NullableColumn::new_column(column, validity)
                 }
                 (ty, arrow_ty) => {

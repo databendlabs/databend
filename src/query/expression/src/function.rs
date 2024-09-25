@@ -19,6 +19,8 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -148,8 +150,8 @@ pub struct EvalContext<'a> {
     /// Validity bitmap of outer nullable column. This is an optimization
     /// to avoid recording errors on the NULL value which has a corresponding
     /// default value in nullable's inner column.
-    pub validity: Option<Bitmap>,
-    pub errors: Option<(MutableBitmap, String)>,
+    pub validity: Option<BooleanBuffer>,
+    pub errors: Option<(BooleanBuffer, String)>,
     pub suppress_error: bool,
 }
 
@@ -290,7 +292,7 @@ impl Function {
                     Value::Scalar(scalar) => Value::Scalar(scalar),
                     Value::Column(column) => Value::Column(NullableColumn::new_column(
                         column,
-                        Bitmap::new_constant(true, num_rows),
+                        BooleanBuffer::new_set( num_rows),
                     )),
                 }
             }
@@ -566,7 +568,7 @@ impl<'a> EvalContext<'a> {
         if self
             .validity
             .as_ref()
-            .map(|b| !b.get_bit(row))
+            .map(|b| !b.value(row))
             .unwrap_or(false)
         {
             return;
@@ -577,7 +579,7 @@ impl<'a> EvalContext<'a> {
                 valids.set(row, false);
             }
             None => {
-                let mut valids = Bitmap::new_constant(true, self.num_rows.max(1)).make_mut();
+                let mut valids = BooleanBuffer::new_set( self.num_rows.max(1));
                 valids.set(row, false);
                 self.errors = Some((valids, error_msg.into()));
             }
@@ -601,7 +603,7 @@ impl<'a> EvalContext<'a> {
                 let first_error_row = match selection {
                     None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
                     Some(selection) if valids.len() == 1 => {
-                        if valids.get(0) || selection.is_empty() {
+                        if valids.value(0) || selection.is_empty() {
                             return Ok(());
                         }
 
@@ -609,7 +611,7 @@ impl<'a> EvalContext<'a> {
                     }
                     Some(selection) => {
                         let Some(first_invalid) =
-                            selection.iter().find(|idx| !valids.get(**idx as usize))
+                            selection.iter().find(|idx| !valids.value(**idx as usize))
                         else {
                             return Ok(());
                         };
@@ -652,7 +654,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
         type T = NullableType<AnyType>;
         type Result = AnyType;
 
-        let mut bitmap: Option<MutableBitmap> = None;
+        let mut bitmap: Option<BooleanBuffer> = None;
         let mut nonull_args: Vec<ValueRef<Result>> = Vec::with_capacity(args.len());
 
         let mut len = 1;
@@ -667,19 +669,19 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                     len = v.len();
                     nonull_args.push(ValueRef::Column(v.column.clone()));
                     bitmap = match bitmap {
-                        Some(m) => Some(m.bitand(&v.validity)),
-                        None => Some(v.validity.clone().make_mut()),
+                        Some(m) => Some((&m) & (&v.validity)),
+                        None => Some(v.validity),
                     };
                 }
             }
         }
         let results = f(&nonull_args, ctx);
-        let bitmap = bitmap.unwrap_or_else(|| Bitmap::new_constant(true, len).make_mut());
+        let validity = bitmap.unwrap_or_else(|| BooleanBuffer::new_set(len));
         if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
             // If the original value is NULL, we can ignore the error.
-            let rhs: Bitmap = bitmap.clone().not().into();
-            let res = error_bitmap.clone().bitor(&rhs);
-            if res.unset_bits() == 0 {
+            let rhs: BooleanBuffer = validity.clone().not();
+            let res = (&*error_bitmap) | (&rhs);
+            if res.count_set_bits() == res.len() {
                 ctx.errors = None;
             } else {
                 *error_bitmap = res;
@@ -688,7 +690,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
 
         match results {
             Value::Scalar(s) => {
-                if bitmap.get(0) {
+                if validity.value(0) {
                     Value::Scalar(s)
                 } else {
                     Value::Scalar(Scalar::Null)
@@ -697,15 +699,10 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             Value::Column(column) => {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
-                        let validity = bitmap.into();
-                        let validity = databend_common_arrow::arrow::bitmap::and(
-                            &nullable_column.validity,
-                            &validity,
-                        );
-
+                        let validity = (&nullable_column.validity) & (&validity);
                         NullableColumn::new_column(nullable_column.column, validity)
                     }
-                    _ => NullableColumn::new_column(column, bitmap.into()),
+                    _ => NullableColumn::new_column(column, validity.into()),
                 };
                 Value::Column(result)
             }
@@ -732,7 +729,7 @@ pub fn error_to_null<I1: ArgType, O: ArgType>(
                 Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
                 Value::Column(column) => Value::Column(NullableColumn::new(
                     column,
-                    Bitmap::new_constant(true, ctx.num_rows),
+                    BooleanBuffer::new_set(ctx.num_rows),
                 )),
             }
         }

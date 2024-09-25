@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
-use arrow_schema::Schema as ArrowSchema;
+use arrow::array::RecordBatch;
+use arrow::datatypes::DataType as ArrowDataType;
+use arrow::datatypes::Field as ArrowField;
+use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::datatypes::DataType as Arrow2DataType;
 use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::ErrorCode;
@@ -97,7 +97,10 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn from_arrow_rs(array: Arc<dyn arrow_array::Array>, data_type: &DataType) -> Result<Self> {
+    pub fn from_arrow_rs(
+        array: Arc<dyn arrow::array::Array>,
+        data_type: &DataType,
+    ) -> Result<Self> {
         let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = array.into();
         Column::from_arrow(arrow2_array.as_ref(), data_type)
     }

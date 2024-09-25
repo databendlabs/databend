@@ -14,6 +14,8 @@
 
 use std::io::Cursor;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -109,7 +111,10 @@ pub fn column_to_arrow_array(column: &BlockEntry, num_rows: usize) -> Box<dyn Ar
     }
 }
 
-pub fn and_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+pub fn and_validities(
+    lhs: Option<BooleanBuffer>,
+    rhs: Option<BooleanBuffer>,
+) -> Option<BooleanBuffer> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs),
         (None, Some(rhs)) => Some(rhs),
@@ -118,11 +123,26 @@ pub fn and_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap
     }
 }
 
-pub fn or_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+pub fn or_validities(
+    lhs: Option<BooleanBuffer>,
+    rhs: Option<BooleanBuffer>,
+) -> Option<BooleanBuffer> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs),
         (None, Some(rhs)) => Some(rhs),
         (None, None) => None,
         (Some(lhs), Some(rhs)) => Some((&lhs) | (&rhs)),
     }
+}
+
+pub fn clone_boolean_buffer_builder(builder: &BooleanBufferBuilder) -> BooleanBufferBuilder {
+    let mut new_builder = BooleanBufferBuilder::new(builder.len());
+    new_builder.append_buffer(builder);
+    new_builder
+}
+
+pub fn boolean_buffer_to_builder(builder: &BooleanBuffer) -> BooleanBufferBuilder {
+    let mut builder = BooleanBufferBuilder::new(builder.len());
+    builder.append_buffer(builder);
+    builder
 }

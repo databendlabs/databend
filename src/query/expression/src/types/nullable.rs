@@ -16,6 +16,8 @@ use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
@@ -256,7 +258,7 @@ impl<T: ArgType> ArgType for NullableType<T> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NullableColumn<T: ValueType> {
     pub column: T::Column,
-    pub validity: Bitmap,
+    pub validity: BooleanBuffer,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -269,7 +271,7 @@ impl<T: ValueType> NullableColumn<T> {
     // though column and validity are public
     // we should better use new to create a new instance to ensure the validity and column are consistent
     // todo: make column and validity private
-    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+    pub fn new(column: T::Column, validity: BooleanBuffer) -> Self {
         debug_assert_eq!(T::column_len(&column), validity.len());
         debug_assert!(!matches!(
             T::upcast_column(column.clone()),
@@ -286,7 +288,7 @@ impl<T: ValueType> NullableColumn<T> {
         &self.column
     }
 
-    pub fn validity_ref(&self) -> &Bitmap {
+    pub fn validity_ref(&self) -> &BooleanBuffer {
         &self.validity
     }
 
@@ -319,7 +321,7 @@ impl<T: ValueType> NullableColumn<T> {
             validity: self
                 .validity
                 .clone()
-                .sliced(range.start, range.end - range.start),
+                .slice(range.start, range.end - range.start),
             column: T::slice_column(&self.column, range),
         }
     }
@@ -348,7 +350,7 @@ impl NullableColumn<AnyType> {
         ))
     }
 
-    pub fn new_column(column: Column, validity: Bitmap) -> Column {
+    pub fn new_column(column: Column, validity: BooleanBuffer) -> Column {
         debug_assert_eq!(column.len(), validity.len());
         debug_assert!(!matches!(column, Column::Nullable(_)));
         Column::Nullable(Box::new(NullableColumn { column, validity }))
@@ -382,17 +384,28 @@ impl<'a, T: ValueType> Iterator for NullableIterator<'a, T> {
 
 unsafe impl<'a, T: ValueType> TrustedLen for NullableIterator<'a, T> {}
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct NullableColumnBuilder<T: ValueType> {
     pub builder: T::ColumnBuilder,
-    pub validity: MutableBitmap,
+    pub validity: BooleanBufferBuilder,
+}
+
+impl Clone for NullableColumnBuilder<AnyType> {
+    fn clone(&self) -> Self {
+        NullableColumnBuilder {
+            builder: self.builder.clone(),
+            validity: self.validity.clone(),
+        }
+    }
 }
 
 impl<T: ValueType> NullableColumnBuilder<T> {
     pub fn from_column(col: NullableColumn<T>) -> Self {
+        let mut validity = BooleanBufferBuilder::new(col.validity.len());
+        validity.append_buffer(&col.validity);
         NullableColumnBuilder {
             builder: T::column_to_builder(col.column),
-            validity: bitmap_into_mut(col.validity),
+            validity,
         }
     }
 

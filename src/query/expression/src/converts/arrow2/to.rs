@@ -299,7 +299,7 @@ impl Column {
             Column::Boolean(col) => Box::new(
                 databend_common_arrow::arrow::array::BooleanArray::try_new(
                     arrow_type,
-                    col.clone(),
+                    col.iter().collect(),
                     None,
                 )
                 .unwrap(),
@@ -388,7 +388,8 @@ impl Column {
             }
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
-                set_validities(arrow_array.clone(), &col.validity)
+                let validity = col.validity.iter().collect();
+                set_validities(arrow_array.clone(), &validity)
             }
             Column::Tuple(fields) => Box::new(
                 databend_common_arrow::arrow::array::StructArray::try_new(

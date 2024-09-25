@@ -10,10 +10,8 @@ edition = { workspace = true }
 test = true
 
 [dependencies]
-arrow-array = { workspace = true }
+arrow = { workspace = true }
 arrow-flight = { workspace = true }
-arrow-schema = { workspace = true }
-arrow-select = { workspace = true }
 async-backtrace = { workspace = true }
 base64 = "0.21.0"
 borsh = { workspace = true, features = ["derive"] }

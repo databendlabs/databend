@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow::buffer::BooleanBuffer;
 use bumpalo::Bump;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
@@ -93,8 +94,9 @@ pub unsafe fn serialize_column_to_rowformat(
             })
         }
         Column::Boolean(v) => {
-            if v.unset_bits() == 0 || v.unset_bits() == v.len() {
-                let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
+            let count_set_bits = v.count_set_bits();
+            if count_set_bits == 0 || count_set_bits == v.len() {
+                let val: u8 = if count_set_bits == v.len() { 1 } else { 0 };
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
                     store(&val, address[index].add(offset) as *mut u8);
@@ -102,7 +104,7 @@ pub unsafe fn serialize_column_to_rowformat(
             } else {
                 for index in select_vector.iter().take(rows).copied() {
                     store(
-                        &(v.get_bit(index) as u8),
+                        &(v.value(index) as u8),
                         address[index].add(offset) as *mut u8,
                     );
                 }
@@ -347,7 +349,7 @@ pub unsafe fn row_match_column(
 
 unsafe fn row_match_binary_column(
     col: &BinaryColumn,
-    validity: Option<&Bitmap>,
+    validity: Option<&BooleanBuffer>,
     address: &[*const u8],
     select_vector: &mut SelectVector,
     temp_vector: &mut SelectVector,
@@ -361,12 +363,12 @@ unsafe fn row_match_binary_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        let is_all_set = validity.unset_bits() == 0;
+        let is_all_set = validity.count_set_bits() == validity.len();
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
             let is_set2 = read::<u8>(validity_address as _) != 0;
-            let is_set = is_all_set || validity.get_bit_unchecked(idx);
+            let is_set = is_all_set || validity.value_unchecked(idx);
 
             if is_set && is_set2 {
                 let len_address = address[idx].add(col_offset);
@@ -428,7 +430,7 @@ unsafe fn row_match_binary_column(
 
 unsafe fn row_match_column_type<T: ArgType>(
     col: &Column,
-    validity: Option<&Bitmap>,
+    validity: Option<&BooleanBuffer>,
     address: &[*const u8],
     select_vector: &mut SelectVector,
     temp_vector: &mut SelectVector,
@@ -443,12 +445,12 @@ unsafe fn row_match_column_type<T: ArgType>(
 
     let mut equal: bool;
     if let Some(validity) = validity {
-        let is_all_set = validity.unset_bits() == 0;
+        let is_all_set = validity.count_set_bits() == validity.len();
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
             let is_set2 = read::<u8>(validity_address as _) != 0;
-            let is_set = is_all_set || validity.get_bit_unchecked(idx);
+            let is_set = is_all_set || validity.value_unchecked(idx);
             if is_set && is_set2 {
                 let address = address[idx].add(col_offset);
                 let scalar = read::<<T as ValueType>::Scalar>(address as _);

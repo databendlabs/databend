@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_array::cast::AsArray;
-use arrow_array::Array;
-use arrow_array::LargeListArray;
-use arrow_array::MapArray;
-use arrow_array::RecordBatch;
-use arrow_array::StructArray;
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
-use arrow_schema::Fields;
-use arrow_schema::Schema as ArrowSchema;
+use arrow::array::cast::AsArray;
+use arrow::array::Array;
+use arrow::array::LargeListArray;
+use arrow::array::MapArray;
+use arrow::array::RecordBatch;
+use arrow::array::StructArray;
+use arrow::datatypes::DataType as ArrowDataType;
+use arrow::datatypes::Field as ArrowField;
+use arrow::datatypes::Fields;
+use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::datatypes::DataType as Arrow2DataType;
 use databend_common_arrow::arrow::datatypes::Field as Arrow2Field;
 use databend_common_exception::Result;
@@ -160,9 +160,9 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn into_arrow_rs(self) -> Arc<dyn arrow_array::Array> {
+    pub fn into_arrow_rs(self) -> Arc<dyn arrow::array::Array> {
         let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> = self.as_arrow();
-        let arrow_array: Arc<dyn arrow_array::Array> = arrow2_array.into();
+        let arrow_array: Arc<dyn arrow::array::Array> = arrow2_array.into();
         arrow_array
     }
 }

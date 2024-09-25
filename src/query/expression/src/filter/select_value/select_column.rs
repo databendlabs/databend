@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 
@@ -31,7 +32,7 @@ impl<'a> Selector<'a> {
         cmp: C,
         left: T::Column,
         right: T::Column,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
         mutable_true_idx: &mut usize,
@@ -50,7 +51,7 @@ impl<'a> Selector<'a> {
                     Some(validity) => {
                         for i in start..end {
                             let idx = *true_selection.get_unchecked(i);
-                            let ret = validity.get_bit_unchecked(idx as usize)
+                            let ret = validity.value_unchecked(idx as usize)
                                 && cmp(
                                     T::index_column_unchecked(&left, idx as usize),
                                     T::index_column_unchecked(&right, idx as usize),
@@ -87,7 +88,7 @@ impl<'a> Selector<'a> {
                     Some(validity) => {
                         for i in start..end {
                             let idx = *false_selection.get_unchecked(i);
-                            let ret = validity.get_bit_unchecked(idx as usize)
+                            let ret = validity.value_unchecked(idx as usize)
                                 && cmp(
                                     T::index_column_unchecked(&left, idx as usize),
                                     T::index_column_unchecked(&right, idx as usize),
@@ -121,7 +122,7 @@ impl<'a> Selector<'a> {
                 match validity {
                     Some(validity) => {
                         for idx in 0u32..count as u32 {
-                            let ret = validity.get_bit_unchecked(idx as usize)
+                            let ret = validity.value_unchecked(idx as usize)
                                 && cmp(
                                     T::index_column_unchecked(&left, idx as usize),
                                     T::index_column_unchecked(&right, idx as usize),
@@ -160,7 +161,7 @@ impl<'a> Selector<'a> {
 
     pub(crate) fn select_boolean_column<const FALSE: bool>(
         &self,
-        column: Bitmap,
+        column: BooleanBuffer,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
         mutable_true_idx: &mut usize,
@@ -176,7 +177,7 @@ impl<'a> Selector<'a> {
                 let end = *mutable_true_idx + count;
                 for i in start..end {
                     let idx = *true_selection.get_unchecked(i);
-                    let ret = column.get_bit_unchecked(idx as usize);
+                    let ret = column.value_unchecked(idx as usize);
                     *true_selection.get_unchecked_mut(true_idx) = idx;
                     true_idx += ret as usize;
                     if FALSE {
@@ -190,7 +191,7 @@ impl<'a> Selector<'a> {
                 let end = *mutable_false_idx + count;
                 for i in start..end {
                     let idx = *false_selection.get_unchecked(i);
-                    let ret = column.get_bit_unchecked(idx as usize);
+                    let ret = column.value_unchecked(idx as usize);
                     *true_selection.get_unchecked_mut(true_idx) = idx;
                     true_idx += ret as usize;
                     if FALSE {
@@ -201,7 +202,7 @@ impl<'a> Selector<'a> {
             },
             SelectStrategy::All => unsafe {
                 for idx in 0u32..count as u32 {
-                    let ret = column.get_bit_unchecked(idx as usize);
+                    let ret = column.value_unchecked(idx as usize);
                     *true_selection.get_unchecked_mut(true_idx) = idx;
                     true_idx += ret as usize;
                     if FALSE {

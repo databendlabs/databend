@@ -15,6 +15,7 @@
 use core::ops::Range;
 use std::sync::Arc;
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
@@ -158,7 +159,7 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
         Ok(())
     }
 
-    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
+    fn visit_boolean(&mut self, bitmap: BooleanBuffer) -> Result<()> {
         let capacity = self.num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
         let mut builder_ptr = builder.as_mut_ptr();

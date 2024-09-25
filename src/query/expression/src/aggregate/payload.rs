@@ -237,8 +237,9 @@ impl Payload {
         for col in group_columns.iter() {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
-                if bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len() {
-                    let val: u8 = if bitmap.unset_bits() == 0 { 1 } else { 0 };
+                let count_set_bits = bitmap.count_set_bits();
+                if count_set_bits == 0 || count_set_bits == bitmap.len() {
+                    let val: u8 = if count_set_bits == bitmap.len() { 1 } else { 0 };
                     // faster path
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
@@ -250,7 +251,7 @@ impl Payload {
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
                             let dst = address[idx].add(write_offset);
-                            store::<u8>(&(bitmap.get_bit(idx) as u8), dst as *mut u8);
+                            store::<u8>(&(bitmap.value(idx) as u8), dst as *mut u8);
                         }
                     }
                 }

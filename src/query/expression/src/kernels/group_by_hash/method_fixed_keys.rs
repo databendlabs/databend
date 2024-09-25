@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Not;
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
@@ -388,7 +389,7 @@ fn build(
     let size = data_type_nonull.numeric_byte_size().unwrap();
 
     let writer = unsafe { writer.add(*offsize) };
-    let nulls: Option<(usize, Option<Bitmap>)> = if ty.is_nullable() {
+    let nulls: Option<(usize, Option<BooleanBuffer>)> = if ty.is_nullable() {
         // origin_ptr-------ptr<------old------>null_offset
         let null_offsize_from_ptr = *null_offsize - *offsize;
         *null_offsize += 1;
@@ -422,7 +423,7 @@ pub fn fixed_hash(
     ptr: *mut u8,
     step: usize,
     // (null_offset, bitmap)
-    nulls: Option<(usize, Option<Bitmap>)>,
+    nulls: Option<(usize, Option<BooleanBuffer>)>,
 ) -> Result<()> {
     if let Column::Nullable(c) = column {
         let (null_offset, bitmap) = nulls.unwrap();

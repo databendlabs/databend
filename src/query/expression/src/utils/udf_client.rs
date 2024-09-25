@@ -15,12 +15,12 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use arrow_array::RecordBatch;
+use arrow::array::RecordBatch;
+use arrow::compute::concat_batches;
 use arrow_flight::decode::FlightRecordBatchStream;
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
-use arrow_select::concat::concat_batches;
 use databend_common_base::headers::HEADER_FUNCTION;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;

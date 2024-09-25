@@ -15,6 +15,8 @@
 use std::iter::TrustedLen;
 use std::sync::Arc;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
@@ -432,59 +434,13 @@ impl Column {
         }
     }
 
-    pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
+    pub fn concat_boolean_types(bitmaps: impl Iterator<Item = BooleanBuffer>, num_rows: usize) -> BooleanBuffer {
         let capacity = num_rows.saturating_add(7) / 8;
-        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_ptr = builder.as_mut_ptr();
-        let mut builder_idx = 0;
-        let mut unset_bits = 0;
-        let mut buf = 0;
-
-        unsafe {
-            for bitmap in bitmaps {
-                let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
-                let mut idx = 0;
-                let len = bitmap.len();
-                if builder_idx % 8 != 0 {
-                    while idx < len {
-                        if bitmap.get_bit_unchecked(idx) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        builder_idx += 1;
-                        idx += 1;
-                        if builder_idx % 8 == 0 {
-                            store_advance_aligned(buf, &mut builder_ptr);
-                            buf = 0;
-                            break;
-                        }
-                    }
-                }
-                let remaining = len - idx;
-                if remaining > 0 {
-                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
-                        &mut builder_ptr,
-                        bitmap_slice,
-                        builder_idx,
-                        idx + bitmap_offset,
-                        remaining,
-                    );
-                    builder_idx += remaining;
-                    unset_bits += cur_unset_bits;
-                    buf = cur_buf;
-                }
-            }
-
-            if builder_idx % 8 != 0 {
-                store_advance_aligned(buf, &mut builder_ptr);
-            }
-
-            set_vec_len_by_ptr(&mut builder, builder_ptr);
-            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
-                .ok()
-                .unwrap()
+        let mut builder = BooleanBufferBuilder::new(capacity);
+        for bitmap in bitmaps {
+            builder.append_buffer(&bitmap);
         }
+        builder.finish()
     }
 
     fn concat_value_types<T: ValueType>(

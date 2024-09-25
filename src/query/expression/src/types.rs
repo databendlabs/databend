@@ -320,7 +320,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type ScalarRef<'a>: Debug + Clone + PartialEq;
     type Column: Debug + Clone + PartialEq;
     type Domain: Debug + Clone + PartialEq;
-    type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
+    type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>>;
     type ColumnBuilder: Debug + Clone;
 
     /// Upcast GAT type's lifetime.

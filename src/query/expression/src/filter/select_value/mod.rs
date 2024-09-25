@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 
@@ -37,7 +38,7 @@ impl<'a> Selector<'a> {
         op: &SelectOp,
         left: Value<AnyType>,
         right: Value<AnyType>,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -70,7 +71,7 @@ impl<'a> Selector<'a> {
         cmp: C,
         left: Value<AnyType>,
         right: Value<AnyType>,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -196,7 +197,7 @@ impl<'a> Selector<'a> {
 
     pub(crate) fn select_boolean_column_adapt(
         &self,
-        column: Bitmap,
+        column: BooleanBuffer,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -236,7 +237,7 @@ impl<'a> Selector<'a> {
         like_pattern: &LikePattern,
         like_str: &[u8],
         not: bool,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         true_selection: &mut [u32],
         false_selection: (&mut [u32], bool),
         mutable_true_idx: &mut usize,
@@ -318,7 +319,7 @@ impl<'a> Selector<'a> {
         like_pattern: &LikePattern,
         like_str: &[u8],
         not: bool,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         true_selection: &mut [u32],
         false_selection: &mut [u32],
         mutable_true_idx: &mut usize,

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
+use arrow::compute::SortOptions;
 use arrow_ord::sort::LexicographicalComparator;
 use arrow_ord::sort::SortColumn;
-use arrow_schema::SortOptions;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use databend_common_base::base::OrderedFloat;
@@ -568,7 +568,7 @@ fn fuzz_test() {
                 };
                 arrow2.into()
             })
-            .collect::<Vec<Arc<dyn arrow_array::Array>>>();
+            .collect::<Vec<Arc<dyn arrow::array::Array>>>();
         let sort_columns = options
             .iter()
             .zip(order_columns.iter())

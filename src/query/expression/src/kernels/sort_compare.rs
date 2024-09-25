@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
@@ -34,7 +35,7 @@ pub struct SortCompare {
     permutation: Vec<u32>,
     ordering_descs: Vec<SortColumnDescription>,
     current_column_index: usize,
-    validity: Option<Bitmap>,
+    validity: Option<BooleanBuffer>,
     equality_index: Vec<u8>,
 }
 
@@ -42,7 +43,7 @@ macro_rules! do_sorter {
     ($self: expr, $value:expr, $validity:expr, $g:expr, $c:expr, $ordering_desc:expr, $range: expr) => {
         if let Some(valids) = &$validity {
             $self.do_inner_sort(
-                |&a, &b| match (valids.get_bit(a as _), valids.get_bit(b as _)) {
+                |&a, &b| match (valids.value(a as _), valids.value(b as _)) {
                     (true, true) => {
                         let left = $g($value, a);
                         let right = $g($value, b);
@@ -229,8 +230,8 @@ impl SortCompare {
                     // Update equality_index
                     for i in start..end {
                         let is_equal = if let Some(ref v) = validity {
-                            let va = v.get_bit(self.permutation[i] as _);
-                            let vb = v.get_bit(self.permutation[i - 1] as _);
+                            let va = v.value(self.permutation[i] as _);
+                            let vb = v.value(self.permutation[i - 1] as _);
                             if va && vb {
                                 c(
                                     g(value, self.permutation[i]),
@@ -285,7 +286,7 @@ impl ValueVisitor for SortCompare {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        if column.validity.unset_bits() > 0 {
+        if column.validity.count_set_bits() < column.validity.len() {
             self.validity = Some(column.validity.clone());
         }
         self.visit_column(column.column.clone())

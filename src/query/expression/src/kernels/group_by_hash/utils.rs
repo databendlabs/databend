@@ -76,7 +76,7 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 }
             })
         }
-        Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
+        Column::Boolean(v) => store_advance::<bool>(&v.value(row), row_space),
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             let value = unsafe { v.index_unchecked(row) };
             let len = value.len();
@@ -106,7 +106,7 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
             }
         }
         Column::Nullable(c) => {
-            let valid = c.validity.get_bit(row);
+            let valid = c.validity.value(row);
             store_advance::<bool>(&valid, row_space);
             if valid {
                 serialize_column_binary(&c.column, row, row_space);

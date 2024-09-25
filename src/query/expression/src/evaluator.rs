@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::BitAnd;
 use std::ops::Not;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -56,7 +59,7 @@ use crate::ScalarRef;
 pub struct EvaluateOptions<'a> {
     pub selection: Option<&'a [u32]>,
     pub suppress_error: bool,
-    pub errors: Option<(MutableBitmap, String)>,
+    pub errors: Option<(BooleanBuffer, String)>,
 }
 
 impl<'a> EvaluateOptions<'a> {
@@ -141,7 +144,7 @@ impl<'a> Evaluator<'a> {
     pub fn partial_run(
         &self,
         expr: &Expr,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         debug_assert!(
@@ -312,7 +315,7 @@ impl<'a> Evaluator<'a> {
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
@@ -372,7 +375,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => {
                     let has_valid = validity
-                        .map(|validity| validity.unset_bits() < validity.len())
+                        .map(|validity| validity.count_set_bits() > 0)
                         .unwrap_or(true);
                     if has_valid {
                         Err(ErrorCode::BadArguments(format!(
@@ -390,9 +393,9 @@ impl<'a> Evaluator<'a> {
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
-                            (validity & (&col.validity)).unset_bits() > validity.unset_bits()
+                            (validity & (&col.validity)).count_set_bits() < validity.count_set_bits()
                         })
-                        .unwrap_or_else(|| col.validity.unset_bits() > 0);
+                        .unwrap_or_else(|| col.validity.count_set_bits() < col.validity.len());
                     if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
@@ -436,7 +439,7 @@ impl<'a> Evaluator<'a> {
                         .into_column()
                         .unwrap();
 
-                    let validity = Bitmap::new_constant(true, column.len());
+                    let validity = BooleanBuffer::new_set(column.len());
                     Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
@@ -458,7 +461,11 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        if validity.count_set_bits() > 0 {
+                            BooleanBuffer::new_set(array.len())
+                        } else {
+                            BooleanBuffer::new_unset(array.len())
+                        }
                     });
                     let new_array = self
                         .run_cast(
@@ -475,11 +482,11 @@ impl<'a> Evaluator<'a> {
                 }
                 Value::Column(Column::Array(col)) => {
                     let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        let mut inner_validity = BooleanBufferBuilder::new(col.len());
                         for (index, offsets) in col.offsets.windows(2).enumerate() {
-                            inner_validity.extend_constant(
+                            inner_validity.append_n(
                                 (offsets[1] - offsets[0]) as usize,
-                                validity.get_bit(index),
+                                validity.value(index),
                             );
                         }
                         inner_validity.into()
@@ -519,7 +526,11 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        if validity.count_set_bits() > 0 {
+                            BooleanBuffer::new_set(array.len())
+                        } else {
+                            BooleanBuffer::new_unset(array.len())
+                        }
                     });
                     let new_array = self
                         .run_cast(
@@ -536,11 +547,11 @@ impl<'a> Evaluator<'a> {
                 }
                 Value::Column(Column::Map(col)) => {
                     let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        let mut inner_validity = BooleanBufferBuilder::new(col.len());
                         for (index, offsets) in col.offsets.windows(2).enumerate() {
-                            inner_validity.extend_constant(
+                            inner_validity.append_n(
                                 (offsets[1] - offsets[0]) as usize,
-                                validity.get_bit(index),
+                                validity.value(index),
                             );
                         }
                         inner_validity.into()
@@ -667,7 +678,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    let validity = bitmap::and(&col.validity, &new_col.validity);
+                    let validity = (&col.validity) & (&new_col.validity);
                     Ok(Value::Column(NullableColumn::new_column(
                         new_col.column,
                         validity,
@@ -678,7 +689,7 @@ impl<'a> Evaluator<'a> {
             (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
                 Value::Scalar(_) => Ok(value),
                 Value::Column(column) => {
-                    let validity = Bitmap::new_constant(true, column.len());
+                    let validity = BooleanBuffer::new_set(column.len());
                     Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
@@ -714,7 +725,7 @@ impl<'a> Evaluator<'a> {
                         values: new_values,
                         offsets: col.offsets,
                     }));
-                    let validity = Bitmap::new_constant(true, new_col.len());
+                    let validity = BooleanBuffer::new_set(new_col.len());
 
                     Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
                 }
@@ -751,7 +762,7 @@ impl<'a> Evaluator<'a> {
                         values: new_values,
                         offsets: col.offsets,
                     }));
-                    let validity = Bitmap::new_constant(true, new_col.len());
+                    let validity = BooleanBuffer::new_set(new_col.len());
 
                     Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
                 }
@@ -788,7 +799,7 @@ impl<'a> Evaluator<'a> {
                             })
                             .collect::<Result<_>>()?;
                         let new_col = Column::Tuple(new_fields);
-                        let validity = Bitmap::new_constant(true, new_col.len());
+                        let validity = BooleanBuffer::new_set( new_col.len());
                         Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
                     }
                     other => unreachable!("source: {}", other),
@@ -809,7 +820,7 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         cast_fn: &str,
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         options: &mut EvaluateOptions,
     ) -> Result<Option<Value<AnyType>>> {
         let expr = Expr::ColumnRef {
@@ -858,7 +869,7 @@ impl<'a> Evaluator<'a> {
         &self,
         args: &[Expr],
         generics: &[DataType],
-        validity: Option<Bitmap>,
+        validity: Option<BooleanBuffer>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if args.len() < 3 && args.len() % 2 == 0 {
@@ -876,7 +887,7 @@ impl<'a> Evaluator<'a> {
             });
 
         // Evaluate the condition first and then partially evaluate the result branches.
-        let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));
+        let mut validity = validity.unwrap_or_else(|| BooleanBuffer::new_set(num_rows));
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
@@ -885,7 +896,7 @@ impl<'a> Evaluator<'a> {
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     results.push(Value::Scalar(Scalar::default_value(&generics[0])));
-                    flags.push(Bitmap::new_constant(false, len.unwrap_or(1)));
+                    flags.push(BooleanBuffer::new_unset(len.unwrap_or(1)));
                 }
                 Value::Scalar(Some(true)) => {
                     results.push(self.partial_run(
@@ -893,8 +904,8 @@ impl<'a> Evaluator<'a> {
                         Some(validity.clone()),
                         options,
                     )?);
-                    validity = Bitmap::new_constant(false, num_rows);
-                    flags.push(Bitmap::new_constant(true, len.unwrap_or(1)));
+                    validity = BooleanBuffer::new_unset(num_rows);
+                    flags.push(BooleanBuffer::new_set(len.unwrap_or(1)));
                     break;
                 }
                 Value::Column(cond) => {
@@ -931,7 +942,7 @@ impl<'a> Evaluator<'a> {
             unsafe {
                 let result = flags
                     .iter()
-                    .position(|flag| flag.get_bit(row_idx))
+                    .position(|flag| flag.value(row_idx))
                     .map(|idx| results[idx].index_unchecked(row_idx))
                     .unwrap_or(else_result.index_unchecked(row_idx));
                 output_builder.push(result);
@@ -947,7 +958,7 @@ impl<'a> Evaluator<'a> {
     fn eval_and_filters(
         &self,
         args: &[Expr],
-        mut validity: Option<Bitmap>,
+        mut validity: Option<BooleanBuffer>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         assert!(args.len() >= 2);
@@ -1160,8 +1171,8 @@ impl<'a> Evaluator<'a> {
                 for offset in offsets.windows(2) {
                     let off = offset[0] as usize;
                     let len = (offset[1] - offset[0]) as usize;
-                    let unset_count = bitmap.null_count_range(off, len);
-                    new_offset += (len - unset_count) as u64;
+                    let set_count = bitmap.slice(off, len).count_set_bits();
+                    new_offset += set_count as u64;
                     filtered_offsets.push(new_offset);
                 }
 

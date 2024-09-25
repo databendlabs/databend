@@ -18,6 +18,8 @@ use std::io::Read;
 use std::io::Write;
 use std::ops::Range;
 
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use borsh::BorshDeserialize;
@@ -44,6 +46,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use crate::arrow::clone_boolean_buffer_builder;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
@@ -160,7 +163,7 @@ pub enum Column {
     EmptyMap { len: usize },
     Number(NumberColumn),
     Decimal(DecimalColumn),
-    Boolean(Bitmap),
+    Boolean(BooleanBuffer),
     Binary(BinaryColumn),
     String(StringColumn),
     Timestamp(Buffer<i64>),
@@ -182,7 +185,7 @@ pub enum ColumnVec {
     EmptyMap,
     Number(NumberColumnVec),
     Decimal(DecimalColumnVec),
-    Boolean(Vec<Bitmap>),
+    Boolean(Vec<BooleanBuffer>),
     Binary(Vec<BinaryColumn>),
     String(Vec<StringColumn>),
     Timestamp(Vec<Buffer<i64>>),
@@ -197,14 +200,14 @@ pub enum ColumnVec {
     Geography(Vec<GeographyColumn>),
 }
 
-#[derive(Debug, Clone, EnumAsInner)]
+#[derive(Debug, EnumAsInner)]
 pub enum ColumnBuilder {
     Null { len: usize },
     EmptyArray { len: usize },
     EmptyMap { len: usize },
     Number(NumberColumnBuilder),
     Decimal(DecimalColumnBuilder),
-    Boolean(MutableBitmap),
+    Boolean(BooleanBufferBuilder),
     Binary(BinaryColumnBuilder),
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
@@ -217,6 +220,33 @@ pub enum ColumnBuilder {
     Variant(BinaryColumnBuilder),
     Geometry(BinaryColumnBuilder),
     Geography(BinaryColumnBuilder),
+}
+
+impl Clone for ColumnBuilder {
+    fn clone(&self) -> Self {
+        match self {
+            ColumnBuilder::Null { len } => ColumnBuilder::Null { len: *len },
+            ColumnBuilder::EmptyArray { len } => ColumnBuilder::EmptyArray { len: *len },
+            ColumnBuilder::EmptyMap { len } => ColumnBuilder::EmptyMap { len: *len },
+            ColumnBuilder::Number(builder) => ColumnBuilder::Number(builder.clone()),
+            ColumnBuilder::Decimal(builder) => ColumnBuilder::Decimal(builder.clone()),
+            ColumnBuilder::Boolean(builder) => {
+                ColumnBuilder::Boolean(clone_boolean_buffer_builder(builder))
+            }
+            ColumnBuilder::Binary(builder) => ColumnBuilder::Binary(builder.clone()),
+            ColumnBuilder::String(builder) => ColumnBuilder::String(builder.clone()),
+            ColumnBuilder::Timestamp(values) => ColumnBuilder::Timestamp(values.clone()),
+            ColumnBuilder::Date(values) => ColumnBuilder::Date(values.clone()),
+            ColumnBuilder::Array(builder) => ColumnBuilder::Array(builder.clone()),
+            ColumnBuilder::Map(builder) => ColumnBuilder::Map(builder.clone()),
+            ColumnBuilder::Bitmap(builder) => ColumnBuilder::Bitmap(builder.clone()),
+            ColumnBuilder::Nullable(builder) => ColumnBuilder::Nullable(builder.clone()),
+            ColumnBuilder::Tuple(builders) => ColumnBuilder::Tuple(builders.clone()),
+            ColumnBuilder::Variant(builder) => ColumnBuilder::Variant(builder.clone()),
+            ColumnBuilder::Geometry(builder) => ColumnBuilder::Geometry(builder.clone()),
+            ColumnBuilder::Geography(builder) => ColumnBuilder::Geography(builder.clone()),
+        }
+    }
 }
 
 impl<'a, T: ValueType> ValueRef<'a, T> {
@@ -1022,7 +1052,7 @@ impl Column {
             Column::Number(col) => Column::Number(col.slice(range)),
             Column::Decimal(col) => Column::Decimal(col.slice(range)),
             Column::Boolean(col) => {
-                Column::Boolean(col.clone().sliced(range.start, range.end - range.start))
+                Column::Boolean(col.clone().slice(range.start, range.end - range.start))
             }
             Column::Binary(col) => Column::Binary(col.slice(range)),
             Column::String(col) => Column::String(col.slice(range)),
@@ -1375,7 +1405,7 @@ impl Column {
         }
     }
 
-    pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {
+    pub fn wrap_nullable(self, validity: Option<BooleanBuffer>) -> Self {
         match self {
             c @ Column::Null { .. } => c,
             Column::Nullable(null_column) => {
@@ -1386,7 +1416,7 @@ impl Column {
                 NullableColumn::new_column(null_column.column, validity)
             }
             _ => {
-                let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
+                let validity = validity.unwrap_or_else(|| BooleanBuffer::new_set( self.len()));
                 NullableColumn::new_column(self, validity)
             }
         }
@@ -1567,7 +1597,7 @@ impl ColumnBuilder {
                 builder.push_repeat(scalar, n);
                 return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                     builder,
-                    validity: Bitmap::new_constant(true, n).make_mut(),
+                    validity: BooleanBuffer::new_set( n).make_mut(),
                 }));
             }
         }
@@ -2237,7 +2267,16 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Number(builder) => builder.pop().map(Scalar::Number),
             ColumnBuilder::Decimal(builder) => builder.pop().map(Scalar::Decimal),
-            ColumnBuilder::Boolean(builder) => builder.pop().map(Scalar::Boolean),
+            ColumnBuilder::Boolean(builder) => {
+                let len = builder.len();
+                if len > 0 {
+                    let value = builder.get_bit(len - 1);
+                    builder.truncate(len - 1);
+                    Some(Scalar::Boolean(value))
+                } else {
+                    None
+                }
+            }
             ColumnBuilder::Binary(builder) => builder.pop().map(Scalar::Binary),
             ColumnBuilder::String(builder) => builder.pop().map(Scalar::String),
             ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),

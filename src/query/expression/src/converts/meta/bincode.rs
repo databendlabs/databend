@@ -112,7 +112,7 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::EmptyMap { len } => Column::EmptyMap { len },
             LegacyColumn::Number(num_col) => Column::Number(num_col),
             LegacyColumn::Decimal(dec_col) => Column::Decimal(dec_col),
-            LegacyColumn::Boolean(bmp) => Column::Boolean(bmp),
+            LegacyColumn::Boolean(bmp) => Column::Boolean(bmp.iter().collect()),
             LegacyColumn::String(str_col) => Column::String(str_col.try_into().unwrap()),
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),
@@ -128,7 +128,7 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::Nullable(nullable_col) => {
                 Column::Nullable(Box::new(NullableColumn::<AnyType> {
                     column: nullable_col.column.into(),
-                    validity: nullable_col.validity,
+                    validity: nullable_col.validity.iter().collect(),
                 }))
             }
             LegacyColumn::Tuple(tuple) => {
@@ -169,7 +169,7 @@ impl From<Column> for LegacyColumn {
             Column::EmptyMap { len } => LegacyColumn::EmptyMap { len },
             Column::Number(num_col) => LegacyColumn::Number(num_col),
             Column::Decimal(dec_col) => LegacyColumn::Decimal(dec_col),
-            Column::Boolean(bmp) => LegacyColumn::Boolean(bmp),
+            Column::Boolean(bmp) => LegacyColumn::Boolean(bmp.iter().collect()),
             Column::Binary(_) | Column::Geometry(_) | Column::Geography(_) => unreachable!(),
             Column::String(str_col) => LegacyColumn::String(str_col.into()),
             Column::Timestamp(buf) => LegacyColumn::Timestamp(buf),
@@ -186,7 +186,7 @@ impl From<Column> for LegacyColumn {
             Column::Nullable(nullable_col) => {
                 LegacyColumn::Nullable(Box::new(LegacyNullableColumn {
                     column: nullable_col.column.into(),
-                    validity: nullable_col.validity,
+                    validity: nullable_col.validity.iter().collect(),
                 }))
             }
             Column::Tuple(tuple) => {

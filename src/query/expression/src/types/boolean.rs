@@ -15,7 +15,8 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use arrow::array::BooleanBufferBuilder;
+use arrow::buffer::BooleanBuffer;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::property::Domain;
@@ -36,10 +37,10 @@ pub struct BooleanType;
 impl ValueType for BooleanType {
     type Scalar = bool;
     type ScalarRef<'a> = bool;
-    type Column = Bitmap;
+    type Column = BooleanBuffer;
     type Domain = BooleanDomain;
-    type ColumnIterator<'a> = databend_common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
-    type ColumnBuilder = MutableBitmap;
+    type ColumnIterator<'a> = arrow::util::bit_iterator::BitIterator<'a>;
+    type ColumnBuilder = BooleanBufferBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
@@ -121,7 +122,7 @@ impl ValueType for BooleanType {
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
+        col.clone().slice(range.start, range.end - range.start)
     }
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
