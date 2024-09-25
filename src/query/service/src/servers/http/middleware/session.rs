@@ -20,8 +20,10 @@ use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_SESSION_ID;
 use databend_common_base::headers::HEADER_TENANT;
+use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
+use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
@@ -434,7 +436,7 @@ pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<Stri
 }
 
 pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
-    let resp = match next.call(req).await {
+    let mut resp = match next.call(req).await {
         Ok(resp) => resp.into_response(),
         Err(err) => (
             err.status(),
@@ -448,5 +450,7 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
         )
             .into_response(),
     };
+    resp.headers_mut()
+        .insert(HEADER_VERSION, QUERY_SEMVER.to_string().parse().unwrap());
     Ok(resp)
 }
