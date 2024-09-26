@@ -245,6 +245,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col)
         },
     );
+
+    registry.register_0_arg_core::<StringType, _, _>("crash", |_| FunctionDomain::Full, |_ctx| {
+        unsafe { std::ptr::null_mut::<i32>().write(42) };
+        unreachable!()
+    });
 }
 
 fn register_inet_aton(registry: &mut FunctionRegistry) {
