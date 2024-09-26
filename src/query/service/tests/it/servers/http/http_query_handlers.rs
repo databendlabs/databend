@@ -187,7 +187,7 @@ impl TestHttpQueryRequest {
             .unwrap();
         assert_eq!(
             resp.header(HEADER_VERSION),
-            Some(QUERY_SEMVER.to_string().parse().unwrap())
+            Some(QUERY_SEMVER.to_string().as_str())
         );
 
         let status_code = resp.status();
