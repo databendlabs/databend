@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fmt::Display;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -140,7 +141,6 @@ use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableInfoFilter;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -2644,11 +2644,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let the_limit = req.limit.unwrap_or(usize::MAX);
 
-        if let TableInfoFilter::DroppedTableOrDroppedDatabase(retention_boundary) = &req.filter {
+        let drop_time_range = req.drop_time_range;
+
+        if req.database_name.is_none() {
             let db_infos = self
                 .get_tenant_history_databases(
                     ListDatabaseReq {
-                        tenant: req.inner.tenant().clone(),
+                        tenant: req.tenant.clone(),
                     },
                     true,
                 )
@@ -2665,24 +2667,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     });
                 }
 
-                // If boundary is None, it means choose all tables.
-                // Thus, we just choose a very large time.
-                let boundary = retention_boundary.unwrap_or(DateTime::<Utc>::MAX_UTC);
-
-                let vacuum_db = {
-                    let drop_on = db_info.meta.drop_on;
-                    drop_on.is_some() && drop_on <= Some(boundary)
-                };
+                let vacuum_db = drop_time_range.contains(&db_info.meta.drop_on);
 
                 // If to vacuum a db, just vacuum all tables.
                 // Otherwise, choose only dropped tables(before retention time).
-                let filter = if vacuum_db {
-                    TableInfoFilter::All
+                let table_drop_time_range = if vacuum_db {
+                    None..Some(DateTime::<Utc>::MAX_UTC)
                 } else {
-                    TableInfoFilter::DroppedTables(*retention_boundary)
+                    drop_time_range.clone()
                 };
 
-                let db_filter = (filter, db_info.clone());
+                let db_filter = (table_drop_time_range, db_info.clone());
 
                 let capacity = the_limit - vacuum_table_infos.len();
                 let table_infos = do_get_table_history(self, db_filter, capacity).await?;
@@ -2723,12 +2718,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             });
         }
 
-        let tenant_dbname = &req.inner;
+        let database_name = req.database_name.clone().unwrap();
+        let tenant_dbname = DatabaseNameIdent::new(&req.tenant, database_name);
 
         // Get db by name to ensure presence
         let res = get_db_or_err(
             self,
-            tenant_dbname,
+            &tenant_dbname,
             format!("get_table_history: {}", tenant_dbname.display()),
         )
         .await;
@@ -2742,10 +2738,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let db_info = Arc::new(DatabaseInfo {
             database_id: seq_db_id.data,
-            name_ident: req.inner.clone(),
+            name_ident: tenant_dbname.clone(),
             meta: db_meta,
         });
-        let db_filter = (req.filter, db_info);
+        let db_filter = (drop_time_range.clone(), db_info);
         let table_infos = do_get_table_history(self, db_filter, the_limit).await?;
         let mut drop_ids = vec![];
         let mut drop_table_infos = vec![];
@@ -3531,11 +3527,17 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     )
 }
 
+#[allow(clippy::type_complexity)]
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
 async fn batch_filter_table_info(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    args: &[(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)],
+    args: &[(
+        Range<Option<DateTime<Utc>>>,
+        &Arc<DatabaseInfo>,
+        u64,
+        String,
+    )],
     filter_tb_infos: &mut Vec<(Arc<TableInfo>, u64)>,
 ) -> Result<(), KVAppError> {
     let table_id_idents = args
@@ -3544,9 +3546,7 @@ async fn batch_filter_table_info(
 
     let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
-    for (seq_meta, (filter, db_info, table_id, table_name)) in
-        seq_metas.into_iter().zip(args.iter())
-    {
+    for (seq_meta, (rng, db_info, table_id, table_name)) in seq_metas.into_iter().zip(args.iter()) {
         let Some(seq_meta) = seq_meta else {
             error!(
                 "batch_filter_table_info cannot find {:?} table_meta",
@@ -3555,14 +3555,8 @@ async fn batch_filter_table_info(
             continue;
         };
 
-        if let TableInfoFilter::DroppedTables(retention_boundary) = filter {
-            let Some(meta_drop_on) = seq_meta.drop_on else {
-                continue;
-            };
-
-            if meta_drop_on > retention_boundary.unwrap_or(DateTime::<Utc>::MAX_UTC) {
-                continue;
-            }
+        if !rng.contains(&seq_meta.data.drop_on) {
+            continue;
         }
 
         let tb_info = TableInfo {
@@ -3583,7 +3577,12 @@ async fn batch_filter_table_info(
     Ok(())
 }
 
-type TableFilterInfoList<'a> = Vec<(&'a TableInfoFilter, &'a Arc<DatabaseInfo>, u64, String)>;
+type TableFilterInfoList<'a> = Vec<(
+    Range<Option<DateTime<Utc>>>,
+    &'a Arc<DatabaseInfo>,
+    u64,
+    String,
+)>;
 
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
@@ -3607,19 +3606,15 @@ async fn get_gc_table_info(
 #[fastrace::trace]
 async fn do_get_table_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_filter: (TableInfoFilter, Arc<DatabaseInfo>),
+    db_filter: (Range<Option<DateTime<Utc>>>, Arc<DatabaseInfo>),
     limit: usize,
 ) -> Result<Vec<(Arc<TableInfo>, u64)>, KVAppError> {
     let mut filter_tb_infos = vec![];
 
     // step 1: list db table name with db id
-    let mut filter_db_info_with_table_id_key_list: Vec<(
-        &TableInfoFilter,
-        &Arc<DatabaseInfo>,
-        TableIdHistoryIdent,
-    )> = vec![];
+    let mut filter_db_info_with_table_id_key_list: Vec<_> = vec![];
 
-    let (filter, db_info) = db_filter;
+    let (drop_time_range, db_info) = db_filter;
     let db_id = db_info.database_id.db_id;
 
     // List tables by tenant, db_id, table_name.
@@ -3633,7 +3628,7 @@ async fn do_get_table_history(
 
     let keys = table_id_list_keys
         .iter()
-        .map(|table_id_list_key| (&filter, &db_info, table_id_list_key.clone()))
+        .map(|table_id_list_key| (drop_time_range.clone(), &db_info, table_id_list_key.clone()))
         .collect::<Vec<_>>();
 
     filter_db_info_with_table_id_key_list.extend(keys);
@@ -3660,10 +3655,17 @@ async fn do_get_table_history(
             let (filter, db_info, table_id_list_key) = table_id_list_keys_iter.next().unwrap();
             let tb_id_list = seq_table_id_list.data;
 
-            let id_list: Vec<(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)> = tb_id_list
+            let id_list: Vec<_> = tb_id_list
                 .id_list
                 .iter()
-                .map(|id| (filter, db_info, *id, table_id_list_key.table_name.clone()))
+                .map(|id| {
+                    (
+                        filter.clone(),
+                        db_info,
+                        *id,
+                        table_id_list_key.table_name.clone(),
+                    )
+                })
                 .collect();
 
             filter_db_info_with_table_id_list.extend(id_list);
@@ -3694,6 +3696,10 @@ async fn do_get_table_history(
     Ok(filter_tb_infos)
 }
 
+/// Permanently remove a dropped database from the meta-service.
+///
+/// Upon calling this method, the dropped database must be already marked as `gc_in_progress`,
+/// then remove all **dropped and non-dropped** tables in the database.
 async fn gc_dropped_db_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
@@ -3892,6 +3898,10 @@ async fn update_txn_to_remove_table_history(
     Ok(())
 }
 
+/// Update TxnRequest to remove a dropped table's own data.
+///
+/// This function returns the updated TxnRequest,
+/// or Err of the reason in string if it can not proceed.
 async fn remove_data_for_dropped_table(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: &TableId,
