@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
@@ -33,9 +34,9 @@ impl UserApiProvider {
         tenant: &Tenant,
         req: CreateProcedureReq,
         overriding: bool,
-    ) -> Result<CreateProcedureReply> {
+    ) -> Result<std::result::Result<CreateProcedureReply, KVAppError>> {
         let procedure_api = self.procedure_api(tenant);
-        let replay = procedure_api.create_procedure(req, overriding).await?;
+        let replay = procedure_api.create_procedure(req, overriding).await;
 
         Ok(replay)
     }
