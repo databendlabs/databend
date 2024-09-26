@@ -255,10 +255,9 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" },
             |(_, _, _, files, _)| SelectStageOption::Files(files),
         ),
-        map(
-            rule! { PATTERN ~ ^"=>" ~ ^#literal_string },
-            |(_, _, pattern)| SelectStageOption::Pattern(pattern),
-        ),
+        map(rule! { PATTERN ~ ^"=>" ~ ^#expr }, |(_, _, pattern)| {
+            SelectStageOption::Pattern(pattern)
+        }),
         map(
             rule! { FILE_FORMAT ~ ^"=>" ~ ^#literal_string },
             |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
