@@ -211,9 +211,16 @@ pub trait SchemaApi: Send + Sync {
     async fn get_tables_history(
         &self,
         req: ListTableReq,
+        db_name: &str,
     ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
 
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    /// List all tables in the database.
+    ///
+    /// Returns a list of `(table_name, table_id, table_meta)` tuples.
+    async fn list_tables(
+        &self,
+        req: ListTableReq,
+    ) -> Result<Vec<(String, TableId, SeqV<TableMeta>)>, KVAppError>;
 
     /// Return TableMeta by table_id.
     ///

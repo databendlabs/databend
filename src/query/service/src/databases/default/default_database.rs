@@ -71,11 +71,30 @@ impl DefaultDatabase {
     }
 
     async fn list_table_infos(&self) -> Result<Vec<Arc<TableInfo>>> {
-        let table_infos = self
+        let db_id = self.db_info.database_id;
+
+        let name_id_metas = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .list_tables(ListTableReq::new(self.get_tenant(), db_id))
             .await?;
+
+        let table_infos = name_id_metas
+            .iter()
+            .map(|(name, id, meta)| {
+                Arc::new(TableInfo {
+                    ident: TableIdent {
+                        table_id: id.table_id,
+                        seq: meta.seq(),
+                    },
+                    desc: format!("'{}'.'{}'", self.get_db_name(), name),
+                    name: name.to_string(),
+                    meta: meta.data.clone(),
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                })
+            })
+            .collect::<Vec<_>>();
 
         if self.ctx.disable_table_info_refresh {
             Ok(table_infos)
@@ -194,7 +213,10 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_tables_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .get_tables_history(
+                ListTableReq::new(self.get_tenant(), self.db_info.database_id),
+                self.get_db_name(),
+            )
             .await?
             .into_iter()
             .filter(|i| i.meta.drop_on.is_some())
