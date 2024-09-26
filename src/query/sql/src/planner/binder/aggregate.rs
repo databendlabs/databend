@@ -688,9 +688,7 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
             )
         };
 

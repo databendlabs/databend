@@ -65,7 +65,7 @@ error:
   --> SQL:1:1
   |
 1 | 'a' and 1
-  | ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('a')` in expr `to_boolean('a')`, during run expr: `to_boolean('a') AND to_boolean(1)`
+  | ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('a')` in expr `to_boolean('a')`, during run expr: `(to_boolean('a') AND to_boolean(1))`
 
 
 

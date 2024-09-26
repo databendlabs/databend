@@ -14,7 +14,6 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::filter::FilterExecutor;
-use databend_common_expression::filter::SelectExprBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -119,11 +118,9 @@ impl ProbeState {
             JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
         ) && let Some(predicate) = other_predicate
         {
-            let (select_expr, has_or) = SelectExprBuilder::new().build(&predicate).into();
             let filter_executor = FilterExecutor::new(
-                select_expr,
+                predicate,
                 func_ctx.clone(),
-                has_or,
                 max_block_size,
                 None,
                 &BUILTIN_FUNCTIONS,

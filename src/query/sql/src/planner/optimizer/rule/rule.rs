@@ -53,7 +53,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyAggIndex,
-        RuleID::SplitAggregate,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere

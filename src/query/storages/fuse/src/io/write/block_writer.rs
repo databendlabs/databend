@@ -48,7 +48,6 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
-use log::info;
 use opendal::Operator;
 
 use crate::io::block_to_inverted_index;
@@ -62,7 +61,6 @@ use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
 
-// TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
@@ -463,12 +461,6 @@ impl BlockWriter {
             metrics_inc_block_index_write_nums(1);
             metrics_inc_block_index_write_nums(index_state.size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
-
-            info!(
-                "wrote down bloom index: {}, use {} secs",
-                location,
-                start.elapsed().as_secs_f32()
-            );
         }
         Ok(())
     }
@@ -486,8 +478,6 @@ impl BlockWriter {
             metrics_inc_block_inverted_index_write_nums(1);
             metrics_inc_block_inverted_index_write_bytes(index_size);
             metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
-
-            info!("wrote down inverted index: {}", location);
         }
         Ok(())
     }
