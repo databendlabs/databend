@@ -23,6 +23,7 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::CreateOption;
+use crate::ast::Expr;
 use crate::ast::FileFormatOptions;
 use crate::ast::UriLocation;
 
@@ -80,10 +81,10 @@ impl Display for CreateStageStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectStageOption {
     Files(Vec<String>),
-    Pattern(String),
+    Pattern(Expr),
     FileFormat(String),
     Connection(BTreeMap<String, String>),
 }
@@ -103,10 +104,10 @@ impl SelectStageOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Default, Drive, DriveMut)]
 pub struct SelectStageOptions {
     pub files: Option<Vec<String>>,
-    pub pattern: Option<String>,
+    pub pattern: Option<Expr>,
     pub file_format: Option<String>,
     pub connection: BTreeMap<String, String>,
 }
@@ -150,7 +151,7 @@ impl Display for SelectStageOptions {
         }
 
         if let Some(pattern) = self.pattern.as_ref() {
-            write!(f, " PATTERN => '{}',", pattern)?;
+            write!(f, " PATTERN => {},", pattern)?;
         }
 
         if !self.connection.is_empty() {

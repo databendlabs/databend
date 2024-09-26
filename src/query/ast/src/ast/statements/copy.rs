@@ -26,6 +26,7 @@ use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -54,7 +55,7 @@ pub struct CopyIntoTableStmt {
 
     // files to load
     pub files: Option<Vec<String>>,
-    pub pattern: Option<String>,
+    pub pattern: Option<Expr>,
     pub force: bool,
 
     // copy options
@@ -110,7 +111,7 @@ impl Display for CopyIntoTableStmt {
         }
 
         if let Some(pattern) = &self.pattern {
-            write!(f, " PATTERN = '{}'", pattern)?;
+            write!(f, " PATTERN = {}", pattern)?;
         }
 
         if !self.file_format.is_empty() {
@@ -440,7 +441,7 @@ impl Display for FileLocation {
 
 pub enum CopyIntoTableOption {
     Files(Vec<String>),
-    Pattern(String),
+    Pattern(Expr),
     FileFormat(FileFormatOptions),
     ValidationMode(String),
     SizeLimit(usize),
