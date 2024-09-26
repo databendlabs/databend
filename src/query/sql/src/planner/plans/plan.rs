@@ -386,6 +386,7 @@ pub enum RewriteKind {
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,
+    ShowDictionaries(String, String),
 
     ShowStreams(String),
 
@@ -403,8 +404,6 @@ pub enum RewriteKind {
 
     Call,
     ShowProcedures,
-
-    ShowDictionaries(String, String),
 }
 
 impl Plan {

@@ -957,9 +957,21 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_dictionaries = map(
         rule! {
-            SHOW ~ DICTIONARIES ~ #show_options?
+            SHOW ~ FULL? ~ DICTIONARIES ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
-        |(_, _, show_options)| Statement::ShowDictionaries { show_options },
+        |(_, opt_full, _, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowDictionaries(ShowDictionariesStmt {
+                catalog,
+                database,
+                full: opt_full.is_some(),
+                limit,
+            })
+        },
     );
     let show_create_dictionary = map(
         rule! {

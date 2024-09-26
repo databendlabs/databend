@@ -31,6 +31,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::DictionaryMeta;
 use itertools::Itertools;
+use log::debug;
 
 use crate::binder::bind_context;
 use crate::normalize_identifier;
