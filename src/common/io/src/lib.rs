@@ -26,6 +26,7 @@
 
 pub mod constants;
 pub mod format_diagnostic;
+pub mod number;
 pub mod prelude;
 
 mod binary_read;
