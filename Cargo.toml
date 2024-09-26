@@ -363,18 +363,17 @@ result_large_err = "allow"
 # incremental = false
 # codegen-units = 1
 
-
 [profile.release]
 debug = 1
 lto = "thin"
 overflow-checks = false
-incremental = false
 opt-level = "s" ## defaults to be 3
+incremental = false
 
-[profile.release.package]
-databend-common-arrow = { codegen-units = 16 }
-databend-query = { codegen-units = 4 }
-databend-binaries = { codegen-units = 4 }
+# [profile.release.package]
+# databend-common-arrow = { codegen-units = 16 }
+# databend-query = { codegen-units = 4 }
+# databend-binaries = { codegen-units = 4 }
 
 [profile.bench]
 debug = true
