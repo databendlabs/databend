@@ -604,7 +604,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
+source = "git+https://github.com/datafuse-extras/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "async-backtrace-attributes",
  "dashmap",
@@ -620,7 +620,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace-attributes"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
+source = "git+https://github.com/datafuse-extras/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -665,7 +665,7 @@ dependencies = [
 [[package]]
 name = "async-compression"
 version = "0.4.3"
-source = "git+https://github.com/everpcpc/async-compression?rev=dc81082#dc8108229e3a0288ee9097c986b89a90788fe9f6"
+source = "git+https://github.com/datafuse-extras/async-compression?rev=dc81082#dc8108229e3a0288ee9097c986b89a90788fe9f6"
 dependencies = [
  "brotli 3.5.0",
  "bzip2",
@@ -786,7 +786,7 @@ dependencies = [
 [[package]]
 name = "async-recursion"
 version = "1.1.1"
-source = "git+https://github.com/zhang2014/async-recursion.git?rev=a353334#a353334ceb408c80a802634ff0cfeeb7a50d0ef7"
+source = "git+https://github.com/datafuse-extras/async-recursion.git?rev=a353334#a353334ceb408c80a802634ff0cfeeb7a50d0ef7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12583,7 +12583,7 @@ dependencies = [
 [[package]]
 name = "recursive"
 version = "0.1.1"
-source = "git+https://github.com/zhang2014/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+source = "git+https://github.com/datafuse-extras/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
 dependencies = [
  "recursive-proc-macro-impl",
  "stacker",
@@ -12592,7 +12592,7 @@ dependencies = [
 [[package]]
 name = "recursive-proc-macro-impl"
 version = "0.1.1"
-source = "git+https://github.com/zhang2014/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+source = "git+https://github.com/datafuse-extras/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
 dependencies = [
  "quote",
  "syn 2.0.58",
