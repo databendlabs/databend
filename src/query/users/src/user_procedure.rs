@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
 use databend_common_meta_app::principal::DropProcedureReq;
 use databend_common_meta_app::principal::GetProcedureReply;
@@ -26,10 +29,16 @@ use crate::UserApiProvider;
 impl UserApiProvider {
     // Add a new Procedure.
     #[async_backtrace::framed]
-    pub async fn add_procedure(&self, tenant: &Tenant, req: CreateProcedureReq) -> Result<()> {
+    pub async fn add_procedure(
+        &self,
+        tenant: &Tenant,
+        req: CreateProcedureReq,
+        overriding: bool,
+    ) -> Result<std::result::Result<CreateProcedureReply, KVAppError>> {
         let procedure_api = self.procedure_api(tenant);
-        let _ = procedure_api.create_procedure(req).await?;
-        Ok(())
+        let replay = procedure_api.create_procedure(req, overriding).await;
+
+        Ok(replay)
     }
 
     #[async_backtrace::framed]
@@ -48,8 +57,22 @@ impl UserApiProvider {
 
     // Drop a Procedure by name.
     #[async_backtrace::framed]
-    pub async fn drop_procedure(&self, tenant: &Tenant, req: DropProcedureReq) -> Result<()> {
-        let _ = self.procedure_api(tenant).drop_procedure(req).await?;
+    pub async fn drop_procedure(
+        &self,
+        tenant: &Tenant,
+        req: DropProcedureReq,
+        if_exists: bool,
+    ) -> Result<()> {
+        let dropped = self
+            .procedure_api(tenant)
+            .drop_procedure(&req.name_ident)
+            .await?;
+        if dropped.is_none() && !if_exists {
+            return Err(ErrorCode::UnknownProcedure(format!(
+                "Unknown procedure '{}' while drop procedure",
+                req.name_ident
+            )));
+        }
         Ok(())
     }
 }

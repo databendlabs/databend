@@ -46,7 +46,6 @@ pub struct CreateProcedurePlan {
 impl From<CreateProcedurePlan> for CreateProcedureReq {
     fn from(p: CreateProcedurePlan) -> Self {
         CreateProcedureReq {
-            create_option: p.create_option,
             name_ident: p.name,
             meta: p.meta,
         }
@@ -56,7 +55,6 @@ impl From<CreateProcedurePlan> for CreateProcedureReq {
 impl From<&CreateProcedurePlan> for CreateProcedureReq {
     fn from(p: &CreateProcedurePlan) -> Self {
         CreateProcedureReq {
-            create_option: p.create_option,
             name_ident: p.name.clone(),
             meta: p.meta.clone(),
         }
@@ -72,17 +70,13 @@ pub struct DropProcedurePlan {
 
 impl From<DropProcedurePlan> for DropProcedureReq {
     fn from(p: DropProcedurePlan) -> Self {
-        DropProcedureReq {
-            if_exists: p.if_exists,
-            name_ident: p.name,
-        }
+        DropProcedureReq { name_ident: p.name }
     }
 }
 
 impl From<&DropProcedurePlan> for DropProcedureReq {
     fn from(p: &DropProcedurePlan) -> Self {
         DropProcedureReq {
-            if_exists: p.if_exists,
             name_ident: p.name.clone(),
         }
     }
