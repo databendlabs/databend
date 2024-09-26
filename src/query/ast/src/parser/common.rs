@@ -88,6 +88,10 @@ pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
 
+pub fn plain_ident(i: Input) -> IResult<Identifier> {
+    plain_identifier(|token| token.is_reserved_ident(false))(i)
+}
+
 pub fn ident_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(true))(i)
 }
@@ -97,13 +101,12 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
 }
 
 pub fn stage_name(i: Input) -> IResult<Identifier> {
-    let named_stage = rule! { #plain_identifier(|token| token.is_reserved_ident(false)) };
     let anonymous_stage = map(consumed(rule! { "~" }), |(span, _)| {
         Identifier::from_name(transform_span(span.tokens), "~")
     });
 
     rule!(
-        #named_stage
+        #plain_ident
         | #anonymous_stage
     )(i)
 }
@@ -291,10 +294,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {
-    map(
-        rule! { "$" ~ ^#plain_identifier(|token| token.is_reserved_ident(false)) },
-        |(_, name)| name.name,
-    )(i)
+    map(rule! { "$" ~ ^#plain_ident }, |(_, name)| name.name)(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -587,7 +587,7 @@ where F: nom::Parser<Input<'a>, O, Error<'a>> {
 pub fn template_hole(i: Input) -> IResult<String> {
     check_template_mode(map(
         rule! {
-            ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
+            ":" ~ ^#plain_ident
         },
         |(_, name)| name.name,
     ))(i)
