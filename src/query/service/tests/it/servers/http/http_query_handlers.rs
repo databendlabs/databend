@@ -21,8 +21,10 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::base::tokio;
+use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
+use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
@@ -183,6 +185,10 @@ impl TestHttpQueryRequest {
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))
             .unwrap();
+        assert_eq!(
+            resp.header(HEADER_VERSION),
+            Some(QUERY_SEMVER.to_string().parse().unwrap())
+        );
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
