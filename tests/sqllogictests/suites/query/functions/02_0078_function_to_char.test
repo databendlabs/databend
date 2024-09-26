@@ -1,10 +1,7 @@
 # https://github.com/postgres/postgres/blob/master/src/test/regress/expected/int8.out
 
 statement ok
-DROP TABLE IF EXISTS INT64_TBL;
-
-statement ok
-CREATE TABLE INT64_TBL(q1 int64, q2 int64);
+CREATE OR REPLACE TABLE INT64_TBL(q1 int64, q2 int64);
 
 statement ok
 INSERT INTO INT64_TBL VALUES
