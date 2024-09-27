@@ -108,6 +108,10 @@ Functions overloads:
 1 add_seconds(Date NULL, Int64 NULL) :: Timestamp NULL
 2 add_seconds(Timestamp, Int64) :: Timestamp
 3 add_seconds(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 add_weeks(Date, Int64) :: Date
+1 add_weeks(Date NULL, Int64 NULL) :: Date NULL
+2 add_weeks(Timestamp, Int64) :: Timestamp
+3 add_weeks(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 add_years(Date, Int64) :: Date
 1 add_years(Date NULL, Int64 NULL) :: Date NULL
 2 add_years(Timestamp, Int64) :: Timestamp
@@ -3686,6 +3690,10 @@ Functions overloads:
 1 subtract_seconds(Date NULL, Int64 NULL) :: Timestamp NULL
 2 subtract_seconds(Timestamp, Int64) :: Timestamp
 3 subtract_seconds(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 subtract_weeks(Date, Int64) :: Date
+1 subtract_weeks(Date NULL, Int64 NULL) :: Date NULL
+2 subtract_weeks(Timestamp, Int64) :: Timestamp
+3 subtract_weeks(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 subtract_years(Date, Int64) :: Date
 1 subtract_years(Date NULL, Int64 NULL) :: Date NULL
 2 subtract_years(Timestamp, Int64) :: Timestamp
