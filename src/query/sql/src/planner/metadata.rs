@@ -371,7 +371,6 @@ impl Metadata {
         }
 
         // build leaf index in DFS order for primitive columns.
-        let mut leaf_index = 0;
         while let Some((indices, field)) = fields.pop_front() {
             if indices.is_empty() {
                 self.add_base_table_column(
@@ -429,11 +428,10 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    Some(leaf_index),
+                    Some(field.column_id as usize),
                     Some(indices[0] + 1),
                     None,
                 );
-                leaf_index += 1;
             }
         }
 
