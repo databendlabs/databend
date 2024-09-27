@@ -91,6 +91,9 @@ impl TempDirManager {
         limit: usize,
         query_id: &str,
     ) -> Option<Arc<TempDir>> {
+        if limit == 0 {
+            return None;
+        }
         self.root.as_ref()?;
 
         let path = self.root.as_ref().unwrap().join(query_id).into_boxed_path();

@@ -461,7 +461,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("window_partition_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10<<30),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of local disk in bytes that each window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
