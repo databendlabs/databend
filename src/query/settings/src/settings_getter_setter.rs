@@ -286,6 +286,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
     }
 
+    pub fn get_spilling_to_disk_vacuum_unknown_temp_dirs_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spilling_to_disk_vacuum_unknown_temp_dirs_limit")? as usize)
+    }
+
     pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
     }

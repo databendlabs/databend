@@ -73,7 +73,10 @@ pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let mgr = TempDirManager::instance();
 
     if mgr.drop_disk_spill_dir(&query_ctx.get_id())? && rand::thread_rng().gen_ratio(1, 10) {
-        let deleted = mgr.drop_disk_spill_dir_unknown(5)?;
+        let limit = query_ctx
+            .get_settings()
+            .get_spilling_to_disk_vacuum_unknown_temp_dirs_limit();
+        let deleted = mgr.drop_disk_spill_dir_unknown(limit)?;
         if !deleted.is_empty() {
             warn!("Deleted residual temporary directories: {:?}", deleted)
         }
