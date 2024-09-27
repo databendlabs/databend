@@ -335,7 +335,7 @@ mod tests {
 
         let config = SpillConfig {
             path: "test_data".to_string(),
-            reserved_disk_ratio: 0.99.into(),
+            reserved_disk_ratio: 0.01.into(),
             global_bytes_limit: 1 << 30,
         };
 
