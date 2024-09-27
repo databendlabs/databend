@@ -10,6 +10,6 @@
   "githubPages": false,
   "navigationLinks": {
     "Homepage": "https://databend.rs/doc/sql-clients/bendsql",
-    "GitHub": "https://github.com/datafuselabs/bendsql"
+    "GitHub": "https://github.com/databendlabs/bendsql"
   }
 }

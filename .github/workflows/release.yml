@@ -92,9 +92,9 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         run: |
-          gh api '/repos/datafuselabs/bendsql/tags' > tags.json
+          gh api '/repos/databendlabs/bendsql/tags' > tags.json
           aws s3 cp tags.json s3://repo/bendsql/tags.json
-          gh api '/repos/datafuselabs/bendsql/releases' > releases.json
+          gh api '/repos/databendlabs/bendsql/releases' > releases.json
           aws s3 cp releases.json s3://repo/bendsql/releases.json
 
   distribution:

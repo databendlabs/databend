@@ -4,11 +4,11 @@ platform: "linux"
 version: "${version}"
 section: "database"
 priority: "extra"
-maintainer: "Databend Authors <opensource@datafuselabs.com>"
+maintainer: "Databend Authors <opensource@databend.com>"
 description: |
   BendSQL is a native command line tool for Databend.
 vendor: "Datafuse Labs"
-homepage: "https://github.com/datafuselabs/bendsql"
+homepage: "https://github.com/databendlabs/bendsql"
 license: "Apache-2.0"
 contents:
 - src: dist/bendsql

@@ -364,7 +364,7 @@ async fn select_bitmap() {
 #[tokio::test]
 async fn select_geometry() {
     // TODO: response type changed to json after
-    // https://github.com/datafuselabs/databend/pull/15214
+    // https://github.com/databendlabs/databend/pull/15214
 }
 
 #[tokio::test]

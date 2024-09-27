@@ -22,7 +22,7 @@ test = ["behave"]
 lint = ["black", "flake8"]
 
 [project.urls]
-Repository = "https://github.com/datafuselabs/bendsql"
+Repository = "https://github.com/databendlabs/bendsql"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]

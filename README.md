@@ -37,14 +37,14 @@ brew install databendcloud/homebrew-tap/bendsql
 - Using DEB822-STYLE format on Ubuntu-22.04/Debian-12 and later:
 
 ```bash
-sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
+sudo curl -L -o /etc/apt/sources.list.d/databend.sources https://repo.databend.rs/deb/databend.sources
 ```
 
 - Using old format on Ubuntu-20.04/Debian-11 and earlier:
 
 ```bash
-sudo curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
-sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
+sudo curl -L -o /usr/share/keyrings/databend-keyring.gpg https://repo.databend.rs/deb/databend.gpg
+sudo curl -L -o /etc/apt/sources.list.d/databend.list https://repo.databend.rs/deb/databend.list
 ```
 
 Then install bendsql:
@@ -57,7 +57,7 @@ sudo apt install bendsql
 
 ### Manually:
 
-Check for latest version on [GitHub Release](https://github.com/datafuselabs/bendsql/releases)
+Check for latest version on [GitHub Release](https://github.com/databendlabs/bendsql/releases)
 
 ## Usage
 

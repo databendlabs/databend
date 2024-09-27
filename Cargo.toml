@@ -15,10 +15,10 @@ resolver = "2"
 edition = "2021"
 version = "0.21.0"
 license = "Apache-2.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@databend.com>"]
 categories = ["database"]
 keywords = ["databend", "database"]
-repository = "https://github.com/datafuselabs/bendsql"
+repository = "https://github.com/databendlabs/bendsql"
 
 [workspace.dependencies]
 databend-client = { path = "core", version = "0.21.0" }

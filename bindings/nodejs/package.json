@@ -1,12 +1,12 @@
 {
   "name": "databend-driver",
-  "author": "Databend Authors <opensource@datafuselabs.com>",
+  "author": "Databend Authors <opensource@databendlabs.com>",
   "version": "0.21.0",
   "license": "Apache-2.0",
   "main": "index.js",
   "types": "index.d.ts",
   "description": "Databend Driver Node.js Binding",
-  "repository": "https://github.com/datafuselabs/bendsql.git",
+  "repository": "https://github.com/databendlabs/bendsql.git",
   "napi": {
     "name": "databend-driver",
     "package": {
