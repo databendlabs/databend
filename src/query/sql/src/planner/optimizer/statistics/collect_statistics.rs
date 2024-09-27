@@ -86,7 +86,7 @@ impl CollectStatisticsOptimizer {
                         ..
                     }) = column
                     {
-                        if path_indices.is_none() && virtual_computed_expr.is_none() {
+                        if virtual_computed_expr.is_none() {
                             if let Some(column_id) = *column_id {
                                 let col_stat = column_statistics_provider
                                     .column_statistics(column_id as ColumnId);
