@@ -33,7 +33,7 @@ mod configs_table;
 mod contributors_table;
 mod credits_table;
 mod databases_table;
-mod dictionaries;
+mod dictionaries_table;
 mod engines_table;
 mod functions_table;
 mod indexes_table;

@@ -710,7 +710,7 @@ impl AccessChecker for PrivilegeAccess {
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowUserFunctions)
-                    | Some(RewriteKind::ShowDictionaries) => {
+                    | Some(RewriteKind::ShowDictionaries(_,_)) => {
                         return Ok(());
                     }
                     | Some(RewriteKind::ShowTableFunctions) => {
