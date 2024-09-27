@@ -131,7 +131,10 @@ impl Spiller {
         let location = self.write_encodes(data_size, vec![encoded]).await?;
 
         // Record statistics.
-        record_write_profile(&instant, data_size);
+        match location {
+            Location::Remote(_) => record_remote_write_profile(&instant, data_size),
+            Location::Local(_) => record_local_write_profile(&instant, data_size),
+        }
 
         // Record columns layout for spilled data.
         self.columns_layout.insert(location.clone(), columns_layout);
@@ -195,7 +198,10 @@ impl Spiller {
         let location = self.write_encodes(write_bytes, write_data).await?;
 
         // Record statistics.
-        record_write_profile(&instant, write_bytes);
+        match location {
+            Location::Remote(_) => record_remote_write_profile(&instant, write_bytes),
+            Location::Local(_) => record_local_write_profile(&instant, write_bytes),
+        }
 
         Ok(SpilledData::MergedPartition {
             location,
@@ -213,7 +219,7 @@ impl Spiller {
         let block = match location {
             Location::Remote(loc) => {
                 let data = self.operator.read(loc).await?.to_bytes();
-                record_read_profile(&instant, data.len());
+                record_remote_read_profile(&instant, data.len());
                 deserialize_block(columns_layout, &data)
             }
             Location::Local(path) => {
@@ -221,7 +227,7 @@ impl Spiller {
                 debug_assert_eq!(file_size, columns_layout.iter().sum::<usize>());
                 let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
                 let data = &buf[range];
-                record_read_profile(&instant, data.len());
+                record_local_read_profile(&instant, data.len());
                 deserialize_block(columns_layout, data)
             }
         };
@@ -284,7 +290,10 @@ impl Spiller {
             };
 
             // Record statistics.
-            record_read_profile(&instant, data.len());
+            match location {
+                Location::Remote(_) => record_remote_read_profile(&instant, data.len()),
+                Location::Local(_) => record_local_read_profile(&instant, data.len()),
+            };
 
             // Deserialize partitioned data block.
             let partitioned_data = partitions
@@ -318,13 +327,13 @@ impl Spiller {
                     .range(data_range)
                     .await?
                     .to_bytes();
-                record_read_profile(&instant, data.len());
+                record_remote_read_profile(&instant, data.len());
                 Ok(deserialize_block(columns_layout, &data))
             }
             Location::Local(path) => {
                 let (buf, range) = dma_read_file_range(path, data_range).await?;
                 let data = &buf[range];
-                record_read_profile(&instant, data.len());
+                record_local_read_profile(&instant, data.len());
                 Ok(deserialize_block(columns_layout, data))
             }
         }
@@ -430,20 +439,38 @@ pub fn deserialize_block(columns_layout: &[usize], mut data: &[u8]) -> DataBlock
     DataBlock::new_from_columns(columns)
 }
 
-pub fn record_write_profile(start: &Instant, write_bytes: usize) {
-    Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-    Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+pub fn record_remote_write_profile(start: &Instant, write_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
     Profile::record_usize_profile(
-        ProfileStatisticsName::SpillWriteTime,
+        ProfileStatisticsName::RemoteSpillWriteTime,
         start.elapsed().as_millis() as usize,
     );
 }
 
-pub fn record_read_profile(start: &Instant, read_bytes: usize) {
-    Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-    Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, read_bytes);
+pub fn record_remote_read_profile(start: &Instant, read_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
     Profile::record_usize_profile(
-        ProfileStatisticsName::SpillReadTime,
+        ProfileStatisticsName::RemoteSpillReadTime,
+        start.elapsed().as_millis() as usize,
+    );
+}
+
+pub fn record_local_write_profile(start: &Instant, write_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::LocalSpillWriteTime,
+        start.elapsed().as_millis() as usize,
+    );
+}
+
+pub fn record_local_read_profile(start: &Instant, read_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::LocalSpillReadTime,
         start.elapsed().as_millis() as usize,
     );
 }
