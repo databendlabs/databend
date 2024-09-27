@@ -3726,6 +3726,10 @@ Functions overloads:
 21 to_boolean(Float32 NULL) :: Boolean NULL
 22 to_boolean(Float64) :: Boolean
 23 to_boolean(Float64 NULL) :: Boolean NULL
+0 to_char(Int64, String) :: String
+1 to_char(Int64 NULL, String NULL) :: String NULL
+2 to_char(Float64, String) :: String
+3 to_char(Float64 NULL, String NULL) :: String NULL
 0 to_date(Variant) :: Date
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
