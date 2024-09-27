@@ -119,6 +119,17 @@ impl Drop for DmaBuffer {
     }
 }
 
+impl From<DmaBuffer> for Vec<u8> {
+    fn from(mut val: DmaBuffer) -> Self {
+        let length = val.len;
+        let cap = val.cap;
+
+        let v = unsafe { Vec::from_raw_parts(val.as_mut_ptr(), length, cap) };
+        std::mem::forget(val);
+        v
+    }
+}
+
 /// A `DmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
 /// perform direct IO.
 struct DmaFile {
@@ -186,7 +197,9 @@ impl DmaFile {
         let buf = self.buffer();
         match rustix::io::write(&self.fd, buf) {
             Ok(n) => {
-                debug_assert_eq!(n, buf.len());
+                if n != buf.len() {
+                    return Err(io::Error::new(io::ErrorKind::Other, "short write"));
+                }
                 unsafe { self.mut_buffer().set_len(0) };
                 Ok(n)
             }
@@ -194,13 +207,17 @@ impl DmaFile {
         }
     }
 
-    fn read_direct(&mut self) -> io::Result<usize> {
+    fn read_direct(&mut self, n: usize) -> io::Result<usize> {
         let Self { fd, buf, .. } = self;
         let buf = buf.as_mut().unwrap();
-        unsafe { buf.set_len(buf.capacity()) };
-        match rustix::io::read(fd, buf) {
+        if n > buf.remaining() {
+            return Err(io::Error::new(io::ErrorKind::Other, "buf not sufficient"));
+        }
+        let start = buf.len();
+        unsafe { buf.set_len(buf.len() + n) };
+        match rustix::io::read(fd, &mut (*buf)[start..]) {
             Ok(n) => {
-                unsafe { buf.set_len(n) };
+                unsafe { buf.set_len(start + n) };
                 Ok(n)
             }
             Err(e) => Err(e.into()),
@@ -309,8 +326,9 @@ pub async fn dma_read_file(
     file.set_buffer(buf);
 
     let mut n = 0;
+    let read_n = file.alignment;
     loop {
-        file = asyncify(move || file.read_direct().map(|_| file)).await?;
+        file = asyncify(move || file.read_direct(read_n).map(|_| file)).await?;
 
         let buf = file.buffer();
         if buf.is_empty() {
@@ -342,16 +360,20 @@ pub async fn dma_read_file_range(
     let buf = DmaBuffer::new(align_end - align_start, file.alignment);
     file.set_buffer(buf);
 
-    let offset = file.seek(SeekFrom::Start(align_start as u64)).await?;
-
-    if offset as usize != align_start {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "range out of range",
-        ));
+    if align_start != 0 {
+        let offset = file.seek(SeekFrom::Start(align_start as u64)).await?;
+        if offset as usize != align_start {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "range out of range",
+            ));
+        }
     }
 
-    file = asyncify(move || file.read_direct().map(|_| file)).await?;
+    while file.buffer().remaining() > 0 {
+        let read_n = file.buffer().remaining();
+        file = asyncify(move || file.read_direct(read_n).map(|_| file)).await?;
+    }
 
     let rt_range = range.start as usize - align_start..range.end as usize - align_start;
     Ok((file.buf.unwrap(), rt_range))
@@ -431,6 +453,34 @@ mod tests {
             .unwrap();
         let got = got.0[got.1].to_vec();
         assert_eq!(&want[4096 * 2 - 5..4096 * 2], got);
+
+        let _ = std::fs::remove_file(filename);
+    }
+
+    #[tokio::test]
+    async fn test_read_direct() {
+        let filename = "test_file3";
+        let _ = std::fs::remove_file(filename);
+        let stat = rustix::fs::statvfs(".").unwrap();
+        let alignment = 512.max(stat.f_bsize as usize);
+        let file_size: usize = alignment * 2;
+
+        let want = (0..file_size).map(|i| (i % 256) as u8).collect::<Vec<_>>();
+
+        let bufs = vec![IoSlice::new(&want)];
+        dma_write_file_vectored(filename, &bufs).await.unwrap();
+
+        let mut file = DmaFile::open(filename).await.unwrap();
+        let buf = DmaBuffer::new(file_size, file.alignment);
+        file.set_buffer(buf);
+
+        let got = file.read_direct(alignment).unwrap();
+        assert_eq!(alignment, got);
+        assert_eq!(&want[0..alignment], &**file.buffer());
+
+        let got = file.read_direct(alignment).unwrap();
+        assert_eq!(alignment, got);
+        assert_eq!(&want, &**file.buffer());
 
         let _ = std::fs::remove_file(filename);
     }

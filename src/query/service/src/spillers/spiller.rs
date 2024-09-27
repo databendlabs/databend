@@ -21,7 +21,6 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::dma_read_file;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
@@ -211,22 +210,23 @@ impl Spiller {
 
         // Read spilled data from storage.
         let instant = Instant::now();
-        let data = match location {
-            Location::Storage(loc) => self.operator.read(loc).await?.to_bytes(),
-            Location::Disk(path) => {
-                let cap = path.size();
-                debug_assert_eq!(cap, columns_layout.iter().sum::<usize>());
-                let mut data = Vec::with_capacity(cap);
-                dma_read_file(path, &mut data).await?;
-                data.into()
+        let block = match location {
+            Location::Remote(loc) => {
+                let data = self.operator.read(loc).await?.to_bytes();
+                record_read_profile(&instant, data.len());
+                deserialize_block(columns_layout, &data)
+            }
+            Location::Local(path) => {
+                let file_size = path.size();
+                debug_assert_eq!(file_size, columns_layout.iter().sum::<usize>());
+                let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
+                let data = &buf[range];
+                record_read_profile(&instant, data.len());
+                deserialize_block(columns_layout, data)
             }
         };
 
-        // Record statistics.
-        record_read_profile(&instant, data.len());
-
-        // Deserialize data block.
-        Ok(deserialize_block(columns_layout, &data))
+        Ok(block)
     }
 
     #[async_backtrace::framed]
@@ -260,11 +260,11 @@ impl Spiller {
             let instant = Instant::now();
 
             let data = match location {
-                Location::Storage(loc) => self.operator.read(loc).await?.to_bytes(),
-                Location::Disk(path) => {
-                    let cap = path.size();
+                Location::Remote(loc) => self.operator.read(loc).await?.to_bytes(),
+                Location::Local(path) => {
+                    let file_size = path.size();
                     debug_assert_eq!(
-                        cap,
+                        file_size,
                         if let Some((_, range, _)) = partitions.last() {
                             range.end
                         } else {
@@ -272,9 +272,14 @@ impl Spiller {
                         }
                     );
 
-                    let mut data = Vec::with_capacity(cap);
-                    dma_read_file(path, &mut data).await?;
-                    data.into()
+                    let (mut buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
+                    assert_eq!(range.start, 0);
+                    unsafe {
+                        buf.set_len(range.end);
+                    }
+
+                    let buf: Vec<u8> = buf.into();
+                    buf.into()
                 }
             };
 
@@ -306,7 +311,7 @@ impl Spiller {
         let data_range = data_range.start as u64..data_range.end as u64;
 
         match location {
-            Location::Storage(loc) => {
+            Location::Remote(loc) => {
                 let data = self
                     .operator
                     .read_with(loc)
@@ -316,7 +321,7 @@ impl Spiller {
                 record_read_profile(&instant, data.len());
                 Ok(deserialize_block(columns_layout, &data))
             }
-            Location::Disk(path) => {
+            Location::Local(path) => {
                 let (buf, range) = dma_read_file_range(path, data_range).await?;
                 let data = &buf[range];
                 record_read_profile(&instant, data.len());
@@ -328,16 +333,16 @@ impl Spiller {
     async fn write_encodes(&mut self, size: usize, blocks: Vec<EncodedBlock>) -> Result<Location> {
         let location = match &self.disk_spill {
             None => None,
-            Some(disk) => disk.new_file_with_size(size)?.map(Location::Disk),
+            Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
         }
-        .unwrap_or(Location::Storage(format!(
+        .unwrap_or(Location::Remote(format!(
             "{}/{}",
             self.location_prefix,
             GlobalUniqName::unique(),
         )));
 
         let written = match &location {
-            Location::Storage(loc) => {
+            Location::Remote(loc) => {
                 let mut writer = self
                     .operator
                     .writer_with(loc)
@@ -353,7 +358,7 @@ impl Spiller {
                 writer.close().await?;
                 written
             }
-            Location::Disk(path) => {
+            Location::Local(path) => {
                 let bufs = blocks
                     .iter()
                     .flat_map(|x| &x.0)
@@ -382,8 +387,8 @@ pub enum SpilledData {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Location {
-    Storage(String),
-    Disk(TempPath),
+    Remote(String),
+    Local(TempPath),
 }
 
 pub struct EncodedBlock(pub Vec<Vec<u8>>);
