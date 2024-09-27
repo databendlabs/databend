@@ -229,7 +229,7 @@ impl Metadata {
         data_type: TableDataType,
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
-        leaf_index: Option<IndexType>,
+        column_id: Option<u32>,
         column_position: Option<usize>,
         virtual_computed_expr: Option<String>,
     ) -> IndexType {
@@ -241,7 +241,7 @@ impl Metadata {
             column_index,
             table_index,
             path_indices,
-            leaf_index,
+            column_id,
             virtual_computed_expr,
         });
         self.columns.push(column_entry);
@@ -370,7 +370,6 @@ impl Metadata {
             }
         }
 
-        // build leaf index in DFS order for primitive columns.
         while let Some((indices, field)) = fields.pop_front() {
             if indices.is_empty() {
                 self.add_base_table_column(
@@ -378,7 +377,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     None,
-                    None,
+                    Some(field.column_id),
                     None,
                     Some(field.computed_expr().unwrap().expr().clone()),
                 );
@@ -401,7 +400,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    None,
+                    Some(field.column_id),
                     None,
                     None,
                 );
@@ -428,7 +427,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    Some(field.column_id as usize),
+                    Some(field.column_id),
                     Some(indices[0] + 1),
                     None,
                 );
@@ -571,9 +570,8 @@ pub struct BaseTableColumn {
 
     /// Path indices for inner column of struct data type.
     pub path_indices: Option<Vec<usize>>,
-    /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
-    /// None if the data type of column is struct.
-    pub leaf_index: Option<usize>,
+    /// The column id in table schema.
+    pub column_id: Option<u32>,
     /// Virtual computed expression, generated in query.
     pub virtual_computed_expr: Option<String>,
 }

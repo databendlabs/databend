@@ -297,7 +297,7 @@ pub fn parse_computed_expr_to_string(
             field.data_type().clone(),
             0,
             None,
-            None,
+            Some(field.column_id),
             None,
             None,
         );
