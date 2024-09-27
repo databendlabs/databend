@@ -66,7 +66,7 @@ impl TempDirManager {
             create_dir_all(&path)?;
 
             let stat = statvfs(path.as_ref()).map_err(|e| ErrorCode::Internal(e.to_string()))?;
-            let reserved = (stat.f_blocks as f64 * (1.0 - *config.max_disk_ratio)) as u64;
+            let reserved = (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64;
 
             (Some(path), reserved)
         };
@@ -332,7 +332,7 @@ mod tests {
 
         let config = SpillConfig {
             path: "test_data".to_string(),
-            max_disk_ratio: 0.99.into(),
+            reserved_disk_ratio: 0.99.into(),
             global_bytes_limit: 1 << 30,
         };
 
@@ -371,7 +371,7 @@ mod tests {
 
         let config = SpillConfig {
             path: "test_data2".to_string(),
-            max_disk_ratio: 0.99.into(),
+            reserved_disk_ratio: 0.99.into(),
             global_bytes_limit: 1 << 30,
         };
 

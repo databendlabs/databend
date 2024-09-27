@@ -2946,9 +2946,9 @@ pub struct SpillConfig {
     )]
     pub spill_local_disk_path: String,
 
-    #[clap(long, value_name = "VALUE", default_value = "60")]
-    /// Allow space in percentage to spill to local disk.
-    pub spill_local_disk_max_space_percentage: OrderedFloat<f64>,
+    #[clap(long, value_name = "VALUE", default_value = "30")]
+    /// Percentage of reserve disk space that won't be used for spill to local disk.
+    pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
 
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
@@ -3080,7 +3080,7 @@ mod cache_config_converters {
         fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
             let SpillConfig {
                 spill_local_disk_path,
-                spill_local_disk_max_space_percentage,
+                spill_local_disk_reserved_space_percentage: spill_local_disk_max_space_percentage,
                 spill_local_disk_max_bytes,
             } = value;
             if !spill_local_disk_max_space_percentage.is_normal()
@@ -3093,7 +3093,7 @@ mod cache_config_converters {
             }
             Ok(Self {
                 path: spill_local_disk_path,
-                max_disk_ratio: spill_local_disk_max_space_percentage / 100.0,
+                reserved_disk_ratio: spill_local_disk_max_space_percentage / 100.0,
                 global_bytes_limit: spill_local_disk_max_bytes,
             })
         }
@@ -3103,7 +3103,7 @@ mod cache_config_converters {
         fn from(value: inner::SpillConfig) -> Self {
             Self {
                 spill_local_disk_path: value.path,
-                spill_local_disk_max_space_percentage: value.max_disk_ratio * 100.0,
+                spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
             }
         }

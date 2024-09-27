@@ -712,8 +712,8 @@ pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     pub path: String,
 
-    /// Allow ratio use of disk space.
-    pub max_disk_ratio: OrderedFloat<f64>,
+    /// Ratio of the reserve of the disk space.
+    pub reserved_disk_ratio: OrderedFloat<f64>,
 
     /// Allow bytes use of disk space.
     pub global_bytes_limit: u64,
@@ -723,7 +723,7 @@ impl Default for SpillConfig {
     fn default() -> Self {
         Self {
             path: "./.databend/temp/_query_spill".to_string(),
-            max_disk_ratio: OrderedFloat(0.6),
+            reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,
         }
     }
