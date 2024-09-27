@@ -916,6 +916,39 @@ macro_rules! impl_register_arith_functions {
                 ),
             );
 
+            registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
+                concat!($op, "_weeks"),
+
+                |_, _, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
+                    let delta = 7 * delta;
+                    match AddDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
+                        Ok(t) => builder.push(t),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e);
+                            builder.push(0);
+                        },
+                    }
+                }),
+            );
+            registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
+                concat!($op, "_weeks"),
+
+                |_, _, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
+                    |ts, delta, builder, ctx| {
+                        let delta = 7 * delta;
+                        match AddDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
+                            Ok(t) => builder.push(t),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e);
+                                builder.push(0);
+                            },
+                        }
+                    },
+                ),
+            );
+
             registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, TimestampType, _, _>(
                 concat!($op, "_hours"),
 

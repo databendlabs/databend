@@ -23030,6 +23030,23 @@ DROP PROCEDURE p1()
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
+        if_exists: false,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+drop PROCEDURE if exists p1()
+---------- Output ---------
+DROP PROCEDURE IF EXISTS p1()
+---------- AST ------------
+DropProcedure(
+    DropProcedureStmt {
+        if_exists: true,
         name: ProcedureIdentity {
             name: "p1",
             args_type: "",
@@ -23045,6 +23062,7 @@ DROP PROCEDURE p1(Int32,STRING)
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
+        if_exists: false,
         name: ProcedureIdentity {
             name: "p1",
             args_type: "Int32,STRING",
@@ -23128,6 +23146,98 @@ ShowProcedures {
         },
     ),
 }
+
+
+---------- Input ----------
+create or replace PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: CreateOrReplace,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+        language: SQL,
+        args: None,
+        return_type: [
+            ProcedureType {
+                name: None,
+                data_type: NotNull(
+                    String,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
+
+
+---------- Input ----------
+create PROCEDURE if not exists p1() returns string not null language sql comment = 'test' as $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+---------- Output ---------
+CREATE PROCEDURE IF NOT EXISTS p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET sum := 0;
+    FOR x IN SELECT * FROM numbers(100) DO
+        sum := sum + x.number;
+    END FOR;
+    RETURN sum;
+END;
+$$
+---------- AST ------------
+CreateProcedure(
+    CreateProcedureStmt {
+        create_option: CreateIfNotExists,
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
+        language: SQL,
+        args: None,
+        return_type: [
+            ProcedureType {
+                name: None,
+                data_type: NotNull(
+                    String,
+                ),
+            },
+        ],
+        comment: Some(
+            "test",
+        ),
+        script: "BEGIN\n    LET sum := 0;\n    FOR x IN SELECT * FROM numbers(100) DO\n        sum := sum + x.number;\n    END FOR;\n    RETURN sum;\nEND;",
+    },
+)
 
 
 ---------- Input ----------
