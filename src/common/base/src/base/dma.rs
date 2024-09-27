@@ -280,7 +280,16 @@ pub async fn dma_write_file_vectored<'a>(
     bufs: &'a [IoSlice<'a>],
 ) -> io::Result<usize> {
     let mut file = DmaFile::create(path.as_ref()).await?;
-    let buf = DmaBuffer::new(file.alignment, file.alignment);
+
+    let file_length = bufs.iter().map(|buf| buf.len()).sum();
+    if file_length == 0 {
+        return Ok(0);
+    }
+
+    const BUFFER_SIZE: usize = 1024 * 1024;
+    let buffer_size = BUFFER_SIZE.min(file_length);
+
+    let buf = DmaBuffer::new(file.align_up(buffer_size), file.alignment);
     file.set_buffer(buf);
 
     for buf in bufs {
@@ -300,7 +309,6 @@ pub async fn dma_write_file_vectored<'a>(
         }
     }
 
-    let file_length = bufs.iter().map(|buf| buf.len()).sum();
     let len = file.buffer().len();
     if len > 0 {
         let align_up = file.align_up(len);
@@ -326,9 +334,12 @@ pub async fn dma_read_file(
     file.set_buffer(buf);
 
     let mut n = 0;
-    let read_n = file.alignment;
     loop {
-        file = asyncify(move || file.read_direct(read_n).map(|_| file)).await?;
+        file = asyncify(move || {
+            let remain = file.buffer().remaining();
+            file.read_direct(remain).map(|_| file)
+        })
+        .await?;
 
         let buf = file.buffer();
         if buf.is_empty() {
@@ -370,9 +381,19 @@ pub async fn dma_read_file_range(
         }
     }
 
-    while file.buffer().remaining() > 0 {
-        let read_n = file.buffer().remaining();
-        file = asyncify(move || file.read_direct(read_n).map(|_| file)).await?;
+    let mut n;
+    loop {
+        (file, n) = asyncify(move || {
+            let remain = file.buffer().remaining();
+            file.read_direct(remain).map(|n| (file, n))
+        })
+        .await?;
+        if align_start + file.buffer().len() >= range.end as usize {
+            break;
+        }
+        if n == 0 {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
+        }
     }
 
     let rt_range = range.start as usize - align_start..range.end as usize - align_start;
