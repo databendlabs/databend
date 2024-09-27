@@ -406,6 +406,7 @@ impl Metadata {
                 );
 
                 let mut i = fields_type.len();
+                let mut inner_field_index = field.column_id;
                 for (inner_field_name, inner_field_type) in
                     fields_name.iter().zip(fields_type.iter()).rev()
                 {
@@ -418,7 +419,12 @@ impl Metadata {
                         field.name(),
                         display_tuple_field_name(inner_field_name)
                     );
-                    let inner_field = TableField::new(&inner_name, inner_field_type.clone());
+                    inner_field_index += inner_field_type.num_leaf_columns() as u32;
+                    let inner_field = TableField::new_from_column_id(
+                        &inner_name,
+                        inner_field_type.clone(),
+                        inner_field_index,
+                    );
                     fields.push_front((inner_indices, inner_field));
                 }
             } else {
