@@ -257,25 +257,25 @@ statement ok
 DROP TABLE IF EXISTS t1;
 
 statement ok
-CREATE or replace TABLE t1 (id VARCHAR NULL, size VARCHAR NULL, create_time int NULL, path VARCHAR NULL);
+CREATE OR REPLACE TABLE t1 (id VARCHAR NULL, size VARCHAR NULL, create_time int NULL, path VARCHAR NULL);
 
 statement ok
-create or replace table t1_random like t1 Engine = Random;
+CREATE OR REPLACE TABLE t1_random like t1 Engine = Random;
 
 statement ok
-insert into  t1 select * from t1_random limit 10;
+INSERT INTO  t1 SELECT * FROM t1_random LIMIT 10;
 
 statement ok
-alter table t1 drop column size;
+ALTER TABLE t1 DROP COLUMN size;
 
 statement ok
-alter table t1 drop column path;
+ALTER TABLE t1 DROP COLUMN path;
 
 statement ok
-select * from t1 where create_time > 111113;
+SELECT * FROM t1 WHERE create_time > 111113;
 
 statement ok
-drop table if exists t1;
+DROP TABLE IF EXISTS t1;
 
 statement ok
-drop table if exists t1_random;
+DROP TABLE IF EXISTS t1_random;

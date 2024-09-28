@@ -996,3 +996,55 @@ drop table t2;
 
 statement ok
 drop table t3;
+
+# Test Tuple Statistics
+statement ok
+CREATE OR REPLACE TABLE t(a TUPLE(INT, INT));
+
+statement ok
+INSERT INTO t VALUES((1, 2)), ((3, 4));
+
+query T
+EXPLAIN SELECT * FROM t WHERE a.1 > 0;
+----
+TableScan
+├── table: default.default.t
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [is_true(t.a:"1" (#2) > 0)], limit: NONE]
+└── estimated rows: 2.00
+
+query T
+EXPLAIN SELECT * FROM t WHERE a.1 > 1;
+----
+TableScan
+├── table: default.default.t
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [is_true(t.a:"1" (#2) > 1)], limit: NONE]
+└── estimated rows: 1.00
+
+query T
+EXPLAIN SELECT * FROM t WHERE a.2 > 1;
+----
+TableScan
+├── table: default.default.t
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [is_true(t.a:"2" (#1) > 1)], limit: NONE]
+└── estimated rows: 2.00
+
+statement ok
+DROP TABLE IF EXISTS t;
