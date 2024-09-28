@@ -1767,3 +1767,67 @@ INSERT OVERWRITE ALL INTO cat.db1.t1 VALUES  (order_id, 'PriorityHandling') INTO
 
 statement ok
 drop table  orders_placed
+
+# Test Tuple Statistics
+statement ok
+CREATE OR REPLACE TABLE t(a TUPLE(INT, INT));
+
+statement ok
+INSERT INTO t VALUES((1, 2)), ((3, 4));
+
+query T
+EXPLAIN SELECT * FROM t WHERE a.1 > 0;
+----
+Filter
+├── output columns: [t.a (#0)]
+├── filters: [is_true(t.a:"1" (#2) > 0)]
+├── estimated rows: 2.00
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [a (#0), a:"1" (#2)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t.a:"1" (#2) > 0)], limit: NONE]
+    └── estimated rows: 2.00
+
+query T
+EXPLAIN SELECT * FROM t WHERE a.1 > 1;
+----
+Filter
+├── output columns: [t.a (#0)]
+├── filters: [is_true(t.a:"1" (#2) > 1)]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [a (#0), a:"1" (#2)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t.a:"1" (#2) > 1)], limit: NONE]
+    └── estimated rows: 2.00
+
+query T
+EXPLAIN SELECT * FROM t WHERE a.2 > 1;
+----
+Filter
+├── output columns: [t.a (#0)]
+├── filters: [is_true(t.a:"2" (#1) > 1)]
+├── estimated rows: 2.00
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [a (#0), a:"2" (#1)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(t.a:"2" (#1) > 1)], limit: NONE]
+    └── estimated rows: 2.00
+
+statement ok
+DROP TABLE IF EXISTS t;
