@@ -1,33 +1,30 @@
 import React from 'react';
-import { GraphData } from '../types/ProfileGraphDashboard';
-
-interface Props {
-  data: GraphData;
+import { Profile } from '../types/ProfileGraphDashboard';
+interface MostExpensiveNodesProps {
+  data: Profile[];
+  plainData: Profile[];
   selectedNodeId: string | null;
   handleNodeSelection: (nodeId: string) => void;
 }
 
-const MostExpensiveNodes: React.FC<Props> = ({ data, selectedNodeId, handleNodeSelection }) => {
-  const sortedNodes = [...data.nodes].sort(
-    (a, b) => b.value.items[0].progress - a.value.items[0].progress
-  );
+const MostExpensiveNodes: React.FC<MostExpensiveNodesProps> = ({ data, plainData, selectedNodeId, handleNodeSelection }) => {
 
   return (
-    <div className="expensive-nodes-card">
-      <div className="expensive-nodes-card-header">
-        <h2>Most Expensive Nodes <span>({sortedNodes.length})</span></h2>
+    <div className="mt-5 bg-white shadow-md w-77 box-border rounded-lg p-6 border border-gray-200">
+        <div className="mb-2">
+        <h2>Most Expensive Nodes <span>({data?.length} of {plainData?.length})</span></h2>
       </div>
-      {sortedNodes.map((node) => (
+     {data?.map((node) => (
         <div
           key={node.id}
           className={`expensive-nodes-node ${selectedNodeId === node.id ? "selected" : ""}`}
-          onClick={() => handleNodeSelection(node.id)}
+          onClick={() => handleNodeSelection(node?.id!)}
         >
           <div className="expensive-nodes-node-name">
-            {node.value.items[0].name} [{node.id}]
+            {node?.name} [{node?.id}]
           </div>
           <div className="expensive-nodes-node-percentage">
-            {node.value.items[0].progress}%
+          {node?.totalTimePercent}
           </div>
         </div>
       ))}

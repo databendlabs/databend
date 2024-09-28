@@ -50,7 +50,7 @@ static VERSION: Lazy<String> = Lazy::new(|| {
     version.to_string()
 });
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct APIClient {
     pub cli: HttpClient,
     pub scheme: String,
@@ -420,8 +420,6 @@ impl APIClient {
             }
             resp.schema = schema;
             resp.data = data;
-            // resp.error = None;
-            println!("----resp:--- ==={:?}", resp.error);
             Ok(resp)
         } else {
             Ok(resp)

@@ -1,12 +1,13 @@
 import React from 'react';
-import { ProfileData } from '../types/ProfileGraphDashboard';
 import { Progress } from 'antd';
+import { IOverview } from '../types/ProfileGraphDashboard';
 
 interface ProfileOverviewNodeProps {
-  profileData: ProfileData;
+  overviewInfo?: IOverview;
 }
 
-const ProfileOverviewNode: React.FC<ProfileOverviewNodeProps> = ({ profileData }) => {
+const ProfileOverviewNode: React.FC<ProfileOverviewNodeProps> = ({ overviewInfo }) => {
+  const cpuTimePercent = parseFloat(overviewInfo?.cpuTimePercent || "0");
   return (
     <div className="expensive-nodes-card">
       <div className="expensive-nodes-card-header">
@@ -14,14 +15,14 @@ const ProfileOverviewNode: React.FC<ProfileOverviewNodeProps> = ({ profileData }
       </div>
       <div className="expensive-nodes-progress">
         <Progress
-          percent={profileData?.cpuTimePercentage}
+          percent={cpuTimePercent}
           trailColor="rgba(255, 152, 0)"
           strokeColor="rgb(28, 130, 242)"
           status="active"
           showInfo={false}
         />
         <div className="expensive-nodes-percentage">
-          {profileData?.cpuTimePercentage}%
+          {overviewInfo?.totalTimePercent}
         </div>
       </div>
       <div className="expensive-nodes-node">
@@ -33,7 +34,7 @@ const ProfileOverviewNode: React.FC<ProfileOverviewNodeProps> = ({ profileData }
           CPU Time
         </div>
         <div className="expensive-nodes-node-percentage">
-          {profileData?.cpuTimePercentage}%
+          {overviewInfo?.cpuTimePercent}
         </div>
       </div>
       <div className="expensive-nodes-node">
@@ -45,7 +46,7 @@ const ProfileOverviewNode: React.FC<ProfileOverviewNodeProps> = ({ profileData }
           I/O Time
         </div>
         <div className="expensive-nodes-node-percentage">
-          {profileData?.ioTimePercentage}%
+          {overviewInfo?.waitTimePercent}
         </div>
       </div>
     </div>

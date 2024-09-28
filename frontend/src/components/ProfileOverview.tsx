@@ -1,11 +1,16 @@
 import React from 'react';
-import { ProfileData } from '../types/ProfileGraphDashboard';
 
+import { IOverview } from '../types/ProfileGraphDashboard';
+import { filterMillisecond } from '../utills';
 interface ProfileOverviewProps {
-  profileData: ProfileData;
+  overviewInfo?: IOverview;
+  queryDuration?: number;
 }
 
-const ProfileOverview: React.FC<ProfileOverviewProps> = ({ profileData }) => {
+const ProfileOverview: React.FC<ProfileOverviewProps> = ({
+  overviewInfo,
+  queryDuration = 0,
+}) => {
   return (
     <div className="expensive-nodes-card">
       <div className="expensive-nodes-card-header">
@@ -16,7 +21,8 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ profileData }) => {
       <div className="expensive-nodes-node">
         <div className="expensive-nodes-node-name">Total Execution Time</div>
         <div className="expensive-nodes-node-percentage">
-          ({profileData?.totalExecutionTime}ms) 100%
+          ({filterMillisecond(Math.floor(queryDuration/1000/60/24))})
+          {overviewInfo?.totalTimePercent}
         </div>
       </div>
       <div className="expensive-nodes-node">
@@ -28,7 +34,7 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ profileData }) => {
           CPU Time
         </div>
         <div className="expensive-nodes-node-percentage">
-          {profileData?.cpuTimePercentage}%
+          {overviewInfo?.cpuTimePercent}
         </div>
       </div>
       <div className="expensive-nodes-node">
@@ -40,7 +46,7 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ profileData }) => {
           I/O Time
         </div>
         <div className="expensive-nodes-node-percentage">
-          {profileData?.ioTimePercentage}%
+          {overviewInfo?.waitTimePercent}
         </div>
       </div>
     </div>

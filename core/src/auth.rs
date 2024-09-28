@@ -17,12 +17,12 @@ use reqwest::RequestBuilder;
 use crate::error::{Error, Result};
 
 #[async_trait::async_trait]
-pub trait Auth: Sync + Send + std::fmt::Debug {
+pub trait Auth: Sync + Send {
     async fn wrap(&self, builder: RequestBuilder) -> Result<RequestBuilder>;
     fn username(&self) -> String;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BasicAuth {
     username: String,
     password: SensitiveString,
@@ -48,7 +48,7 @@ impl Auth for BasicAuth {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AccessTokenAuth {
     token: SensitiveString,
 }
@@ -72,7 +72,7 @@ impl Auth for AccessTokenAuth {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AccessTokenFileAuth {
     token_file: String,
 }

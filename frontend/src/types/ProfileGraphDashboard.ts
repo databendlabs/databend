@@ -13,6 +13,8 @@ export interface Node {
 }
 
 export interface Edge {
+  lineWidth: any;
+  _value: undefined;
   source: string;
   target: string;
 }
@@ -70,15 +72,62 @@ export interface Metric {
 }
 
 export interface Profile {
-  id: number;
+  waitTimePercent: string;
+  cpuTimePercent: string;
+  totalTimePercent: string;
+  statisticsDescArray: { _type: string; desc: string; display_name: string | undefined; index: number; unit: ("NanoSeconds" | "Bytes" | "Rows" | "Count" | "MillisSeconds") | undefined; plain_statistics: boolean | undefined; _value: number; }[];
+  waitTime: number;
+  cpuTime: number;
+  totalTime: number;
+  id?: string;
   name: string;
-  parent_id: number | null;
+  parent_id: number | string | null;
   title: string;
   labels: Label[];
   statistics: number[];
   metrics?: Record<string, Metric[]>;
+  errors: string[];
 }
 
 export interface MessageResponse {
   result: string;
+}
+
+export type TUnit = "NanoSeconds" | "MillisSeconds" | "Bytes" | "Rows" | "Count";
+export interface IStatisticsDesc {
+  _type: string;
+  desc: string;
+  index: number;
+  _value: any;
+  display_name: string;
+  displayName?: string;
+  plain_statistics?: boolean;
+  unit?: TUnit;
+}
+
+export interface IErrors {
+  backtrace: string;
+  detail: string;
+  message: string;
+  _errorType: string;
+}
+
+export interface IOverview {
+  cpuTime: number;
+  waitTime: number;
+  totalTime: number;
+  isTotalBigerZero?: boolean;
+  totalTimePercent?: string;
+  cpuTimePercent?: string;
+  waitTimePercent?: string;
+  id?: string;
+  labels?: { name: string; value: any[] }[];
+  statisticsDescArray?: IStatisticsDesc[];
+  errors?: IErrors[];
+  name?: string;
+}
+
+export interface IGraphSize {
+  width: number;
+  height: number;
 }
