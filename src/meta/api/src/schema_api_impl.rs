@@ -27,6 +27,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::display::display_slice::DisplaySliceExt;
+use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -175,7 +176,6 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -218,6 +218,7 @@ use crate::util::deserialize_struct_get_response;
 use crate::util::mget_pb_values;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
+use crate::util::txn_put_pb;
 use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
 use crate::SchemaApi;
@@ -3707,99 +3708,83 @@ async fn gc_dropped_db_by_id(
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
-    let dbid_idlist = DatabaseIdHistoryIdent::new(tenant, db_name);
-    let (db_id_list_seq, db_id_list_opt) = kv_api.get_pb_seq_and_value(&dbid_idlist).await?;
-
-    let mut db_id_list = match db_id_list_opt {
-        Some(list) => list,
-        None => return Ok(()),
+    let db_id_history_ident = DatabaseIdHistoryIdent::new(tenant, db_name);
+    let Some(seq_dbid_list) = kv_api.get_pb(&db_id_history_ident).await? else {
+        return Ok(());
     };
-    for (i, dbid) in db_id_list.id_list.iter().enumerate() {
-        if *dbid != db_id {
-            continue;
-        }
-        let dbid = DatabaseId { db_id };
-        let (db_meta_seq, _db_meta) = kv_api.get_pb_seq_and_value(&dbid).await?;
-        if db_meta_seq == 0 {
-            return Ok(());
-        }
-        let id_to_name = DatabaseIdToName { db_id };
-        let (name_ident_seq, _name_ident) = kv_api.get_pb_seq_and_value(&id_to_name).await?;
-        if name_ident_seq == 0 {
-            return Ok(());
-        }
 
-        let dbid_tbname_idlist = TableIdHistoryIdent {
-            database_id: db_id,
-            table_name: "".to_string(),
-        };
+    let mut db_id_list = seq_dbid_list.data;
 
-        let dir_name = DirName::new(dbid_tbname_idlist);
-
-        let table_id_list_keys = list_keys(kv_api, &dir_name).await?;
-        let keys: Vec<String> = table_id_list_keys
-            .iter()
-            .map(|table_id_list_key| {
-                TableIdHistoryIdent {
-                    database_id: db_id,
-                    table_name: table_id_list_key.table_name.clone(),
-                }
-                .to_string_key()
-            })
-            .collect();
-
-        let mut txn = TxnRequest::default();
-
-        for c in keys.chunks(DEFAULT_MGET_SIZE) {
-            let tb_id_list_seq_vec: Vec<(u64, Option<TableIdList>)> =
-                mget_pb_values(kv_api, c).await?;
-            let mut iter = c.iter();
-            for (tb_id_list_seq, tb_id_list_opt) in tb_id_list_seq_vec {
-                let tb_id_list = match tb_id_list_opt {
-                    Some(list) => list,
-                    None => {
-                        continue;
-                    }
-                };
-
-                for tb_id in tb_id_list.id_list {
-                    let table_id_ident = TableId { table_id: tb_id };
-                    remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
-                    remove_data_for_dropped_table(kv_api, &table_id_ident, &mut txn).await?;
-                    remove_index_for_dropped_table(kv_api, tenant, &table_id_ident, &mut txn)
-                        .await?;
-                }
-
-                let id_key = iter.next().unwrap();
-                txn.if_then.push(TxnOp::delete(id_key));
-                txn.condition
-                    .push(TxnCondition::eq_seq(id_key, tb_id_list_seq));
-            }
-
-            // for id_key in c {
-            // if_then.push(txn_op_del(id_key));
-            // }
-        }
-        db_id_list.id_list.remove(i);
-        txn.condition
-            .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
-        if db_id_list.id_list.is_empty() {
-            txn.if_then.push(txn_op_del(&dbid_idlist));
-        } else {
-            // save new db id list
-            txn.if_then
-                .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
-        }
-
-        txn.condition.push(txn_cond_seq(&dbid, Eq, db_meta_seq));
-        txn.if_then.push(txn_op_del(&dbid));
-        txn.condition
-            .push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
-        txn.if_then.push(txn_op_del(&id_to_name));
-
-        let _resp = kv_api.transaction(txn).await?;
-        break;
+    // If the db_id is not in the list, return.
+    if db_id_list.id_list.remove_first(&db_id).is_none() {
+        return Ok(());
     }
+
+    let dbid = DatabaseId { db_id };
+    let Some(seq_db_meta) = kv_api.get_pb(&dbid).await? else {
+        return Ok(());
+    };
+
+    // TODO: enable this when gc_in_progress is set.
+    // if !seq_db_meta.gc_in_progress {
+    //     let err = UnknownDatabaseId::new(
+    //         db_id,
+    //         "database is not in gc_in_progress state, \
+    //         can not gc. \
+    //         First mark the database as gc_in_progress, \
+    //         then gc is allowed.",
+    //     );
+    //     return Err(AppError::from(err).into());
+    // }
+
+    let id_to_name = DatabaseIdToName { db_id };
+    let Some(seq_name) = kv_api.get_pb(&id_to_name).await? else {
+        return Ok(());
+    };
+
+    let table_history_ident = TableIdHistoryIdent {
+        database_id: db_id,
+        table_name: "dummy".to_string(),
+    };
+    let dir_name = DirName::new(table_history_ident);
+
+    let table_history_items = kv_api.list_pb_vec(&dir_name).await?;
+
+    let mut txn = TxnRequest::default();
+
+    for (ident, table_history) in table_history_items {
+        for tb_id in table_history.id_list.iter() {
+            let table_id_ident = TableId { table_id: *tb_id };
+
+            // TODO: mark table as gc_in_progress
+
+            remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
+            remove_data_for_dropped_table(kv_api, &table_id_ident, &mut txn).await?;
+            remove_index_for_dropped_table(kv_api, tenant, &table_id_ident, &mut txn).await?;
+        }
+
+        txn.condition
+            .push(txn_cond_eq_seq(&ident, table_history.seq));
+        txn.if_then.push(txn_op_del(&ident));
+    }
+
+    txn.condition
+        .push(txn_cond_eq_seq(&db_id_history_ident, seq_dbid_list.seq));
+    if db_id_list.id_list.is_empty() {
+        txn.if_then.push(txn_op_del(&db_id_history_ident));
+    } else {
+        // save new db id list
+        txn.if_then
+            .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
+    }
+
+    txn.condition.push(txn_cond_eq_seq(&dbid, seq_db_meta.seq));
+    txn.if_then.push(txn_op_del(&dbid));
+    txn.condition
+        .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
+    txn.if_then.push(txn_op_del(&id_to_name));
+
+    let _resp = kv_api.transaction(txn).await?;
 
     Ok(())
 }
