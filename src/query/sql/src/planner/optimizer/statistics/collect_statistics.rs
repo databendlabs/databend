@@ -80,7 +80,6 @@ impl CollectStatisticsOptimizer {
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
-                        path_indices,
                         column_id,
                         virtual_computed_expr,
                         ..

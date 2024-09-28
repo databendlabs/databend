@@ -405,26 +405,24 @@ impl Metadata {
                     None,
                 );
 
-                let mut i = fields_type.len();
                 let mut inner_column_id = field.column_id;
-                for (inner_field_name, inner_field_type) in
-                    fields_name.iter().zip(fields_type.iter()).rev()
+                for (index, (inner_field_name, inner_field_type)) in
+                    fields_name.iter().zip(fields_type.iter()).enumerate()
                 {
-                    i -= 1;
                     let mut inner_indices = indices.clone();
-                    inner_indices.push(i);
+                    inner_indices.push(index);
                     // create tuple inner field
                     let inner_name = format!(
                         "{}:{}",
                         field.name(),
                         display_tuple_field_name(inner_field_name)
                     );
-                    inner_column_id += inner_field_type.num_leaf_columns() as u32;
                     let inner_field = TableField::new_from_column_id(
                         &inner_name,
                         inner_field_type.clone(),
                         inner_column_id,
                     );
+                    inner_column_id += inner_field_type.num_leaf_columns() as u32;
                     fields.push_front((inner_indices, inner_field));
                 }
             } else {
