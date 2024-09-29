@@ -5411,8 +5411,6 @@ dependencies = [
  "parquet",
  "rand 0.8.5",
  "roaring",
- "serde",
- "serde_json",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
