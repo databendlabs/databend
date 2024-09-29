@@ -136,6 +136,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetOptionsPlan;
 use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
@@ -1080,6 +1081,14 @@ impl Binder {
             AlterTableAction::SetOptions { set_options } => {
                 Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
                     set_options: set_options.clone(),
+                    catalog,
+                    database,
+                    table,
+                })))
+            }
+            AlterTableAction::UnsetOptions { targets } => {
+                Ok(Plan::UnsetOptions(Box::new(UnsetOptionsPlan {
+                    options: targets.iter().map(|i| i.name.to_lowercase()).collect(),
                     catalog,
                     database,
                     table,
