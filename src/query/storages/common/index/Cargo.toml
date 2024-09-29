@@ -29,6 +29,7 @@ log = { workspace = true }
 match-template = { workspace = true }
 parquet = { workspace = true }
 roaring = "0.10.1"
+serde = { workspace = true }
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = "0.5"
