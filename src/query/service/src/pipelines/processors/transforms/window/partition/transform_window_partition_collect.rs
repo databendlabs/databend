@@ -128,7 +128,7 @@ impl TransformWindowPartitionCollect {
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
         let buffer =
-            WindowPartitionBuffer::new(spiller, num_partitions, sort_block_size, spill_settings)?;
+            WindowPartitionBuffer::new(spiller, partitions.len(), sort_block_size, spill_settings)?;
 
         let max_block_size = settings.get_max_block_size()? as usize;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;

@@ -329,8 +329,9 @@ pub async fn dma_read_file(
     path: impl AsRef<Path>,
     mut writer: impl io::Write,
 ) -> io::Result<usize> {
+    const BUFFER_SIZE: usize = 1024 * 1024;
     let mut file = DmaFile::open(path.as_ref()).await?;
-    let buf = DmaBuffer::new(file.alignment, file.alignment);
+    let buf = DmaBuffer::new(file.align_up(BUFFER_SIZE), file.alignment);
     file.set_buffer(buf);
 
     let mut n = 0;
@@ -347,6 +348,7 @@ pub async fn dma_read_file(
         }
         n += buf.len();
         writer.write_all(buf)?;
+        // WARN: Is it possible to have a short read but not eof?
         let eof = buf.remaining() > 0;
         unsafe { file.mut_buffer().set_len(0) }
         if eof {
