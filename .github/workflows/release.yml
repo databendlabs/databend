@@ -71,7 +71,7 @@ jobs:
       - name: Checkout Docs
         uses: actions/checkout@v4
         with:
-          repository: datafuselabs/databend-docs
+          repository: databendlabs/databend-docs
           ref: main
       - name: Get date
         shell: bash
@@ -83,10 +83,10 @@ jobs:
           mkdir -p docs/release-stable
           df="docs/release-stable/${{ env.DATE }}_${{ needs.create_release.outputs.version }}.md"
           echo "---" > $df
-          gh release view --repo datafuselabs/databend ${{ needs.create_release.outputs.version }} >> $df
+          gh release view --repo databendlabs/databend ${{ needs.create_release.outputs.version }} >> $df
           sed -i -E 's/^--$/---/g' $df
           sed -i -E '/^asset:/d' $df
-          sed -i -E 's_https://github.com/datafuselabs/databend/pull/([0-9]+)_[#\1](https://github.com/datafuselabs/databend/pull/\1)_g' $df
+          sed -i -E 's_https://github.com/databendlabs/databend/pull/([0-9]+)_[#\1](https://github.com/databendlabs/databend/pull/\1)_g' $df
           git add docs/release-stable
           git status
       - uses: peter-evans/create-pull-request@v4
@@ -649,7 +649,7 @@ jobs:
   #     - name: checkout share endpoint
   #       uses: actions/checkout@v4
   #       with:
-  #         repository: datafuselabs/share-endpoint
+  #         repository: databendlabs/share-endpoint
   #         token: ${{ secrets.DATABEND_BOT_TOKEN }}
   #         path: share-endpoint
   #     - name: Download artifacts
