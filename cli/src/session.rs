@@ -634,10 +634,11 @@ impl From<&str> for QueryKind {
         match tz.next() {
             Some(Ok(t)) => match t.kind {
                 TokenKind::EXPLAIN => {
-                    if Tokenizer::contains_token(query, TokenKind::GRAPHICAL) {
-                        return QueryKind::Graphical;
+                    if query.to_lowercase().contains("GRAPHICAL") {
+                        QueryKind::Graphical
+                    } else {
+                        QueryKind::Explain
                     }
-                    QueryKind::Explain
                 },
                 TokenKind::PUT => QueryKind::Put,
                 TokenKind::GET => QueryKind::Get,

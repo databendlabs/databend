@@ -27,7 +27,6 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::{
     ast::{format_query, highlight_query},
     config::{ExpandMode, OutputFormat, OutputQuoteStyle, Settings},
-    helper::CliHelper,
     session::QueryKind,
     web::start_server_and_open_browser,
 };
