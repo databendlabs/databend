@@ -3447,9 +3447,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let unset_table_options = map(
         rule! {
-            UNSET ~ OPTIONS ~ "(" ~ #unset_source~ ")"
+            UNSET ~ OPTIONS ~ #unset_source
         },
-        |(_, _, _, targets, _)| AlterTableAction::UnsetOptions { targets },
+        |(_, _, targets)| AlterTableAction::UnsetOptions { targets },
     );
 
     rule!(
