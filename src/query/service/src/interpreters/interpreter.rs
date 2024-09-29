@@ -207,7 +207,10 @@ pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(
         Arc::new(ServiceQueryExecutor::new(ctx.clone())),
     );
     let result = planner.plan_sql(sql).await;
-    let short_sql = short_sql(sql.to_string());
+    let short_sql = short_sql(
+        sql.to_string(),
+        ctx.get_settings().get_short_sql_max_length()?,
+    );
     let mut stmt = if let Ok((_, extras)) = &result {
         Some(extras.statement.clone())
     } else {

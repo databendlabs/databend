@@ -193,8 +193,7 @@ pub fn mask_connection_info(sql: &str) -> String {
 /// Maximum length of the SQL query to be displayed or log.
 /// If the query exceeds this length and starts with keywords,
 /// it will be truncated and appended with the remaining length.
-pub fn short_sql(sql: String) -> String {
-    const MAX_LENGTH: usize = 128;
+pub fn short_sql(sql: String, max_length: u64) -> String {
     let keywords = ["INSERT"];
 
     fn starts_with_any(query: &str, keywords: &[&str]) -> bool {
@@ -209,10 +208,10 @@ pub fn short_sql(sql: String) -> String {
     // of multiple Unicode code points.
     // This ensures that we handle complex characters like emojis or
     // accented characters properly.
-    if query.graphemes(true).count() > MAX_LENGTH && starts_with_any(query, &keywords) {
-        let truncated: String = query.graphemes(true).take(MAX_LENGTH).collect();
+    if query.graphemes(true).count() > max_length as usize && starts_with_any(query, &keywords) {
+        let truncated: String = query.graphemes(true).take(max_length as usize).collect();
         let original_length = query.graphemes(true).count();
-        let remaining_length = original_length.saturating_sub(MAX_LENGTH);
+        let remaining_length = original_length.saturating_sub(max_length as usize);
         // Append the remaining length indicator
         truncated + &format!("...[{} more characters]", remaining_length)
     } else {
