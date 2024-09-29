@@ -140,12 +140,13 @@ impl InterpreterFactory {
                 ExplainConfig::default(),
                 false,
             )?)),
-            Plan::ExplainAnalyze { partial, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+            Plan::ExplainAnalyze { graphical, partial, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
                 ExplainConfig::default(),
                 *partial,
+                *graphical,
             )?)),
 
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
