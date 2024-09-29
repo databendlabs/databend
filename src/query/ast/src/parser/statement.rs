@@ -2200,7 +2200,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
-            | #explain_analyze_graphical : "`EXPLAIN ANALYZE GRAPHICAL <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
