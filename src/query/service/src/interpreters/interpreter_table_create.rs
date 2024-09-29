@@ -46,8 +46,10 @@ use databend_enterprise_attach_table::get_attach_table_handler;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::table::{OPT_KEY_COMMENT, OPT_KEY_SNAPSHOT_LOCATION, OPT_KEY_TEMP_PREFIX};
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 

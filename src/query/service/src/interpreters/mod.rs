@@ -111,6 +111,7 @@ mod interpreter_table_set_options;
 mod interpreter_table_show_create;
 mod interpreter_table_truncate;
 mod interpreter_table_undrop;
+mod interpreter_table_unset_options;
 mod interpreter_table_vacuum;
 mod interpreter_task_alter;
 mod interpreter_task_create;
@@ -143,7 +144,6 @@ mod interpreter_virtual_column_create;
 mod interpreter_virtual_column_drop;
 mod interpreter_virtual_column_refresh;
 mod util;
-mod interpreter_table_unset_options;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;

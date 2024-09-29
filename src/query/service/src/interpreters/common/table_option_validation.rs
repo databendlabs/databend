@@ -176,5 +176,3 @@ pub fn is_valid_random_seed(
     }
     Ok(())
 }
-
-

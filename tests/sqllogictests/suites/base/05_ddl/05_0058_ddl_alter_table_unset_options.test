@@ -34,10 +34,3 @@ alter table t unset options(database_id);
 # not allowed
 statement error 1301
 alter table t unset options(database_id, snapshot_location, data_retention_period_in_hours);
-
-
-
-
-
-
-
