@@ -448,7 +448,7 @@ impl ExplainInterpreter {
         let result = if self.partial {
             format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
         } else {
-            plan.format(metadata.clone(), query_profiles)?
+            plan.format(metadata.clone(), query_profiles.clone())?
                 .format_pretty()?
         };
         let line_split_result: Vec<&str> = result.lines().collect();

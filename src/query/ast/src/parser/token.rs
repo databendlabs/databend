@@ -589,8 +589,6 @@ pub enum TokenKind {
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
     EXPLAIN,
-    #[token("GRAPHICAL", ignore(ascii_case))]
-    GRAPHICAL,
     #[token("EXPIRE", ignore(ascii_case))]
     EXPIRE,
     #[token("EXTRACT", ignore(ascii_case))]
