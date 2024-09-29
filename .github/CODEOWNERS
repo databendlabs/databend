@@ -1,45 +1,45 @@
 # Query
-/src/common/arrow/         @databendlabs/databend-query-reviewer
-/src/common/hashtable/     @databendlabs/databend-query-reviewer
-/src/common/io/            @databendlabs/databend-query-reviewer
-/src/query/datablocks/     @databendlabs/databend-query-reviewer
-/src/query/datavalues/     @databendlabs/databend-query-reviewer
-/src/query/functions/      @databendlabs/databend-query-reviewer
-/src/query/management/     @databendlabs/databend-query-reviewer
-/src/query/streams/        @databendlabs/databend-query-reviewer
+/src/common/arrow/         @datafuselabs/databend-query-reviewer
+/src/common/hashtable/     @datafuselabs/databend-query-reviewer
+/src/common/io/            @datafuselabs/databend-query-reviewer
+/src/query/datablocks/     @datafuselabs/databend-query-reviewer
+/src/query/datavalues/     @datafuselabs/databend-query-reviewer
+/src/query/functions/      @datafuselabs/databend-query-reviewer
+/src/query/management/     @datafuselabs/databend-query-reviewer
+/src/query/streams/        @datafuselabs/databend-query-reviewer
 
 # Executor
-/src/common/base/                  @databendlabs/databend-executor-reviewer
-/src/common/exception/             @databendlabs/databend-executor-reviewer
-/src/query/planners/               @databendlabs/databend-executor-reviewer
-/src/query/service/src/clusters/   @databendlabs/databend-executor-reviewer
-/src/query/service/src/pipelines/  @databendlabs/databend-executor-reviewer
-/src/query/service/src/api/rpc/    @databendlabs/databend-executor-reviewer
+/src/common/base/                  @datafuselabs/databend-executor-reviewer
+/src/common/exception/             @datafuselabs/databend-executor-reviewer
+/src/query/planners/               @datafuselabs/databend-executor-reviewer
+/src/query/service/src/clusters/   @datafuselabs/databend-executor-reviewer
+/src/query/service/src/pipelines/  @datafuselabs/databend-executor-reviewer
+/src/query/service/src/api/rpc/    @datafuselabs/databend-executor-reviewer
 
 # Planner
-/src/query/ast/                       @databendlabs/databend-planner-reviewer
-/src/query/service/src/optimizers/    @databendlabs/databend-planner-reviewer
+/src/query/ast/                       @datafuselabs/databend-planner-reviewer
+/src/query/service/src/optimizers/    @datafuselabs/databend-planner-reviewer
 
 # MetaSrv
-/src/common/grpc/         @databendlabs/databend-meta-reviewer
-/src/meta/                @databendlabs/databend-meta-reviewer
+/src/common/grpc/         @datafuselabs/databend-meta-reviewer
+/src/meta/                @datafuselabs/databend-meta-reviewer
 /src/meta/protos/proto    @drmingdrmer
 
 # Storage
-/src/common/cache/                 @databendlabs/databend-storage-reviewer
-/src/common/contexts/              @databendlabs/databend-storage-reviewer
-/src/common/storage/               @databendlabs/databend-storage-reviewer
-/src/query/catalog/                @databendlabs/databend-storage-reviewer
-/src/query/storages/               @databendlabs/databend-storage-reviewer
-/src/query/service/src/catalogs/   @databendlabs/databend-storage-reviewer
-/src/query/service/src/storages/   @databendlabs/databend-storage-reviewer
+/src/common/cache/                 @datafuselabs/databend-storage-reviewer
+/src/common/contexts/              @datafuselabs/databend-storage-reviewer
+/src/common/storage/               @datafuselabs/databend-storage-reviewer
+/src/query/catalog/                @datafuselabs/databend-storage-reviewer
+/src/query/storages/               @datafuselabs/databend-storage-reviewer
+/src/query/service/src/catalogs/   @datafuselabs/databend-storage-reviewer
+/src/query/service/src/storages/   @datafuselabs/databend-storage-reviewer
 
 
 # API and handler
-/src/common/http/                  @databendlabs/databend-api-reviewer
-/src/query/service/src/servers/    @databendlabs/databend-api-reviewer
+/src/common/http/                  @datafuselabs/databend-api-reviewer
+/src/query/service/src/servers/    @datafuselabs/databend-api-reviewer
 
 # Tool
-/docker/               @databendlabs/databend-tool-reviewer
-/scripts/              @databendlabs/databend-tool-reviewer
-/.github/              @databendlabs/databend-tool-reviewer
+/docker/               @datafuselabs/databend-tool-reviewer
+/scripts/              @datafuselabs/databend-tool-reviewer
+/.github/              @datafuselabs/databend-tool-reviewer
