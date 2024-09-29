@@ -674,8 +674,8 @@ impl DocIdsCollector {
             candidate_doc_ids.bitand_assign(all_prefix_doc_ids);
         }
 
-        // Collect the postion `offset` and `term_freqs` for each terms,
-        // which can be used to read positons.
+        // Collect the position `offset` and `term_freqs` for each terms,
+        // which can be used to read positions.
         let mut offset_and_term_freqs_map = HashMap::new();
         for term_id in term_ids.into_iter() {
             let offset_and_term_freqs = self.get_position_offsets(term_id, &candidate_doc_ids)?;
