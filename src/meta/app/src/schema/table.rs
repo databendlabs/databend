@@ -984,15 +984,8 @@ impl ListDroppedTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    Db {
-        db_id: u64,
-        db_name: String,
-        tables: Vec<(u64, String)>,
-    },
-    Table {
-        name: DBIdTableName,
-        id: TableId,
-    },
+    Db { db_id: u64, db_name: String },
+    Table { name: DBIdTableName, id: TableId },
 }
 
 impl DroppedId {
