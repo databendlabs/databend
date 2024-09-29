@@ -4091,12 +4091,10 @@ impl SchemaApiTestSuite {
             drop_ids_1.push(DroppedId::Db {
                 db_id: *res.db_id,
                 db_name: db_name.database_name().to_string(),
-                tables: vec![],
             });
             drop_ids_2.push(DroppedId::Db {
                 db_id: *res.db_id,
                 db_name: db_name.database_name().to_string(),
-                tables: vec![],
             });
 
             let req = CreateTableReq {
@@ -4136,7 +4134,6 @@ impl SchemaApiTestSuite {
             drop_ids_2.push(DroppedId::Db {
                 db_id: *db_id,
                 db_name: "db2".to_string(),
-                tables: vec![],
             });
 
             info!("--- create and drop db2.tb1");
