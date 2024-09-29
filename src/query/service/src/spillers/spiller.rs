@@ -21,6 +21,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::dma_buffer_as_vec;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
@@ -125,7 +126,7 @@ impl Spiller {
         let instant = Instant::now();
 
         // Spill data to storage.
-        let encoded = EncodedBlock::from_block(&data_block);
+        let encoded = EncodedBlock::from_block(data_block);
         let columns_layout = encoded.columns_layout();
         let data_size = encoded.size();
         let location = self.write_encodes(data_size, vec![encoded]).await?;
@@ -184,7 +185,7 @@ impl Spiller {
         for (partition_id, data_block) in partitioned_data.into_iter() {
             let begin = write_bytes;
 
-            let encoded = EncodedBlock::from_block(&data_block);
+            let encoded = EncodedBlock::from_block(data_block);
             let columns_layout = encoded.columns_layout();
             let data_size = encoded.size();
 
@@ -280,12 +281,9 @@ impl Spiller {
 
                     let (mut buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
                     assert_eq!(range.start, 0);
-                    unsafe {
-                        buf.set_len(range.end);
-                    }
+                    buf.truncate(range.end);
 
-                    let buf: Vec<u8> = buf.into();
-                    buf.into()
+                    dma_buffer_as_vec(buf).into()
                 }
             };
 
@@ -403,7 +401,7 @@ pub enum Location {
 pub struct EncodedBlock(pub Vec<Vec<u8>>);
 
 impl EncodedBlock {
-    pub fn from_block(block: &DataBlock) -> Self {
+    pub fn from_block(block: DataBlock) -> Self {
         let data = block
             .columns()
             .iter()
