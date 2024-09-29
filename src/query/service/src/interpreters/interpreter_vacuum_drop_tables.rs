@@ -172,23 +172,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
             let mut success_dropped_ids = vec![];
             for drop_id in drop_ids {
                 match &drop_id {
-                    DroppedId::Db {
-                        db_id,
-                        db_name,
-                        tables,
-                    } => {
+                    DroppedId::Db { db_id: _, db_name } => {
                         if !failed_dbs.contains(db_name) {
                             success_dropped_ids.push(drop_id);
-                        } else {
-                            for (table_id, table_name) in tables.iter() {
-                                if !failed_tables.contains(table_id) {
-                                    success_dropped_ids.push(DroppedId::new_table(
-                                        *db_id,
-                                        *table_id,
-                                        table_name.clone(),
-                                    ));
-                                }
-                            }
                         }
                     }
                     DroppedId::Table { name: _, id } => {

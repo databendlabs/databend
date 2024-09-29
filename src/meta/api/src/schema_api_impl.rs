@@ -2678,31 +2678,25 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     drop_time_range.clone()
                 };
 
-                let db_filter = (table_drop_time_range, db_info.clone());
-
                 let capacity = the_limit - vacuum_table_infos.len();
-                let table_infos = do_get_table_history(self, db_filter, capacity).await?;
+                let table_infos =
+                    do_get_table_history(self, table_drop_time_range, db_info.clone(), capacity)
+                        .await?;
+
+                for (table_info, db_id) in table_infos.iter() {
+                    vacuum_ids.push(DroppedId::new_table(
+                        *db_id,
+                        table_info.ident.table_id,
+                        table_info.name.clone(),
+                    ));
+                }
 
                 // A DB can be removed only when all its tables are removed.
                 if vacuum_db && capacity > table_infos.len() {
                     vacuum_ids.push(DroppedId::Db {
                         db_id: db_info.database_id.db_id,
                         db_name: db_info.name_ident.database_name().to_string(),
-                        tables: table_infos
-                            .iter()
-                            .map(|(table_info, _)| {
-                                (table_info.ident.table_id, table_info.name.clone())
-                            })
-                            .collect(),
                     });
-                } else {
-                    for (table_info, db_id) in table_infos.iter().take(capacity) {
-                        vacuum_ids.push(DroppedId::new_table(
-                            *db_id,
-                            table_info.ident.table_id,
-                            table_info.name.clone(),
-                        ));
-                    }
                 }
 
                 vacuum_table_infos.extend(
@@ -2742,8 +2736,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             name_ident: tenant_dbname.clone(),
             meta: db_meta,
         });
-        let db_filter = (drop_time_range.clone(), db_info);
-        let table_infos = do_get_table_history(self, db_filter, the_limit).await?;
+        let table_infos =
+            do_get_table_history(self, drop_time_range.clone(), db_info, the_limit).await?;
         let mut drop_ids = vec![];
         let mut drop_table_infos = vec![];
 
@@ -2766,11 +2760,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError> {
         for drop_id in req.drop_ids {
             match drop_id {
-                DroppedId::Db {
-                    db_id,
-                    db_name,
-                    tables: _,
-                } => gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?,
+                DroppedId::Db { db_id, db_name } => {
+                    gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?
+                }
                 DroppedId::Table { name, id } => {
                     gc_dropped_table_by_id(self, &req.tenant, &name, &id).await?
                 }
@@ -3532,10 +3524,10 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
 #[fastrace::trace]
 async fn do_get_table_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_filter: (Range<Option<DateTime<Utc>>>, Arc<DatabaseInfo>),
+    drop_time_range: Range<Option<DateTime<Utc>>>,
+    db_info: Arc<DatabaseInfo>,
     limit: usize,
 ) -> Result<Vec<(Arc<TableInfo>, u64)>, KVAppError> {
-    let (drop_time_range, db_info) = db_filter;
     let db_id = db_info.database_id.db_id;
 
     let dbid_tbname_idlist = TableIdHistoryIdent {
