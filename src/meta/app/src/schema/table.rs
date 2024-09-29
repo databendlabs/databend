@@ -39,6 +39,7 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -988,7 +989,18 @@ pub enum DroppedId {
     Table { name: DBIdTableName, id: TableId },
 }
 
+impl From<TableNIV> for DroppedId {
+    fn from(value: TableNIV) -> Self {
+        let (name, id, _) = value.unpack();
+        Self::Table { name, id }
+    }
+}
+
 impl DroppedId {
+    pub fn new_table_name_id(name: DBIdTableName, id: TableId) -> DroppedId {
+        DroppedId::Table { name, id }
+    }
+
     pub fn new_table(db_id: u64, table_id: u64, table_name: impl ToString) -> DroppedId {
         DroppedId::Table {
             name: DBIdTableName::new(db_id, table_name),

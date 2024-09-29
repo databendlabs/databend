@@ -28,6 +28,7 @@ pub mod index_id_to_name_ident;
 pub mod index_name_ident;
 pub mod least_visible_time_ident;
 pub mod table_lock_ident;
+pub mod table_niv;
 pub mod virtual_column_ident;
 
 mod create_option;
