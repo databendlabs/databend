@@ -2658,13 +2658,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )
                 .await?;
 
-            let mut vacuum_table_infos = vec![];
+            let mut vacuum_tables = vec![];
             let mut vacuum_ids = vec![];
 
             for db_info in db_infos {
-                if vacuum_table_infos.len() >= the_limit {
+                if vacuum_tables.len() >= the_limit {
                     return Ok(ListDroppedTableResp {
-                        drop_table_infos: vacuum_table_infos,
+                        vacuum_tables,
                         drop_ids: vacuum_ids,
                     });
                 }
@@ -2679,7 +2679,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     drop_time_range.clone()
                 };
 
-                let capacity = the_limit - vacuum_table_infos.len();
+                let capacity = the_limit - vacuum_tables.len();
                 let table_nivs = get_history_tables_for_gc(
                     self,
                     table_drop_time_range,
@@ -2692,26 +2692,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     vacuum_ids.push(DroppedId::from(table_niv.clone()));
                 }
 
+                let db_name = db_info.name_ident.database_name().to_string();
+                let db_name_ident = db_info.name_ident.clone();
+
                 // A DB can be removed only when all its tables are removed.
                 if vacuum_db && capacity > table_nivs.len() {
                     vacuum_ids.push(DroppedId::Db {
                         db_id: db_info.database_id.db_id,
-                        db_name: db_info.name_ident.database_name().to_string(),
+                        db_name: db_name.clone(),
                     });
                 }
 
-                vacuum_table_infos.extend(table_nivs.iter().take(capacity).map(|niv| {
-                    Arc::new(TableInfo::new(
-                        db_info.name_ident.database_name(),
-                        &niv.name().table_name,
-                        TableIdent::new(niv.id().table_id, niv.value().seq),
-                        niv.value().data.clone(),
-                    ))
-                }));
+                vacuum_tables.extend(std::iter::repeat(db_name_ident).zip(table_nivs));
             }
 
             return Ok(ListDroppedTableResp {
-                drop_table_infos: vacuum_table_infos,
+                vacuum_tables,
                 drop_ids: vacuum_ids,
             });
         }
@@ -2748,21 +2744,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         .await?;
 
         let mut drop_ids = vec![];
-        let mut drop_table_infos = vec![];
+        let mut vacuum_tables = vec![];
 
-        for niv in table_nivs.iter() {
+        for niv in table_nivs {
             drop_ids.push(DroppedId::from(niv.clone()));
-
-            drop_table_infos.push(Arc::new(TableInfo::new(
-                db_info.name_ident.database_name(),
-                &niv.name().table_name,
-                TableIdent::new(niv.id().table_id, niv.value().seq),
-                niv.value().data.clone(),
-            )));
+            vacuum_tables.push((tenant_dbname.clone(), niv));
         }
 
         Ok(ListDroppedTableResp {
-            drop_table_infos,
+            vacuum_tables,
             drop_ids,
         })
     }
