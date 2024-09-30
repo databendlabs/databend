@@ -2723,25 +2723,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )
         .await;
 
-        let (seq_db_id, db_meta) = match res {
+        let (seq_db_id, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
             }
         };
 
-        let db_info = Arc::new(DatabaseInfo {
-            database_id: seq_db_id.data,
-            name_ident: tenant_dbname.clone(),
-            meta: db_meta,
-        });
-        let table_nivs = get_history_tables_for_gc(
-            self,
-            drop_time_range.clone(),
-            db_info.database_id.db_id,
-            the_limit,
-        )
-        .await?;
+        let database_id = seq_db_id.data;
+        let table_nivs =
+            get_history_tables_for_gc(self, drop_time_range.clone(), database_id.db_id, the_limit)
+                .await?;
 
         let mut drop_ids = vec![];
         let mut vacuum_tables = vec![];

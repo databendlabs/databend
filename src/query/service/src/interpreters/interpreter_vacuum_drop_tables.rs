@@ -142,13 +142,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .await?;
 
         // map: table id to its belonging db id
-        let mut belonging_db = BTreeMap::new();
+        let mut containing_db = BTreeMap::new();
         for drop_id in drop_ids.iter() {
-            match drop_id {
-                DroppedId::Table { name, id } => {
-                    belonging_db.insert(id.table_id, name.db_id);
-                }
-                _ => {}
+            if let DroppedId::Table { name, id } = drop_id {
+                containing_db.insert(id.table_id, name.db_id);
             }
         }
 
@@ -184,7 +181,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let failed_db_ids = failed_tables
             .iter()
             // Safe unwrap: the map is built from drop_ids
-            .map(|id| *belonging_db.get(id).unwrap())
+            .map(|id| *containing_db.get(id).unwrap())
             .collect::<HashSet<_>>();
 
         // gc metadata only when not dry run
