@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_part;
-mod mutation_meta;
-mod mutation_part;
+use std::any::Any;
 
-pub use compact_part::CompactBlockPartInfo;
-pub use compact_part::CompactExtraInfo;
-pub use compact_part::CompactLazyPartInfo;
-pub use compact_part::CompactTaskInfo;
-pub use mutation_meta::ClusterStatsGenType;
-pub use mutation_meta::CompactSourceMeta;
-pub use mutation_meta::SerializeBlock;
-pub use mutation_meta::SerializeDataMeta;
-pub use mutation_part::DeletedSegmentInfo;
-pub use mutation_part::Mutation;
-pub use mutation_part::MutationPartInfo;
+use databend_common_metrics::http::metrics_incr_http_response_panics_count;
+use http::StatusCode;
+
+#[derive(Clone, Debug)]
+pub(crate) struct PanicHandler {}
+
+impl PanicHandler {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl poem::middleware::PanicHandler for PanicHandler {
+    type Response = (StatusCode, &'static str);
+
+    fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
+        metrics_incr_http_response_panics_count();
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+    }
+}

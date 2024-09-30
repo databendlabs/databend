@@ -117,7 +117,6 @@ impl DataBlock {
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        #[cfg(debug_assertions)]
         Self::check_columns_valid(&columns, num_rows).unwrap();
 
         Self {
@@ -130,6 +129,7 @@ impl DataBlock {
     fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
         for entry in columns.iter() {
             if let Value::Column(c) = &entry.value {
+                #[cfg(debug_assertions)]
                 c.check_valid()?;
                 if c.len() != num_rows {
                     return Err(ErrorCode::Internal(format!(
@@ -264,6 +264,12 @@ impl DataBlock {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
+        assert!(
+            range.end <= self.num_rows(),
+            "range {:?} out of len {}",
+            range,
+            self.num_rows()
+        );
         let columns = self
             .columns()
             .iter()
@@ -279,7 +285,11 @@ impl DataBlock {
             .collect();
         Self {
             columns,
-            num_rows: range.end - range.start,
+            num_rows: if range.is_empty() {
+                0
+            } else {
+                range.end - range.start
+            },
             meta: self.meta.clone(),
         }
     }

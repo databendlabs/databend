@@ -12,125 +12,148 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::PrefetchAsyncSource;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::UnknownMode;
 use databend_common_sql::StreamContext;
-use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::operations::mutation::ClusterStatsGenType;
-use crate::operations::mutation::CompactBlockPartInfo;
-use crate::operations::mutation::SerializeBlock;
-use crate::operations::mutation::SerializeDataMeta;
-use crate::operations::BlockMetaIndex;
+use crate::operations::ClusterStatsGenType;
+use crate::operations::CompactBlockPartInfo;
+use crate::operations::CompactSourceMeta;
+use crate::operations::SerializeBlock;
+use crate::operations::SerializeDataMeta;
 use crate::FuseStorageFormat;
-use crate::MergeIOReadResult;
-
-enum State {
-    ReadData(Option<PartInfoPtr>),
-    Concat {
-        read_res: Vec<MergeIOReadResult>,
-        metas: Vec<Arc<BlockMeta>>,
-        index: BlockMetaIndex,
-    },
-    Output(Option<PartInfoPtr>, DataBlock),
-    Finish,
-}
 
 pub struct CompactSource {
-    state: State,
     ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
-    storage_format: FuseStorageFormat,
-    output: Arc<OutputPort>,
-    stream_ctx: Option<StreamContext>,
+    prefetch_num: usize,
 }
 
 impl CompactSource {
-    pub fn try_create(
+    pub fn create(
         ctx: Arc<dyn TableContext>,
-        storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
-        stream_ctx: Option<StreamContext>,
-        output: Arc<OutputPort>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(CompactSource {
-            state: State::ReadData(None),
+        prefetch_num: usize,
+    ) -> Self {
+        Self {
             ctx,
             block_reader,
-            storage_format,
-            output,
-            stream_ctx,
-        })))
+            prefetch_num,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for CompactSource {
-    fn name(&self) -> String {
-        "CompactSource".to_string()
+impl PrefetchAsyncSource for CompactSource {
+    const NAME: &'static str = "CompactSource";
+
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
+
+    fn is_full(&self, prefetched: &[DataBlock]) -> bool {
+        prefetched.len() >= self.prefetch_num
     }
 
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        let part = match self.ctx.get_partition() {
+            Some(part) => part,
+            None => return Ok(None),
+        };
 
-    fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::ReadData(None)) {
-            self.state = self
-                .ctx
-                .get_partition()
-                .map_or(State::Finish, |part| State::ReadData(Some(part)));
-        }
+        let part = CompactBlockPartInfo::from_part(&part)?;
+        let meta = match part {
+            CompactBlockPartInfo::CompactTaskInfo(task) => {
+                let mut task_futures = Vec::new();
+                for block in &task.blocks {
+                    let settings = ReadSettings::from_ctx(&self.ctx)?;
+                    let block_reader = self.block_reader.clone();
+                    let block = block.clone();
+                    // read block in parallel.
+                    task_futures.push(async move {
+                        databend_common_base::runtime::spawn(async move {
+                            // Perf
+                            {
+                                metrics_inc_compact_block_read_nums(1);
+                                metrics_inc_compact_block_read_bytes(block.block_size);
+                            }
 
-        if self.output.is_finished() {
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-
-        match self.state {
-            State::ReadData(_) => Ok(Event::Async),
-            State::Concat { .. } => Ok(Event::Sync),
-            State::Output(_, _) => {
-                if let State::Output(part, data_block) =
-                    std::mem::replace(&mut self.state, State::Finish)
-                {
-                    self.state = part.map_or(State::Finish, |part| State::ReadData(Some(part)));
-
-                    self.output.push_data(Ok(data_block));
-                    Ok(Event::NeedConsume)
-                } else {
-                    Err(ErrorCode::Internal("It's a bug."))
+                            block_reader
+                                .read_columns_data_by_merge_io(
+                                    &settings,
+                                    &block.location.0,
+                                    &block.col_metas,
+                                    &None,
+                                )
+                                .await
+                        })
+                        .await
+                        .unwrap()
+                    });
                 }
+
+                let start = Instant::now();
+
+                let read_res = futures::future::try_join_all(task_futures).await?;
+                // Perf.
+                {
+                    metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
+                }
+                Box::new(CompactSourceMeta::Concat {
+                    read_res,
+                    metas: task.blocks.clone(),
+                    index: task.index.clone(),
+                })
             }
-            State::Finish => {
-                self.output.finish();
-                Ok(Event::Finished)
+            CompactBlockPartInfo::CompactExtraInfo(extra) => {
+                Box::new(CompactSourceMeta::Extras(extra.clone()))
             }
+        };
+        Ok(Some(DataBlock::empty_with_meta(meta)))
+    }
+}
+
+pub struct CompactTransform {
+    ctx: Arc<dyn TableContext>,
+    block_reader: Arc<BlockReader>,
+    storage_format: FuseStorageFormat,
+    stream_ctx: Option<StreamContext>,
+}
+
+impl CompactTransform {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        block_reader: Arc<BlockReader>,
+        storage_format: FuseStorageFormat,
+        stream_ctx: Option<StreamContext>,
+    ) -> Self {
+        Self {
+            ctx,
+            block_reader,
+            storage_format,
+            stream_ctx,
         }
     }
+}
 
-    fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::Concat {
+#[async_trait::async_trait]
+impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
+    const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
+    const NAME: &'static str = "CompactTransform";
+
+    fn transform(&mut self, meta: CompactSourceMeta) -> Result<Vec<DataBlock>> {
+        match meta {
+            CompactSourceMeta::Concat {
                 read_res,
                 metas,
                 index,
@@ -171,70 +194,12 @@ impl Processor for CompactSource {
                     bytes: new_block.memory_size(),
                 };
                 self.ctx.get_write_progress().incr(&progress_values);
-
-                self.state = State::Output(self.ctx.get_partition(), new_block);
+                Ok(vec![new_block])
             }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadData(Some(part)) => {
-                let block_reader = self.block_reader.as_ref();
-
-                // block read tasks.
-                let mut task_futures = Vec::new();
-                let part = CompactBlockPartInfo::from_part(&part)?;
-                match part {
-                    CompactBlockPartInfo::CompactExtraInfo(extra) => {
-                        let meta = Box::new(SerializeDataMeta::CompactExtras(extra.clone()));
-                        let block = DataBlock::empty_with_meta(meta);
-                        self.state = State::Output(self.ctx.get_partition(), block);
-                    }
-                    CompactBlockPartInfo::CompactTaskInfo(task) => {
-                        for block in &task.blocks {
-                            let settings = ReadSettings::from_ctx(&self.ctx)?;
-                            // read block in parallel.
-                            task_futures.push(async move {
-                                // Perf
-                                {
-                                    metrics_inc_compact_block_read_nums(1);
-                                    metrics_inc_compact_block_read_bytes(block.block_size);
-                                }
-
-                                block_reader
-                                    .read_columns_data_by_merge_io(
-                                        &settings,
-                                        &block.location.0,
-                                        &block.col_metas,
-                                        &None,
-                                    )
-                                    .await
-                            });
-                        }
-
-                        let start = Instant::now();
-
-                        let read_res = futures::future::try_join_all(task_futures).await?;
-                        // Perf.
-                        {
-                            metrics_inc_compact_block_read_milliseconds(
-                                start.elapsed().as_millis() as u64,
-                            );
-                        }
-                        self.state = State::Concat {
-                            read_res,
-                            metas: task.blocks.clone(),
-                            index: task.index.clone(),
-                        };
-                    }
-                }
-                Ok(())
+            CompactSourceMeta::Extras(extra) => {
+                let meta = Box::new(SerializeDataMeta::CompactExtras(extra));
+                Ok(vec![DataBlock::empty_with_meta(meta)])
             }
-            _ => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 }

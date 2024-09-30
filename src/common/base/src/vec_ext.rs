@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_part;
-mod mutation_meta;
-mod mutation_part;
+pub trait VecExt<T> {
+    /// Remove the first element that is equal to the given item.
+    fn remove_first(&mut self, item: &T) -> Option<T>
+    where T: PartialEq;
+}
 
-pub use compact_part::CompactBlockPartInfo;
-pub use compact_part::CompactExtraInfo;
-pub use compact_part::CompactLazyPartInfo;
-pub use compact_part::CompactTaskInfo;
-pub use mutation_meta::ClusterStatsGenType;
-pub use mutation_meta::CompactSourceMeta;
-pub use mutation_meta::SerializeBlock;
-pub use mutation_meta::SerializeDataMeta;
-pub use mutation_part::DeletedSegmentInfo;
-pub use mutation_part::Mutation;
-pub use mutation_part::MutationPartInfo;
+impl<T> VecExt<T> for Vec<T> {
+    fn remove_first(&mut self, item: &T) -> Option<T>
+    where T: PartialEq {
+        let pos = self.iter().position(|x| x == item)?;
+        Some(self.remove(pos))
+    }
+}

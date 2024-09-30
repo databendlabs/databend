@@ -48,11 +48,11 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
-use crate::servers::http::v1::StringBlock;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
 
