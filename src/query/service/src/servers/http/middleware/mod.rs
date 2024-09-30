@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod compact_part;
-mod mutation_meta;
-mod mutation_part;
+mod metrics;
+mod panic_handler;
+mod session;
 
-pub use compact_part::CompactBlockPartInfo;
-pub use compact_part::CompactExtraInfo;
-pub use compact_part::CompactLazyPartInfo;
-pub use compact_part::CompactTaskInfo;
-pub use mutation_meta::ClusterStatsGenType;
-pub use mutation_meta::CompactSourceMeta;
-pub use mutation_meta::SerializeBlock;
-pub use mutation_meta::SerializeDataMeta;
-pub use mutation_part::DeletedSegmentInfo;
-pub use mutation_part::Mutation;
-pub use mutation_part::MutationPartInfo;
+pub(crate) use metrics::MetricsMiddleware;
+pub(crate) use panic_handler::PanicHandler;
+pub use session::json_response;
+pub(crate) use session::sanitize_request_headers;
+pub use session::EndpointKind;
+// for it tests only
+pub use session::HTTPSessionEndpoint;
+pub use session::HTTPSessionMiddleware;

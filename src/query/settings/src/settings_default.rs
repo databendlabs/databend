@@ -921,6 +921,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("short_sql_max_length", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(128),
+                    desc: "Sets the maximum length for truncating SQL queries in short_sql function.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=1024*1024)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

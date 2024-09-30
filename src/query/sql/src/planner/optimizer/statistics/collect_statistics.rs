@@ -80,19 +80,18 @@ impl CollectStatisticsOptimizer {
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
-                        path_indices,
-                        leaf_index,
+                        column_id,
                         virtual_computed_expr,
                         ..
                     }) = column
                     {
-                        if path_indices.is_none() && virtual_computed_expr.is_none() {
-                            if let Some(col_id) = *leaf_index {
+                        if virtual_computed_expr.is_none() {
+                            if let Some(column_id) = *column_id {
                                 let col_stat = column_statistics_provider
-                                    .column_statistics(col_id as ColumnId);
+                                    .column_statistics(column_id as ColumnId);
                                 column_stats.insert(*column_index, col_stat.cloned());
                                 let histogram =
-                                    column_statistics_provider.histogram(col_id as ColumnId);
+                                    column_statistics_provider.histogram(column_id as ColumnId);
                                 histograms.insert(*column_index, histogram);
                             }
                         }

@@ -17,12 +17,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
-use databend_storages_common_index::check_term_fsts_match;
-use databend_storages_common_index::collect_matched_rows;
-use databend_storages_common_index::TermValue;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
@@ -40,6 +38,7 @@ use tantivy::tokenizer::TokenizerManager;
 use tantivy::Index;
 use tantivy_fst::raw::Fst;
 
+use crate::index::DocIdsCollector;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_file;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_meta;
@@ -61,15 +60,14 @@ impl InvertedIndexReader {
     #[allow(clippy::too_many_arguments)]
     pub async fn do_filter(
         self,
-        field_nums: usize,
         need_position: bool,
         has_score: bool,
         query: Box<dyn Query>,
-        field_ids: &HashSet<usize>,
+        field_ids: &HashSet<u32>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
         tokenizer_manager: TokenizerManager,
-        row_count: u32,
+        row_count: u64,
         index_loc: &str,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let start = Instant::now();
@@ -79,7 +77,6 @@ impl InvertedIndexReader {
                 index_loc,
                 query,
                 field_ids,
-                field_nums,
                 need_position,
                 has_score,
                 index_record,
@@ -101,15 +98,19 @@ impl InvertedIndexReader {
         &self,
         index_path: &'a str,
         name: &str,
-        field_ids: &HashSet<usize>,
+        field_ids: &HashSet<u32>,
         inverted_index_meta_map: &HashMap<String, SingleColumnMeta>,
-    ) -> Result<HashMap<usize, OwnedBytes>> {
-        let mut col_metas = vec![];
-        let mut col_field_map = HashMap::new();
+    ) -> Result<HashMap<u32, OwnedBytes>> {
+        let mut col_metas = Vec::with_capacity(field_ids.len());
+        let mut col_field_map = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
             let col_name = format!("{}-{}", name, field_id);
-            let col_meta = inverted_index_meta_map.get(&col_name).unwrap();
-
+            let col_meta = inverted_index_meta_map.get(&col_name).ok_or_else(|| {
+                ErrorCode::TantivyError(format!(
+                    "inverted index column `{}` does not exist",
+                    col_name
+                ))
+            })?;
             col_metas.push((col_name.clone(), col_meta));
             col_field_map.insert(col_name, *field_id);
         }
@@ -131,18 +132,16 @@ impl InvertedIndexReader {
         Ok(col_files)
     }
 
-    // first version search function, using tantivy searcher.
-    async fn search_v0<'a>(
+    // legacy query search function, using tantivy searcher.
+    async fn legacy_search<'a>(
         &self,
         index_path: &'a str,
         query: Box<dyn Query>,
-        field_nums: usize,
         has_score: bool,
         tokenizer_manager: TokenizerManager,
-        row_count: u32,
+        row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
-        let directory =
-            load_inverted_index_directory(self.dal.clone(), field_nums, index_path).await?;
+        let directory = load_inverted_index_directory(self.dal.clone(), index_path).await?;
 
         let mut index = Index::open(directory)?;
         index.set_tokenizers(tokenizer_manager);
@@ -179,34 +178,48 @@ impl InvertedIndexReader {
     }
 
     // Follow the process below to perform the query search:
-    // 1. Read the `fst` first, check if the term in the query matches,
-    //    return if it doesn't matched.
-    // 2. Read the `term dict` to get the `postings_range` in `idx`
-    //    and the `positions_range` in `pos` for each terms.
-    // 3. Read the `doc_ids` and `term_freqs` in `idx` for each terms
-    //    using `postings_range`.
-    // 4. If it's a phrase query, read the `position` of each terms in
-    //    `pos` using `positions_range`.
-    // 5. Collect matched doc ids using term-related information.
+    //
+    // 1. Read the `fst` first, check if the term in the query matches.
+    //    If it matches, collect the terms that need to be checked
+    //    for subsequent processing, otherwise, return directly
+    //    and ignore the block.
+    // 2. Read the `term_info` for each terms from the `term_dict`,
+    //    which contains three parts:
+    //    `doc_freq` is the number of docs containing the term.
+    //    `postings_range` is used to read posting list in the postings (`.idx`) file.
+    //    `positions_range` is used to read positions in the positions (`.pos`) file.
+    // 3. Read `postings` data from postings (`.idx`) file by `postings_range`
+    //    of each terms, and `positions` data from positions (`.pos`) file
+    //    by `positions_range` of each terms.
+    // 4. Open `BlockSegmentPostings` using `postings` data for each terms,
+    //    which can be used to read `doc_ids` and `term_freqs`.
+    // 5. If the query is a phrase query, Open `PositionReader` using
+    //    `positions` data for each terms, which can be use to read
+    //    term `positions` in each docs.
+    // 6. Collect matched `doc_ids` of the query.
+    //    If the query is a term query, the `doc_ids` can read from `BlockSegmentPostings`.
+    //    If the query is a phrase query, in addition to `doc_ids`, also need to
+    //    use `PositionReader` to read the positions for each terms and check whether
+    //    the position of terms in doc is the same as the position of terms in query.
     //
     // If the term does not match, only the `fst` file needs to be read.
-    // If the term matches, only the `idx` and `pos` data of the related terms
-    // need to be read instead of all the `idx` and `pos` data.
+    // If the term matches, the `term_dict` and `postings`, `positions`
+    // data of the related terms need to be read instead of all
+    // the `postings` and `positions` data.
     #[allow(clippy::too_many_arguments)]
     async fn search<'a>(
         &self,
         index_path: &'a str,
         query: Box<dyn Query>,
-        field_ids: &HashSet<usize>,
-        field_nums: usize,
+        field_ids: &HashSet<u32>,
         need_position: bool,
         has_score: bool,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
         tokenizer_manager: TokenizerManager,
-        row_count: u32,
+        row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
-        // 1. read index meta
+        // 1. read index meta.
         let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
 
         let inverted_index_meta_map = inverted_index_meta
@@ -220,18 +233,11 @@ impl InvertedIndexReader {
         // use compatible search function to read.
         if inverted_index_meta_map.contains_key("meta.json") {
             return self
-                .search_v0(
-                    index_path,
-                    query,
-                    field_nums,
-                    has_score,
-                    tokenizer_manager,
-                    row_count,
-                )
+                .legacy_search(index_path, query, has_score, tokenizer_manager, row_count)
                 .await;
         }
 
-        // 2. read fst files
+        // 2. read fst files.
         let fst_files = self
             .read_column_data(index_path, "fst", field_ids, &inverted_index_meta_map)
             .await?;
@@ -250,15 +256,18 @@ impl InvertedIndexReader {
 
         // 3. check whether query is matched in the fsts.
         let mut matched_terms = HashMap::new();
+        let mut prefix_terms = HashMap::new();
         let mut fuzziness_terms = HashMap::new();
-        let matched = check_term_fsts_match(
+        let matched = DocIdsCollector::check_term_fsts_match(
             query.box_clone(),
             &fst_maps,
             fuzziness,
             &mut matched_terms,
+            &mut prefix_terms,
             &mut fuzziness_terms,
-        );
+        )?;
 
+        // if not matched, return without further check
         if !matched {
             return Ok(None);
         }
@@ -268,71 +277,66 @@ impl InvertedIndexReader {
             .read_column_data(index_path, "term", field_ids, &inverted_index_meta_map)
             .await?;
 
-        let mut term_dict_maps = HashMap::new();
+        let mut term_infos = HashMap::with_capacity(matched_terms.len());
         for (field_id, term_dict_data) in term_dict_files.into_iter() {
             let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
             let term_info_store = TermInfoStore::open(term_dict_file)?;
-            term_dict_maps.insert(field_id, term_info_store);
-        }
 
-        let mut term_values = HashMap::new();
-        for (term, term_ord) in matched_terms.iter() {
-            let field = term.field();
-            let field_id = field.field_id() as usize;
-
-            let term_dict = term_dict_maps.get(&field_id).unwrap();
-            let term_info = term_dict.get(*term_ord);
-
-            let term_value = TermValue {
-                term_info,
-                doc_ids: vec![],
-                term_freqs: vec![],
-                position_reader: None,
-            };
-            term_values.insert(term.clone(), term_value);
+            for (_, (term_field_id, term_id)) in matched_terms.iter() {
+                if field_id == *term_field_id {
+                    let term_info = term_info_store.get(*term_id);
+                    term_infos.insert(*term_id, (field_id, term_info));
+                }
+            }
         }
 
         // 5. read postings and optional positions.
-        //    collect doc ids, term frequencies and optional position readers.
-        let mut slice_metas = Vec::with_capacity(term_values.len());
-        let mut name_map = HashMap::new();
-        for (term, term_value) in term_values.iter() {
-            let field = term.field();
-            let field_id = field.field_id() as usize;
-
+        let term_slice_len = if need_position {
+            term_infos.len() * 2
+        } else {
+            term_infos.len()
+        };
+        let mut slice_metas = Vec::with_capacity(term_slice_len);
+        let mut slice_name_map = HashMap::with_capacity(term_slice_len);
+        for (term_id, (field_id, term_info)) in term_infos.iter() {
             let idx_name = format!("idx-{}", field_id);
-            let idx_meta = inverted_index_meta_map.get(&idx_name).unwrap();
-
+            let idx_meta = inverted_index_meta_map.get(&idx_name).ok_or_else(|| {
+                ErrorCode::TantivyError(format!(
+                    "inverted index column `{}` does not exist",
+                    idx_name
+                ))
+            })?;
             // ignore 8 bytes total_num_tokens_slice
-            let offset = idx_meta.offset + 8 + (term_value.term_info.postings_range.start as u64);
-            let len = term_value.term_info.postings_range.len() as u64;
+            let offset = idx_meta.offset + 8 + (term_info.postings_range.start as u64);
+            let len = term_info.postings_range.len() as u64;
             let idx_slice_meta = SingleColumnMeta {
                 offset,
                 len,
                 num_values: 1,
             };
 
-            let idx_slice_name =
-                format!("{}-{}", idx_name, term_value.term_info.postings_range.start);
+            let idx_slice_name = format!("{}-{}", idx_name, term_info.postings_range.start);
             slice_metas.push((idx_slice_name.clone(), idx_slice_meta));
-            name_map.insert(idx_slice_name, term.clone());
+            slice_name_map.insert(idx_slice_name, *term_id);
 
             if need_position {
                 let pos_name = format!("pos-{}", field_id);
-                let pos_meta = inverted_index_meta_map.get(&pos_name).unwrap();
-                let offset = pos_meta.offset + (term_value.term_info.positions_range.start as u64);
-                let len = term_value.term_info.positions_range.len() as u64;
+                let pos_meta = inverted_index_meta_map.get(&pos_name).ok_or_else(|| {
+                    ErrorCode::TantivyError(format!(
+                        "inverted index column `{}` does not exist",
+                        pos_name
+                    ))
+                })?;
+                let offset = pos_meta.offset + (term_info.positions_range.start as u64);
+                let len = term_info.positions_range.len() as u64;
                 let pos_slice_meta = SingleColumnMeta {
                     offset,
                     len,
                     num_values: 1,
                 };
-                let pos_slice_name = format!(
-                    "{}-{}",
-                    pos_name, term_value.term_info.positions_range.start
-                );
+                let pos_slice_name = format!("{}-{}", pos_name, term_info.positions_range.start);
                 slice_metas.push((pos_slice_name.clone(), pos_slice_meta));
-                name_map.insert(pos_slice_name, term.clone());
+                slice_name_map.insert(pos_slice_name, *term_id);
             }
         }
 
@@ -347,53 +351,58 @@ impl InvertedIndexReader {
             .map(|f| (f.name.clone(), f.data.clone()))
             .collect::<HashMap<_, _>>();
 
+        let mut block_postings_map = HashMap::with_capacity(term_infos.len());
+        let mut position_reader_map = HashMap::with_capacity(term_infos.len());
         for (slice_name, slice_data) in slice_files.into_iter() {
-            let term = name_map.get(&slice_name).unwrap();
-            let term_value = term_values.get_mut(term).unwrap();
+            let term_id = slice_name_map.remove(&slice_name).unwrap();
+            let (_, term_info) = term_infos.get(&term_id).unwrap();
 
             if slice_name.starts_with("idx") {
                 let posting_file = FileSlice::new(Arc::new(slice_data));
-                let postings = BlockSegmentPostings::open(
-                    term_value.term_info.doc_freq,
+                let block_postings = BlockSegmentPostings::open(
+                    term_info.doc_freq,
                     posting_file,
                     *index_record,
                     *index_record,
                 )?;
-                let doc_ids = postings.docs();
-                let term_freqs = postings.freqs();
 
-                term_value.doc_ids = doc_ids.to_vec();
-                term_value.term_freqs = term_freqs.to_vec();
+                block_postings_map.insert(term_id, block_postings);
             } else if slice_name.starts_with("pos") {
                 let position_reader = PositionReader::open(slice_data)?;
-                term_value.position_reader = Some(position_reader);
+                position_reader_map.insert(term_id, position_reader);
             }
         }
 
-        // 6. collect matched rows by term values.
-        let matched_docs = collect_matched_rows(
-            query.box_clone(),
+        // 6. collect matched doc ids.
+        let mut collector = DocIdsCollector::create(
             row_count,
-            &fuzziness_terms,
-            &mut term_values,
+            need_position,
+            matched_terms,
+            term_infos,
+            block_postings_map,
+            position_reader_map,
         );
+        let matched_doc_ids =
+            collector.collect_matched_rows(query.box_clone(), &prefix_terms, &fuzziness_terms)?;
 
-        if !matched_docs.is_empty() {
-            let mut matched_rows = Vec::with_capacity(matched_docs.len());
-            if has_score {
-                // TODO: add score
-                for doc_id in matched_docs {
-                    matched_rows.push((doc_id as usize, Some(F32::from(1.0))));
+        if let Some(matched_doc_ids) = matched_doc_ids {
+            if !matched_doc_ids.is_empty() {
+                let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
+                let doc_ids_iter = matched_doc_ids.iter();
+                if has_score {
+                    // TODO: add score
+                    for doc_id in doc_ids_iter {
+                        matched_rows.push((doc_id as usize, Some(F32::from(1.0))));
+                    }
+                } else {
+                    for doc_id in doc_ids_iter {
+                        matched_rows.push((doc_id as usize, None));
+                    }
                 }
-            } else {
-                for doc_id in matched_docs {
-                    matched_rows.push((doc_id as usize, None))
-                }
+                return Ok(Some(matched_rows));
             }
-            Ok(Some(matched_rows))
-        } else {
-            Ok(None)
         }
+        Ok(None)
     }
 
     // delegation of [InvertedIndexFileReader::cache_key_of_index_columns]

@@ -330,7 +330,16 @@ pub async fn clickhouse_handler_post(
         // other parts of the request already logged in middleware
         let len = sql.len();
         let msg = if len > n {
-            format!("{}...(omit {} bytes)", short_sql(sql.clone()), len - n)
+            format!(
+                "{}...(omit {} bytes)",
+                short_sql(
+                    sql.clone(),
+                    ctx.get_settings()
+                        .get_short_sql_max_length()
+                        .unwrap_or(1000)
+                ),
+                len - n
+            )
         } else {
             sql.to_string()
         };

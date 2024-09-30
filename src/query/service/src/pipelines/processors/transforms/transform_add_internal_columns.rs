@@ -40,8 +40,8 @@ impl Transform for TransformAddInternalColumns {
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         if let Some(meta) = block.take_meta() {
-            let internal_column_meta =
-                InternalColumnMeta::downcast_from(meta).ok_or(ErrorCode::Internal("It's a bug"))?;
+            let internal_column_meta = InternalColumnMeta::downcast_from(meta)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
             let num_rows = block.num_rows();
             for internal_column in self.internal_columns.values() {
                 let column =

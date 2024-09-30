@@ -25,11 +25,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::TableInfoFilter;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
@@ -125,19 +123,20 @@ impl Interpreter for VacuumDropTablesInterpreter {
             self.plan.database, retention_time
         );
         // if database if empty, vacuum all tables
-        let filter = if self.plan.database.is_empty() {
-            TableInfoFilter::DroppedTableOrDroppedDatabase(Some(retention_time))
+        let database_name = if self.plan.database.is_empty() {
+            None
         } else {
-            TableInfoFilter::DroppedTables(Some(retention_time))
+            Some(self.plan.database.clone())
         };
 
         let tenant = self.ctx.get_tenant();
         let (tables, drop_ids) = catalog
-            .get_drop_table_infos(ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, &self.plan.database),
-                filter,
-                limit: self.plan.option.limit,
-            })
+            .get_drop_table_infos(ListDroppedTableReq::new4(
+                &tenant,
+                database_name,
+                Some(retention_time),
+                self.plan.option.limit,
+            ))
             .await?;
 
         info!(
@@ -173,23 +172,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
             let mut success_dropped_ids = vec![];
             for drop_id in drop_ids {
                 match &drop_id {
-                    DroppedId::Db {
-                        db_id,
-                        db_name,
-                        tables,
-                    } => {
+                    DroppedId::Db { db_id: _, db_name } => {
                         if !failed_dbs.contains(db_name) {
                             success_dropped_ids.push(drop_id);
-                        } else {
-                            for (table_id, table_name) in tables.iter() {
-                                if !failed_tables.contains(table_id) {
-                                    success_dropped_ids.push(DroppedId::new_table(
-                                        *db_id,
-                                        *table_id,
-                                        table_name.clone(),
-                                    ));
-                                }
-                            }
                         }
                     }
                     DroppedId::Table { name: _, id } => {
