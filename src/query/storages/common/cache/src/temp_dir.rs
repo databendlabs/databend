@@ -73,7 +73,7 @@ impl TempDirManager {
 
     pub fn dir_xxxx(&self) -> Result<()> {
         let Some(path) = &self.root else {
-            return Err(ErrorCode::Internal(format!("emtpy root")));
+            return Err(ErrorCode::Internal(format!("empty root")));
         };
 
         if let Err(e) = remove_dir_all(path) {
