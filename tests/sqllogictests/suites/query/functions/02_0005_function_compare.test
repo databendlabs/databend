@@ -1064,6 +1064,11 @@ SELECT parse_json('"cd"') not regexp '.*'
 ----
 0
 
+query BB
+SELECT parse_json('{"a":111}') = parse_json('{"a":123,"b":"xxx"}'), parse_json('{"a":123,"b":"xxx"}') = parse_json('{"a":111}')
+----
+0 0
+
 statement ok
 drop table if exists t
 
