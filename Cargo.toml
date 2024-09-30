@@ -351,7 +351,6 @@ useless_format = "allow"
 mutable_key_type = "allow"
 result_large_err = "allow"
 
-
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
 ## Test SQL: 
 ## select sum(number) from numbers_mt(10000000000);   ~ 3x performance 
@@ -367,7 +366,7 @@ result_large_err = "allow"
 debug = 1
 lto = "thin"
 overflow-checks = false
-opt-level = "s" ## defaults to be 3
+opt-level = "s"         ## defaults to be 3
 incremental = false
 
 # [profile.release.package]
