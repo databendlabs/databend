@@ -23,6 +23,7 @@ use std::ops::Range;
 use std::os::fd::BorrowedFd;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
+use std::ptr::Alignment;
 use std::ptr::NonNull;
 
 use rustix::fs::OFlags;
@@ -33,21 +34,19 @@ use crate::runtime::spawn_blocking;
 
 unsafe impl Send for DmaAllocator {}
 
-pub struct DmaAllocator {
-    align: usize,
-}
+pub struct DmaAllocator(Alignment);
 
 impl DmaAllocator {
-    pub fn new(align: usize) -> DmaAllocator {
-        DmaAllocator { align }
+    pub fn new(align: Alignment) -> DmaAllocator {
+        DmaAllocator(align)
     }
 
     fn real_layout(&self, layout: Layout) -> Layout {
-        Layout::from_size_align(self.real_cap(layout.size()), self.align).unwrap()
+        Layout::from_size_align(layout.size(), self.0.as_usize()).unwrap()
     }
 
     fn real_cap(&self, cap: usize) -> usize {
-        align_up(self.align, cap)
+        align_up(self.0, cap)
     }
 }
 
@@ -106,7 +105,7 @@ pub fn dma_buffer_as_vec(mut buf: DmaBuffer) -> Vec<u8> {
 /// perform direct IO.
 struct DmaFile {
     fd: File,
-    alignment: usize,
+    alignment: Alignment,
     buf: Option<DmaBuffer>,
 }
 
@@ -145,15 +144,14 @@ impl DmaFile {
     }
 
     /// Aligns `value` down to the memory alignment requirement for this file.
-    #[allow(dead_code)]
     pub fn align_down(&self, value: usize) -> usize {
         align_down(self.alignment, value)
     }
 
     /// Return the alignment requirement for this file. The returned alignment value can be used
     /// to allocate a buffer to use with this file:
-    #[allow(dead_code)]
-    pub fn alignment(&self) -> usize {
+    #[expect(dead_code)]
+    pub fn alignment(&self) -> Alignment {
         self.alignment
     }
 
@@ -205,17 +203,17 @@ impl DmaFile {
     }
 }
 
-pub fn align_up(alignment: usize, value: usize) -> usize {
-    (value + alignment - 1) & !(alignment - 1)
+pub fn align_up(alignment: Alignment, value: usize) -> usize {
+    (value + alignment.as_usize() - 1) & alignment.mask()
 }
 
-pub fn align_down(alignment: usize, value: usize) -> usize {
-    value & !(alignment - 1)
+pub fn align_down(alignment: Alignment, value: usize) -> usize {
+    value & alignment.mask()
 }
 
 async fn open_dma(file: File) -> io::Result<DmaFile> {
     let stat = fstatvfs(&file).await?;
-    let alignment = stat.f_bsize.max(512) as usize;
+    let alignment = Alignment::new(stat.f_bsize.max(512) as usize).unwrap();
 
     Ok(DmaFile {
         fd: file,
@@ -261,16 +259,16 @@ pub async fn dma_write_file_vectored<'a>(
     const BUFFER_SIZE: usize = 1024 * 1024;
     let buffer_size = BUFFER_SIZE.min(file_length);
 
-    let buf = Vec::with_capacity_in(
+    let dma_buf = Vec::with_capacity_in(
         file.align_up(buffer_size),
         DmaAllocator::new(file.alignment),
     );
-    file.set_buffer(buf);
+    file.set_buffer(dma_buf);
 
-    for buf in bufs {
-        let mut buf = &buf[..];
+    for src in bufs {
+        let mut src = &src[..];
 
-        while !buf.is_empty() {
+        while !src.is_empty() {
             let dst = file.buffer();
             if dst.capacity() == dst.len() {
                 file = asyncify(move || file.write_direct().map(|_| file)).await?;
@@ -278,10 +276,10 @@ pub async fn dma_write_file_vectored<'a>(
 
             let dst = file.mut_buffer();
             let remaining = dst.capacity() - dst.len();
-            let n = buf.len().min(remaining);
-            let (left, right) = buf.split_at(n);
+            let n = src.len().min(remaining);
+            let (left, right) = src.split_at(n);
             dst.extend_from_slice(left);
-            buf = right;
+            src = right;
         }
     }
 

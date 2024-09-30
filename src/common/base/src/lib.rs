@@ -24,6 +24,7 @@
 #![feature(alloc_error_hook)]
 #![feature(slice_swap_unchecked)]
 #![feature(variant_count)]
+#![feature(ptr_alignment_type)]
 
 pub mod base;
 pub mod containers;
