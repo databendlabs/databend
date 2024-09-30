@@ -461,6 +461,10 @@ impl FuseTable {
         };
         Ok(retention_period)
     }
+
+    pub fn get_storage_format(&self) -> FuseStorageFormat {
+        self.storage_format
+    }
 }
 
 #[async_trait::async_trait]
