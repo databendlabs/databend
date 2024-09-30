@@ -234,7 +234,11 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                 }
             }
         },
-        Plan::ExplainAnalyze { plan, partial, graphical } => Ok(Plan::ExplainAnalyze {
+        Plan::ExplainAnalyze {
+            plan,
+            partial,
+            graphical,
+        } => Ok(Plan::ExplainAnalyze {
             partial,
             graphical,
             plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),

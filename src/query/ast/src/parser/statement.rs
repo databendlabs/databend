@@ -90,8 +90,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, opt_partial_or_graphical, statement)| {
             let (partial, graphical) = match opt_partial_or_graphical {
-                Some(Token { kind: TokenKind::PARTIAL, .. }) => (true, false),
-                Some(Token { kind: TokenKind::GRAPHICAL, .. }) => (false, true),
+                Some(Token {
+                    kind: TokenKind::PARTIAL,
+                    ..
+                }) => (true, false),
+                Some(Token {
+                    kind: TokenKind::GRAPHICAL,
+                    ..
+                }) => (false, true),
                 _ => (false, false),
             };
             Statement::ExplainAnalyze {

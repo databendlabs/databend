@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::Serialize;
-use serde_json;
-
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::profile::get_statistics_desc;
-use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_base::runtime::profile::ProfileDesc;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -43,6 +40,8 @@ use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
+use serde::Serialize;
+use serde_json;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
@@ -397,13 +396,14 @@ impl ExplainInterpreter {
     fn graphical_profiles_to_datablocks(profiles: GraphicalProfiles) -> Vec<DataBlock> {
         let mut blocks = Vec::new();
 
-         let json_string = serde_json::to_string_pretty(&profiles).unwrap_or_else(|_| "Failed to format profiles".to_string());
+        let json_string = serde_json::to_string_pretty(&profiles)
+            .unwrap_or_else(|_| "Failed to format profiles".to_string());
 
-         let line_split_result: Vec<&str> = json_string.lines().collect();
-         let formatted_block = StringType::from_data(line_split_result);
-         blocks.push(DataBlock::new_from_columns(vec![formatted_block]));
+        let line_split_result: Vec<&str> = json_string.lines().collect();
+        let formatted_block = StringType::from_data(line_split_result);
+        blocks.push(DataBlock::new_from_columns(vec![formatted_block]));
 
-         blocks
+        blocks
     }
 
     #[async_backtrace::framed]
@@ -412,7 +412,7 @@ impl ExplainInterpreter {
         s_expr: &SExpr,
         metadata: &MetadataRef,
         required: ColumnSet,
-        ignore_result: bool
+        ignore_result: bool,
     ) -> Result<GraphicalProfiles> {
         let query_ctx = self.ctx.clone();
 

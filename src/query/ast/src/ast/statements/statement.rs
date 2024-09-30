@@ -413,7 +413,11 @@ impl Display for Statement {
                 }
                 write!(f, " {query}")?;
             }
-            Statement::ExplainAnalyze { partial, graphical, query } => {
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query,
+            } => {
                 if *partial {
                     write!(f, "EXPLAIN ANALYZE PARTIAL {query}")?;
                 } else if *graphical {

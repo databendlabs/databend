@@ -143,7 +143,11 @@ impl InterpreterFactory {
                 false,
                 false,
             )?)),
-            Plan::ExplainAnalyze { graphical, partial, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+            Plan::ExplainAnalyze {
+                graphical,
+                partial,
+                plan,
+            } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
