@@ -4077,6 +4077,7 @@ impl SchemaApiTestSuite {
 
         // first create a database drop within filter time
         info!("--- create db1");
+        let db1_id;
         {
             let db_name = DatabaseNameIdent::new(&tenant, "db1");
             let req = CreateDatabaseReq {
@@ -4086,7 +4087,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(req).await?;
-            let db1_id = res.db_id.db_id;
+            db1_id = res.db_id;
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
@@ -4103,21 +4104,22 @@ impl SchemaApiTestSuite {
             })
             .await?;
 
-            drop_ids_boundary.push(DroppedId::new_table(db1_id, db1_tb1_id, "tb1"));
+            drop_ids_boundary.push(DroppedId::new_table(*db1_id, db1_tb1_id, "tb1"));
             drop_ids_boundary.push(DroppedId::Db {
-                db_id: db1_id,
+                db_id: *db1_id,
                 db_name: db_name.database_name().to_string(),
             });
 
-            drop_ids_no_boundary.push(DroppedId::new_table(db1_id, db1_tb1_id, "tb1"));
+            drop_ids_no_boundary.push(DroppedId::new_table(*db1_id, db1_tb1_id, "tb1"));
             drop_ids_no_boundary.push(DroppedId::Db {
-                db_id: db1_id,
+                db_id: *db1_id,
                 db_name: db_name.database_name().to_string(),
             });
         }
 
         // second create a database drop outof filter time, but has a table drop within filter time
         info!("--- create db2");
+        let db2_id;
         {
             let create_db_req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
@@ -4126,7 +4128,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(create_db_req.clone()).await?;
-            let db2_id = res.db_id;
+            db2_id = res.db_id;
             drop_ids_no_boundary.push(DroppedId::Db {
                 db_id: *db2_id,
                 db_name: "db2".to_string(),
@@ -4231,6 +4233,7 @@ impl SchemaApiTestSuite {
         }
 
         // third create a database not dropped, but has a table drop within filter time
+        let db3_id;
         {
             let create_db_req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
@@ -4239,7 +4242,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_database(create_db_req.clone()).await?;
-            let db_id = res.db_id;
+            db3_id = res.db_id;
 
             info!("--- create and drop db3.tb1");
             {
@@ -4250,12 +4253,12 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_boundary.push(DroppedId::new_table(*db_id, resp.table_id, "tb1"));
-                drop_ids_no_boundary.push(DroppedId::new_table(*db_id, resp.table_id, "tb1"));
+                drop_ids_boundary.push(DroppedId::new_table(*db3_id, resp.table_id, "tb1"));
+                drop_ids_no_boundary.push(DroppedId::new_table(*db3_id, resp.table_id, "tb1"));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
-                    db_id: *db_id,
+                    db_id: *db3_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
@@ -4274,11 +4277,11 @@ impl SchemaApiTestSuite {
                     as_dropped: false,
                 };
                 let resp = mt.create_table(req.clone()).await?;
-                drop_ids_no_boundary.push(DroppedId::new_table(*db_id, resp.table_id, "tb2"));
+                drop_ids_no_boundary.push(DroppedId::new_table(*db3_id, resp.table_id, "tb2"));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
-                    db_id: *db_id,
+                    db_id: *db3_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
@@ -4331,9 +4334,15 @@ impl SchemaApiTestSuite {
             .into_iter()
             .collect();
             let actual: BTreeSet<String> = resp
-                .drop_table_infos
+                .vacuum_tables
                 .iter()
-                .map(|table_info| table_info.desc.clone())
+                .map(|(db_name_ident, table_niv)| {
+                    format!(
+                        "'{}'.'{}'",
+                        db_name_ident.database_name(),
+                        &table_niv.name().table_name
+                    )
+                })
                 .collect();
             assert_eq!(expected, actual);
         }
@@ -4368,9 +4377,15 @@ impl SchemaApiTestSuite {
             .cloned()
             .collect();
             let actual: BTreeSet<String> = resp
-                .drop_table_infos
+                .vacuum_tables
                 .iter()
-                .map(|table_info| table_info.desc.clone())
+                .map(|(db_name_ident, table_niv)| {
+                    format!(
+                        "'{}'.'{}'",
+                        db_name_ident.database_name(),
+                        &table_niv.name().table_name
+                    )
+                })
                 .collect();
             assert_eq!(expected, actual);
         }
