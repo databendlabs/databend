@@ -110,7 +110,6 @@ use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableInfoFilter;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
@@ -3472,11 +3471,7 @@ impl SchemaApiTestSuite {
         assert_eq!(id_list.len(), 2);
 
         {
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
-                limit: None,
-            };
+            let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
 
             let req = GcDroppedTableReq {
@@ -3682,11 +3677,7 @@ impl SchemaApiTestSuite {
 
         // gc the drop tables
         {
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
-                limit: None,
-            };
+            let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
 
             let req = GcDroppedTableReq {
@@ -3879,11 +3870,7 @@ impl SchemaApiTestSuite {
 
         // gc the data
         {
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
-                limit: None,
-            };
+            let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
 
             let req = GcDroppedTableReq {
@@ -4352,11 +4339,7 @@ impl SchemaApiTestSuite {
         // case 1: test AllDroppedTables with filter time
         {
             let now = Utc::now();
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(Some(now)),
-                limit: None,
-            };
+            let req = ListDroppedTableReq::new(&tenant).with_retention_boundary(now);
             let resp = mt.get_drop_table_infos(req).await?;
 
             let got = resp
@@ -4390,11 +4373,7 @@ impl SchemaApiTestSuite {
 
         // case 2: test AllDroppedTables without filter time
         {
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
-                limit: None,
-            };
+            let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
 
             let got = resp
@@ -4609,10 +4588,11 @@ impl SchemaApiTestSuite {
             ),
         ];
         for (limit, number, drop_ids) in limit_and_drop_ids {
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
-                limit,
+            let req = ListDroppedTableReq::new(&tenant);
+            let req = if let Some(limit) = limit {
+                req.with_limit(limit)
+            } else {
+                req
             };
             let resp = mt.get_drop_table_infos(req).await?;
             assert_eq!(resp.drop_ids.len(), number);
@@ -5290,11 +5270,7 @@ impl SchemaApiTestSuite {
             assert!(seqv.is_some() && seqv.unwrap().seq != 0);
 
             // vacuum drop table
-            let req = ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, ""),
-                filter: TableInfoFilter::DroppedTableOrDroppedDatabase(None),
-                limit: None,
-            };
+            let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
             assert!(!resp.drop_ids.is_empty());
 

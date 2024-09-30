@@ -98,7 +98,11 @@ impl Display for CreateProcedureStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        write!(f, "PROCEDURE {}", self.name.name)?;
+        write!(f, "PROCEDURE ")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write!(f, "{}", self.name.name)?;
         if let Some(args) = &self.args {
             if args.is_empty() {
                 write!(f, "() ")?;
@@ -137,12 +141,17 @@ impl Display for CreateProcedureStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropProcedureStmt {
+    pub if_exists: bool,
     pub name: ProcedureIdentity,
 }
 
 impl Display for DropProcedureStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DROP PROCEDURE {}", self.name)?;
+        write!(f, "DROP PROCEDURE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.name)?;
 
         Ok(())
     }

@@ -33,6 +33,7 @@ pub mod headers;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
+pub mod vec_ext;
 pub mod version;
 
 pub use runtime::dump_backtrace;

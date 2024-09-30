@@ -112,6 +112,7 @@ struct FilterVisitor<'a> {
     filter: &'a Bitmap,
     result: Option<Value<AnyType>>,
     num_rows: usize,
+    original_rows: usize,
 }
 
 impl<'a> FilterVisitor<'a> {
@@ -121,6 +122,7 @@ impl<'a> FilterVisitor<'a> {
             filter,
             result: None,
             num_rows,
+            original_rows: filter.len(),
         }
     }
 }
@@ -130,6 +132,8 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         match value {
             Value::Scalar(c) => self.visit_scalar(c),
             Value::Column(c) => {
+                assert!(c.len() == self.original_rows);
+
                 if c.len() == self.num_rows || c.len() == 0 {
                     self.result = Some(Value::Column(c));
                 } else if self.num_rows == 0 {
@@ -255,7 +259,14 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         Ok(())
     }
 
-    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
+    fn visit_boolean(&mut self, mut bitmap: Bitmap) -> Result<()> {
+        // faster path for all bits set
+        if bitmap.unset_bits() == 0 {
+            bitmap.slice(0, self.num_rows);
+            self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
+            return Ok(());
+        }
+
         let capacity = self.num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
         let mut builder_ptr = builder.as_mut_ptr();
