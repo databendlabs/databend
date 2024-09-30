@@ -5396,7 +5396,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "cbordata",
- "crc32fast",
  "criterion",
  "databend-common-arrow",
  "databend-common-ast",
@@ -5411,8 +5410,8 @@ dependencies = [
  "match-template",
  "parquet",
  "rand 0.8.5",
+ "roaring",
  "serde",
- "serde_json",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
@@ -11086,7 +11085,7 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 [[package]]
 name = "ownedbytes"
 version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -14770,7 +14769,7 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 [[package]]
 name = "tantivy"
 version = "0.22.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -14820,7 +14819,7 @@ dependencies = [
 [[package]]
 name = "tantivy-bitpacker"
 version = "0.6.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "bitpacking 0.9.2",
 ]
@@ -14828,7 +14827,7 @@ dependencies = [
 [[package]]
 name = "tantivy-columnar"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -14843,7 +14842,7 @@ dependencies = [
 [[package]]
 name = "tantivy-common"
 version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -14866,7 +14865,7 @@ dependencies = [
 [[package]]
 name = "tantivy-jieba"
 version = "0.11.0"
-source = "git+https://github.com/datafuse-extras/tantivy-jieba?rev=124a8fc#124a8fc8c8a9f1389af5a9bfa497fb358ecc556e"
+source = "git+https://github.com/datafuse-extras/tantivy-jieba?rev=0e300e9#0e300e9085651b7e6659dfcc7b0ea0fa9cab09c2"
 dependencies = [
  "jieba-rs",
  "lazy_static",
@@ -14876,7 +14875,7 @@ dependencies = [
 [[package]]
 name = "tantivy-query-grammar"
 version = "0.22.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "nom",
 ]
@@ -14884,7 +14883,7 @@ dependencies = [
 [[package]]
 name = "tantivy-sstable"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "tantivy-bitpacker",
  "tantivy-common",
@@ -14895,7 +14894,7 @@ dependencies = [
 [[package]]
 name = "tantivy-stacker"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "murmurhash32",
  "rand_distr",
@@ -14905,7 +14904,7 @@ dependencies = [
 [[package]]
 name = "tantivy-tokenizer-api"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "serde",
 ]
