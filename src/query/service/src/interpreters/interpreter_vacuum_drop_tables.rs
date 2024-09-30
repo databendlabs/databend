@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::cmp::min;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Duration;
@@ -139,6 +141,17 @@ impl Interpreter for VacuumDropTablesInterpreter {
             ))
             .await?;
 
+        // map: table id to its belonging db id
+        let mut belonging_db = BTreeMap::new();
+        for drop_id in drop_ids.iter() {
+            match drop_id {
+                DroppedId::Table { name, id } => {
+                    belonging_db.insert(id.table_id, name.db_id);
+                }
+                _ => {}
+            }
+        }
+
         info!(
             "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?}, drop_ids: {:?}",
             self.plan.database,
@@ -156,7 +169,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let (files_opt, failed_dbs, failed_tables) = handler
+        let (files_opt, failed_tables) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
                 tables,
@@ -167,13 +180,20 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
-        // gc meta data only when not dry run
+
+        let failed_db_ids = failed_tables
+            .iter()
+            // Safe unwrap: the map is built from drop_ids
+            .map(|id| *belonging_db.get(id).unwrap())
+            .collect::<HashSet<_>>();
+
+        // gc metadata only when not dry run
         if self.plan.option.dry_run.is_none() {
             let mut success_dropped_ids = vec![];
             for drop_id in drop_ids {
                 match &drop_id {
-                    DroppedId::Db { db_id: _, db_name } => {
-                        if !failed_dbs.contains(db_name) {
+                    DroppedId::Db { db_id, db_name: _ } => {
+                        if !failed_db_ids.contains(db_id) {
                             success_dropped_ids.push(drop_id);
                         }
                     }
@@ -186,7 +206,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             }
             info!(
                 "failed dbs:{:?}, failed_tables:{:?}, success_drop_ids:{:?}",
-                failed_dbs, failed_tables, success_dropped_ids
+                failed_db_ids, failed_tables, success_dropped_ids
             );
             self.gc_drop_tables(catalog, success_dropped_ids).await?;
         }
