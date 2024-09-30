@@ -173,7 +173,6 @@ impl PipelineBuilder {
 
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let temp_dir_manager = TempDirManager::instance();
-        temp_dir_manager.dir_xxxx()?;
         let disk_spill = temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id());
 
         let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;

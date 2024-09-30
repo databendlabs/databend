@@ -2942,7 +2942,7 @@ pub struct SpillConfig {
     #[clap(
         long,
         value_name = "VALUE",
-        default_value = "./.databend/_cache/temp/_query_spill"
+        default_value = "./.databend/temp/_query_spill"
     )]
     pub spill_local_disk_path: String,
 
