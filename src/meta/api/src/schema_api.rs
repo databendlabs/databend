@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -209,11 +210,7 @@ pub trait SchemaApi: Send + Sync {
         table_id_history: &TableIdHistoryIdent,
     ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
 
-    async fn get_tables_history(
-        &self,
-        req: ListTableReq,
-        db_name: &str,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
 
     /// List all tables in the database.
     ///

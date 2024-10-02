@@ -199,7 +199,6 @@ use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
-use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
@@ -1562,14 +1561,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_tables_history(
-        &self,
-        req: ListTableReq,
-        db_name: &str,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // List tables by tenant, db_id, table_name.
+        // List tables by tenant, db_id.
         let table_id_history_ident = TableIdHistoryIdent {
             database_id: req.database_id.db_id,
             table_name: "dummy".to_string(),
@@ -1577,62 +1572,25 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let dir_name = DirName::new(table_id_history_ident);
 
-        let table_id_list_keys = list_keys(self, &dir_name).await?;
+        let ident_histories = self.list_pb_vec(&dir_name).await?;
 
-        let mut tbs_info_list = vec![];
+        let mut res = vec![];
         let now = Utc::now();
-        let keys: Vec<String> = table_id_list_keys
-            .iter()
-            .map(|table_id_list_key| {
-                TableIdHistoryIdent {
-                    database_id: req.database_id.db_id,
-                    table_name: table_id_list_key.table_name.clone(),
-                }
-                .to_string_key()
-            })
-            .collect();
 
-        let mut table_id_list_keys_iter = table_id_list_keys.into_iter();
-        for c in keys.chunks(DEFAULT_MGET_SIZE) {
-            let tb_id_list_seq_vec: Vec<(u64, Option<TableIdList>)> =
-                mget_pb_values(self, c).await?;
-            for (tb_id_list_seq, tb_id_list_opt) in tb_id_list_seq_vec {
-                let table_id_list_key = table_id_list_keys_iter.next().unwrap();
-                let tb_id_list = if tb_id_list_seq == 0 {
-                    continue;
-                } else {
-                    match tb_id_list_opt {
-                        Some(list) => list,
-                        None => {
-                            continue;
-                        }
-                    }
-                };
+        for (ident, history) in ident_histories {
+            debug!(name :% =(&ident); "get_tables_history");
 
-                debug!(
-                    name :% =(&table_id_list_key);
-                    "get_tables_history"
-                );
+            let id_metas = get_table_meta_history(self, &now, history.data).await?;
 
-                let metas = get_table_meta_history(self, &now, tb_id_list).await?;
-                let tb_info_list: Vec<Arc<TableInfo>> = metas
-                    .into_iter()
-                    .map(|(table_id, seqv)| {
-                        Arc::new(TableInfo {
-                            ident: TableIdent::new(table_id.table_id, seqv.seq()),
-                            desc: format!("'{}'.'{}'", db_name, table_id_list_key.table_name,),
-                            name: table_id_list_key.table_name.to_string(),
-                            meta: seqv.data,
-                            db_type: DatabaseType::NormalDB,
-                            catalog_info: Default::default(),
-                        })
-                    })
-                    .collect();
-                tbs_info_list.extend(tb_info_list);
-            }
+            let table_nivs = id_metas.into_iter().map(|(table_id, seq_meta)| {
+                let name = DBIdTableName::new(ident.database_id, ident.table_name.clone());
+                TableNIV::new(name, table_id, seq_meta)
+            });
+
+            res.extend(table_nivs);
         }
 
-        return Ok(tbs_info_list);
+        return Ok(res);
     }
 
     #[logcall::logcall]
