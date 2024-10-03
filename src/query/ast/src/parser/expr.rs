@@ -295,6 +295,11 @@ pub enum ExprElement {
         interval: Expr,
         date: Expr,
     },
+    DateDiff {
+        unit: IntervalKind,
+        date_start: Expr,
+        date_end: Expr,
+    },
     DateSub {
         unit: IntervalKind,
         interval: Expr,
@@ -407,6 +412,7 @@ impl ExprElement {
             ExprElement::Map { .. } => Affix::Nilfix,
             ExprElement::Interval { .. } => Affix::Nilfix,
             ExprElement::DateAdd { .. } => Affix::Nilfix,
+            ExprElement::DateDiff { .. } => Affix::Nilfix,
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
@@ -449,6 +455,7 @@ impl Expr {
             Expr::Map { .. } => Affix::Nilfix,
             Expr::Interval { .. } => Affix::Nilfix,
             Expr::DateAdd { .. } => Affix::Nilfix,
+            Expr::DateDiff { .. } => Affix::Nilfix,
             Expr::DateSub { .. } => Affix::Nilfix,
             Expr::DateTrunc { .. } => Affix::Nilfix,
             Expr::Hole { .. } => Affix::Nilfix,
@@ -623,6 +630,16 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 unit,
                 interval: Box::new(interval),
                 date: Box::new(date),
+            },
+            ExprElement::DateDiff {
+                unit,
+                date_start,
+                date_end,
+            } => Expr::DateDiff {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date_start: Box::new(date_start),
+                date_end: Box::new(date_end),
             },
             ExprElement::DateSub {
                 unit,
@@ -1176,6 +1193,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             date,
         },
     );
+
+    let date_diff = map(
+        rule! {
+            DATE_DIFF ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
+        },
+        |(_, _, unit, _, date_start, _, date_end, _)| ExprElement::DateDiff {
+            unit,
+            date_start,
+            date_end,
+        },
+    );
+
     let date_sub = map(
         rule! {
             DATE_SUB ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
@@ -1262,6 +1291,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #unary_op : "<operator>"
                 | #cast : "`CAST(... AS ...)`"
                 | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_diff: "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
                 | #date_expr: "`DATE <str_literal>`"

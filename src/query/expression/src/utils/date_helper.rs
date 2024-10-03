@@ -16,6 +16,7 @@ use std::sync::LazyLock;
 
 use chrono::DateTime;
 use chrono::Datelike;
+use chrono::Days;
 use chrono::Duration;
 use chrono::LocalResult;
 use chrono::NaiveDate;
@@ -33,7 +34,7 @@ use num_traits::AsPrimitive;
 
 use crate::types::date::check_date;
 use crate::types::timestamp::check_timestamp;
-use crate::types::timestamp::MICROS_IN_A_SEC;
+use crate::types::timestamp::MICROS_PER_SEC;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TzLUT {
@@ -148,7 +149,7 @@ impl TzLUT {
     #[inline]
     fn start_of_second(&self, us: i64, seconds: i64) -> i64 {
         if seconds == 1 {
-            return us / MICROS_IN_A_SEC * MICROS_IN_A_SEC;
+            return us / MICROS_PER_SEC * MICROS_PER_SEC;
         }
         if seconds % 60 == 0 {
             return self.start_of_minutes(us, seconds / 60);
@@ -158,32 +159,32 @@ impl TzLUT {
 
     #[inline]
     fn start_of_minutes(&self, us: i64, minus: i64) -> i64 {
-        let us_div = minus * 60 * MICROS_IN_A_SEC;
+        let us_div = minus * 60 * MICROS_PER_SEC;
         if self.offset_round_minute {
             return if us > 0 {
                 us / us_div * us_div
             } else {
-                (us + MICROS_IN_A_SEC - us_div) / us_div * us_div
+                (us + MICROS_PER_SEC - us_div) / us_div * us_div
             };
         }
         let datetime = self.to_datetime_from_us(us);
         let fix = datetime.offset().fix().local_minus_utc() as i64;
-        fix + (us - fix * MICROS_IN_A_SEC) / us_div * us_div
+        fix + (us - fix * MICROS_PER_SEC) / us_div * us_div
     }
 
     #[inline]
     fn round_down(&self, us: i64, seconds: i64) -> i64 {
-        let us_div = seconds * MICROS_IN_A_SEC;
+        let us_div = seconds * MICROS_PER_SEC;
         if self.offset_round_hour {
             return if us > 0 {
                 us / us_div * us_div
             } else {
-                (us + MICROS_IN_A_SEC - us_div) / us_div * us_div
+                (us + MICROS_PER_SEC - us_div) / us_div * us_div
             };
         }
         let datetime = self.to_datetime_from_us(us);
         let fix = datetime.offset().fix().local_minus_utc() as i64;
-        fix + (us - fix * MICROS_IN_A_SEC) / us_div * us_div
+        fix + (us - fix * MICROS_PER_SEC) / us_div * us_div
     }
 
     #[inline]
@@ -202,7 +203,7 @@ impl TzLUT {
                     .tz
                     .with_ymd_and_hms(dt.year(), dt.month(), dt.day(), 0, 0, 0)
                     .unwrap();
-                dt.timestamp() * MICROS_IN_A_SEC
+                dt.timestamp() * MICROS_PER_SEC
             }
         }
     }
@@ -210,7 +211,7 @@ impl TzLUT {
     #[inline]
     pub fn to_minute(&self, us: i64) -> u8 {
         if us >= 0 && self.offset_round_hour {
-            ((us / MICROS_IN_A_SEC / 60) % 60) as u8
+            ((us / MICROS_PER_SEC / 60) % 60) as u8
         } else {
             let datetime = self.to_datetime_from_us(us);
             datetime.minute() as u8
@@ -220,7 +221,7 @@ impl TzLUT {
     #[inline]
     pub fn to_second(&self, us: i64) -> u8 {
         if us >= 0 {
-            (us / MICROS_IN_A_SEC % 60) as u8
+            (us / MICROS_PER_SEC % 60) as u8
         } else {
             let datetime = self.to_datetime_from_us(us);
             datetime.second() as u8
@@ -256,7 +257,7 @@ where T: AsPrimitive<i64>
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
         // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
         let micros = self.as_();
-        let (mut secs, mut nanos) = (micros / MICROS_IN_A_SEC, (micros % MICROS_IN_A_SEC) * 1_000);
+        let (mut secs, mut nanos) = (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
         if nanos < 0 {
             secs -= 1;
             nanos += 1_000_000_000;
@@ -265,13 +266,15 @@ where T: AsPrimitive<i64>
     }
 }
 
+pub const MICROSECS_PER_DAY: i64 = 86_400_000_000;
+
 // Timestamp arithmetic factors.
 pub const FACTOR_HOUR: i64 = 3600;
 pub const FACTOR_MINUTE: i64 = 60;
 pub const FACTOR_SECOND: i64 = 1;
 const LAST_DAY_LUT: [u8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-fn add_years_base(
+fn eval_years_base(
     year: i32,
     month: u32,
     day: u32,
@@ -286,7 +289,7 @@ fn add_years_base(
         .ok_or_else(|| format!("Overflow on date YMD {}-{}-{}.", new_year, month, new_day))
 }
 
-fn add_months_base(
+fn eval_months_base(
     year: i32,
     month: u32,
     day: u32,
@@ -323,6 +326,17 @@ fn last_day_of_year_month(year: i32, month: u32) -> u32 {
         return 29;
     }
     LAST_DAY_LUT[month as usize] as u32
+}
+
+// Check if the date difference is a multiple of months, 31 Jan and 28 Feb differ one month, but 30 Mar and 30 Apr not
+fn is_same_day_of_month(date_start: &NaiveDate, date_end: &NaiveDate) -> bool {
+    let start_is_last_day_of_month =
+        date_start.day() == last_day_of_year_month(date_start.year(), date_start.month());
+    let end_is_last_day_of_month =
+        date_end.day() == last_day_of_year_month(date_end.year(), date_end.month());
+
+    start_is_last_day_of_month == end_is_last_day_of_month
+        && (start_is_last_day_of_month || date_start.day() == date_end.day())
 }
 
 macro_rules! impl_interval_year_month {
@@ -362,35 +376,173 @@ macro_rules! impl_interval_year_month {
     };
 }
 
-impl_interval_year_month!(AddYearsImpl, add_years_base);
-impl_interval_year_month!(AddMonthsImpl, add_months_base);
+impl_interval_year_month!(EvalYearsImpl, eval_years_base);
+impl_interval_year_month!(EvalMonthsImpl, eval_months_base);
 
-pub struct AddDaysImpl;
+impl EvalYearsImpl {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TzLUT) -> i32 {
+        EvalMonthsImpl::eval_date_diff(date_start, date_end, tz) / 12
+    }
 
-impl AddDaysImpl {
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TzLUT) -> i64 {
+        EvalMonthsImpl::eval_timestamp_diff(date_start, date_end, tz) / 12
+    }
+}
+
+pub struct EvalQuartersImpl;
+
+impl EvalQuartersImpl {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TzLUT) -> i32 {
+        EvalMonthsImpl::eval_date_diff(date_start, date_end, tz) / 3
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TzLUT) -> i64 {
+        EvalMonthsImpl::eval_timestamp_diff(date_start, date_end, tz) / 3
+    }
+}
+
+impl EvalMonthsImpl {
+    pub fn eval_date_diff(date_start: i32, date_end: i32, tz: TzLUT) -> i32 {
+        let (mut date_start, mut date_end) = (date_start, date_end);
+        let sign = if date_start > date_end {
+            (date_start, date_end) = (date_end, date_start);
+            -1
+        } else {
+            1
+        };
+
+        let date_start = date_start.to_date(tz.tz);
+        let date_end = date_end.to_date(tz.tz);
+        let mut diff_months = (date_end.year() - date_start.year()) * 12
+            + (date_end.month() as i32 - date_start.month() as i32);
+
+        let is_same_day = is_same_day_of_month(&date_start, &date_end);
+        if !is_same_day && date_start.day() > date_end.day() {
+            diff_months -= 1
+        }
+        diff_months * sign
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, tz: TzLUT) -> i64 {
+        let (mut date_start, mut date_end) = (date_start, date_end);
+        let sign = if date_start > date_end {
+            (date_start, date_end) = (date_end, date_start);
+            -1
+        } else {
+            1
+        };
+
+        let (date_start_days, date_start_micros) = (
+            date_start / MICROSECS_PER_DAY,
+            date_start % MICROSECS_PER_DAY,
+        );
+        let (date_end_days, date_end_micros) =
+            (date_end / MICROSECS_PER_DAY, date_end % MICROSECS_PER_DAY);
+        let mut diff_months =
+            EvalMonthsImpl::eval_date_diff(date_start_days as i32, date_end_days as i32, tz) as i64;
+
+        let date_start = date_start_days.to_date(tz.tz);
+        let date_end = date_end_days.to_date(tz.tz);
+
+        let is_same_day = is_same_day_of_month(&date_start, &date_end);
+        if is_same_day && date_start_micros > date_end_micros {
+            diff_months -= 1;
+        }
+        diff_months * sign
+    }
+
+    // current we don't consider tz here
+    pub fn months_between_ts(ts_a: i64, ts_b: i64) -> f64 {
+        EvalMonthsImpl::months_between(
+            (ts_a / 86_400_000_000) as i32,
+            (ts_b / 86_400_000_000) as i32,
+        )
+    }
+
+    pub fn months_between(date_a: i32, date_b: i32) -> f64 {
+        let date_a = Utc
+            .timestamp_opt((date_a as i64) * 86400, 0)
+            .unwrap()
+            .date_naive(); // Assuming date_a is in days
+        let date_b = Utc
+            .timestamp_opt((date_b as i64) * 86400, 0)
+            .unwrap()
+            .date_naive(); // Assuming date_b is in days
+
+        let year_diff = date_a.year() - date_b.year();
+        let month_diff = date_a.month() as i32 - date_b.month() as i32;
+
+        // Calculate total months difference
+        let total_months_diff = year_diff * 12 + month_diff;
+
+        // Determine if special case for fractional part applies
+        let is_same_day_of_month = date_a.day() == date_b.day();
+        let are_both_end_of_month = date_a
+            .checked_add_days(Days::new(1))
+            .map(|d| d.month() != date_a.month())
+            .unwrap_or(false)
+            && date_b
+                .checked_add_days(Days::new(1))
+                .map(|d| d.month() != date_b.month())
+                .unwrap_or(false);
+
+        let day_fraction = if is_same_day_of_month || are_both_end_of_month {
+            0.0
+        } else {
+            let day_diff = date_a.day() as i32 - date_b.day() as i32;
+            day_diff as f64 / 31.0 // Using 31-day month for fractional part
+        };
+
+        // Total difference including fractional part
+        total_months_diff as f64 + day_fraction
+    }
+}
+
+pub struct EvalWeeksImpl;
+
+impl EvalWeeksImpl {
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        (date_end - date_start) / 7
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64) -> i64 {
+        EvalDaysImpl::eval_timestamp_diff(date_start, date_end) / 7
+    }
+}
+
+pub struct EvalDaysImpl;
+
+impl EvalDaysImpl {
     pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> std::result::Result<i32, String> {
         check_date((date as i64).wrapping_add(delta.as_()))
+    }
+
+    pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
+        date_end - date_start
     }
 
     pub fn eval_timestamp(
         date: i64,
         delta: impl AsPrimitive<i64>,
     ) -> std::result::Result<i64, String> {
-        check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * MICROS_IN_A_SEC))
+        check_timestamp(date.wrapping_add(delta.as_() * MICROSECS_PER_DAY))
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64) -> i64 {
+        (date_end - date_start) / MICROSECS_PER_DAY
     }
 }
 
-pub struct AddTimesImpl;
+pub struct EvalTimesImpl;
 
-impl AddTimesImpl {
+impl EvalTimesImpl {
     pub fn eval_date(
         date: i32,
         delta: impl AsPrimitive<i64>,
         factor: i64,
     ) -> std::result::Result<i32, String> {
         check_date(
-            (date as i64 * 3600 * 24 * MICROS_IN_A_SEC)
-                .wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC),
+            (date as i64 * MICROSECS_PER_DAY).wrapping_add(delta.as_() * factor * MICROS_PER_SEC),
         )
     }
 
@@ -399,7 +551,11 @@ impl AddTimesImpl {
         delta: impl AsPrimitive<i64>,
         factor: i64,
     ) -> std::result::Result<i64, String> {
-        check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC))
+        check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_PER_SEC))
+    }
+
+    pub fn eval_timestamp_diff(date_start: i64, date_end: i64, factor: i64) -> i64 {
+        (date_end - date_start) / factor
     }
 }
 

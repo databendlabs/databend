@@ -902,6 +902,41 @@ select date_add(QUARTER, 1, to_date('2018-01-02'))
 2018-04-02
 
 query T
+SELECT DATE_ADD(WEEK, 1, TODAY())=DATE_ADD('day', 7, TODAY())
+----
+1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+23
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2012-02-29'), to_date('2013-02-28'))
+----
+1
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+287
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2012-02-29'), to_date('2013-02-28'))
+----
+12
+
+query T
+SELECT DATE_DIFF(DAY, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+8765
+
+query T
+SELECT DATE_DIFF(DAY, to_date('2012-02-29'), to_date('2013-02-28'))
+----
+366
+
+query T
 select date_sub(QUARTER, 1, to_date('2018-01-02'))
 ----
 2017-10-02
@@ -1133,7 +1168,3 @@ select to_timestamp('2022-03-27 07:54:31.12');
 ----
 2022-03-27 07:54:31.120000
 
-query T
-SELECT DATE_ADD('week', 1, TODAY())=DATE_ADD('day', 7, TODAY())
-----
-1
