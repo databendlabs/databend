@@ -529,7 +529,26 @@ impl EvalDaysImpl {
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64) -> i64 {
-        (date_end - date_start) / MICROSECS_PER_DAY
+        let (mut date_start, mut date_end) = (date_start, date_end);
+        let sign = if date_start > date_end {
+            (date_start, date_end) = (date_end, date_start);
+            -1
+        } else {
+            1
+        };
+
+        let (date_start_days, date_start_micros) = (
+            date_start / MICROSECS_PER_DAY,
+            date_start % MICROSECS_PER_DAY,
+        );
+        let (date_end_days, date_end_micros) =
+            (date_end / MICROSECS_PER_DAY, date_end % MICROSECS_PER_DAY);
+        let mut diff_days = date_end_days - date_start_days;
+
+        if date_start_micros > date_end_micros {
+            diff_days -= 1;
+        }
+        diff_days * sign
     }
 }
 
@@ -555,7 +574,28 @@ impl EvalTimesImpl {
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, factor: i64) -> i64 {
-        (date_end - date_start) / factor
+        let (mut date_start, mut date_end) = (date_start, date_end);
+        let sign = if date_start > date_end {
+            (date_start, date_end) = (date_end, date_start);
+            -1
+        } else {
+            1
+        };
+
+        let (date_start_days, date_start_micros) = (
+            date_start / (MICROS_PER_SEC * factor),
+            date_start % (MICROS_PER_SEC * factor),
+        );
+        let (date_end_days, date_end_micros) = (
+            date_end / (MICROS_PER_SEC * factor),
+            date_end % (MICROS_PER_SEC * factor),
+        );
+        let mut diff_days = date_end_days - date_start_days;
+
+        if date_start_micros > date_end_micros {
+            diff_days -= 1;
+        }
+        diff_days * sign
     }
 }
 

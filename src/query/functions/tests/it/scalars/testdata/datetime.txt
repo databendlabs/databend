@@ -3573,54 +3573,54 @@ output         : -365
 ast            : date_diff(hour, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_hours(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_hours<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 12035388127_i64
+optimized expr : 12035_i64
 output type    : Int64
-output domain  : {12035388127..=12035388127}
-output         : 12035388127
+output domain  : {12035..=12035}
+output         : 12035
 
 
 ast            : date_diff(hour, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_hours(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_hours<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -8783999928_i64
+optimized expr : -8783_i64
 output type    : Int64
-output domain  : {-8783999928..=-8783999928}
-output         : -8783999928
+output domain  : {-8783..=-8783}
+output         : -8783
 
 
 ast            : date_diff(minute, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_minutes(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_minutes<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 722123287626_i64
+optimized expr : 722123_i64
 output type    : Int64
-output domain  : {722123287626..=722123287626}
-output         : 722123287626
+output domain  : {722123..=722123}
+output         : 722123
 
 
 ast            : date_diff(minute, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_minutes(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_minutes<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -527039995706_i64
+optimized expr : -527039_i64
 output type    : Int64
-output domain  : {-527039995706..=-527039995706}
-output         : -527039995706
+output domain  : {-527039..=-527039}
+output         : -527039
 
 
 ast            : date_diff(second, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))
 raw expr       : diff_seconds(to_timestamp('2025-03-27 21:01:35.423179'), to_timestamp('2023-11-12 09:38:18.165575'))
 checked expr   : diff_seconds<Timestamp, Timestamp>(to_timestamp<String>("2025-03-27 21:01:35.423179"), to_timestamp<String>("2023-11-12 09:38:18.165575"))
-optimized expr : 43327397257604_i64
+optimized expr : 43327397_i64
 output type    : Int64
-output domain  : {43327397257604..=43327397257604}
-output         : 43327397257604
+output domain  : {43327397..=43327397}
+output         : 43327397
 
 
 ast            : date_diff(second, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))
 raw expr       : diff_seconds(to_timestamp('2019-02-28 23:59:59.423179'), to_timestamp('2020-02-29 23:59:59.165575'))
 checked expr   : diff_seconds<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59.423179"), to_timestamp<String>("2020-02-29 23:59:59.165575"))
-optimized expr : -31622399742396_i64
+optimized expr : -31622399_i64
 output type    : Int64
-output domain  : {-31622399742396..=-31622399742396}
-output         : -31622399742396
+output domain  : {-31622399..=-31622399}
+output         : -31622399
 
 
