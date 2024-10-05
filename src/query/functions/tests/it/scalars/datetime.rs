@@ -715,4 +715,9 @@ fn test_date_date_diff(file: &mut impl Write) {
         "date_diff(second, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
         &[],
     );
+    run_ast(
+        file,
+        "date_diff(second, to_timestamp('2020-02-29 23:59:59'), to_timestamp('2019-02-28 23:59:59'))",
+        &[],
+    );
 }

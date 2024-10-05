@@ -3624,3 +3624,12 @@ output domain  : {-31622399..=-31622399}
 output         : -31622399
 
 
+ast            : date_diff(second, to_timestamp('2020-02-29 23:59:59'), to_timestamp('2019-02-28 23:59:59'))
+raw expr       : diff_seconds(to_timestamp('2019-02-28 23:59:59'), to_timestamp('2020-02-29 23:59:59'))
+checked expr   : diff_seconds<Timestamp, Timestamp>(to_timestamp<String>("2019-02-28 23:59:59"), to_timestamp<String>("2020-02-29 23:59:59"))
+optimized expr : -31622400_i64
+output type    : Int64
+output domain  : {-31622400..=-31622400}
+output         : -31622400
+
+
