@@ -126,7 +126,10 @@ impl StreamColumnMeta {
 }
 
 pub fn build_origin_block_row_num(num_rows: usize) -> BlockEntry {
-    let row_ids = (0..num_rows as u64).collect();
+    let mut row_ids = Vec::with_capacity(num_rows);
+    for i in 0..num_rows {
+        row_ids.push(i as u64);
+    }
     let column = Value::Column(UInt64Type::from_data(row_ids));
 
     BlockEntry::new(

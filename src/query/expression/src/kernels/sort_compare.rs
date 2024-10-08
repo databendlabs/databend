@@ -263,7 +263,6 @@ impl ValueVisitor for SortCompare {
     // faster path for numeric
     fn visit_number<T: Number>(&mut self, column: Buffer<T>) -> Result<()> {
         let values = column.as_slice();
-        assert!(values.len() == self.rows);
         self.generic_sort(values, |c, idx| c[idx as usize], |a: T, b: T| a.cmp(&b));
         Ok(())
     }
@@ -277,7 +276,6 @@ impl ValueVisitor for SortCompare {
     }
 
     fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
-        assert!(T::column_len(&col) == self.rows);
         self.generic_sort(
             &col,
             |c, idx| -> T::ScalarRef<'_> { unsafe { T::index_column_unchecked(c, idx as _) } },
