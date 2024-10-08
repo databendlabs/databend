@@ -60,9 +60,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use databend_common_io::number::f32_to_char;
-use databend_common_io::number::f64_to_char;
-use databend_common_io::number::i64_to_char;
+use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -403,7 +401,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match i64_to_char(value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .map(|entry| entry.process_i64(value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
@@ -429,7 +431,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match f64_to_char(*value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .map(|entry| entry.process_f64(*value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
@@ -455,7 +461,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match f32_to_char(*value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .map(|entry| entry.process_f32(*value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()

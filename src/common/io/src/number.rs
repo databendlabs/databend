@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enumflags2::bitflags;
@@ -574,10 +576,6 @@ struct NumProc {
     num_curr: usize,       // current position in number
     out_pre_spaces: usize, // spaces before first digit
 
-    _read_dec: bool,   // to_number - was read dec. point
-    _read_post: usize, // to_number - number of dec. digit
-    _read_pre: usize,  // to_number - number non-dec. digit
-
     number: Vec<char>,
     number_p: usize,
 
@@ -742,6 +740,50 @@ impl NumProc {
     }
 }
 
+pub struct FmtCacheEntry {
+    format: Vec<FormatNode>,
+    _str: String,
+    desc: NumDesc,
+}
+
+impl FromStr for FmtCacheEntry {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let mut desc = NumDesc::default();
+        let format = parse_format(s, &NUM_KEYWORDS, Some(&mut desc))?;
+        Ok(FmtCacheEntry {
+            format,
+            _str: s.to_string(),
+            desc,
+        })
+    }
+}
+
+impl FmtCacheEntry {
+    pub fn process_i64(&self, value: i64) -> Result<String> {
+        let desc = self.desc.clone();
+        let num_part = desc.i64_to_num_part(value)?;
+        self.process(desc, num_part)
+    }
+
+    pub fn process_f64(&self, value: f64) -> Result<String> {
+        let mut desc = self.desc.clone();
+        let num_part = desc.f64_to_num_part(value)?;
+        self.process(desc, num_part)
+    }
+
+    pub fn process_f32(&self, value: f32) -> Result<String> {
+        let mut desc = self.desc.clone();
+        let num_part = desc.f32_to_num_part(value)?;
+        self.process(desc, num_part)
+    }
+
+    fn process(&self, desc: NumDesc, num_part: NumPart) -> Result<String> {
+        num_processor(&self.format, desc, num_part)
+    }
+}
+
 fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Result<String> {
     let NumPart {
         sign,
@@ -756,9 +798,6 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
         num_in: false,
         num_curr: 0,
         out_pre_spaces,
-        _read_dec: false,
-        _read_post: 0,
-        _read_pre: 0,
         number: number.chars().collect(),
         number_p: 0,
         inout: String::new(),
@@ -849,6 +888,10 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
         match n {
             // Format pictures actions
             FormatNode::Action(key) => match key.id {
+                // Note: The locale sign is anchored to number and we
+                // write it when we work with first or last number
+                // (Tk0/Tk9).
+                NumPoz::TkS => (),
                 id @ (NumPoz::Tk9 | NumPoz::Tk0 | NumPoz::TkDec | NumPoz::TkD) => {
                     np.numpart_to_char(id)
                 }
@@ -902,7 +945,6 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
                 NumPoz::TkPR => (),
                 NumPoz::TkFM => (),
-                NumPoz::TkS => (),
                 _ => unimplemented!(),
             },
             FormatNode::End => break,
@@ -919,39 +961,21 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
     Ok(np.inout)
 }
 
-pub fn i64_to_char(value: i64, fmt: &str) -> Result<String> {
-    // TODO: We should cache FormatNode
-    let mut desc = NumDesc::default();
-    let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
-
-    let num_part = desc.i64_to_num_part(value)?;
-
-    num_processor(&nodes, desc, num_part)
-}
-
-pub fn f64_to_char(value: f64, fmt: &str) -> Result<String> {
-    // TODO: We should cache FormatNode
-    let mut desc = NumDesc::default();
-    let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
-
-    let num_part = desc.f64_to_num_part(value)?;
-
-    num_processor(&nodes, desc, num_part)
-}
-
-pub fn f32_to_char(value: f32, fmt: &str) -> Result<String> {
-    // TODO: We should cache FormatNode
-    let mut desc = NumDesc::default();
-    let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
-
-    let num_part = desc.f32_to_num_part(value)?;
-
-    num_processor(&nodes, desc, num_part)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn i64_to_char(value: i64, fmt: &str) -> Result<String> {
+        fmt.parse::<FmtCacheEntry>()?.process_i64(value)
+    }
+
+    fn f64_to_char(value: f64, fmt: &str) -> Result<String> {
+        fmt.parse::<FmtCacheEntry>()?.process_f64(value)
+    }
+
+    fn f32_to_char(value: f32, fmt: &str) -> Result<String> {
+        fmt.parse::<FmtCacheEntry>()?.process_f32(value)
+    }
 
     #[test]
     fn test_i64() -> Result<()> {
@@ -1076,7 +1100,27 @@ mod tests {
 
         assert_eq!(" 0003148.50", f32_to_char(3148.5, "0009999.999")?);
         assert_eq!(" 3,148.50", f32_to_char(3148.5, "9G999D999")?);
-        assert_eq!("  1234567", f32_to_char(1234567.0, "99999999D999999")?);
+
+        assert_eq!(
+            "  1234567040",
+            f32_to_char(1234567.0e3, "99999999999D999999")?
+        );
+        assert_eq!(
+            "     1234567",
+            f32_to_char(1234567.0, "99999999999D999999")?
+        );
+        assert_eq!(
+            "        1234.57",
+            f32_to_char(1234567.0e-3, "99999999999D999999")?
+        );
+        assert_eq!(
+            "           1.23457",
+            f32_to_char(1234567.0e-6, "99999999999D999999")?
+        );
+        assert_eq!(
+            "            .00123",
+            f32_to_char(1234567.0e-9, "99999999999D999999")?
+        );
 
         // assert_eq!("        CDLXXXV", f64_to_char(485, "RN")?);
         // assert_eq!("CDLXXXV", f64_to_char(485, "FMRN")?);
