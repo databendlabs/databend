@@ -259,6 +259,9 @@ impl NumDesc {
                     if self.flag.contains(NumFlag::LSign) {
                         return Err("cannot use \"S\" twice");
                     }
+                    self.need_locale = true;
+                    self.flag.insert(NumFlag::LSign);
+
                     if self
                         .flag
                         .intersects(NumFlag::Plus | NumFlag::Minus | NumFlag::Bracket)
@@ -266,19 +269,13 @@ impl NumDesc {
                         return Err("cannot use \"S\" and \"PL\"/\"MI\"/\"SG\"/\"PR\" together");
                     }
 
-                    if self.flag.contains(NumFlag::Decimal) {
+                    if !self.flag.contains(NumFlag::Decimal) {
                         self.lsign = Some(NumLSign::Pre);
                         self.pre_lsign_num = self.pre;
-                        self.need_locale = true;
-                        self.flag.insert(NumFlag::LSign);
-                        return Ok(());
+                    } else {
+                        self.lsign = Some(NumLSign::Post);
                     }
 
-                    if self.lsign.is_none() {
-                        self.lsign = Some(NumLSign::Post);
-                        self.need_locale = true;
-                        self.flag.insert(NumFlag::LSign);
-                    }
                     Ok(())
                 }
 
@@ -1045,6 +1042,9 @@ mod tests {
 
         assert_eq!("485+", i64_to_char(485, "999S")?);
         assert_eq!("485-", i64_to_char(-485, "999S")?);
+
+        assert_eq!("+485", i64_to_char(485, "S999")?);
+        assert_eq!("-485", i64_to_char(-485, "S999")?);
 
         Ok(())
     }
