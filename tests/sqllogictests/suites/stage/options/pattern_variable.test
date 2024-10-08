@@ -27,5 +27,5 @@ unset variable pt;
 query error 1006
 copy into t1 from @data/csv/ pattern= $p file_format=(type=csv)
 
-query error 1065
+query error 1005
 copy into t1 from @data/csv/ pattern=x file_format=(type=csv)

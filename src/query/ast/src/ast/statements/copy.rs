@@ -26,7 +26,6 @@ use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
-use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -55,7 +54,7 @@ pub struct CopyIntoTableStmt {
 
     // files to load
     pub files: Option<Vec<String>>,
-    pub pattern: Option<Expr>,
+    pub pattern: Option<LiteralStringOrVariable>,
     pub force: bool,
 
     // copy options
@@ -439,9 +438,34 @@ impl Display for FileLocation {
     }
 }
 
+/// Used when we want to allow use variable for options etc.
+/// Other expr is not necessary, because
+/// 1. we can allways create a variable that can be used directly.
+/// 2. columns can not be referred.
+///
+/// Can extend to all type of Literals if needed later.
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum LiteralStringOrVariable {
+    Literal(String),
+    Variable(String),
+}
+
+impl Display for LiteralStringOrVariable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralStringOrVariable::Literal(s) => {
+                write!(f, "'{s}'")
+            }
+            LiteralStringOrVariable::Variable(s) => {
+                write!(f, "${s}")
+            }
+        }
+    }
+}
+
 pub enum CopyIntoTableOption {
     Files(Vec<String>),
-    Pattern(Expr),
+    Pattern(LiteralStringOrVariable),
     FileFormat(FileFormatOptions),
     ValidationMode(String),
     SizeLimit(usize),

@@ -26,6 +26,7 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -42,6 +43,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::shrink_scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -54,8 +56,6 @@ use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -67,7 +67,6 @@ use parking_lot::RwLock;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
-use crate::plans::ConstantExpr;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -76,7 +75,6 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
-use crate::TypeChecker;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -115,41 +113,23 @@ impl<'a> Binder {
         }
     }
 
-    fn resolve_const_expr(ctx: Arc<dyn TableContext>, expr: &Expr) -> Result<Scalar> {
-        let settings = Settings::create(Tenant::new_literal("dummy"));
-        let mut bind_context = BindContext::new();
-        let metadata = Metadata::default();
-
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let mut type_checker = TypeChecker::try_create(
-            &mut bind_context,
-            ctx.clone(),
-            &name_resolution_ctx,
-            Arc::new(RwLock::new(metadata)),
-            &[],
-            false,
-        )?;
-        let (scalar, _) = *type_checker.resolve(expr)?;
-        if let Ok(arg) = ConstantExpr::try_from(scalar) {
-            Ok(arg.value)
-        } else {
-            Err(ErrorCode::BadArguments(format!(
-                "except const expr, got {expr}"
-            )))
-        }
-    }
-
     pub(crate) fn resolve_copy_pattern(
         ctx: Arc<dyn TableContext>,
-        pattern: &Expr,
+        pattern: &LiteralStringOrVariable,
     ) -> Result<String> {
-        let c = Self::resolve_const_expr(ctx.clone(), pattern)?;
-        if let Scalar::String(s) = c {
-            Ok(s)
-        } else {
-            Err(ErrorCode::BadArguments(format!(
-                "invalid pattern expr: {c}"
-            )))
+        match pattern {
+            LiteralStringOrVariable::Literal(s) => Ok(s.clone()),
+            LiteralStringOrVariable::Variable(var_name) => {
+                let var_value = ctx.get_variable(&var_name).unwrap_or(Scalar::Null);
+                let var_value = shrink_scalar(var_value);
+                if let Scalar::String(s) = var_value {
+                    Ok(s)
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "invalid pattern expr: {var_value}"
+                    )))
+                }
+            }
         }
     }
 

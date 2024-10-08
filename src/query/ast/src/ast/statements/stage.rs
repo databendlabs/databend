@@ -23,8 +23,8 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::CreateOption;
-use crate::ast::Expr;
 use crate::ast::FileFormatOptions;
+use crate::ast::LiteralStringOrVariable;
 use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -84,7 +84,7 @@ impl Display for CreateStageStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectStageOption {
     Files(Vec<String>),
-    Pattern(Expr),
+    Pattern(LiteralStringOrVariable),
     FileFormat(String),
     Connection(BTreeMap<String, String>),
 }
@@ -107,7 +107,7 @@ impl SelectStageOptions {
 #[derive(Debug, Clone, PartialEq, Default, Drive, DriveMut)]
 pub struct SelectStageOptions {
     pub files: Option<Vec<String>>,
-    pub pattern: Option<Expr>,
+    pub pattern: Option<LiteralStringOrVariable>,
     pub file_format: Option<String>,
     pub connection: BTreeMap<String, String>,
 }

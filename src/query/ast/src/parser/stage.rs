@@ -24,6 +24,7 @@ use crate::ast::FileLocation;
 use crate::ast::SelectStageOption;
 use crate::ast::UriLocation;
 use crate::parser::common::*;
+use crate::parser::copy::literal_string_or_variable;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;
@@ -255,9 +256,10 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { FILES ~ ^"=>" ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" },
             |(_, _, _, files, _)| SelectStageOption::Files(files),
         ),
-        map(rule! { PATTERN ~ ^"=>" ~ ^#expr }, |(_, _, pattern)| {
-            SelectStageOption::Pattern(pattern)
-        }),
+        map(
+            rule! { PATTERN ~ ^"=>" ~ ^#literal_string_or_variable },
+            |(_, _, pattern)| SelectStageOption::Pattern(pattern),
+        ),
         map(
             rule! { FILE_FORMAT ~ ^"=>" ~ ^#literal_string },
             |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
