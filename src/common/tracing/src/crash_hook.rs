@@ -20,7 +20,7 @@ use std::sync::PoisonError;
 
 use databend_common_base::runtime::ThreadTracker;
 
-use crate::panic_hook::backtrace;
+use crate::panic_hook::captures_frames;
 
 struct CrashHandler {
     version: String,
@@ -48,7 +48,22 @@ impl CrashHandler {
         write_error(format_args!("Timestamp(Local): {}", chrono::Local::now()));
         write_error(format_args!("QueryId: {:?}", current_query_id));
         write_error(format_args!("{}", signal_message(sig, info, uc)));
-        write_error(format_args!("Backtrace:\n{}", backtrace(50)));
+
+        write_error(format_args!("Backtrace:\n"));
+        for (idx, (name, file, location)) in captures_frames(50).into_iter().enumerate() {
+            let has_hash_suffix = name.len() > 19
+                && &name[name.len() - 19..name.len() - 16] == "::h"
+                && name[name.len() - 16..]
+                    .chars()
+                    .all(|x| x.is_ascii_hexdigit());
+
+            match has_hash_suffix {
+                true => write_error(format_args!("{:4}: {}", idx, &name[..name.len() - 19])),
+                false => write_error(format_args!("{:4}: {}", idx, name)),
+            }
+
+            write_error(format_args!("             at {}:{}", file, location));
+        }
     }
 }
 
@@ -418,9 +433,8 @@ mod tests {
                 assert!(ERROR_MESSAGE.contains("1.2.111"));
                 assert!(ERROR_MESSAGE.contains(&query_id));
                 assert!(ERROR_MESSAGE.contains(&format!("Signal {}", signal)));
-                assert!(ERROR_MESSAGE.contains(&format!("{:━^80}", " BACKTRACE ")));
+                assert!(ERROR_MESSAGE.contains("Backtrace"));
                 assert!(ERROR_MESSAGE.contains("test_crash"));
-                eprintln!("{}", ERROR_MESSAGE)
             }
         }
     }
