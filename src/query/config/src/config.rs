@@ -3024,7 +3024,7 @@ mod cache_config_converters {
             if cache.disk_cache_config.path != inner::DiskCacheConfig::default().path
                 && spill.spill_local_disk_path == inner::SpillConfig::default().path
             {
-                spill.spill_local_disk_path = PathBuf::from(spill.spill_local_disk_path)
+                spill.spill_local_disk_path = PathBuf::from(&cache.disk_cache_config.path)
                     .join("temp/_query_spill")
                     .into();
             };
