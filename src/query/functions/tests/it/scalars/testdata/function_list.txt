@@ -2261,7 +2261,17 @@ Functions overloads:
 1 is_true(Boolean NULL) :: Boolean
 0 jq FACTORY
 0 json_array FACTORY
+0 json_array_distinct(Variant) :: Variant
+1 json_array_distinct(Variant NULL) :: Variant NULL
 0 json_array_elements FACTORY
+0 json_array_except(Variant, Variant) :: Variant
+1 json_array_except(Variant NULL, Variant NULL) :: Variant NULL
+0 json_array_insert(Variant, Int32, Variant) :: Variant
+1 json_array_insert(Variant NULL, Int32 NULL, Variant NULL) :: Variant NULL
+0 json_array_intersection(Variant, Variant) :: Variant
+1 json_array_intersection(Variant NULL, Variant NULL) :: Variant NULL
+0 json_array_overlap(Variant, Variant) :: Boolean
+1 json_array_overlap(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_contains_in_left(Variant, Variant) :: Boolean
 1 json_contains_in_left(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_contains_in_right(Variant, Variant) :: Boolean
