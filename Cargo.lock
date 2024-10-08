@@ -1419,6 +1419,7 @@ dependencies = [
  "miniz_oxide",
  "object 0.36.3",
  "rustc-demangle",
+ "serde",
 ]
 
 [[package]]
@@ -4723,6 +4724,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
+ "bincode 2.0.0-rc.3",
+ "bytes",
  "chrono",
  "databend-common-base",
  "databend-common-exception",

@@ -44,6 +44,7 @@ pub mod linux {
     use tikv_jemalloc_sys as ffi;
 
     use super::JEAllocator;
+    use crate::mem_allocator::StdAllocator;
     use crate::runtime::ThreadTracker;
 
     #[cfg(any(target_arch = "arm", target_arch = "mips", target_arch = "powerpc"))]

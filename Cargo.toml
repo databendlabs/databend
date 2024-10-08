@@ -400,7 +400,7 @@ arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev =
 arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
-backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = ["std", "serialize-serde"] }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
