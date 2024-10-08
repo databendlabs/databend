@@ -327,6 +327,7 @@ impl Drop for InnerPath {
 #[cfg(test)]
 mod tests {
     use std::assert_matches::assert_matches;
+    use std::ffi::OsString;
     use std::fs;
     use std::sync::atomic::Ordering;
 
@@ -338,7 +339,7 @@ mod tests {
         GlobalInstance::init_testing(thread.name().unwrap());
 
         let config = SpillConfig {
-            path: "test_data".to_string(),
+            path: OsString::from("test_data"),
             reserved_disk_ratio: 0.01.into(),
             global_bytes_limit: 1 << 30,
         };
@@ -377,7 +378,7 @@ mod tests {
         GlobalInstance::init_testing(thread.name().unwrap());
 
         let config = SpillConfig {
-            path: "test_data2".to_string(),
+            path: OsString::from("test_data2"),
             reserved_disk_ratio: 0.99.into(),
             global_bytes_limit: 1 << 30,
         };

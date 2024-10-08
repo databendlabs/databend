@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -2944,7 +2945,7 @@ pub struct SpillConfig {
         value_name = "VALUE",
         default_value = "./.databend/temp/_query_spill"
     )]
-    pub spill_local_disk_path: String,
+    pub spill_local_disk_path: OsString,
 
     #[clap(long, value_name = "VALUE", default_value = "30")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
@@ -2956,6 +2957,8 @@ pub struct SpillConfig {
 }
 
 mod cache_config_converters {
+    use std::path::PathBuf;
+
     use log::warn;
 
     use super::*;
@@ -2988,31 +2991,55 @@ mod cache_config_converters {
         type Error = ErrorCode;
 
         fn try_into(self) -> Result<InnerConfig> {
+            let Config {
+                subcommand,
+                config_file,
+                query,
+                log,
+                meta,
+                storage,
+                catalog,
+                cache,
+                mut spill,
+                background,
+                catalogs: input_catalogs,
+                ..
+            } = self;
+
             let mut catalogs = HashMap::new();
-            for (k, v) in self.catalogs.into_iter() {
+            for (k, v) in input_catalogs.into_iter() {
                 let catalog = v.try_into()?;
                 catalogs.insert(k, catalog);
             }
-            if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
+            if !catalog.address.is_empty() || !catalog.protocol.is_empty() {
                 warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
-                let hive = self.catalog.try_into()?;
+                let hive = catalog.try_into()?;
                 let catalog = InnerCatalogConfig::Hive(hive);
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
+            // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
+            if cache.disk_cache_config.path != inner::DiskCacheConfig::default().path
+                && spill.spill_local_disk_path == inner::SpillConfig::default().path
+            {
+                spill.spill_local_disk_path = PathBuf::from(spill.spill_local_disk_path)
+                    .join("temp/_query_spill")
+                    .into();
+            };
+
             Ok(InnerConfig {
-                subcommand: self.subcommand,
-                config_file: self.config_file,
-                query: self.query.try_into()?,
-                log: self.log.try_into()?,
-                meta: self.meta.try_into()?,
-                storage: self.storage.try_into()?,
+                subcommand,
+                config_file,
+                query: query.try_into()?,
+                log: log.try_into()?,
+                meta: meta.try_into()?,
+                storage: storage.try_into()?,
                 catalogs,
-                cache: self.cache.try_into()?,
-                spill: self.spill.try_into()?,
-                background: self.background.try_into()?,
+                cache: cache.try_into()?,
+                spill: spill.try_into()?,
+                background: background.try_into()?,
             })
         }
     }
