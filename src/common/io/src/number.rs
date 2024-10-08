@@ -430,6 +430,14 @@ impl NumDesc {
     }
 
     fn f64_to_num_part(&mut self, value: f64) -> Result<NumPart> {
+        self.float_to_num_part(value, 15)
+    }
+
+    fn f32_to_num_part(&mut self, value: f32) -> Result<NumPart> {
+        self.float_to_num_part(value as f64, 6)
+    }
+
+    fn float_to_num_part(&mut self, value: f64, float_digits: usize) -> Result<NumPart> {
         if self.flag.contains(NumFlag::Roman) {
             return Err(ErrorCode::Unimplemented("to_char RN (Roman numeral)"));
         }
@@ -463,12 +471,11 @@ impl NumDesc {
         let orgnum = format!("{:.0}", value.abs());
         let numstr_pre_len = orgnum.len();
 
-        const FLT_DIG: usize = 6;
         // adjust post digits to fit max float digits
-        if numstr_pre_len >= FLT_DIG {
+        if numstr_pre_len >= float_digits {
             self.post = 0;
-        } else if numstr_pre_len + self.post > FLT_DIG {
-            self.post = FLT_DIG - numstr_pre_len;
+        } else if numstr_pre_len + self.post > float_digits {
+            self.post = float_digits - numstr_pre_len;
         }
         let orgnum = format!("{:.*}", self.post, value.abs());
 
@@ -584,8 +591,8 @@ struct NumProc {
     decimal: String,
     loc_negative_sign: String,
     loc_positive_sign: String,
-    _loc_thousands_sep: String,
-    _loc_currency_symbol: String,
+    loc_thousands_sep: String,
+    loc_currency_symbol: String,
 }
 
 impl NumProc {
@@ -728,6 +735,14 @@ impl NumProc {
     fn last_relevant_is_dot(&self) -> bool {
         self.last_relevant.is_some_and(|(c, _)| c == '.')
     }
+
+    fn prepare_locale(&mut self) {
+        // todo: True localization will be the next step
+        self.loc_negative_sign = "-".to_string();
+        self.loc_positive_sign = "+".to_string();
+        self.loc_thousands_sep = ",".to_string();
+        self.loc_currency_symbol = "$".to_string();
+    }
 }
 
 fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Result<String> {
@@ -754,8 +769,8 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
         decimal: ".".to_string(),
         loc_negative_sign: String::new(),
         loc_positive_sign: String::new(),
-        _loc_thousands_sep: String::new(),
-        _loc_currency_symbol: String::new(),
+        loc_thousands_sep: String::new(),
+        loc_currency_symbol: String::new(),
     };
 
     if np.desc.zero_start > 0 {
@@ -829,8 +844,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
     // Locale
     if np.desc.need_locale {
-        // 	NUM_prepare_locale(Np);
-        return Err(ErrorCode::Unimplemented("to_char uses locale S/L/D/G"));
+        np.prepare_locale();
     }
 
     // Processor direct cycle
@@ -850,6 +864,23 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
                     if !np.desc.flag.contains(NumFlag::FillMode) {
                         np.inout.push(' ')
                     }
+                }
+
+                NumPoz::TkG => {
+                    if np.num_in {
+                        np.inout.push_str(&np.loc_thousands_sep);
+                        continue;
+                    }
+                    if np.desc.flag.contains(NumFlag::FillMode) {
+                        continue;
+                    }
+                    let sep = " ".repeat(np.loc_thousands_sep.len());
+                    np.inout.push_str(&sep);
+                    continue;
+                }
+
+                NumPoz::TkL => {
+                    np.inout.push_str(&np.loc_currency_symbol);
                 }
 
                 NumPoz::TkMI => {
@@ -874,6 +905,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
                 NumPoz::TkPR => (),
                 NumPoz::TkFM => (),
+                NumPoz::TkS => (),
                 _ => unimplemented!(),
             },
             FormatNode::End => break,
@@ -906,6 +938,16 @@ pub fn f64_to_char(value: f64, fmt: &str) -> Result<String> {
     let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
 
     let num_part = desc.f64_to_num_part(value)?;
+
+    num_processor(&nodes, desc, num_part)
+}
+
+pub fn f32_to_char(value: f32, fmt: &str) -> Result<String> {
+    // TODO: We should cache FormatNode
+    let mut desc = NumDesc::default();
+    let nodes = parse_format(fmt, &NUM_KEYWORDS, Some(&mut desc))?;
+
+    let num_part = desc.f32_to_num_part(value)?;
 
     num_processor(&nodes, desc, num_part)
 }
@@ -986,13 +1028,29 @@ mod tests {
         assert_eq!("485 ", i64_to_char(485, "999MI")?);
         assert_eq!("485", i64_to_char(485, "FM999MI")?);
 
-        // assert_eq!(" 1 485", i64_to_char(1485, "9G999")?);
+        assert_eq!(" 1,485", i64_to_char(1485, "9G999")?);
+        assert_eq!("-1,485", i64_to_char(-1485, "9G999")?);
+
+        assert_eq!("1,485", i64_to_char(1485, "FM9G999")?);
+        assert_eq!("-1,485", i64_to_char(-1485, "FM9G999")?);
+
+        assert_eq!("  12,345,678", i64_to_char(12345678, "999G999G999")?);
+        assert_eq!(" -12,345,678", i64_to_char(-12345678, "999G999G999")?);
+
+        assert_eq!("12,345,678", i64_to_char(12345678, "FM999G999G999")?);
+        assert_eq!("-12,345,678", i64_to_char(-12345678, "FM999G999G999")?);
+
+        assert_eq!("$ 485", i64_to_char(485, "L999")?);
+        assert_eq!("$-485", i64_to_char(-485, "L999")?);
+
+        assert_eq!("485+", i64_to_char(485, "999S")?);
+        assert_eq!("485-", i64_to_char(-485, "999S")?);
 
         Ok(())
     }
 
     #[test]
-    fn test_f64() -> Result<()> {
+    fn test_float() -> Result<()> {
         assert_eq!(" 12.34", f64_to_char(12.34, "99.99")?);
         assert_eq!("-12.34", f64_to_char(-12.34, "99.99")?);
         assert_eq!("   .10", f64_to_char(0.1, "99.99")?);
@@ -1014,11 +1072,11 @@ mod tests {
             f64_to_char(485.8, "\"Pre:\"999\" Post:\" .999")?
         );
 
-        // assert_eq!(" 148,500", f64_to_char(148.5, "999D999")?);
-        // assert_eq!(" 3 148,500", f64_to_char(3148.5, "9G999D999")?);
-        // assert_eq!("485-", f64_to_char(-485, "999S")?);
+        assert_eq!(" 148.500", f64_to_char(148.5, "999D999")?);
 
-        // assert_eq!("DM 485", f64_to_char(485, "L999")?);
+        assert_eq!(" 0003148.50", f32_to_char(3148.5, "0009999.999")?);
+        assert_eq!(" 3,148.50", f32_to_char(3148.5, "9G999D999")?);
+        assert_eq!("  1234567", f32_to_char(1234567.0, "99999999D999999")?);
 
         // assert_eq!("        CDLXXXV", f64_to_char(485, "RN")?);
         // assert_eq!("CDLXXXV", f64_to_char(485, "FMRN")?);

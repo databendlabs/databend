@@ -3738,6 +3738,8 @@ Functions overloads:
 1 to_char(Int64 NULL, String NULL) :: String NULL
 2 to_char(Float64, String) :: String
 3 to_char(Float64 NULL, String NULL) :: String NULL
+4 to_char(Float32, String) :: String
+5 to_char(Float32 NULL, String NULL) :: String NULL
 0 to_date(Variant) :: Date
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
