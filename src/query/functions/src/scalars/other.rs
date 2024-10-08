@@ -404,7 +404,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                 // TODO: We should cache FmtCacheEntry
                 match fmt
                     .parse::<FmtCacheEntry>()
-                    .map(|entry| entry.process_i64(value))
+                    .and_then(|entry| entry.process_i64(value))
                 {
                     Ok(s) => {
                         builder.put_str(&s);
@@ -434,7 +434,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                 // TODO: We should cache FmtCacheEntry
                 match fmt
                     .parse::<FmtCacheEntry>()
-                    .map(|entry| entry.process_f64(*value))
+                    .and_then(|entry| entry.process_f64(*value))
                 {
                     Ok(s) => {
                         builder.put_str(&s);
@@ -464,7 +464,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                 // TODO: We should cache FmtCacheEntry
                 match fmt
                     .parse::<FmtCacheEntry>()
-                    .map(|entry| entry.process_f32(*value))
+                    .and_then(|entry| entry.process_f32(*value))
                 {
                     Ok(s) => {
                         builder.put_str(&s);
