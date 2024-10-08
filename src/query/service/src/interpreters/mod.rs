@@ -111,6 +111,7 @@ mod interpreter_table_set_options;
 mod interpreter_table_show_create;
 mod interpreter_table_truncate;
 mod interpreter_table_undrop;
+mod interpreter_table_unset_options;
 mod interpreter_table_vacuum;
 mod interpreter_task_alter;
 mod interpreter_task_create;

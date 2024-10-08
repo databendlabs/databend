@@ -59,6 +59,7 @@ use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
+use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
 use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
 use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
@@ -211,6 +212,10 @@ impl InterpreterFactory {
             Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
                 ctx,
                 *set_options.clone(),
+            )?)),
+            Plan::UnsetOptions(targets) => Ok(Arc::new(UnsetOptionsInterpreter::try_create(
+                ctx,
+                *targets.clone(),
             )?)),
             Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
                 ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,

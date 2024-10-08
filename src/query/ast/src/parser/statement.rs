@@ -3461,6 +3461,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
     );
 
+    let unset_table_options = map(
+        rule! {
+            UNSET ~ OPTIONS ~ #unset_source
+        },
+        |(_, _, targets)| AlterTableAction::UnsetOptions { targets },
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -3473,6 +3480,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #recluster_table
         | #revert_table
         | #set_table_options
+        | #unset_table_options
     )(i)
 }
 
