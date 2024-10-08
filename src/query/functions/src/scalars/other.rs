@@ -419,36 +419,6 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
-        "to_char",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_f64(*value))
-                {
-                    Ok(s) => {
-                        builder.put_str(&s);
-                        builder.commit_row()
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
-    );
-
     registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
         "to_char",
         |_, _, _| FunctionDomain::MayThrow,
@@ -465,6 +435,36 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                 match fmt
                     .parse::<FmtCacheEntry>()
                     .and_then(|entry| entry.process_f32(*value))
+                {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f64(*value))
                 {
                     Ok(s) => {
                         builder.put_str(&s);
