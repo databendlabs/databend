@@ -440,7 +440,7 @@ impl Display for FileLocation {
 
 /// Used when we want to allow use variable for options etc.
 /// Other expr is not necessary, because
-/// 1. we can allways create a variable that can be used directly.
+/// 1. we can always create a variable that can be used directly.
 /// 2. columns can not be referred.
 ///
 /// Can extend to all type of Literals if needed later.
