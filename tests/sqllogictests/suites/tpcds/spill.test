@@ -24,6 +24,9 @@ statement ok
 set window_partition_spilling_memory_ratio = 1;
 
 statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+statement ok
 set window_partition_spilling_bytes_threshold_per_proc = 1;
 
 # TPC-DS TEST
