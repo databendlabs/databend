@@ -551,7 +551,7 @@ impl<'a> Evaluator<'a> {
                         for (idx, x) in col.iter().enumerate() {
                             let array = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true)
                             {
-                                temp_array = jsonb::from_slice(&x).map_err(|e| {
+                                temp_array = jsonb::from_slice(x).map_err(|e| {
                                     ErrorCode::BadArguments(format!(
                                         "Expect to be valid json, got err: {e:?}"
                                     ))
