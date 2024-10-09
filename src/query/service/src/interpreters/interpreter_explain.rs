@@ -394,16 +394,13 @@ impl ExplainInterpreter {
     }
 
     fn graphical_profiles_to_datablocks(profiles: GraphicalProfiles) -> Vec<DataBlock> {
-        let mut blocks = Vec::new();
-
         let json_string = serde_json::to_string_pretty(&profiles)
             .unwrap_or_else(|_| "Failed to format profiles".to_string());
 
         let line_split_result: Vec<&str> = json_string.lines().collect();
         let formatted_block = StringType::from_data(line_split_result);
-        blocks.push(DataBlock::new_from_columns(vec![formatted_block]));
 
-        blocks
+        vec![DataBlock::new_from_columns(vec![formatted_block])]
     }
 
     #[async_backtrace::framed]
