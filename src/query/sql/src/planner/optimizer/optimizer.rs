@@ -505,11 +505,23 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
 
     let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
     mutation.distributed = opt_ctx.enable_distributed_optimization;
-    if input_s_expr.plan.rel_op() == RelOp::Join {
-        let right_child = input_s_expr.child(1)?;
-        if right_child.plan.rel_op() == RelOp::ConstantTableScan {
+
+    // To fix issue #16581, if target table is rewritten as an empty scan, that means
+    // the condition is false and the match branch can never be executed.
+    // Therefore, the match evaluators can be cleared.
+    match input_s_expr.plan.rel_op() {
+        RelOp::ConstantTableScan => {
             mutation.matched_evaluators.clear();
+            mutation.strategy = MutationStrategy::NotMatchedOnly;
         }
+        RelOp::Join => {
+            let right_child = input_s_expr.child(1)?;
+            if right_child.plan.rel_op() == RelOp::ConstantTableScan {
+                mutation.matched_evaluators.clear();
+                mutation.strategy = MutationStrategy::NotMatchedOnly;
+            }
+        }
+        _ => (),
     }
 
     input_s_expr = match mutation.mutation_type {
