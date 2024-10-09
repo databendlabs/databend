@@ -16,8 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io;
-use std::io::Write;
 use std::ops::Range;
 use std::ptr::Alignment;
 use std::sync::Arc;
@@ -25,8 +23,7 @@ use std::time::Instant;
 
 use databend_common_base::base::dma_buffer_as_vec;
 use databend_common_base::base::dma_read_file_range;
-use databend_common_base::base::dma_write_file_vectored;
-use databend_common_base::base::DmaAllocator;
+use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -133,12 +130,12 @@ impl Spiller {
         encoder.add_block(data_block);
         let data_size = encoder.size();
         let BlocksEncoder {
-            data,
+            buf,
             mut columns_layout,
             ..
         } = encoder;
 
-        let location = self.write_encodes(data_size, data).await?;
+        let location = self.write_encodes(data_size, buf).await?;
 
         // Record statistics.
         match location {
@@ -198,7 +195,7 @@ impl Spiller {
 
         let write_bytes = encoder.size();
         let BlocksEncoder {
-            data,
+            buf,
             offsets,
             columns_layout,
             ..
@@ -217,7 +214,7 @@ impl Spiller {
 
         // Spill data to storage.
         let instant = Instant::now();
-        let location = self.write_encodes(write_bytes, data).await?;
+        let location = self.write_encodes(write_bytes, buf).await?;
 
         // Record statistics.
         match location {
@@ -358,11 +355,7 @@ impl Spiller {
         }
     }
 
-    async fn write_encodes(
-        &mut self,
-        size: usize,
-        data: Vec<Vec<u8, DmaAllocator>>,
-    ) -> Result<Location> {
+    async fn write_encodes(&mut self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
         let location = match &self.disk_spill {
             None => None,
             Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
@@ -382,7 +375,7 @@ impl Spiller {
                     .await?;
 
                 let mut written = 0;
-                for data in data.into_iter() {
+                for data in buf.into_data() {
                     written += data.len();
                     writer.write(dma_buffer_as_vec(data)).await?;
                 }
@@ -390,14 +383,7 @@ impl Spiller {
                 writer.close().await?;
                 written
             }
-            Location::Local(path) => {
-                let bufs = data
-                    .iter()
-                    .map(|data| io::IoSlice::new(data))
-                    .collect::<Vec<_>>();
-
-                dma_write_file_vectored(path.as_ref(), &bufs).await?
-            }
+            Location::Local(path) => buf.into_file(path).await?,
         };
         debug_assert_eq!(size, written);
         Ok(location)
@@ -432,21 +418,17 @@ pub enum Location {
 }
 
 struct BlocksEncoder {
-    allocator: DmaAllocator,
-    data: Vec<Vec<u8, DmaAllocator>>,
+    buf: DmaWriteBuf,
     offsets: Vec<usize>,
     columns_layout: Vec<Vec<usize>>,
-    chunk: usize,
 }
 
 impl BlocksEncoder {
     fn new(align: Alignment, chunk: usize) -> Self {
         Self {
-            allocator: DmaAllocator::new(align),
-            data: Vec::new(),
+            buf: DmaWriteBuf::new(align, chunk),
             offsets: vec![0],
             columns_layout: Vec::new(),
-            chunk: align_up(align, chunk),
         }
     }
 
@@ -459,7 +441,7 @@ impl BlocksEncoder {
                 let column = entry
                     .value
                     .convert_to_full_column(&entry.data_type, block.num_rows());
-                serialize_column_in(&column, self).unwrap();
+                serialize_column_in(&column, &mut self.buf).unwrap();
                 self.size() - start
             })
             .collect();
@@ -468,44 +450,7 @@ impl BlocksEncoder {
     }
 
     fn size(&self) -> usize {
-        self.data.iter().map(|x| x.len()).sum()
-    }
-}
-
-fn align_up(alignment: Alignment, value: usize) -> usize {
-    (value + alignment.as_usize() - 1) & alignment.mask()
-}
-
-impl Write for BlocksEncoder {
-    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
-        let n = buf.len();
-        while !buf.is_empty() {
-            let (dst, remain) = match self.data.last_mut() {
-                Some(dst) if dst.len() < dst.capacity() => {
-                    let remian = dst.capacity() - dst.len();
-                    (dst, remian)
-                }
-                _ => {
-                    self.data
-                        .push(Vec::with_capacity_in(self.chunk, self.allocator));
-                    (self.data.last_mut().unwrap(), self.chunk)
-                }
-            };
-
-            if buf.len() <= remain {
-                dst.extend_from_slice(buf);
-                buf = &buf[buf.len()..]
-            } else {
-                let (left, right) = buf.split_at(remain);
-                dst.extend_from_slice(left);
-                buf = right
-            }
-        }
-        Ok(n)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        self.buf.size()
     }
 }
 
