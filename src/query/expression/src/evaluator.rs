@@ -35,10 +35,14 @@ use crate::types::array::ArrayColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
+use crate::types::variant::JSONB_NULL;
+use crate::types::ArgType;
+use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
+use crate::types::VariantType;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -502,6 +506,85 @@ impl<'a> Evaluator<'a> {
                 }
                 other => unreachable!("source: {}", other),
             },
+            (DataType::Variant, DataType::Array(inner_dest_ty)) => {
+                let empty_vec = vec![jsonb::Value::Null];
+                match value {
+                    Value::Scalar(Scalar::Variant(x)) => {
+                        let array = jsonb::from_slice(&x).map_err(|e| {
+                            ErrorCode::BadArguments(format!(
+                                "Expect to be valid json, got err: {e:?}"
+                            ))
+                        })?;
+                        let array = array.as_array().unwrap_or(&empty_vec);
+                        let column = VariantType::create_column_from_variants(array.as_slice());
+
+                        let validity = validity.map(|validity| {
+                            Bitmap::new_constant(
+                                validity.unset_bits() != validity.len(),
+                                column.len(),
+                            )
+                        });
+
+                        let new_array = self
+                            .run_cast(
+                                span,
+                                &DataType::Variant,
+                                inner_dest_ty,
+                                Value::Column(Column::Variant(column)),
+                                validity,
+                                options,
+                            )?
+                            .into_column()
+                            .unwrap();
+                        Ok(Value::Scalar(Scalar::Array(new_array)))
+                    }
+                    Value::Column(Column::Variant(col)) => {
+                        let mut array_builder =
+                            ArrayType::<VariantType>::create_builder(col.len(), &[]);
+
+                        for x in col.iter() {
+                            let array = jsonb::from_slice(x).map_err(|e| {
+                                ErrorCode::BadArguments(format!(
+                                    "Expect to be valid json, got err: {e:?}"
+                                ))
+                            })?;
+                            let array = array.as_array().unwrap_or(&empty_vec);
+                            for v in array.iter() {
+                                v.write_to_vec(&mut array_builder.builder.data);
+                                array_builder.builder.commit_row();
+                            }
+                            array_builder.commit_row();
+                        }
+                        let col = array_builder.build();
+                        let validity = validity.map(|validity| {
+                            let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                            for (index, offsets) in col.offsets.windows(2).enumerate() {
+                                inner_validity.extend_constant(
+                                    (offsets[1] - offsets[0]) as usize,
+                                    validity.get_bit(index),
+                                );
+                            }
+                            inner_validity.into()
+                        });
+                        let new_col = self
+                            .run_cast(
+                                span,
+                                &DataType::Variant,
+                                inner_dest_ty,
+                                Value::Column(Column::Variant(col.values)),
+                                validity,
+                                options,
+                            )?
+                            .into_column()
+                            .unwrap();
+                        Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
+                            values: new_col,
+                            offsets: col.offsets,
+                        }))))
+                    }
+                    other => unreachable!("source: {}", other),
+                }
+            }
             (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyMap) => {
                     let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
