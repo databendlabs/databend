@@ -23,6 +23,7 @@ databend-common-pipeline-core = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
+futures = { workspace = true }
 iceberg = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
@@ -31,7 +32,6 @@ ordered-float = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
-futures = { workspace = true }
 
 [lints]
 workspace = true
