@@ -55,6 +55,7 @@ use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
@@ -316,8 +317,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
+            Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
+                user: user.clone().into(),
+            })),
 
             // Roles
             Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
