@@ -379,7 +379,7 @@ NULL NULL
 [12,13] []
 
 query T
-select json_array_reduce([1,2,3,4]::Variant, (x, y) -> 3 + x + y), json_array_transform(parse_json('"aa"'), data -> CONCAT(data::String, 'bend'));;
+select json_array_reduce([1,2,3,4]::Variant, (x, y) -> 3 + x + y), json_array_transform(parse_json('"aa"'), data -> CONCAT(data::String, 'bend'));
 ----
 19 []
 
