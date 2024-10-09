@@ -3718,6 +3718,7 @@ dependencies = [
  "databend-common-proto-conv",
  "fastrace 0.7.2",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "maplit",

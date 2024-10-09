@@ -40,6 +40,7 @@ use futures::stream;
 use futures::stream::BoxStream;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
+use itertools::Itertools;
 
 pub(crate) use self::codec::decode_non_empty_item;
 pub(crate) use self::codec::decode_seqv;
@@ -52,6 +53,9 @@ use crate::kv_pb_api::errors::StreamReadEof;
 
 /// This trait provides a way to access a kv store with `kvapi::Key` type key and protobuf encoded value.
 pub trait KVPbApi: KVApi {
+    /// The number of keys in one batch get.
+    const CHUNK_SIZE: usize = 256;
+
     /// Update or insert a protobuf encoded value by kvapi::Key.
     ///
     /// The key will be converted to string and the value is encoded by `FromToProto`.
@@ -189,21 +193,35 @@ pub trait KVPbApi: KVApi {
     }
 
     /// Same as [`get_pb_values`](Self::get_pb_values) but collect the result in a `Vec` instead of a stream.
+    ///
+    /// If the number of keys is larger than [`Self::CHUNK_SIZE`], it will be split into multiple requests.
     fn get_pb_values_vec<K, I>(
         &self,
         keys: I,
     ) -> impl Future<Output = Result<Vec<Option<SeqV<K::ValueType>>>, Self::Error>> + Send
     where
-        K: kvapi::Key + 'static,
+        K: kvapi::Key + Send + 'static,
         K::ValueType: FromToProto + Send + 'static,
         I: IntoIterator<Item = K> + Send,
+        I::IntoIter: Send,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
+        let it = keys.into_iter();
+        let key_chunks = it
+            .chunks(Self::CHUNK_SIZE)
+            .into_iter()
+            .map(|x| x.collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
         async move {
-            self.get_pb_values(keys)
-                .await?
-                .try_collect::<Vec<_>>()
-                .await
+            let mut res = vec![];
+            for chunk in key_chunks {
+                let strm = self.get_pb_values(chunk).await?;
+
+                let vec = strm.try_collect::<Vec<_>>().await?;
+                res.extend(vec);
+            }
+            Ok(res)
         }
     }
 
@@ -241,6 +259,8 @@ pub trait KVPbApi: KVApi {
     }
 
     /// Same as [`get_pb_stream`](Self::get_pb_stream) but collect the result in a `Vec` instead of a stream.
+    ///
+    /// If the number of keys is larger than [`Self::CHUNK_SIZE`], it will be split into multiple requests.
     fn get_pb_vec<K, I>(
         &self,
         keys: I,
@@ -249,11 +269,25 @@ pub trait KVPbApi: KVApi {
         K: kvapi::Key + Send + 'static,
         K::ValueType: FromToProto + Send + 'static,
         I: IntoIterator<Item = K> + Send,
+        I::IntoIter: Send,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
+        let it = keys.into_iter();
+        let key_chunks = it
+            .chunks(Self::CHUNK_SIZE)
+            .into_iter()
+            .map(|x| x.collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
         async move {
-            let kvs = self.get_pb_stream(keys).await?.try_collect().await?;
-            Ok(kvs)
+            let mut res = vec![];
+            for chunk in key_chunks {
+                let strm = self.get_pb_stream(chunk).await?;
+
+                let vec = strm.try_collect::<Vec<_>>().await?;
+                res.extend(vec);
+            }
+            Ok(res)
         }
     }
 
@@ -497,14 +531,14 @@ mod tests {
     use crate::kv_pb_api::KVPbApi;
 
     //
-    struct Foo {
+    struct FooKV {
         /// Whether to return without exhausting the input for `get_kv_stream`.
         early_return: Option<usize>,
         kvs: BTreeMap<String, SeqV>,
     }
 
     #[async_trait]
-    impl KVApi for Foo {
+    impl KVApi for FooKV {
         type Error = MetaError;
 
         async fn upsert_kv(&self, _req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
@@ -560,7 +594,7 @@ mod tests {
         };
         let v = catalog_meta.to_pb()?.encode_to_vec();
 
-        let foo = Foo {
+        let foo = FooKV {
             early_return: Some(2),
             kvs: vec![
                 (s("__fd_catalog_by_id/1"), SeqV::new(1, v.clone())),
@@ -613,7 +647,7 @@ mod tests {
         };
         let v = catalog_meta.to_pb()?.encode_to_vec();
 
-        let foo = Foo {
+        let foo = FooKV {
             early_return: None,
             kvs: vec![
                 (s("__fd_catalog_by_id/1"), SeqV::new(1, v.clone())),
@@ -670,6 +704,61 @@ mod tests {
             assert_eq!(Some(&catalog_meta), got[0].value());
             assert_eq!(Some(&catalog_meta), got[1].value());
             assert_eq!(None, got[2].value());
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_pb_vec_span_chunk() -> anyhow::Result<()> {
+        let catalog_meta = CatalogMeta {
+            catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                address: "127.0.0.1:10000".to_string(),
+                storage_params: None,
+            }),
+            created_on: DateTime::<Utc>::MIN_UTC,
+        };
+        let catalog_bytes = catalog_meta.to_pb()?.encode_to_vec();
+
+        let n = 1024;
+        let mut kvs = vec![];
+        for i in 1..=n {
+            let key = s(format!("__fd_catalog_by_id/{}", i));
+            let value = SeqV::new(i, catalog_bytes.clone());
+            kvs.push((key, value));
+        }
+
+        let foo = FooKV {
+            early_return: None,
+            kvs: kvs.into_iter().collect(),
+        };
+
+        assert!(FooKV::CHUNK_SIZE < n as usize);
+
+        let tenant = Tenant::new_literal("dummy");
+
+        {
+            let got = foo
+                .get_pb_vec((1..=n).map(|i| CatalogIdIdent::new(&tenant, i)))
+                .await?;
+
+            for i in 1..=n {
+                let key = CatalogIdIdent::new(&tenant, i);
+                assert_eq!(key, got[i as usize - 1].0.clone());
+                let value = got[i as usize - 1].1.clone().unwrap();
+                assert_eq!(i, value.seq());
+            }
+        }
+
+        {
+            let got = foo
+                .get_pb_values_vec((1..=n).map(|i| CatalogIdIdent::new(&tenant, i)))
+                .await?;
+
+            for i in 1..=n {
+                let value = got[i as usize - 1].clone().unwrap();
+                assert_eq!(i, value.seq());
+            }
         }
 
         Ok(())
