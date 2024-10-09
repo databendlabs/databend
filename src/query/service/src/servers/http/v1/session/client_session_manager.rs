@@ -23,7 +23,6 @@ use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
@@ -154,7 +153,7 @@ impl ClientSessionManager {
         client_session_api
             .upsert_client_session_id(
                 client_session_id,
-                ClientSession { user_name },
+                &user_name,
                 REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -251,9 +250,7 @@ impl ClientSessionManager {
         client_session_api
             .upsert_client_session_id(
                 &client_session_id,
-                ClientSession {
-                    user_name: claim.user.clone(),
-                },
+                &claim.user,
                 REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -332,7 +329,7 @@ impl ClientSessionManager {
                 .await
                 .ok();
             client_session_api
-                .drop_client_session_id(&claim.session_id)
+                .drop_client_session_id(&claim.session_id, &claim.user)
                 .await
                 .ok();
             let state = self.session_state.lock().remove(&claim.session_id);
