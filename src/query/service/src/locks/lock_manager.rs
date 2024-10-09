@@ -108,7 +108,7 @@ impl LockManager {
             ctx.get_current_user()?.name,       // user
             ctx.get_cluster().local_id.clone(), // node
             query_id.clone(),                   // query_id
-            expire_secs,
+            Duration::from_secs(expire_secs),
         );
 
         let catalog = ctx.get_catalog(catalog_name).await?;
@@ -129,10 +129,15 @@ impl LockManager {
 
         loop {
             // List all revisions and check if the current is the minimum.
-            let reply = catalog
+            let mut rev_list = catalog
                 .list_lock_revisions(list_table_lock_req.clone())
-                .await?;
-            let rev_list = reply.into_iter().map(|(x, _)| x).collect::<Vec<_>>();
+                .await?
+                .into_iter()
+                .map(|(x, _)| x)
+                .collect::<Vec<_>>();
+            // list_lock_revisions are returned in big-endian order,
+            // we need to sort them in ascending numeric order.
+            rev_list.sort();
             let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
                 ErrorCode::TableLockExpired(format!(
@@ -144,8 +149,12 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-                let extend_table_lock_req =
-                    ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
+                let extend_table_lock_req = ExtendLockRevReq::new(
+                    lock_key.clone(),
+                    revision,
+                    Duration::from_secs(expire_secs),
+                    true,
+                );
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.

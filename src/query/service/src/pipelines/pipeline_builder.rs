@@ -49,8 +49,10 @@ pub struct PipelineBuilder {
     pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
-    // Cte -> state, each cte has it's own state
+    // The cte state of each materialized cte.
     pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
+    // The column offsets used by cte scan
+    pub cte_scan_offsets: HashMap<IndexType, Vec<usize>>,
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
@@ -75,6 +77,7 @@ impl PipelineBuilder {
             main_pipeline: Pipeline::with_scopes(scopes),
             exchange_injector: DefaultExchangeInjector::create(),
             cte_state: HashMap::new(),
+            cte_scan_offsets: HashMap::new(),
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
@@ -165,7 +168,7 @@ impl PipelineBuilder {
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::WindowPartition(window_partition) => {
-                self.build_window_partition_pipeline(window_partition)
+                self.build_window_partition(window_partition)
             }
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),

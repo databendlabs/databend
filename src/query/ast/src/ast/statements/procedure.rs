@@ -19,8 +19,8 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_string_list;
 use crate::ast::CreateOption;
+use crate::ast::Expr;
 use crate::ast::TypeName;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -98,7 +98,11 @@ impl Display for CreateProcedureStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        write!(f, "PROCEDURE {}", self.name.name)?;
+        write!(f, "PROCEDURE ")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write!(f, "{}", self.name.name)?;
         if let Some(args) = &self.args {
             if args.is_empty() {
                 write!(f, "() ")?;
@@ -137,12 +141,17 @@ impl Display for CreateProcedureStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropProcedureStmt {
+    pub if_exists: bool,
     pub name: ProcedureIdentity,
 }
 
 impl Display for DropProcedureStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DROP PROCEDURE {}", self.name)?;
+        write!(f, "DROP PROCEDURE ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.name)?;
 
         Ok(())
     }
@@ -169,16 +178,17 @@ impl Display for DescProcedureStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CallProcedureStmt {
     pub name: String,
-    pub args: Vec<String>,
+    pub args: Vec<Expr>,
 }
 
 impl Display for CallProcedureStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CALL PROCEDURE {}(", self.name)?;
-        write_comma_separated_string_list(f, self.args.clone())?;
+        let CallProcedureStmt { name, args } = self;
+        write!(f, "CALL PROCEDURE {}(", name)?;
+        write_comma_separated_list(f, args)?;
         write!(f, ")")?;
         Ok(())
     }

@@ -53,8 +53,8 @@ impl LockHolder {
         req: CreateLockRevReq,
     ) -> Result<u64> {
         let lock_key = req.lock_key.clone();
-        let expire_secs = req.expire_secs;
-        let sleep_range = (expire_secs * 1000 / 3)..=(expire_secs * 1000 * 2 / 3);
+        let ttl = req.ttl;
+        let sleep_range = (ttl / 3)..=(ttl * 2 / 3);
 
         // get a new table lock revision.
         let res = catalog.create_lock_revision(req).await?;
@@ -63,19 +63,19 @@ impl LockHolder {
         record_created_lock_nums(lock_key.lock_type().to_string(), lock_key.get_table_id(), 1);
 
         let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
-        let extend_table_lock_req =
-            ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, false);
+        let extend_table_lock_req = ExtendLockRevReq::new(lock_key.clone(), revision, ttl, false);
 
         GlobalIORuntime::instance().spawn({
             let self_clone = self.clone();
             async move {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());
                 while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
-                    let mills = {
+                    let rand_sleep_duration = {
                         let mut rng = thread_rng();
                         rng.gen_range(sleep_range.clone())
                     };
-                    let sleep_range = Box::pin(sleep(Duration::from_millis(mills)));
+
+                    let sleep_range = Box::pin(sleep(rand_sleep_duration));
                     match select(notified, sleep_range).await {
                         Either::Left((_, _)) => {
                             // shutdown.
@@ -87,7 +87,7 @@ impl LockHolder {
                                 .try_extend_lock(
                                     catalog.clone(),
                                     extend_table_lock_req.clone(),
-                                    Some(Duration::from_millis(expire_secs * 1000 - mills)),
+                                    Some(ttl - rand_sleep_duration),
                                 )
                                 .await
                             {
@@ -103,12 +103,7 @@ impl LockHolder {
                     }
                 }
 
-                Self::try_delete_lock(
-                    catalog,
-                    delete_table_lock_req,
-                    Some(Duration::from_millis(expire_secs * 1000)),
-                )
-                .await
+                Self::try_delete_lock(catalog, delete_table_lock_req, Some(ttl)).await
             }
         });
 

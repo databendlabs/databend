@@ -48,7 +48,7 @@ pub fn compress_binary<O: Offset>(
         compressor.to_compression()
     );
 
-    let codec = u8::from(compressor.to_compression());
+    let codec = compressor.to_compression() as u8;
 
     match compressor {
         BinaryCompressor::Basic(c) => {
@@ -110,8 +110,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
     values: &mut Vec<u8>,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let (codec, compressed_size, _uncompressed_size) = read_compress_header(reader)?;
-    let compression = Compression::from_codec(codec)?;
+    let (compression, compressed_size, _uncompressed_size) = read_compress_header(reader, scratch)?;
 
     // already fit in buffer
     let mut use_inner = false;
@@ -159,7 +158,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
             }
 
             // values
-            let (_, compressed_size, uncompressed_size) = read_compress_header(reader)?;
+            let (_, compressed_size, uncompressed_size) = read_compress_header(reader, scratch)?;
             use_inner = false;
             reader.fill_buf()?;
             let input = if reader.buffer_bytes().len() >= compressed_size {

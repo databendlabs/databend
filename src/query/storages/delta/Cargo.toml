@@ -23,7 +23,6 @@ deltalake = { workspace = true }
 fastrace = { workspace = true }
 match-template = "0.0.1"
 object_store_opendal = { workspace = true }
-ordered-float = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

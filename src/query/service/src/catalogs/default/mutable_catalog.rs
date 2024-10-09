@@ -22,6 +22,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
@@ -91,6 +92,7 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -98,7 +100,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -118,6 +119,7 @@ use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
 use fastrace::func_name;
 use log::info;
+use log::warn;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -247,15 +249,21 @@ impl Catalog for MutableCatalog {
             .meta
             .list_databases(ListDatabaseReq {
                 tenant: tenant.clone(),
-                filter: None,
             })
             .await?;
 
-        dbs.iter().try_fold(vec![], |mut acc, item| {
-            let db = self.build_db_instance(item)?;
-            acc.push(db);
-            Ok(acc)
-        })
+        dbs.iter()
+            .try_fold(vec![], |mut acc, item: &Arc<DatabaseInfo>| {
+                let db_result = self.build_db_instance(item);
+                match db_result {
+                    Ok(db) => acc.push(db),
+                    Err(err) => {
+                        // Ignore the error and continue, allow partial failure.
+                        warn!("Failed to build database '{:?}': {:?}", item, err);
+                    }
+                }
+                Ok(acc)
+            })
     }
 
     #[async_backtrace::framed]
@@ -422,6 +430,34 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    // Mget dbs by DatabaseNameIdent.
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let res = self
+            .ctx
+            .meta
+            .mget_id_value_compat(db_names.iter().cloned())
+            .await?;
+        let dbs = res
+            .map(|(name_ident, database_id, meta)| {
+                Arc::new(DatabaseInfo {
+                    database_id,
+                    name_ident,
+                    meta,
+                })
+            })
+            .collect::<Vec<Arc<DatabaseInfo>>>();
+
+        dbs.iter().try_fold(vec![], |mut acc, item| {
+            let db = self.build_db_instance(item)?;
+            acc.push(db);
+            Ok(acc)
+        })
+    }
+
     async fn mget_database_names_by_ids(
         &self,
         _tenant: &Tenant,
@@ -489,13 +525,20 @@ impl Catalog for MutableCatalog {
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
         let drop_ids = resp.drop_ids.clone();
-        let drop_table_infos = resp.drop_table_infos;
 
         let storage = ctx.storage_factory;
 
         let mut tables = vec![];
-        for table_info in drop_table_infos {
-            tables.push(storage.get_table(table_info.as_ref())?);
+        for (db_name_ident, niv) in resp.vacuum_tables {
+            let table_info = TableInfo::new_full(
+                db_name_ident.database_name(),
+                &niv.name().table_name,
+                TableIdent::new(niv.id().table_id, niv.value().seq),
+                niv.value().data.clone(),
+                self.info(),
+                DatabaseType::NormalDB,
+            );
+            tables.push(storage.get_table(&table_info)?);
         }
         Ok((tables, drop_ids))
     }
@@ -521,14 +564,14 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.undrop_table(req).await
     }
 
-    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, req: UndropTableByIdReq) -> Result<()> {
         let res = self.ctx.meta.undrop_table_by_id(req).await?;
         Ok(res)
     }
@@ -659,7 +702,17 @@ impl Catalog for MutableCatalog {
     }
 
     async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
-        Ok(self.ctx.meta.get_sequence(req).await?)
+        let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
+
+        let Some(seq_meta) = seq_meta else {
+            return Err(KVAppError::AppError(AppError::SequenceError(
+                req.ident.unknown_error(func_name!()).into(),
+            ))
+            .into());
+        };
+        Ok(GetSequenceReply {
+            meta: seq_meta.data,
+        })
     }
 
     async fn get_sequence_next_value(

@@ -159,11 +159,11 @@ impl PhysicalPlan {
             }
             PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
-                let left_child = materialized_cte.left.format_join(metadata)?;
                 let right_child = materialized_cte.right.format_join(metadata)?;
+                let left_child = materialized_cte.left.format_join(metadata)?;
                 let children = vec![
-                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
                     FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
                 ];
                 Ok(FormatTreeNode::with_children(
                     format!("MaterializedCte: {}", materialized_cte.cte_idx),
@@ -840,6 +840,10 @@ fn constant_table_scan_to_format_tree(
     plan: &ConstantTableScan,
     metadata: &Metadata,
 ) -> Result<FormatTreeNode<String>> {
+    if plan.num_rows == 0 {
+        return Ok(FormatTreeNode::new(plan.name().to_string()));
+    }
+
     let mut children = Vec::with_capacity(plan.values.len() + 1);
     children.push(FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -850,7 +854,7 @@ fn constant_table_scan_to_format_tree(
         children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
     }
     Ok(FormatTreeNode::with_children(
-        "ConstantTableScan".to_string(),
+        plan.name().to_string(),
         children,
     ))
 }
@@ -1085,6 +1089,10 @@ fn aggregate_partial_to_format_tree(
         children.extend(items);
     }
 
+    if let Some((_, r)) = &plan.rank_limit {
+        children.push(FormatTreeNode::new(format!("rank limit: {r}")));
+    }
+
     append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, profs)?);
@@ -1125,11 +1133,6 @@ fn aggregate_final_to_format_tree(
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];
-
-    if let Some(limit) = &plan.limit {
-        let items = FormatTreeNode::new(format!("limit: {limit}"));
-        children.push(items);
-    }
 
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
@@ -1762,8 +1765,8 @@ fn materialized_cte_to_format_tree(
             "output columns: [{}]",
             format_output_columns(plan.output_schema()?, metadata, true)
         )),
-        to_format_tree(&plan.left, metadata, profs)?,
         to_format_tree(&plan.right, metadata, profs)?,
+        to_format_tree(&plan.left, metadata, profs)?,
     ];
     Ok(FormatTreeNode::with_children(
         "MaterializedCTE".to_string(),

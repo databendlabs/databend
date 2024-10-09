@@ -591,7 +591,6 @@ impl PhysicalPlan {
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
@@ -636,7 +635,7 @@ impl PhysicalPlan {
             PhysicalPlan::MutationOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MaterializedCte(plan) => Box::new(
-                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
+                std::iter::once(plan.right.as_ref()).chain(std::iter::once(plan.left.as_ref())),
             ),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AsyncFunction(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -652,6 +651,10 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::CopyIntoTable(v) => match &v.source {
+                CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_ref())),
+                CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_ref())),
+            },
         }
     }
 

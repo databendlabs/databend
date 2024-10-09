@@ -137,7 +137,8 @@ pub struct MaterializedCteSource {
     cte_idx: (IndexType, IndexType),
     ctx: Arc<QueryContext>,
     cte_state: Arc<MaterializedCteState>,
-    offsets: Vec<IndexType>,
+    column_offsets: Vec<IndexType>,
+    scan_offsets: Vec<usize>,
 }
 
 impl MaterializedCteSource {
@@ -146,13 +147,15 @@ impl MaterializedCteSource {
         output_port: Arc<OutputPort>,
         cte_idx: (IndexType, IndexType),
         cte_state: Arc<MaterializedCteState>,
-        offsets: Vec<IndexType>,
+        column_offsets: Vec<IndexType>,
+        scan_offsets: Vec<usize>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output_port, MaterializedCteSource {
             ctx,
             cte_idx,
             cte_state,
-            offsets,
+            column_offsets,
+            scan_offsets,
         })
     }
 }
@@ -167,19 +170,19 @@ impl AsyncSource for MaterializedCteSource {
         let materialized_cte = self.ctx.get_materialized_cte(self.cte_idx)?;
         if let Some(blocks) = materialized_cte {
             let mut blocks_guard = blocks.write();
-            let block = blocks_guard.pop();
-            if let Some(b) = block {
-                if self.offsets.len() == b.num_columns() {
-                    return Ok(Some(b));
+            let data_block = blocks_guard.pop();
+            if let Some(data_block) = data_block {
+                if self.column_offsets.len() == data_block.num_columns() {
+                    return Ok(Some(data_block));
                 }
-                let row_len = b.num_rows();
+                let num_rows = data_block.num_rows();
                 let pruned_columns = self
-                    .offsets
+                    .column_offsets
                     .iter()
-                    .map(|offset| b.get_by_offset(*offset).clone())
+                    .map(|offset| data_block.get_by_offset(self.scan_offsets[*offset]).clone())
                     .collect::<Vec<BlockEntry>>();
 
-                Ok(Some(DataBlock::new(pruned_columns, row_len)))
+                Ok(Some(DataBlock::new(pruned_columns, num_rows)))
             } else {
                 Ok(None)
             }

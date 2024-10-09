@@ -50,7 +50,7 @@ use databend_common_meta_types::StorageError;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::TryStreamExt;
 use log::error;
@@ -276,7 +276,7 @@ impl RaftServiceImpl {
 #[async_trait::async_trait]
 impl RaftService for RaftServiceImpl {
     async fn forward(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
         async {
             let forward_req: ForwardRequest<ForwardRequestBody> = GrpcHelper::parse_req(request)?;
@@ -299,7 +299,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
         async {
             let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
@@ -323,7 +323,8 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<RaftReply>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+        let remote_addr = remote_addr(&request);
 
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
@@ -332,14 +333,20 @@ impl RaftService for RaftServiceImpl {
             let req_summary = ae_req.summary();
             let raft = &self.meta_node.raft;
 
-            info!("RaftServiceImpl::append_entries: {}", req_summary);
+            info!(
+                "RaftServiceImpl::append_entries: from:{remote_addr} {}",
+                req_summary
+            );
 
             let resp = raft
                 .append_entries(ae_req)
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            info!("RaftServiceImpl::append_entries: done: {}", req_summary);
+            info!(
+                "RaftServiceImpl::append_entries: from:{remote_addr} done: {}",
+                req_summary
+            );
 
             GrpcHelper::ok_response(&resp)
         }
@@ -351,7 +358,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<SnapshotChunkRequest>,
     ) -> Result<Response<RaftReply>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         self.do_install_snapshot_v1(request).in_span(root).await
     }
 
@@ -359,12 +366,13 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<Streaming<SnapshotChunkRequestV003>>,
     ) -> Result<Response<SnapshotResponseV003>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         self.do_install_snapshot_v003(request).in_span(root).await
     }
 
     async fn vote(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+        let remote_addr = remote_addr(&request);
 
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
@@ -373,13 +381,19 @@ impl RaftService for RaftServiceImpl {
 
             let v_req_summary = v_req.summary();
 
-            info!("RaftServiceImpl::vote: start: {}", v_req_summary);
+            info!(
+                "RaftServiceImpl::vote: from:{remote_addr} start: {}",
+                v_req_summary
+            );
 
             let raft = &self.meta_node.raft;
 
             let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
 
-            info!("RaftServiceImpl::vote: done: {}", v_req_summary);
+            info!(
+                "RaftServiceImpl::vote: from:{remote_addr} done: {}",
+                v_req_summary
+            );
 
             GrpcHelper::ok_response(&resp)
         }
@@ -391,14 +405,20 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<pb::TransferLeaderRequest>,
     ) -> Result<Response<Empty>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+        let remote_addr = remote_addr(&request);
+
         let fu = async {
             let req = request.into_inner();
             let req: TransferLeaderRequest = req.try_into()?;
 
             let req_str = req.to_string();
 
-            info!("RaftServiceImpl::{}: start: {}", func_name!(), req_str);
+            info!(
+                "RaftServiceImpl::{}: from:{remote_addr} start: {}",
+                func_name!(),
+                req_str
+            );
 
             let raft = &self.meta_node.raft;
 
@@ -406,7 +426,11 @@ impl RaftService for RaftServiceImpl {
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            info!("RaftServiceImpl::{}: done: {}", func_name!(), req_str);
+            info!(
+                "RaftServiceImpl::{}: from:{remote_addr} done: {}",
+                func_name!(),
+                req_str
+            );
 
             Ok(Response::new(pb::Empty {}))
         };

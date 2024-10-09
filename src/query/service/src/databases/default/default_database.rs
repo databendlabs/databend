@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -38,13 +39,11 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::SeqValue;
 
 use crate::databases::Database;
@@ -73,11 +72,30 @@ impl DefaultDatabase {
     }
 
     async fn list_table_infos(&self) -> Result<Vec<Arc<TableInfo>>> {
-        let table_infos = self
+        let db_id = self.db_info.database_id;
+
+        let name_id_metas = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .list_tables(ListTableReq::new(self.get_tenant(), db_id))
             .await?;
+
+        let table_infos = name_id_metas
+            .iter()
+            .map(|(name, id, meta)| {
+                Arc::new(TableInfo {
+                    ident: TableIdent {
+                        table_id: id.table_id,
+                        seq: meta.seq(),
+                    },
+                    desc: format!("'{}'.'{}'", self.get_db_name(), name),
+                    name: name.to_string(),
+                    meta: meta.data.clone(),
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                })
+            })
+            .collect::<Vec<_>>();
 
         if self.ctx.disable_table_info_refresh {
             Ok(table_infos)
@@ -170,7 +188,6 @@ impl Database for DefaultDatabase {
                     ),
                     name: table_name.to_string(),
                     meta: seqv.data,
-                    tenant: self.db_info.name_ident.tenant_name().to_string(),
                     db_type: DatabaseType::NormalDB,
                     catalog_info: Default::default(),
                 })
@@ -197,10 +214,23 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_tables_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .get_tables_history(ListTableReq::new(
+                self.get_tenant(),
+                self.db_info.database_id,
+            ))
             .await?
             .into_iter()
-            .filter(|i| i.meta.drop_on.is_some())
+            .filter(|i| i.value().drop_on.is_some())
+            .map(|niv| {
+                Arc::new(TableInfo::new_full(
+                    self.get_db_name(),
+                    &niv.name().table_name,
+                    TableIdent::new(niv.id().table_id, niv.value().seq()),
+                    niv.value().data.clone(),
+                    Arc::new(CatalogInfo::default()),
+                    DatabaseType::NormalDB,
+                ))
+            })
             .collect::<Vec<_>>();
 
         let mut table_infos = self.list_table_infos().await?;
@@ -223,7 +253,7 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let res = self.ctx.meta.undrop_table(req).await?;
         Ok(res)
     }

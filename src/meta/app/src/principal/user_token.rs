@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
+use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -24,6 +27,30 @@ use serde::Serialize;
 pub enum TokenType {
     Refresh = 1,
     Session = 2,
+}
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            TokenType::Refresh => 'r',
+            TokenType::Session => 's',
+        })
+    }
+}
+
+impl TryFrom<u8> for TokenType {
+    type Error = ErrorCode;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let value = value as char;
+        match value {
+            'r' => Ok(TokenType::Refresh),
+            's' => Ok(TokenType::Session),
+            _ => Err(ErrorCode::AuthenticateFailure(format!(
+                "invalid token type '{value}'"
+            ))),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

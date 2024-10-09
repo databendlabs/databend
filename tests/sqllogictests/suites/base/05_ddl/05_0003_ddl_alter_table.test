@@ -255,3 +255,27 @@ DROP TABLE IF EXISTS t;
 
 statement ok
 DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE OR REPLACE TABLE t1 (id VARCHAR NULL, size VARCHAR NULL, create_time int NULL, path VARCHAR NULL);
+
+statement ok
+CREATE OR REPLACE TABLE t1_random like t1 Engine = Random;
+
+statement ok
+INSERT INTO  t1 SELECT * FROM t1_random LIMIT 10;
+
+statement ok
+ALTER TABLE t1 DROP COLUMN size;
+
+statement ok
+ALTER TABLE t1 DROP COLUMN path;
+
+statement ok
+SELECT * FROM t1 WHERE create_time > 111113;
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t1_random;

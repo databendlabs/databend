@@ -46,9 +46,15 @@ pub trait SnapshotGenerator {
         prev_table_seq: Option<u64>,
         txn_mgr: TxnManagerRef,
         table_id: u64,
+        table_name: &str,
     ) -> Result<TableSnapshot> {
-        let mut snapshot =
-            self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
+        let mut snapshot = self.do_generate_new_snapshot(
+            schema,
+            cluster_key_meta,
+            &previous,
+            prev_table_seq,
+            table_name,
+        )?;
 
         let has_pending_transactional_mutations = {
             let guard = txn_mgr.lock();
@@ -73,5 +79,6 @@ pub trait SnapshotGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        table_name: &str,
     ) -> Result<TableSnapshot>;
 }

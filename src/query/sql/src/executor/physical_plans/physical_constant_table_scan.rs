@@ -34,6 +34,14 @@ impl ConstantTableScan {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }
+
+    pub fn name(&self) -> &str {
+        if self.num_rows == 0 {
+            "EmptyResultScan"
+        } else {
+            "ConstantTableScan"
+        }
+    }
 }
 
 impl PhysicalPlanBuilder {

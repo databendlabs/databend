@@ -193,6 +193,7 @@ build_exceptions! {
     /// For example: license key is expired
     LicenseKeyInvalid(1402),
     EnterpriseFeatureNotEnable(1403),
+    LicenseKeyExpired(1404),
 
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),
@@ -386,12 +387,7 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
-    UnknownDictionaryId(3115),
-    UnsupportedDictionaryOption(3116),
-    UnsupportedDictionarySource(3117),
-    MissingDictionaryOption(3118),
-    WrongDictionaryFieldExpr(3119),
-
+    DictionarySourceError(3115),
     // Procedure
     UnknownProcedure(3130),
     ProcedureAlreadyExists(3131),

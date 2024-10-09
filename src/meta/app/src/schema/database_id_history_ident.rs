@@ -15,10 +15,10 @@
 use crate::tenant_key::ident::TIdent;
 
 /// The key of the list of database ids that have been used in history by a database name.
-pub type DatabaseIdHistoryIdent = TIdent<Resource>;
-pub type DatabaseIdHistoryIdentRaw = TIdentRaw<Resource>;
+pub type DatabaseIdHistoryIdent = TIdent<DatabaseIdHistoryRsc>;
+pub type DatabaseIdHistoryIdentRaw = TIdentRaw<DatabaseIdHistoryRsc>;
 
-pub use kvapi_impl::Resource;
+pub use kvapi_impl::DatabaseIdHistoryRsc;
 
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -44,8 +44,8 @@ mod kvapi_impl {
     use crate::schema::DbIdList;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct DatabaseIdHistoryRsc;
+    impl TenantResource for DatabaseIdHistoryRsc {
         const PREFIX: &'static str = "__fd_db_id_list";
         const TYPE: &'static str = "DatabaseIdHistoryIdent";
         const HAS_TENANT: bool = true;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -28,10 +29,11 @@ use crate::plans::RelOp;
 use crate::ColumnBinding;
 use crate::IndexType;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterializedCte {
-    pub(crate) left_output_columns: Vec<ColumnBinding>,
     pub(crate) cte_idx: IndexType,
+    pub(crate) materialized_output_columns: Vec<ColumnBinding>,
+    pub(crate) materialized_indexes: HashMap<IndexType, IndexType>,
 }
 
 impl Operator for MaterializedCte {
@@ -44,12 +46,12 @@ impl Operator for MaterializedCte {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
 
-        let output_columns = right_prop.output_columns.clone();
-        let outer_columns = right_prop.outer_columns.clone();
-        let used_columns = right_prop.used_columns.clone();
-        let orderings = right_prop.orderings.clone();
+        let output_columns = left_prop.output_columns.clone();
+        let outer_columns = left_prop.outer_columns.clone();
+        let used_columns = left_prop.used_columns.clone();
+        let orderings = left_prop.orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
@@ -101,5 +103,12 @@ impl Operator for MaterializedCte {
                 distribution: Distribution::Serial,
             },
         ]])
+    }
+}
+
+impl std::hash::Hash for MaterializedCte {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.cte_idx.hash(state);
+        self.materialized_output_columns.hash(state);
     }
 }

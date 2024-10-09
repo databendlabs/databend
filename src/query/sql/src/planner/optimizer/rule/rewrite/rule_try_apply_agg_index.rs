@@ -85,13 +85,10 @@ impl RuleTryApplyAggIndex {
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::Aggregate,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
+                            op_type: RelOp::EvalScalar,
                             children: vec![Matcher::MatchOp {
-                                op_type: RelOp::EvalScalar,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Scan,
-                                    children: vec![],
-                                }],
+                                op_type: RelOp::Scan,
+                                children: vec![],
                             }],
                         }],
                     }],
@@ -115,15 +112,12 @@ impl RuleTryApplyAggIndex {
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::Aggregate,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
+                            op_type: RelOp::EvalScalar,
                             children: vec![Matcher::MatchOp {
-                                op_type: RelOp::EvalScalar,
+                                op_type: RelOp::Filter,
                                 children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Filter,
-                                    children: vec![Matcher::MatchOp {
-                                        op_type: RelOp::Scan,
-                                        children: vec![],
-                                    }],
+                                    op_type: RelOp::Scan,
+                                    children: vec![],
                                 }],
                             }],
                         }],
@@ -172,13 +166,10 @@ impl RuleTryApplyAggIndex {
                 children: vec![Matcher::MatchOp {
                     op_type: RelOp::Aggregate,
                     children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
+                        op_type: RelOp::EvalScalar,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
+                            op_type: RelOp::Scan,
+                            children: vec![],
                         }],
                     }],
                 }],
@@ -197,15 +188,12 @@ impl RuleTryApplyAggIndex {
                 children: vec![Matcher::MatchOp {
                     op_type: RelOp::Aggregate,
                     children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
+                        op_type: RelOp::EvalScalar,
                         children: vec![Matcher::MatchOp {
-                            op_type: RelOp::EvalScalar,
+                            op_type: RelOp::Filter,
                             children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Filter,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Scan,
-                                    children: vec![],
-                                }],
+                                op_type: RelOp::Scan,
+                                children: vec![],
                             }],
                         }],
                     }],

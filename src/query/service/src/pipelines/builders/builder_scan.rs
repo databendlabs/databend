@@ -84,6 +84,10 @@ impl PipelineBuilder {
                     cte_scan.cte_idx,
                     self.cte_state.get(&cte_scan.cte_idx.0).unwrap().clone(),
                     cte_scan.offsets.clone(),
+                    self.cte_scan_offsets
+                        .get(&cte_scan.cte_idx.0)
+                        .unwrap()
+                        .clone(),
                 )
             },
             max_threads as usize,

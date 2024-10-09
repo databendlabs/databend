@@ -111,9 +111,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 let id_list = MaskpolicyTableIdList::default();
                 txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
                 txn.if_then.extend(vec![
-                    txn_op_put_pb(name_ident, &id)?,        // name -> db_id
-                    txn_op_put_pb(&id_ident, &meta)?,       // id -> meta
-                    txn_op_put_pb(&id_list_key, &id_list)?, // data mask name -> id_list
+                    txn_op_put_pb(name_ident, &id, None)?,        // name -> db_id
+                    txn_op_put_pb(&id_ident, &meta, None)?,       // id -> meta
+                    txn_op_put_pb(&id_list_key, &id_list, None)?, // data mask name -> id_list
                 ]);
 
                 let (succ, _responses) = send_txn(self, txn).await?;

@@ -16,6 +16,7 @@ use nom::branch::alt;
 use nom::branch::permutation;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom_rule::rule;
 
 use crate::ast::ClusterOption;
 use crate::ast::ClusterType;
@@ -29,6 +30,7 @@ use crate::parser::common::comma_separated_list1;
 use crate::parser::common::dot_separated_idents_1_to_3;
 use crate::parser::common::map_res;
 use crate::parser::common::IResult;
+use crate::parser::common::*;
 use crate::parser::expr::expr;
 use crate::parser::expr::literal_u64;
 use crate::parser::query::query;
@@ -39,7 +41,6 @@ use crate::parser::statement::table_option;
 use crate::parser::statement::warehouse_option;
 use crate::parser::token::TokenKind::*;
 use crate::parser::Input;
-use crate::rule;
 
 pub fn dynamic_table(i: Input) -> IResult<Statement> {
     rule!(

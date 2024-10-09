@@ -18,6 +18,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use clap::Parser;
+use databend_sqllogictests::mock_source::run_mysql_source;
+use databend_sqllogictests::mock_source::run_redis_source;
 use futures_util::stream;
 use futures_util::StreamExt;
 use sqllogictest::default_column_validator;
@@ -74,6 +76,10 @@ impl sqllogictest::AsyncDB for Databend {
 #[tokio::main]
 pub async fn main() -> Result<()> {
     env_logger::init();
+
+    // Run mock sources for dictionary test.
+    run_mock_sources();
+
     let args = SqlLogicTestArgs::parse();
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
@@ -94,6 +100,17 @@ pub async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn run_mock_sources() {
+    // Run a mock Redis server.
+    databend_common_base::runtime::spawn(async move {
+        run_redis_source().await;
+    });
+    // Run a mock MySQL server.
+    databend_common_base::runtime::Thread::spawn(move || {
+        run_mysql_source();
+    });
 }
 
 async fn run_mysql_client() -> Result<()> {

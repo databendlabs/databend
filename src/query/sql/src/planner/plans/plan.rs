@@ -41,6 +41,7 @@ use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CallProcedurePlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
@@ -139,6 +140,7 @@ use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
@@ -218,6 +220,7 @@ pub enum Plan {
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
+    UnsetOptions(Box<UnsetOptionsPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -355,6 +358,7 @@ pub enum Plan {
     // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
     DropProcedure(Box<DropProcedurePlan>),
     CreateProcedure(Box<CreateProcedurePlan>),
+    CallProcedure(Box<CallProcedurePlan>),
     // RenameProcedure(Box<RenameProcedurePlan>),
 
     // sequence
@@ -478,6 +482,7 @@ impl Plan {
             Plan::DescConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
             Plan::ExecuteImmediate(plan) => plan.schema(),
+            Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
 
             _ => Arc::new(DataSchema::empty()),

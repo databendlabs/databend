@@ -56,7 +56,7 @@ pub fn compress_double<T: DoubleType>(
         compressor.to_compression()
     );
 
-    let codec = u8::from(compressor.to_compression());
+    let codec = compressor.to_compression() as u8;
     buf.extend_from_slice(&codec.to_le_bytes());
     let pos = buf.len();
     buf.extend_from_slice(&[0u8; 8]);
@@ -85,8 +85,7 @@ pub fn decompress_double<T: DoubleType, R: NativeReadBuf>(
     output: &mut Vec<T>,
     scratch: &mut Vec<u8>,
 ) -> Result<()> {
-    let (codec, compressed_size, _uncompressed_size) = read_compress_header(reader)?;
-    let compression = Compression::from_codec(codec)?;
+    let (compression, compressed_size, _uncompressed_size) = read_compress_header(reader, scratch)?;
 
     // already fit in buffer
     let mut use_inner = false;

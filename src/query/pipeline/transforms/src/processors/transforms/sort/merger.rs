@@ -78,7 +78,7 @@ where
 
         let sorted_cursors = A::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
-        let pending_stream = (0..streams.len()).collect();
+        let pending_streams = (0..streams.len()).collect();
 
         Self {
             schema,
@@ -88,7 +88,7 @@ where
             batch_rows,
             limit,
             sort_desc,
-            pending_streams: pending_stream,
+            pending_streams,
             temp_sorted_num_rows: 0,
             temp_output_indices: vec![],
             temp_sorted_blocks: vec![],

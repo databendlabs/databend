@@ -130,8 +130,8 @@ impl DefaultCostModel {
     }
 
     fn compute_materialized_cte(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        let left_group = m_expr.child_group(memo, 0)?;
-        let cost = left_group.stat_info.cardinality * self.compute_per_row;
+        let right_group = m_expr.child_group(memo, 1)?;
+        let cost = right_group.stat_info.cardinality * self.compute_per_row;
         Ok(Cost(cost))
     }
 
