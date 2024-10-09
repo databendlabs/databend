@@ -64,6 +64,7 @@ impl Plan {
             Plan::RenameTable(_) => Ok("RenameTable".to_string()),
             Plan::ModifyTableComment(_) => Ok("ModifyTableComment".to_string()),
             Plan::SetOptions(_) => Ok("SetOptions".to_string()),
+            Plan::UnsetOptions(_) => Ok("UnsetOptions".to_string()),
             Plan::RenameTableColumn(_) => Ok("RenameTableColumn".to_string()),
             Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
             Plan::ModifyTableColumn(_) => Ok("ModifyTableColumn".to_string()),

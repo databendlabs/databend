@@ -245,8 +245,9 @@ geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", 
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
-jsonb = "0.4.1"
+jsonb = "0.4.3"
 jwt-simple = "0.11.0"
+libc = { version = "0.2.158" }
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
 object_store_opendal = "0.46"
@@ -408,7 +409,7 @@ openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev =
 orc-rust = { git = "https://github.com/datafuse-extras/datafusion-orc", rev = "03372b97" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "37aeac0" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "37aeac0", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "124a8fc" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

@@ -39,6 +39,7 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -128,6 +129,9 @@ impl DBIdTableName {
             db_id,
             table_name: table_name.to_string(),
         }
+    }
+    pub fn display(&self) -> impl Display {
+        format!("{}.'{}'", self.db_id, self.table_name)
     }
 }
 
@@ -341,6 +345,7 @@ impl TableInfo {
         }
     }
 
+    /// Deprecated: use `new_full()`. This method sets default values for some fields.
     pub fn new(db_name: &str, table_name: &str, ident: TableIdent, meta: TableMeta) -> TableInfo {
         TableInfo {
             ident,
@@ -348,6 +353,24 @@ impl TableInfo {
             name: table_name.to_string(),
             meta,
             ..Default::default()
+        }
+    }
+
+    pub fn new_full(
+        db_name: &str,
+        table_name: &str,
+        ident: TableIdent,
+        meta: TableMeta,
+        catalog_info: Arc<CatalogInfo>,
+        db_type: DatabaseType,
+    ) -> TableInfo {
+        TableInfo {
+            ident,
+            desc: format!("'{}'.'{}'", db_name, table_name),
+            name: table_name.to_string(),
+            meta,
+            catalog_info,
+            db_type,
         }
     }
 
@@ -984,18 +1007,22 @@ impl ListDroppedTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    Db {
-        db_id: u64,
-        db_name: String,
-        tables: Vec<(u64, String)>,
-    },
-    Table {
-        name: DBIdTableName,
-        id: TableId,
-    },
+    Db { db_id: u64, db_name: String },
+    Table { name: DBIdTableName, id: TableId },
+}
+
+impl From<TableNIV> for DroppedId {
+    fn from(value: TableNIV) -> Self {
+        let (name, id, _) = value.unpack();
+        Self::Table { name, id }
+    }
 }
 
 impl DroppedId {
+    pub fn new_table_name_id(name: DBIdTableName, id: TableId) -> DroppedId {
+        DroppedId::Table { name, id }
+    }
+
     pub fn new_table(db_id: u64, table_id: u64, table_name: impl ToString) -> DroppedId {
         DroppedId::Table {
             name: DBIdTableName::new(db_id, table_name),
@@ -1016,7 +1043,8 @@ impl DroppedId {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDroppedTableResp {
-    pub drop_table_infos: Vec<Arc<TableInfo>>,
+    /// The **database_name, (name, id, value)** of a table to vacuum.
+    pub vacuum_tables: Vec<(DatabaseNameIdent, TableNIV)>,
     pub drop_ids: Vec<DroppedId>,
 }
 

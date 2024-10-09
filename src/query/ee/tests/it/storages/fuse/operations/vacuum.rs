@@ -308,7 +308,6 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     let tables = vec![(table_info, operator)];
     let result = do_vacuum_drop_table(tables, None).await?;
     assert!(!result.1.is_empty());
-    assert!(!result.2.is_empty());
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
 
@@ -341,7 +340,6 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
 
         // verify that errors of deletions are not swallowed
         assert!(!result.1.is_empty());
-        assert!(!result.2.is_empty());
     }
 
     // Case 2: parallel vacuum dropped tables
@@ -358,7 +356,6 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         assert!(faulty_accessor.hit_delete_operation());
         // verify that errors of deletions are not swallowed
         assert!(!result.1.is_empty());
-        assert!(!result.2.is_empty());
     }
 
     Ok(())
@@ -433,7 +430,6 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let tables = vec![(table_info, operator)];
     let result = do_vacuum_drop_table(tables, None).await?;
     assert!(!result.1.is_empty());
-    assert!(!result.2.is_empty());
 
     // verify that accessor.delete() was called
     assert!(!accessor.hit_delete_operation());

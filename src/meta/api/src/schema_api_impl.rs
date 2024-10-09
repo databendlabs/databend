@@ -67,6 +67,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -2657,13 +2658,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )
                 .await?;
 
-            let mut vacuum_table_infos = vec![];
+            let mut vacuum_tables = vec![];
             let mut vacuum_ids = vec![];
 
             for db_info in db_infos {
-                if vacuum_table_infos.len() >= the_limit {
+                if vacuum_tables.len() >= the_limit {
                     return Ok(ListDroppedTableResp {
-                        drop_table_infos: vacuum_table_infos,
+                        vacuum_tables,
                         drop_ids: vacuum_ids,
                     });
                 }
@@ -2678,43 +2679,35 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     drop_time_range.clone()
                 };
 
-                let db_filter = (table_drop_time_range, db_info.clone());
+                let capacity = the_limit - vacuum_tables.len();
+                let table_nivs = get_history_tables_for_gc(
+                    self,
+                    table_drop_time_range,
+                    db_info.database_id.db_id,
+                    capacity,
+                )
+                .await?;
 
-                let capacity = the_limit - vacuum_table_infos.len();
-                let table_infos = do_get_table_history(self, db_filter, capacity).await?;
-
-                // A DB can be removed only when all its tables are removed.
-                if vacuum_db && capacity > table_infos.len() {
-                    vacuum_ids.push(DroppedId::Db {
-                        db_id: db_info.database_id.db_id,
-                        db_name: db_info.name_ident.database_name().to_string(),
-                        tables: table_infos
-                            .iter()
-                            .map(|(table_info, _)| {
-                                (table_info.ident.table_id, table_info.name.clone())
-                            })
-                            .collect(),
-                    });
-                } else {
-                    for (table_info, db_id) in table_infos.iter().take(capacity) {
-                        vacuum_ids.push(DroppedId::new_table(
-                            *db_id,
-                            table_info.ident.table_id,
-                            table_info.name.clone(),
-                        ));
-                    }
+                for table_niv in table_nivs.iter() {
+                    vacuum_ids.push(DroppedId::from(table_niv.clone()));
                 }
 
-                vacuum_table_infos.extend(
-                    table_infos
-                        .iter()
-                        .take(capacity)
-                        .map(|(table_info, _)| table_info.clone()),
-                );
+                let db_name = db_info.name_ident.database_name().to_string();
+                let db_name_ident = db_info.name_ident.clone();
+
+                // A DB can be removed only when all its tables are removed.
+                if vacuum_db && capacity > table_nivs.len() {
+                    vacuum_ids.push(DroppedId::Db {
+                        db_id: db_info.database_id.db_id,
+                        db_name: db_name.clone(),
+                    });
+                }
+
+                vacuum_tables.extend(std::iter::repeat(db_name_ident).zip(table_nivs));
             }
 
             return Ok(ListDroppedTableResp {
-                drop_table_infos: vacuum_table_infos,
+                vacuum_tables,
                 drop_ids: vacuum_ids,
             });
         }
@@ -2730,34 +2723,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )
         .await;
 
-        let (seq_db_id, db_meta) = match res {
+        let (seq_db_id, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
             }
         };
 
-        let db_info = Arc::new(DatabaseInfo {
-            database_id: seq_db_id.data,
-            name_ident: tenant_dbname.clone(),
-            meta: db_meta,
-        });
-        let db_filter = (drop_time_range.clone(), db_info);
-        let table_infos = do_get_table_history(self, db_filter, the_limit).await?;
-        let mut drop_ids = vec![];
-        let mut drop_table_infos = vec![];
+        let database_id = seq_db_id.data;
+        let table_nivs =
+            get_history_tables_for_gc(self, drop_time_range.clone(), database_id.db_id, the_limit)
+                .await?;
 
-        for (table_info, db_id) in table_infos.iter().take(the_limit) {
-            drop_ids.push(DroppedId::new_table(
-                *db_id,
-                table_info.ident.table_id,
-                table_info.name.clone(),
-            ));
-            drop_table_infos.push(table_info.clone());
+        let mut drop_ids = vec![];
+        let mut vacuum_tables = vec![];
+
+        for niv in table_nivs {
+            drop_ids.push(DroppedId::from(niv.clone()));
+            vacuum_tables.push((tenant_dbname.clone(), niv));
         }
 
         Ok(ListDroppedTableResp {
-            drop_table_infos,
+            vacuum_tables,
             drop_ids,
         })
     }
@@ -2766,11 +2753,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError> {
         for drop_id in req.drop_ids {
             match drop_id {
-                DroppedId::Db {
-                    db_id,
-                    db_name,
-                    tables: _,
-                } => gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?,
+                DroppedId::Db { db_id, db_name } => {
+                    gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?
+                }
                 DroppedId::Table { name, id } => {
                     gc_dropped_table_by_id(self, &req.tenant, &name, &id).await?
                 }
@@ -3528,21 +3513,22 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     )
 }
 
+/// Lists all dropped and non-dropped tables belonging to a Database,
+/// returns those tables that are eligible for garbage collection,
+/// i.e., whose dropped time is in the specified range.
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
-async fn do_get_table_history(
+async fn get_history_tables_for_gc(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_filter: (Range<Option<DateTime<Utc>>>, Arc<DatabaseInfo>),
+    drop_time_range: Range<Option<DateTime<Utc>>>,
+    db_id: u64,
     limit: usize,
-) -> Result<Vec<(Arc<TableInfo>, u64)>, KVAppError> {
-    let (drop_time_range, db_info) = db_filter;
-    let db_id = db_info.database_id.db_id;
-
-    let dbid_tbname_idlist = TableIdHistoryIdent {
+) -> Result<Vec<TableNIV>, KVAppError> {
+    let ident = TableIdHistoryIdent {
         database_id: db_id,
         table_name: "dummy".to_string(),
     };
-    let dir_name = DirName::new(dbid_tbname_idlist);
+    let dir_name = DirName::new(ident);
     let table_history_kvs = kv_api.list_pb_vec(&dir_name).await?;
 
     let mut args = vec![];
@@ -3573,19 +3559,11 @@ async fn do_get_table_history(
                 continue;
             }
 
-            let tb_info = TableInfo {
-                ident: TableIdent {
-                    table_id: table_id.table_id,
-                    seq: seq_meta.seq,
-                },
-                desc: format!("'{}'.'{}'", db_info.name_ident.database_name(), table_name,),
-                name: (*table_name).clone(),
-                meta: seq_meta.data,
-                db_type: DatabaseType::NormalDB,
-                catalog_info: Default::default(),
-            };
-
-            filter_tb_infos.push((Arc::new(tb_info), db_info.database_id.db_id));
+            filter_tb_infos.push(TableNIV::new(
+                DBIdTableName::new(db_id, table_name.clone()),
+                table_id.clone(),
+                seq_meta,
+            ));
         }
     }
 

@@ -92,6 +92,7 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -524,13 +525,20 @@ impl Catalog for MutableCatalog {
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
         let drop_ids = resp.drop_ids.clone();
-        let drop_table_infos = resp.drop_table_infos;
 
         let storage = ctx.storage_factory;
 
         let mut tables = vec![];
-        for table_info in drop_table_infos {
-            tables.push(storage.get_table(table_info.as_ref())?);
+        for (db_name_ident, niv) in resp.vacuum_tables {
+            let table_info = TableInfo::new_full(
+                db_name_ident.database_name(),
+                &niv.name().table_name,
+                TableIdent::new(niv.id().table_id, niv.value().seq),
+                niv.value().data.clone(),
+                self.info(),
+                DatabaseType::NormalDB,
+            );
+            tables.push(storage.get_table(&table_info)?);
         }
         Ok((tables, drop_ids))
     }

@@ -140,6 +140,7 @@ use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
@@ -220,6 +221,7 @@ pub enum Plan {
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
+    UnsetOptions(Box<UnsetOptionsPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),

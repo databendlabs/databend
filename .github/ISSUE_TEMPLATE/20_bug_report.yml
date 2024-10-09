@@ -8,17 +8,17 @@ body:
       value: |
         Thank you very much for submitting feedback to Databend to help Databend develop better.
 
-        If it is an idea or help wanted, please go to: [Discussion](https://github.com/datafuselabs/databend/discussions)
+        If it is an idea or help wanted, please go to: [Discussion](https://github.com/databendlabs/databend/discussions)
 
   - type: checkboxes
     attributes:
       label: Search before asking
       description: >
-        Please make sure to search in the [issues](https://github.com/datafuselabs/databend/issues) first to see
+        Please make sure to search in the [issues](https://github.com/databendlabs/databend/issues) first to see
         whether the same issue was reported already.
       options:
         - label: >
-            I had searched in the [issues](https://github.com/datafuselabs/databend/issues) and found no similar
+            I had searched in the [issues](https://github.com/databendlabs/databend/issues) and found no similar
             issues.
           required: true
 
