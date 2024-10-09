@@ -26,7 +26,6 @@ use std::path::Path;
 use std::ptr::Alignment;
 use std::ptr::NonNull;
 
-use rustix::fs::OFlags;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 
@@ -109,31 +108,69 @@ struct DmaFile {
     buf: Option<DmaBuffer>,
 }
 
+#[cfg(target_os = "linux")]
+pub mod linux {
+    use rustix::fs::OFlags;
+
+    use super::*;
+
+    impl DmaFile {
+        /// Attempts to open a file in read-only mode.
+        pub(super) async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
+            let file = File::options()
+                .read(true)
+                .custom_flags(OFlags::DIRECT.bits() as i32)
+                .open(path)
+                .await?;
+
+            open_dma(file).await
+        }
+
+        /// Opens a file in write-only mode.
+        pub(super) async fn create(path: impl AsRef<Path>) -> io::Result<DmaFile> {
+            let file = File::options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .custom_flags((OFlags::DIRECT | OFlags::EXCL).bits() as i32)
+                .open(path)
+                .await?;
+
+            open_dma(file).await
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub mod not_linux {
+    use rustix::fs::OFlags;
+
+    use super::*;
+
+    impl DmaFile {
+        /// Attempts to open a file in read-only mode.
+        pub(super) async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
+            let file = File::options().read(true).open(path).await?;
+
+            open_dma(file).await
+        }
+
+        /// Opens a file in write-only mode.
+        pub(super) async fn create(path: impl AsRef<Path>) -> io::Result<DmaFile> {
+            let file = File::options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .custom_flags(OFlags::EXCL.bits() as i32)
+                .open(path)
+                .await?;
+
+            open_dma(file).await
+        }
+    }
+}
+
 impl DmaFile {
-    /// Attempts to open a file in read-only mode.
-    async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
-        let file = File::options()
-            .read(true)
-            .custom_flags(OFlags::DIRECT.bits() as i32)
-            .open(path)
-            .await?;
-
-        open_dma(file).await
-    }
-
-    /// Opens a file in write-only mode.
-    async fn create(path: impl AsRef<Path>) -> io::Result<DmaFile> {
-        let file = File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .custom_flags((OFlags::DIRECT | OFlags::EXCL).bits() as i32)
-            .open(path)
-            .await?;
-
-        open_dma(file).await
-    }
-
     fn set_buffer(&mut self, buf: DmaBuffer) {
         self.buf = Some(buf)
     }
