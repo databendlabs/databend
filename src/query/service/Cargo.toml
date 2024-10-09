@@ -170,6 +170,7 @@ tempfile = "3.4.0"
 time = "0.3.14"
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
+tokio-util = "0.7.12"
 toml = { version = "0.8", default-features = false }
 tonic = { workspace = true }
 typetag = { workspace = true }

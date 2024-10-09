@@ -200,6 +200,8 @@ pub struct TempDir {
 }
 
 impl TempDir {
+    // It should be ensured that the actual size is less than or equal to
+    // the reserved size as much as possible, otherwise the limit may be exceeded.
     pub fn new_file_with_size(&self, size: usize) -> Result<Option<TempPath>> {
         let path = self.path.join(GlobalUniqName::unique()).into_boxed_path();
 
@@ -306,6 +308,27 @@ impl TempPath {
     pub fn size(&self) -> usize {
         self.0.size
     }
+
+    pub fn set_size(&mut self, size: usize) -> std::result::Result<(), &'static str> {
+        use std::cmp::Ordering;
+
+        let Some(path) = Arc::get_mut(&mut self.0) else {
+            return Err("can't set size after share");
+        };
+        match size.cmp(&path.size) {
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                let mut dir = path.dir_info.size.lock().unwrap();
+                *dir += size - path.size;
+            }
+            Ordering::Less => {
+                let mut dir = path.dir_info.size.lock().unwrap();
+                *dir -= path.size - size;
+            }
+        }
+        path.size = size;
+        Ok(())
+    }
 }
 
 struct InnerPath {
@@ -348,11 +371,12 @@ mod tests {
 
         let mgr = TempDirManager::instance();
         let dir = mgr.get_disk_spill_dir(1 << 30, "some_query").unwrap();
-        let path = dir.new_file_with_size(100)?.unwrap();
+        let mut path = dir.new_file_with_size(110)?.unwrap();
 
         println!("{:?}", &path);
 
         fs::write(&path, vec![b'a'; 100])?;
+        path.set_size(100).unwrap();
 
         assert_eq!(1, dir.dir_info.count.load(Ordering::Relaxed));
         assert_eq!(100, *dir.dir_info.size.lock().unwrap());

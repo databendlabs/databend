@@ -36,6 +36,7 @@ use databend_common_expression::DataBlock;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use opendal::Operator;
+use tokio_util::io::SyncIoBridge;
 
 use crate::sessions::QueryContext;
 
