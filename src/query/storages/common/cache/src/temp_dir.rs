@@ -24,6 +24,7 @@ use std::ops::Deref;
 use std::ops::Drop;
 use std::path::Path;
 use std::path::PathBuf;
+use std::ptr::Alignment;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -44,14 +45,15 @@ pub struct TempDirManager {
     global_limit: usize,
     // Reserved disk space in blocks
     reserved: u64,
+    alignment: Alignment,
 
     group: Mutex<Group>,
 }
 
 impl TempDirManager {
     pub fn init(config: &SpillConfig, tenant_id: &str) -> Result<()> {
-        let (root, reserved) = if config.path.is_empty() {
-            (None, 0)
+        let (root, reserved, alignment) = if config.path.is_empty() {
+            (None, 0, Alignment::MIN)
         } else {
             let path = PathBuf::from(&config.path)
                 .join(tenant_id)
@@ -66,13 +68,16 @@ impl TempDirManager {
             }
 
             if create_dir_all(&path).is_err() {
-                (None, 0)
+                (None, 0, Alignment::MIN)
             } else {
                 let stat =
                     statvfs(path.as_ref()).map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-                let reserved = (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64;
 
-                (Some(path), reserved)
+                (
+                    Some(path),
+                    (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
+                    Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
+                )
             }
         };
 
@@ -80,6 +85,7 @@ impl TempDirManager {
             root,
             global_limit: config.global_bytes_limit as usize,
             reserved,
+            alignment,
             group: Mutex::new(Group {
                 dirs: HashMap::new(),
             }),
@@ -175,6 +181,10 @@ impl TempDirManager {
         }
     }
 
+    pub fn block_alignment(&self) -> Alignment {
+        self.alignment
+    }
+
     fn insufficient_disk(&self, size: u64) -> Result<bool> {
         let stat = statvfs(self.root.as_ref().unwrap().as_ref())
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
@@ -242,6 +252,10 @@ impl TempDir {
             }
         });
         Ok(rt?)
+    }
+
+    pub fn block_alignment(&self) -> Alignment {
+        self.manager.alignment
     }
 }
 
