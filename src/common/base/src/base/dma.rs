@@ -33,6 +33,7 @@ use crate::runtime::spawn_blocking;
 
 unsafe impl Send for DmaAllocator {}
 
+#[derive(Clone, Copy)]
 pub struct DmaAllocator(Alignment);
 
 impl DmaAllocator {

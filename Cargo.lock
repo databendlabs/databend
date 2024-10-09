@@ -5279,7 +5279,6 @@ dependencies = [
  "time",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "toml 0.8.19",
  "tonic 0.11.0",
  "tower",
