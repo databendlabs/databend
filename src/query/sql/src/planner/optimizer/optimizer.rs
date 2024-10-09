@@ -50,7 +50,9 @@ use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Mutation;
+use crate::plans::Operator;
 use crate::plans::Plan;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
@@ -503,6 +505,12 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
 
     let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
     mutation.distributed = opt_ctx.enable_distributed_optimization;
+    if input_s_expr.plan.rel_op() == RelOp::Join {
+        let right_child = input_s_expr.child(1)?;
+        if right_child.plan.rel_op() == RelOp::ConstantTableScan {
+            mutation.matched_evaluators.clear();
+        }
+    }
 
     input_s_expr = match mutation.mutation_type {
         MutationType::Merge => {
