@@ -356,8 +356,8 @@ impl Write for DmaWriteBuf {
         while !buf.is_empty() {
             let (dst, remain) = match self.data.last_mut() {
                 Some(dst) if dst.len() < dst.capacity() => {
-                    let remian = dst.capacity() - dst.len();
-                    (dst, remian)
+                    let remain = dst.capacity() - dst.len();
+                    (dst, remain)
                 }
                 _ => {
                     self.data

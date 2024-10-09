@@ -433,18 +433,17 @@ impl BlocksEncoder {
     }
 
     fn add_block(&mut self, block: DataBlock) {
-        let start = self.size();
-        let columns_layout = block
-            .columns()
-            .iter()
-            .map(|entry| {
+        let columns_layout = std::iter::once(self.size())
+            .chain(block.columns().iter().map(|entry| {
                 let column = entry
                     .value
                     .convert_to_full_column(&entry.data_type, block.num_rows());
                 serialize_column_in(&column, &mut self.buf).unwrap();
-                self.size() - start
-            })
+                self.size()
+            }))
+            .map_windows(|x: &[_; 2]| x[1] - x[0])
             .collect();
+
         self.columns_layout.push(columns_layout);
         self.offsets.push(self.size())
     }
