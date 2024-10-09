@@ -30,6 +30,7 @@ mod utils;
 
 pub use parquet_part::ParquetFilesPart;
 pub use parquet_part::ParquetPart;
+pub use parquet_rs::transform_record_batch;
 pub use parquet_rs::InMemoryRowGroup;
 pub use parquet_rs::ParquetFileReader;
 pub use parquet_rs::ParquetRSFullReader;
