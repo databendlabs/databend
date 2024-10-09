@@ -35,7 +35,6 @@ use crate::types::array::ArrayColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
-use crate::types::variant::JSONB_NULL;
 use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
