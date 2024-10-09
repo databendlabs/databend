@@ -238,28 +238,29 @@ impl InvertedIndexReader {
         }
 
         // 2. read fst files.
-        let fst_files = self
+        let mut fst_files = self
             .read_column_data(index_path, "fst", field_ids, &inverted_index_meta_map)
             .await?;
 
         let mut fst_maps = HashMap::new();
         for field_id in field_ids {
-            let fst_map = if let Some(fst_data) = fst_files.remove(&field_id) {
-                let fst = Fst::new(fst_data).map_err(|err| {
+            let fst = if let Some(fst_data) = fst_files.remove(field_id) {
+                Fst::new(fst_data).map_err(|err| {
                     std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         format!("Fst data is corrupted: {:?}", err),
                     )
-                })?;
-                tantivy_fst::Map::from(fst)
+                })?
             } else {
-                // create an empty fst if the fst data not exist.
-                // this mean the filed don't have any valid term.
-                let mut builder = tantivy_fst::MapBuilder::memory();
+                // If the FST data does not exist, create an empty FST.
+                // This means that the field does not have any valid terms.
+                let builder = tantivy_fst::MapBuilder::memory();
                 let bytes = builder.into_inner().unwrap();
-                tantivy_fst::Map::from_bytes(bytes).unwrap()
+                let fst_data = OwnedBytes::new(bytes);
+                Fst::new(fst_data).unwrap()
             };
-            fst_maps.insert(field_id, fst_map);
+            let fst_map = tantivy_fst::Map::from(fst);
+            fst_maps.insert(*field_id, fst_map);
         }
 
         // 3. check whether query is matched in the fsts.
