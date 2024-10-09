@@ -4725,7 +4725,6 @@ dependencies = [
  "anyhow",
  "backtrace",
  "bincode 2.0.0-rc.3",
- "bytes",
  "chrono",
  "databend-common-base",
  "databend-common-exception",
