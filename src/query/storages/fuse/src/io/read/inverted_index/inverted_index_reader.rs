@@ -105,14 +105,14 @@ impl InvertedIndexReader {
         let mut col_field_map = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
             let col_name = format!("{}-{}", name, field_id);
-            let col_meta = inverted_index_meta_map.get(&col_name).ok_or_else(|| {
-                ErrorCode::TantivyError(format!(
-                    "inverted index column `{}` does not exist",
-                    col_name
-                ))
-            })?;
-            col_metas.push((col_name.clone(), col_meta));
-            col_field_map.insert(col_name, *field_id);
+            if let Some(col_meta) = inverted_index_meta_map.get(&col_name) {
+                col_metas.push((col_name.clone(), col_meta));
+                col_field_map.insert(col_name, *field_id);
+            }
+        }
+        if col_metas.is_empty() {
+            let col_files = HashMap::new();
+            return Ok(col_files);
         }
 
         let futs = col_metas
@@ -243,14 +243,22 @@ impl InvertedIndexReader {
             .await?;
 
         let mut fst_maps = HashMap::new();
-        for (field_id, fst_data) in fst_files.into_iter() {
-            let fst = Fst::new(fst_data).map_err(|err| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Fst data is corrupted: {:?}", err),
-                )
-            })?;
-            let fst_map = tantivy_fst::Map::from(fst);
+        for field_id in field_ids {
+            let fst_map = if let Some(fst_data) = fst_files.remove(&field_id) {
+                let fst = Fst::new(fst_data).map_err(|err| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Fst data is corrupted: {:?}", err),
+                    )
+                })?;
+                tantivy_fst::Map::from(fst)
+            } else {
+                // create an empty fst if the fst data not exist.
+                // this mean the filed don't have any valid term.
+                let mut builder = tantivy_fst::MapBuilder::memory();
+                let bytes = builder.into_inner().unwrap();
+                tantivy_fst::Map::from_bytes(bytes).unwrap()
+            };
             fst_maps.insert(field_id, fst_map);
         }
 
