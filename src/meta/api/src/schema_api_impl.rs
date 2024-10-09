@@ -638,7 +638,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListDatabaseReq,
         include_non_retainable: bool,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_ident = DatabaseIdHistoryIdent::new(&req.tenant, "dummy");
@@ -652,26 +652,23 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let ids = db_id_list
                 .id_list
                 .iter()
-                .map(|db_id| DatabaseId { db_id: *db_id })
-                .collect::<Vec<_>>();
+                .map(|db_id| DatabaseId { db_id: *db_id });
 
-            for db_ids in ids.chunks(DEFAULT_MGET_SIZE) {
-                let id_metas = self.get_pb_vec(db_ids.iter().cloned()).await?;
+            let id_metas = self.get_pb_vec(ids).await?;
 
-                for (db_id, db_meta) in id_metas {
-                    let Some(db_meta) = db_meta else {
-                        error!("get_database_history cannot find {:?} db_meta", db_id);
-                        continue;
-                    };
+            for (db_id, db_meta) in id_metas {
+                let Some(db_meta) = db_meta else {
+                    error!("get_database_history cannot find {:?} db_meta", db_id);
+                    continue;
+                };
 
-                    let db = DatabaseInfo {
-                        database_id: db_id,
-                        name_ident: DatabaseNameIdent::new_from(db_id_list_key.clone()),
-                        meta: db_meta,
-                    };
+                let db = DatabaseInfo {
+                    database_id: db_id,
+                    name_ident: DatabaseNameIdent::new_from(db_id_list_key.clone()),
+                    meta: db_meta,
+                };
 
-                    dbs.insert(db_id.db_id, Arc::new(db));
-                }
+                dbs.insert(db_id.db_id, Arc::new(db));
             }
         }
 
@@ -706,7 +703,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = DatabaseNameIdent::new(req.tenant(), "dummy");
@@ -1659,11 +1656,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .map(|id| TableId { table_id: id })
             .collect::<Vec<_>>();
 
-        let mut seq_metas = vec![];
-        for chunk in ids.chunks(DEFAULT_MGET_SIZE) {
-            let got = self.get_pb_values_vec(chunk.to_vec()).await?;
-            seq_metas.extend(got);
-        }
+        let seq_metas = self.get_pb_values_vec(ids.clone()).await?;
 
         let res = names
             .into_iter()
@@ -3091,27 +3084,22 @@ async fn get_table_meta_history(
 ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
     let mut tb_metas = vec![];
 
-    let inner_keys = tb_id_list
-        .id_list
-        .into_iter()
-        .map(TableId::new)
-        .collect::<Vec<_>>();
+    let inner_keys = tb_id_list.id_list.into_iter().map(TableId::new);
 
-    for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
-        let kvs = kv_api.get_pb_vec(c.iter().cloned()).await?;
+    let kvs = kv_api.get_pb_vec(inner_keys).await?;
 
-        for (k, table_meta) in kvs {
-            let Some(table_meta) = table_meta else {
-                error!("get_table_history cannot find {:?} table_meta", k);
-                continue;
-            };
+    for (k, table_meta) in kvs {
+        let Some(table_meta) = table_meta else {
+            error!("get_table_history cannot find {:?} table_meta", k);
+            continue;
+        };
 
-            if !is_drop_time_retainable(table_meta.drop_on, *now) {
-                continue;
-            }
-            tb_metas.push((k, table_meta));
+        if !is_drop_time_retainable(table_meta.drop_on, *now) {
+            continue;
         }
+        tb_metas.push((k, table_meta));
     }
+
     Ok(tb_metas)
 }
 
@@ -3541,30 +3529,29 @@ async fn get_history_tables_for_gc(
 
     let mut filter_tb_infos = vec![];
 
-    for chunk in args[..std::cmp::min(limit, args.len())].chunks(DEFAULT_MGET_SIZE) {
-        let table_id_idents = chunk.iter().map(|(table_id, _)| table_id.clone());
+    let limited_args = &args[..std::cmp::min(limit, args.len())];
+    let table_id_idents = limited_args.iter().map(|(table_id, _)| table_id.clone());
 
-        let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
+    let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
-        for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
-            let Some(seq_meta) = seq_meta else {
-                error!(
-                    "batch_filter_table_info cannot find {:?} table_meta",
-                    table_id
-                );
-                continue;
-            };
+    for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(limited_args.iter()) {
+        let Some(seq_meta) = seq_meta else {
+            error!(
+                "batch_filter_table_info cannot find {:?} table_meta",
+                table_id
+            );
+            continue;
+        };
 
-            if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                continue;
-            }
-
-            filter_tb_infos.push(TableNIV::new(
-                DBIdTableName::new(db_id, table_name.clone()),
-                table_id.clone(),
-                seq_meta,
-            ));
+        if !drop_time_range.contains(&seq_meta.data.drop_on) {
+            continue;
         }
+
+        filter_tb_infos.push(TableNIV::new(
+            DBIdTableName::new(db_id, table_name.clone()),
+            table_id.clone(),
+            seq_meta,
+        ));
     }
 
     Ok(filter_tb_infos)

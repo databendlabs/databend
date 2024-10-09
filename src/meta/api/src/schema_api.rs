@@ -124,14 +124,15 @@ pub trait SchemaApi: Send + Sync {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     async fn rename_database(
         &self,
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, KVAppError>;
 
-    /// Retrieves all databases for a specific tenant, including those marked as dropped.
+    /// Retrieves all databases for a specific tenant,
+    /// optionally including those marked as dropped.
     ///
     /// * `include_non_retainable` -
     /// If true, includes databases that are beyond the retention period.
@@ -140,7 +141,7 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListDatabaseReq,
         include_non_retainable: bool,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     // index
 
