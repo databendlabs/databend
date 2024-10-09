@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -124,14 +125,15 @@ pub trait SchemaApi: Send + Sync {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     async fn rename_database(
         &self,
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, KVAppError>;
 
-    /// Retrieves all databases for a specific tenant, including those marked as dropped.
+    /// Retrieves all databases for a specific tenant,
+    /// optionally including those marked as dropped.
     ///
     /// * `include_non_retainable` -
     /// If true, includes databases that are beyond the retention period.
@@ -140,7 +142,7 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListDatabaseReq,
         include_non_retainable: bool,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     // index
 
@@ -208,11 +210,7 @@ pub trait SchemaApi: Send + Sync {
         table_id_history: &TableIdHistoryIdent,
     ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
 
-    async fn get_tables_history(
-        &self,
-        req: ListTableReq,
-        db_name: &str,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError>;
+    async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
 
     /// List all tables in the database.
     ///
