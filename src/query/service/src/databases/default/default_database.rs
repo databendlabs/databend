@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -213,13 +214,23 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_tables_history(
-                ListTableReq::new(self.get_tenant(), self.db_info.database_id),
-                self.get_db_name(),
-            )
+            .get_tables_history(ListTableReq::new(
+                self.get_tenant(),
+                self.db_info.database_id,
+            ))
             .await?
             .into_iter()
-            .filter(|i| i.meta.drop_on.is_some())
+            .filter(|i| i.value().drop_on.is_some())
+            .map(|niv| {
+                Arc::new(TableInfo::new_full(
+                    self.get_db_name(),
+                    &niv.name().table_name,
+                    TableIdent::new(niv.id().table_id, niv.value().seq()),
+                    niv.value().data.clone(),
+                    Arc::new(CatalogInfo::default()),
+                    DatabaseType::NormalDB,
+                ))
+            })
             .collect::<Vec<_>>();
 
         let mut table_infos = self.list_table_infos().await?;
