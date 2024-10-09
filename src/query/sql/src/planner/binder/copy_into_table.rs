@@ -120,7 +120,7 @@ impl<'a> Binder {
         match pattern {
             LiteralStringOrVariable::Literal(s) => Ok(s.clone()),
             LiteralStringOrVariable::Variable(var_name) => {
-                let var_value = ctx.get_variable(&var_name).unwrap_or(Scalar::Null);
+                let var_value = ctx.get_variable(var_name).unwrap_or(Scalar::Null);
                 let var_value = shrink_scalar(var_value);
                 if let Scalar::String(s) = var_value {
                     Ok(s)
