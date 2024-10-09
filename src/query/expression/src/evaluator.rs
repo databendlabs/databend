@@ -506,15 +506,21 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
             (DataType::Variant, DataType::Array(inner_dest_ty)) => {
-                let empty_vec = vec![jsonb::Value::Null];
+                let empty_vec = vec![];
+                let temp_array: jsonb::Value;
                 match value {
                     Value::Scalar(Scalar::Variant(x)) => {
-                        let array = jsonb::from_slice(&x).map_err(|e| {
-                            ErrorCode::BadArguments(format!(
-                                "Expect to be valid json, got err: {e:?}"
-                            ))
-                        })?;
-                        let array = array.as_array().unwrap_or(&empty_vec);
+                        let array = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
+                            temp_array = jsonb::from_slice(&x).map_err(|e| {
+                                ErrorCode::BadArguments(format!(
+                                    "Expect to be valid json, got err: {e:?}"
+                                ))
+                            })?;
+                            temp_array.as_array().unwrap_or(&empty_vec)
+                        } else {
+                            &empty_vec
+                        };
+
                         let column = VariantType::create_column_from_variants(array.as_slice());
 
                         let validity = validity.map(|validity| {
@@ -541,13 +547,20 @@ impl<'a> Evaluator<'a> {
                         let mut array_builder =
                             ArrayType::<VariantType>::create_builder(col.len(), &[]);
 
-                        for x in col.iter() {
-                            let array = jsonb::from_slice(x).map_err(|e| {
-                                ErrorCode::BadArguments(format!(
-                                    "Expect to be valid json, got err: {e:?}"
-                                ))
-                            })?;
-                            let array = array.as_array().unwrap_or(&empty_vec);
+                        let mut temp_array: jsonb::Value;
+                        for (idx, x) in col.iter().enumerate() {
+                            let array = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true)
+                            {
+                                temp_array = jsonb::from_slice(&x).map_err(|e| {
+                                    ErrorCode::BadArguments(format!(
+                                        "Expect to be valid json, got err: {e:?}"
+                                    ))
+                                })?;
+                                temp_array.as_array().unwrap_or(&empty_vec)
+                            } else {
+                                &empty_vec
+                            };
+
                             for v in array.iter() {
                                 v.write_to_vec(&mut array_builder.builder.data);
                                 array_builder.builder.commit_row();
