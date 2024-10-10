@@ -23,6 +23,7 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
+use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
 use crate::parser::common::comma_separated_list0;
@@ -138,6 +139,13 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
     )(i)
 }
 
+pub fn literal_string_or_variable(i: Input) -> IResult<LiteralStringOrVariable> {
+    alt((
+        map(literal_string, LiteralStringOrVariable::Literal),
+        map(variable_ident, LiteralStringOrVariable::Variable),
+    ))(i)
+}
+
 fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
     alt((
         map(
@@ -145,7 +153,7 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             |(_, _, _, files, _)| CopyIntoTableOption::Files(files),
         ),
         map(
-            rule! { PATTERN ~ "=" ~ #literal_string },
+            rule! { PATTERN ~ ^"=" ~ ^#literal_string_or_variable },
             |(_, _, pattern)| CopyIntoTableOption::Pattern(pattern),
         ),
         map(rule! { #file_format_clause }, |options| {
