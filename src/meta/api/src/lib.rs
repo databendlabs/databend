@@ -53,7 +53,6 @@ pub use util::deserialize_struct;
 pub use util::deserialize_u64;
 pub use util::fetch_id;
 pub use util::get_u64_value;
-pub use util::list_keys;
 pub use util::list_u64_value;
 pub use util::send_txn;
 pub use util::serialize_struct;

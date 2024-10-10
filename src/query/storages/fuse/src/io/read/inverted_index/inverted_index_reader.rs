@@ -105,14 +105,14 @@ impl InvertedIndexReader {
         let mut col_field_map = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
             let col_name = format!("{}-{}", name, field_id);
-            let col_meta = inverted_index_meta_map.get(&col_name).ok_or_else(|| {
-                ErrorCode::TantivyError(format!(
-                    "inverted index column `{}` does not exist",
-                    col_name
-                ))
-            })?;
-            col_metas.push((col_name.clone(), col_meta));
-            col_field_map.insert(col_name, *field_id);
+            if let Some(col_meta) = inverted_index_meta_map.get(&col_name) {
+                col_metas.push((col_name.clone(), col_meta));
+                col_field_map.insert(col_name, *field_id);
+            }
+        }
+        if col_metas.is_empty() {
+            let col_files = HashMap::new();
+            return Ok(col_files);
         }
 
         let futs = col_metas
@@ -238,20 +238,29 @@ impl InvertedIndexReader {
         }
 
         // 2. read fst files.
-        let fst_files = self
+        let mut fst_files = self
             .read_column_data(index_path, "fst", field_ids, &inverted_index_meta_map)
             .await?;
 
         let mut fst_maps = HashMap::new();
-        for (field_id, fst_data) in fst_files.into_iter() {
-            let fst = Fst::new(fst_data).map_err(|err| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Fst data is corrupted: {:?}", err),
-                )
-            })?;
+        for field_id in field_ids {
+            let fst = if let Some(fst_data) = fst_files.remove(field_id) {
+                Fst::new(fst_data).map_err(|err| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Fst data is corrupted: {:?}", err),
+                    )
+                })?
+            } else {
+                // If the FST data does not exist, create an empty FST.
+                // This means that the field does not have any valid terms.
+                let builder = tantivy_fst::MapBuilder::memory();
+                let bytes = builder.into_inner().unwrap();
+                let fst_data = OwnedBytes::new(bytes);
+                Fst::new(fst_data).unwrap()
+            };
             let fst_map = tantivy_fst::Map::from(fst);
-            fst_maps.insert(field_id, fst_map);
+            fst_maps.insert(*field_id, fst_map);
         }
 
         // 3. check whether query is matched in the fsts.

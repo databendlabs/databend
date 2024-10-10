@@ -16,10 +16,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::io;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::dma_buffer_as_vec;
+use databend_common_base::base::dma_read_file_range;
+use databend_common_base::base::dma_write_file_vectored;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -29,6 +33,8 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::DataBlock;
+use databend_storages_common_cache::TempDir;
+use databend_storages_common_cache::TempPath;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
@@ -59,12 +65,8 @@ impl Display for SpillerType {
 #[derive(Clone)]
 pub struct SpillerConfig {
     pub location_prefix: String,
-}
-
-impl SpillerConfig {
-    pub fn create(location_prefix: String) -> Self {
-        Self { location_prefix }
-    }
+    pub disk_spill: Option<Arc<TempDir>>,
+    pub spiller_type: SpillerType,
 }
 
 /// Spiller is a unified framework for operators which need to spill data from memory.
@@ -77,13 +79,14 @@ impl SpillerConfig {
 pub struct Spiller {
     ctx: Arc<QueryContext>,
     operator: Operator,
-    config: SpillerConfig,
+    location_prefix: String,
+    disk_spill: Option<Arc<TempDir>>,
     _spiller_type: SpillerType,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
-    pub partition_location: HashMap<usize, Vec<String>>,
+    pub partition_location: HashMap<usize, Vec<Location>>,
     /// Record columns layout for spilled data, will be used when read data from disk
-    pub columns_layout: HashMap<String, Vec<u64>>,
+    pub columns_layout: HashMap<Location, Vec<usize>>,
     /// Record how many bytes have been spilled for each partition.
     pub partition_spilled_bytes: HashMap<usize, u64>,
 }
@@ -94,13 +97,18 @@ impl Spiller {
         ctx: Arc<QueryContext>,
         operator: Operator,
         config: SpillerConfig,
-        spiller_type: SpillerType,
     ) -> Result<Self> {
         let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
+        let SpillerConfig {
+            location_prefix,
+            disk_spill,
+            spiller_type,
+        } = config;
         Ok(Self {
-            ctx: ctx.clone(),
+            ctx,
             operator,
-            config,
+            location_prefix,
+            disk_spill,
             _spiller_type: spiller_type,
             join_spilling_partition_bits,
             partition_location: Default::default(),
@@ -114,31 +122,20 @@ impl Spiller {
     }
 
     /// Spill a [`DataBlock`] to storage.
-    pub async fn spill(&mut self, data_block: DataBlock) -> Result<String> {
-        // Serialize data block.
-        let (data_size, columns_data, columns_layout) = self.serialize_data_block(data_block)?;
+    pub async fn spill(&mut self, data_block: DataBlock) -> Result<Location> {
+        let instant = Instant::now();
 
         // Spill data to storage.
-        let instant = Instant::now();
-        let unique_name = GlobalUniqName::unique();
-        let location = format!("{}/{}", self.config.location_prefix, unique_name);
-        let mut writer = self
-            .operator
-            .writer_with(&location)
-            .chunk(8 * 1024 * 1024)
-            .await?;
-        for data in columns_data.into_iter() {
-            writer.write(data).await?;
-        }
-        writer.close().await?;
+        let encoded = EncodedBlock::from_block(data_block);
+        let columns_layout = encoded.columns_layout();
+        let data_size = encoded.size();
+        let location = self.write_encodes(data_size, vec![encoded]).await?;
 
         // Record statistics.
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, data_size as usize);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::SpillWriteTime,
-            instant.elapsed().as_millis() as usize,
-        );
+        match location {
+            Location::Remote(_) => record_remote_write_profile(&instant, data_size),
+            Location::Local(_) => record_local_write_profile(&instant, data_size),
+        }
 
         // Record columns layout for spilled data.
         self.columns_layout.insert(location.clone(), columns_layout);
@@ -187,37 +184,25 @@ impl Spiller {
         let mut spilled_partitions = Vec::with_capacity(partitioned_data.len());
         for (partition_id, data_block) in partitioned_data.into_iter() {
             let begin = write_bytes;
-            let (data_size, columns_data, columns_layout) =
-                self.serialize_data_block(data_block)?;
+
+            let encoded = EncodedBlock::from_block(data_block);
+            let columns_layout = encoded.columns_layout();
+            let data_size = encoded.size();
 
             write_bytes += data_size;
-            write_data.push(columns_data);
+            write_data.push(encoded);
             spilled_partitions.push((partition_id, begin..write_bytes, columns_layout));
         }
 
         // Spill data to storage.
         let instant = Instant::now();
-        let unique_name = GlobalUniqName::unique();
-        let location = format!("{}/{}", self.config.location_prefix, unique_name);
-        let mut writer = self
-            .operator
-            .writer_with(&location)
-            .chunk(8 * 1024 * 1024)
-            .await?;
-        for write_bucket_data in write_data.into_iter() {
-            for data in write_bucket_data.into_iter() {
-                writer.write(data).await?;
-            }
-        }
-        writer.close().await?;
+        let location = self.write_encodes(write_bytes, write_data).await?;
 
         // Record statistics.
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes as usize);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::SpillWriteTime,
-            instant.elapsed().as_millis() as usize,
-        );
+        match location {
+            Location::Remote(_) => record_remote_write_profile(&instant, write_bytes),
+            Location::Local(_) => record_local_write_profile(&instant, write_bytes),
+        }
 
         Ok(SpilledData::MergedPartition {
             location,
@@ -227,43 +212,38 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
-    pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
-        debug_assert!(self.columns_layout.contains_key(file));
+    pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
+        let columns_layout = self.columns_layout.get(location).unwrap();
 
         // Read spilled data from storage.
         let instant = Instant::now();
-        let data = self.operator.read(file).await?.to_bytes();
+        let block = match location {
+            Location::Remote(loc) => {
+                let data = self.operator.read(loc).await?.to_bytes();
+                record_remote_read_profile(&instant, data.len());
+                deserialize_block(columns_layout, &data)
+            }
+            Location::Local(path) => {
+                let file_size = path.size();
+                debug_assert_eq!(file_size, columns_layout.iter().sum::<usize>());
+                let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
+                let data = &buf[range];
+                record_local_read_profile(&instant, data.len());
+                deserialize_block(columns_layout, data)
+            }
+        };
 
-        // Record statistics.
-        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, data.len());
-        Profile::record_usize_profile(
-            ProfileStatisticsName::SpillReadTime,
-            instant.elapsed().as_millis() as usize,
-        );
-
-        // Deserialize data block.
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(self.columns_layout.len());
-        let columns_layout = self.columns_layout.get(file).unwrap();
-        for column_layout in columns_layout.iter() {
-            columns.push(
-                deserialize_column(&data[begin as usize..(begin + column_layout) as usize])
-                    .unwrap(),
-            );
-            begin += column_layout;
-        }
-
-        Ok(DataBlock::new_from_columns(columns))
+        Ok(block)
     }
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
     pub async fn read_spilled_partition(&mut self, p_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(files) = self.partition_location.get(p_id) {
-            let mut spilled_data = Vec::with_capacity(files.len());
-            for file in files.iter() {
-                let block = self.read_spilled_file(file).await?;
+        if let Some(locs) = self.partition_location.get(p_id) {
+            let mut spilled_data = Vec::with_capacity(locs.len());
+            for loc in locs.iter() {
+                let block = self.read_spilled_file(loc).await?;
+
                 if block.num_rows() != 0 {
                     spilled_data.push(block);
                 }
@@ -285,30 +265,43 @@ impl Spiller {
         {
             // Read spilled data from storage.
             let instant = Instant::now();
-            let data = self.operator.read(location).await?.to_bytes();
+
+            let data = match location {
+                Location::Remote(loc) => self.operator.read(loc).await?.to_bytes(),
+                Location::Local(path) => {
+                    let file_size = path.size();
+                    debug_assert_eq!(
+                        file_size,
+                        if let Some((_, range, _)) = partitions.last() {
+                            range.end
+                        } else {
+                            0
+                        }
+                    );
+
+                    let (mut buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
+                    assert_eq!(range.start, 0);
+                    buf.truncate(range.end);
+
+                    dma_buffer_as_vec(buf).into()
+                }
+            };
 
             // Record statistics.
-            Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, data.len());
-            Profile::record_usize_profile(
-                ProfileStatisticsName::SpillReadTime,
-                instant.elapsed().as_millis() as usize,
-            );
+            match location {
+                Location::Remote(_) => record_remote_read_profile(&instant, data.len()),
+                Location::Local(_) => record_local_read_profile(&instant, data.len()),
+            };
 
             // Deserialize partitioned data block.
-            let mut partitioned_data = Vec::with_capacity(partitions.len());
-            for (partition_id, range, columns_layout) in partitions.iter() {
-                let mut begin = range.start;
-                let mut columns = Vec::with_capacity(columns_layout.len());
-                for column_layout in columns_layout.iter() {
-                    columns.push(
-                        deserialize_column(&data[begin as usize..(begin + column_layout) as usize])
-                            .unwrap(),
-                    );
-                    begin += column_layout;
-                }
-                partitioned_data.push((*partition_id, DataBlock::new_from_columns(columns)));
-            }
+            let partitioned_data = partitions
+                .iter()
+                .map(|(partition_id, range, columns_layout)| {
+                    let block = deserialize_block(columns_layout, &data[range.clone()]);
+                    (*partition_id, block)
+                })
+                .collect();
+
             return Ok(partitioned_data);
         }
         Ok(vec![])
@@ -316,70 +309,166 @@ impl Spiller {
 
     pub async fn read_range(
         &self,
-        location: &str,
-        data_range: Range<u64>,
-        columns_layout: &[u64],
+        location: &Location,
+        data_range: Range<usize>,
+        columns_layout: &[usize],
     ) -> Result<DataBlock> {
         // Read spilled data from storage.
         let instant = Instant::now();
-        let data = self
-            .operator
-            .read_with(location)
-            .range(data_range)
-            .await?
-            .to_vec();
+        let data_range = data_range.start as u64..data_range.end as u64;
 
-        // Record statistics.
-        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, data.len());
-        Profile::record_usize_profile(
-            ProfileStatisticsName::SpillReadTime,
-            instant.elapsed().as_millis() as usize,
-        );
-
-        // Deserialize data block.
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(columns_layout.len());
-        for column_layout in columns_layout.iter() {
-            columns.push(
-                deserialize_column(&data[begin as usize..(begin + column_layout) as usize])
-                    .unwrap(),
-            );
-            begin += column_layout;
+        match location {
+            Location::Remote(loc) => {
+                let data = self
+                    .operator
+                    .read_with(loc)
+                    .range(data_range)
+                    .await?
+                    .to_bytes();
+                record_remote_read_profile(&instant, data.len());
+                Ok(deserialize_block(columns_layout, &data))
+            }
+            Location::Local(path) => {
+                let (buf, range) = dma_read_file_range(path, data_range).await?;
+                let data = &buf[range];
+                record_local_read_profile(&instant, data.len());
+                Ok(deserialize_block(columns_layout, data))
+            }
         }
-
-        Ok(DataBlock::new_from_columns(columns))
     }
 
-    pub(crate) fn spilled_files(&self) -> Vec<String> {
+    async fn write_encodes(&mut self, size: usize, blocks: Vec<EncodedBlock>) -> Result<Location> {
+        let location = match &self.disk_spill {
+            None => None,
+            Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
+        }
+        .unwrap_or(Location::Remote(format!(
+            "{}/{}",
+            self.location_prefix,
+            GlobalUniqName::unique(),
+        )));
+
+        let written = match &location {
+            Location::Remote(loc) => {
+                let mut writer = self
+                    .operator
+                    .writer_with(loc)
+                    .chunk(8 * 1024 * 1024)
+                    .await?;
+
+                let mut written = 0;
+                for data in blocks.into_iter().flat_map(|x| x.0) {
+                    written += data.len();
+                    writer.write(data).await?;
+                }
+
+                writer.close().await?;
+                written
+            }
+            Location::Local(path) => {
+                let bufs = blocks
+                    .iter()
+                    .flat_map(|x| &x.0)
+                    .map(|data| io::IoSlice::new(data))
+                    .collect::<Vec<_>>();
+
+                dma_write_file_vectored(path.as_ref(), &bufs).await?
+            }
+        };
+        debug_assert_eq!(size, written);
+        Ok(location)
+    }
+
+    pub(crate) fn spilled_files(&self) -> Vec<Location> {
         self.columns_layout.keys().cloned().collect()
-    }
-
-    // Serialize data block to (data_size, columns_data, columns_layout).
-    fn serialize_data_block(&self, data_block: DataBlock) -> Result<(u64, Vec<Vec<u8>>, Vec<u64>)> {
-        let num_columns = data_block.num_columns();
-        let mut data_size = 0;
-        let mut columns_data = Vec::with_capacity(num_columns);
-        let mut columns_layout = Vec::with_capacity(num_columns);
-
-        for column in data_block.columns() {
-            let column = column
-                .value
-                .convert_to_full_column(&column.data_type, data_block.num_rows());
-            let column_data = serialize_column(&column);
-
-            data_size += column_data.len() as u64;
-            columns_layout.push(column_data.len() as u64);
-            columns_data.push(column_data);
-        }
-        Ok((data_size, columns_data, columns_layout))
     }
 }
 
 pub enum SpilledData {
-    Partition(String),
+    Partition(Location),
     MergedPartition {
-        location: String,
-        partitions: Vec<(usize, Range<u64>, Vec<u64>)>,
+        location: Location,
+        partitions: Vec<(usize, Range<usize>, Vec<usize>)>,
     },
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum Location {
+    Remote(String),
+    Local(TempPath),
+}
+
+pub struct EncodedBlock(pub Vec<Vec<u8>>);
+
+impl EncodedBlock {
+    pub fn from_block(block: DataBlock) -> Self {
+        let data = block
+            .columns()
+            .iter()
+            .map(|entry| {
+                let column = entry
+                    .value
+                    .convert_to_full_column(&entry.data_type, block.num_rows());
+                serialize_column(&column)
+            })
+            .collect();
+        EncodedBlock(data)
+    }
+
+    pub fn columns_layout(&self) -> Vec<usize> {
+        self.0.iter().map(|data| data.len()).collect()
+    }
+
+    pub fn size(&self) -> usize {
+        self.0.iter().map(|data| data.len()).sum()
+    }
+}
+
+pub fn deserialize_block(columns_layout: &[usize], mut data: &[u8]) -> DataBlock {
+    let columns = columns_layout
+        .iter()
+        .map(|layout| {
+            let (cur, remain) = data.split_at(*layout);
+            data = remain;
+            deserialize_column(cur).unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    DataBlock::new_from_columns(columns)
+}
+
+pub fn record_remote_write_profile(start: &Instant, write_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::RemoteSpillWriteTime,
+        start.elapsed().as_millis() as usize,
+    );
+}
+
+pub fn record_remote_read_profile(start: &Instant, read_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::RemoteSpillReadTime,
+        start.elapsed().as_millis() as usize,
+    );
+}
+
+pub fn record_local_write_profile(start: &Instant, write_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::LocalSpillWriteTime,
+        start.elapsed().as_millis() as usize,
+    );
+}
+
+pub fn record_local_read_profile(start: &Instant, read_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::LocalSpillReadTime,
+        start.elapsed().as_millis() as usize,
+    );
 }
