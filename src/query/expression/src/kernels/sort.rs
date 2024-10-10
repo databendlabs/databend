@@ -106,7 +106,7 @@ impl DataBlock {
         if num_rows <= 1 || block.num_columns() == 0 {
             return Ok(block.clone());
         }
-        let mut sort_compare = SortCompare::new(descriptions.to_owned(), num_rows + 11, limit);
+        let mut sort_compare = SortCompare::new(descriptions.to_owned(), num_rows, limit);
 
         for desc in descriptions.iter() {
             let array = block.get_by_offset(desc.offset).value.clone();
