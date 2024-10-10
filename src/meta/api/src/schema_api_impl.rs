@@ -1547,36 +1547,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_meta_history(
+    async fn get_retainable_tables(
         &self,
-        database_name: &str,
-        table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
-        let table_name = &table_id_history.table_name;
+        history_ident: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
+        let Some(seq_table_id_list) = self.get_pb(history_ident).await? else {
+            return Ok(vec![]);
+        };
 
-        let (_seq, table_id_list) = self.get_pb_seq_and_value(table_id_history).await?;
-
-        let table_id_list = table_id_list.ok_or_else(|| {
-            AppError::from(UnknownTable::new(
-                table_name,
-                format!("get_table_history: {}.{}", database_name, table_name),
-            ))
-        })?;
-
-        let now = Utc::now();
-
-        let metas = get_table_meta_history(self, &now, table_id_list).await?;
-
-        debug!(
-            name :% =(&table_id_history);
-            "get_table_meta_history"
-        );
-        return Ok(metas);
+        get_retainable_table_metas(self, &Utc::now(), seq_table_id_list.data).await
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
+    async fn list_retainable_tables(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // List tables by tenant, db_id.
@@ -1595,7 +1579,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for (ident, history) in ident_histories {
             debug!(name :% =(&ident); "get_tables_history");
 
-            let id_metas = get_table_meta_history(self, &now, history.data).await?;
+            let id_metas = get_retainable_table_metas(self, &now, history.data).await?;
 
             let table_nivs = id_metas.into_iter().map(|(table_id, seq_meta)| {
                 let name = DBIdTableName::new(ident.database_id, ident.table_name.clone());
@@ -3050,16 +3034,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 }
 
-async fn get_table_meta_history(
+async fn get_retainable_table_metas(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     now: &DateTime<Utc>,
     tb_id_list: TableIdList,
-) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
+) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
     let mut tb_metas = vec![];
 
-    let inner_keys = tb_id_list.id_list.into_iter().map(TableId::new);
+    let table_ids = tb_id_list.id_list.into_iter().map(TableId::new);
 
-    let kvs = kv_api.get_pb_vec(inner_keys).await?;
+    let kvs = kv_api.get_pb_vec(table_ids).await?;
 
     for (k, table_meta) in kvs {
         let Some(table_meta) = table_meta else {
@@ -3067,10 +3051,9 @@ async fn get_table_meta_history(
             continue;
         };
 
-        if !is_drop_time_retainable(table_meta.drop_on, *now) {
-            continue;
+        if is_drop_time_retainable(table_meta.drop_on, *now) {
+            tb_metas.push((k, table_meta));
         }
-        tb_metas.push((k, table_meta));
     }
 
     Ok(tb_metas)
