@@ -28,18 +28,19 @@ impl ExtractSegmentResult {
 #[typetag::serde(name = "extract_segment_result")]
 impl BlockMetaInfo for ExtractSegmentResult {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals SegmentLocationMeta")
+        unimplemented!("Unimplemented equals ExtractSegmentResult")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone SegmentLocationMeta")
+        unimplemented!("Unimplemented clone ExtractSegmentResult")
     }
 }
 
 impl Debug for ExtractSegmentResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SegmentLocationMeta")
+        f.debug_struct("ExtractSegmentResult")
             .field("segment_location", &self.segment_location)
+            .field("block_metas", &self.block_metas)
             .finish()
     }
 }
@@ -47,13 +48,13 @@ impl Debug for ExtractSegmentResult {
 impl serde::Serialize for ExtractSegmentResult {
     fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize SegmentLocationMeta")
+        unimplemented!("Unimplemented serialize ExtractSegmentResult")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExtractSegmentResult {
     fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize SegmentLocationMeta")
+        unimplemented!("Unimplemented deserialize ExtractSegmentResult")
     }
 }
