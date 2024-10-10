@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -202,7 +203,15 @@ pub trait SchemaApi: Send + Sync {
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError>;
 
+    /// Get a [`TableInfo`] by `tenant, database_name, table_name`.
+    ///
+    /// This method should be deprecated,
+    /// where the database-id is already known and there is no need to re-fetch db by database-name.
+    /// In this case, use [`Self::get_table_in_db`] instead.
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError>;
+
+    /// Get a [`TableNIV`] by `database_id, table_name`.
+    async fn get_table_in_db(&self, req: &DBIdTableName) -> Result<Option<TableNIV>, MetaError>;
 
     async fn get_table_meta_history(
         &self,

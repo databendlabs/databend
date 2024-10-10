@@ -1477,43 +1477,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         };
 
-        let table_id = {
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id: *seq_db_id.data,
-                table_name: tenant_dbname_tbname.table_name.clone(),
-            };
-
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            assert_table_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
-
-            table_id
+        let dbid_tbname = DBIdTableName {
+            db_id: *seq_db_id.data,
+            table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let tbid = TableId { table_id };
+        let table_niv = self.get_table_in_db(&dbid_tbname).await?;
 
-        let seq_meta = self.get_pb(&tbid).await?;
-
-        let Some(seq_meta) = seq_meta else {
-            Err(AppError::from(UnknownTable::new(
+        let Some(table_niv) = table_niv else {
+            return Err(AppError::from(UnknownTable::new(
                 &tenant_dbname_tbname.table_name,
                 format!("get_table: {}", tenant_dbname_tbname),
-            )))?
+            ))
+            .into());
         };
 
-        debug!(
-            ident :% =(&tbid),
-            name :% =(tenant_dbname_tbname),
-            table_meta :? =(&seq_meta);
-            "get_table"
-        );
+        let (_name, id, seq_meta) = table_niv.unpack();
 
         let db_type = DatabaseType::NormalDB;
 
         let tb_info = TableInfo {
             ident: TableIdent {
-                table_id: tbid.table_id,
+                table_id: id.table_id,
                 seq: seq_meta.seq,
             },
             desc: format!(
@@ -1528,6 +1513,36 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         return Ok(Arc::new(tb_info));
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_table_in_db(
+        &self,
+        name_ident: &DBIdTableName,
+    ) -> Result<Option<TableNIV>, MetaError> {
+        debug!(req :? =(name_ident); "SchemaApi: {}", func_name!());
+
+        let table_id = {
+            // Get table by tenant, db_id, table_name to assert presence.
+
+            let (tb_id_seq, table_id) = get_u64_value(self, name_ident).await?;
+            if tb_id_seq == 0 {
+                return Ok(None);
+            }
+
+            table_id
+        };
+
+        let tbid = TableId { table_id };
+
+        let seq_meta = self.get_pb(&tbid).await?;
+
+        let Some(seq_meta) = seq_meta else {
+            return Ok(None);
+        };
+
+        Ok(Some(TableNIV::new(name_ident.clone(), tbid, seq_meta)))
     }
 
     #[logcall::logcall]
