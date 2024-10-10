@@ -20,6 +20,7 @@ use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::meta::is_possible_non_standard_decimal_block;
 use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_to_parquet_schema;
@@ -39,7 +40,7 @@ pub fn column_chunks_to_record_batch(
     compression: &Compression,
     block_path: &str,
 ) -> databend_common_exception::Result<RecordBatch> {
-    let use_v1 = !block_path.contains("_b/g")
+    let use_v1 = !is_possible_non_standard_decimal_block(block_path)?
         && original_schema.fields.iter().any(|f| {
             matches!(
                 f.data_type.remove_nullable(),
