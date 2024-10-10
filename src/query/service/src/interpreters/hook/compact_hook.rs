@@ -90,16 +90,13 @@ async fn do_hook_compact(
                     block_limit: Some(compaction_num_block_hint as usize),
                 }
             }
-            _ =>
-            // for mutations other than Insertions, we use an empirical value of 3 segments as the
-            // limit for compaction. to be refined later.
-                {
-                    let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
-                    CompactionLimits {
-                        segment_limit: Some(auto_compaction_segments_limit as usize),
-                        block_limit: None,
-                    }
+            _ => {
+                let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
+                CompactionLimits {
+                    segment_limit: Some(auto_compaction_segments_limit as usize),
+                    block_limit: None,
                 }
+            }
         };
 
         let op_name = &trace_ctx.operation_name;
@@ -141,7 +138,12 @@ async fn compact_table(
             &compact_target.table,
         )
         .await?;
+    let settings = ctx.get_settings();
+    // keep the original progress value
+    let progress_value = ctx.get_write_progress_value();
+
     let do_recluster = !table.cluster_keys(ctx.clone()).is_empty();
+    let do_compact = compaction_limits.block_limit.is_some() || !do_recluster;
 
     // evict the table from cache
     ctx.evict_table_from_cache(
@@ -150,56 +152,58 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
-    let mut build_res = if do_recluster {
+    if do_compact {
+        let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+            catalog: compact_target.catalog.clone(),
+            database: compact_target.database.clone(),
+            table: compact_target.table.clone(),
+            limit: compaction_limits.clone(),
+        });
+        let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+        let compact_interpreter = OptimizeCompactBlockInterpreter::try_create(
+            ctx.clone(),
+            s_expr,
+            lock_opt.clone(),
+            false,
+        )?;
+        let mut build_res = compact_interpreter.execute2().await?;
+        // execute the compact pipeline
+        if build_res.main_pipeline.is_complete_pipeline()? {
+            build_res.set_max_threads(settings.get_max_threads()? as usize);
+            let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+
+            let complete_executor =
+                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+
+            // Clears previously generated segment locations to avoid duplicate data in the refresh phase
+            ctx.clear_segment_locations()?;
+            ctx.set_executor(complete_executor.get_inner())?;
+            complete_executor.execute()?;
+            drop(complete_executor);
+        }
+    }
+
+    if do_recluster {
         let recluster = RelOperator::Recluster(Recluster {
             catalog: compact_target.catalog,
             database: compact_target.database,
             table: compact_target.table,
             filters: None,
-            limit: compaction_limits.segment_limit,
+            limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
         });
         let s_expr = SExpr::create_leaf(Arc::new(recluster));
         let recluster_interpreter =
             ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-        recluster_interpreter.execute2().await?
-    } else {
-        let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
-            catalog: compact_target.catalog,
-            database: compact_target.database,
-            table: compact_target.table,
-            limit: compaction_limits,
-        });
-        let s_expr = SExpr::create_leaf(Arc::new(compact_block));
-        let compact_interpreter =
-            OptimizeCompactBlockInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-        compact_interpreter.execute2().await?
-    };
-
-    if build_res.main_pipeline.is_empty() {
-        return Ok(());
+        // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+        // we do not need to use `PipelineCompleteExecutor` to execute it.
+        let build_res = recluster_interpreter.execute2().await?;
+        assert!(build_res.main_pipeline.is_empty());
     }
 
-    // execute the compact pipeline (for table with cluster keys, re-cluster will also be executed)
-    let settings = ctx.get_settings();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-    let settings = ExecutorSettings::try_create(ctx.clone())?;
-
-    if build_res.main_pipeline.is_complete_pipeline()? {
-        let mut pipelines = build_res.sources_pipelines;
-        pipelines.push(build_res.main_pipeline);
-
-        let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-
-        // keep the original progress value
-        let progress_value = ctx.get_write_progress_value();
-        // Clears previously generated segment locations to avoid duplicate data in the refresh phase
-        ctx.clear_segment_locations()?;
-        ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute()?;
-        drop(complete_executor);
-
-        // reset the progress value
-        ctx.get_write_progress().set(&progress_value);
-    }
+    // reset the progress value
+    ctx.get_write_progress().set(&progress_value);
     Ok(())
 }

@@ -318,3 +318,21 @@ SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
 
 statement ok
 unset max_set_operator_count;
+
+query I
+select * from numbers(100) union all select * from numbers(100) ignore_result;
+----
+
+statement ok
+create or replace table t1 (test bigint);
+
+statement ok
+insert into t1 values(1), (0);
+
+query I
+WITH cte1 AS ( SELECT t1.test FROM t1 WHERE t1.test = 0 ) ,cte2 AS ( SELECT cte1.test FROM cte1 WHERE cte1.test = 1  UNION ALL  SELECT cte1.test FROM cte1 WHERE cte1.test = 0 ) SELECT * FROM cte2;
+----
+0
+
+statement ok
+drop table t1;

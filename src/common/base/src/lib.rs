@@ -24,6 +24,7 @@
 #![feature(alloc_error_hook)]
 #![feature(slice_swap_unchecked)]
 #![feature(variant_count)]
+#![feature(ptr_alignment_type)]
 
 pub mod base;
 pub mod containers;
@@ -33,6 +34,7 @@ pub mod headers;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
+pub mod vec_ext;
 pub mod version;
 
 pub use runtime::dump_backtrace;

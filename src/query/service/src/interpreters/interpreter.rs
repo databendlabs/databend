@@ -44,10 +44,11 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
-use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
-use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
-use crate::interpreters::InterpreterMetrics;
-use crate::interpreters::InterpreterQueryLog;
+use super::hook::vacuum_hook::hook_disk_temp_dir;
+use super::hook::vacuum_hook::hook_vacuum_temp_files;
+use super::interpreter_txn_commit::CommitInterpreter;
+use super::InterpreterMetrics;
+use super::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -207,7 +208,10 @@ pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(
         Arc::new(ServiceQueryExecutor::new(ctx.clone())),
     );
     let result = planner.plan_sql(sql).await;
-    let short_sql = short_sql(sql.to_string());
+    let short_sql = short_sql(
+        sql.to_string(),
+        ctx.get_settings().get_short_sql_max_length()?,
+    );
     let mut stmt = if let Ok((_, extras)) = &result {
         Some(extras.statement.clone())
     } else {
@@ -281,6 +285,8 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
     }
 
     hook_vacuum_temp_files(&query_ctx)?;
+
+    hook_disk_temp_dir(&query_ctx)?;
 
     let err_opt = match &info.res {
         Ok(_) => None,

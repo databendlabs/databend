@@ -98,6 +98,25 @@ async fn test_set_settings() {
         let expect = "WrongValueForVariable. Code: 2803, Text = Value xx is not within the allowed values [\"None\", \"LZ4\", \"ZSTD\"].";
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
+
+    // Number Range
+    {
+        // Ok
+        settings
+            .set_setting("short_sql_max_length".to_string(), "1000".to_string())
+            .unwrap();
+
+        // Range 1024*1024
+        let result =
+            settings.set_setting("short_sql_max_length".to_string(), "1048577".to_string());
+        let expect = "WrongValueForVariable. Code: 2803, Text = Value 1048577 is not within the range [1, 1048576].";
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+
+        // Range 1
+        let result = settings.set_setting("short_sql_max_length".to_string(), "0".to_string());
+        let expect = "WrongValueForVariable. Code: 2803, Text = Value 0 is not within the range [1, 1048576].";
+        assert_eq!(expect, format!("{}", result.unwrap_err()));
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

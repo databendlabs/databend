@@ -25,7 +25,6 @@ use databend_common_expression::types::DataType;
 use crate::principal::procedure_id_ident::ProcedureIdIdent;
 use crate::principal::procedure_name_ident::ProcedureNameIdent;
 use crate::principal::ProcedureIdentity;
-use crate::schema::CreateOption;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
@@ -85,22 +84,15 @@ impl Display for ProcedureMeta {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateProcedureReq {
-    pub create_option: CreateOption,
     pub name_ident: ProcedureNameIdent,
     pub meta: ProcedureMeta,
 }
 
 impl Display for CreateProcedureReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let typ = match self.create_option {
-            CreateOption::Create => "create_procedure",
-            CreateOption::CreateIfNotExists => "create_procedure_if_not_exists",
-            CreateOption::CreateOrReplace => "create_or_replace_procedure",
-        };
         write!(
             f,
-            "{}:{}/{}={:?}",
-            typ,
+            "{}/{}={:?}",
             self.name_ident.tenant_name(),
             self.name_ident.procedure_name(),
             self.meta
@@ -137,7 +129,6 @@ pub struct RenameProcedureReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropProcedureReq {
-    pub if_exists: bool,
     pub name_ident: ProcedureNameIdent,
 }
 
@@ -145,8 +136,7 @@ impl Display for DropProcedureReq {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "drop_procedure(if_exists={}):{}/{}",
-            self.if_exists,
+            "drop_procedure:{}/{}",
             self.name_ident.tenant_name(),
             self.name_ident.procedure_name(),
         )

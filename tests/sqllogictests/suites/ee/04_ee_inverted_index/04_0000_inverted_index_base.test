@@ -480,6 +480,19 @@ ALTER TABLE books MODIFY COLUMN title string not null
 #10 465 3534
 
 statement ok
+CREATE TABLE t2 (id int, body string)
+
+statement ok
+CREATE INVERTED INDEX IF NOT EXISTS idx ON t2(body) tokenizer = 'chinese'
+
+statement ok
+INSERT INTO t2 VALUES (1, null)
+
+query IT
+select * from t2 where query('body:test');
+----
+
+statement ok
 use default
 
 statement ok

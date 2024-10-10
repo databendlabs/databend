@@ -303,6 +303,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("spilling_to_disk_vacuum_unknown_temp_dirs_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "Set the maximum number of directories to clean up. If there are some temporary dirs when another query is unexpectedly interrupted, which needs to be cleaned up after this query.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable merge into row fetch optimization.",
@@ -459,6 +465,12 @@ impl DefaultSettings {
                     desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("window_partition_spilling_to_disk_bytes_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of local disk in bytes that each window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_num_partitions", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
@@ -920,6 +932,12 @@ impl DefaultSettings {
                     desc: "Time budget for dynamic sample in milliseconds",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("short_sql_max_length", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(128),
+                    desc: "Sets the maximum length for truncating SQL queries in short_sql function.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=1024*1024)),
                 }),
             ]);
 

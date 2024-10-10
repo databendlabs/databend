@@ -17,7 +17,6 @@ mod http_query_handlers;
 mod query;
 mod session;
 mod stage;
-pub mod string_block;
 mod suggestions;
 
 pub use discovery::discovery_nodes;
@@ -27,6 +26,7 @@ pub use http_query_handlers::make_state_uri;
 pub use http_query_handlers::query_route;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
+pub use query::string_block::StringBlock;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
 pub use query::ExpiringState;
@@ -42,7 +42,6 @@ pub use session::ClientSessionManager;
 pub(crate) use session::SessionClaim;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
-pub(crate) use string_block::StringBlock;
 pub use suggestions::list_suggestions;
 pub use suggestions::SuggestionsResponse;
 

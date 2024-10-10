@@ -80,20 +80,46 @@ where
     }
 }
 
+#[multiversion::multiversion(targets("x86_64+avx", "x86_64+sse"))]
+fn sum_batch<T, N>(other: T::Column) -> N::Scalar
+where
+    T: ValueType + Sync + Send,
+    N: ValueType,
+    T::Scalar: Number + AsPrimitive<N::Scalar>,
+    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
+    for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
+{
+    // use temp variable to hint the compiler to unroll the loop
+    let mut sum = N::Scalar::default();
+    for value in T::iter_column(&other) {
+        sum += value.as_();
+    }
+    sum
+}
+
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
     T: ValueType + Sync + Send,
     N: ValueType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
 {
     fn add(
         &mut self,
         other: T::ScalarRef<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let other = T::to_owned_scalar(other).as_();
-        self.value += other;
+        self.value += other.as_();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        self.value += sum_batch::<T, N>(other);
         Ok(())
     }
 

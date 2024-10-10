@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::cmp::min;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Duration;
@@ -25,11 +27,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::TableInfoFilter;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
@@ -125,20 +125,29 @@ impl Interpreter for VacuumDropTablesInterpreter {
             self.plan.database, retention_time
         );
         // if database if empty, vacuum all tables
-        let filter = if self.plan.database.is_empty() {
-            TableInfoFilter::DroppedTableOrDroppedDatabase(Some(retention_time))
+        let database_name = if self.plan.database.is_empty() {
+            None
         } else {
-            TableInfoFilter::DroppedTables(Some(retention_time))
+            Some(self.plan.database.clone())
         };
 
         let tenant = self.ctx.get_tenant();
         let (tables, drop_ids) = catalog
-            .get_drop_table_infos(ListDroppedTableReq {
-                inner: DatabaseNameIdent::new(&tenant, &self.plan.database),
-                filter,
-                limit: self.plan.option.limit,
-            })
+            .get_drop_table_infos(ListDroppedTableReq::new4(
+                &tenant,
+                database_name,
+                Some(retention_time),
+                self.plan.option.limit,
+            ))
             .await?;
+
+        // map: table id to its belonging db id
+        let mut containing_db = BTreeMap::new();
+        for drop_id in drop_ids.iter() {
+            if let DroppedId::Table { name, id } = drop_id {
+                containing_db.insert(id.table_id, name.db_id);
+            }
+        }
 
         info!(
             "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?}, drop_ids: {:?}",
@@ -157,7 +166,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let (files_opt, failed_dbs, failed_tables) = handler
+        let (files_opt, failed_tables) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
                 tables,
@@ -168,28 +177,21 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
-        // gc meta data only when not dry run
+
+        let failed_db_ids = failed_tables
+            .iter()
+            // Safe unwrap: the map is built from drop_ids
+            .map(|id| *containing_db.get(id).unwrap())
+            .collect::<HashSet<_>>();
+
+        // gc metadata only when not dry run
         if self.plan.option.dry_run.is_none() {
             let mut success_dropped_ids = vec![];
             for drop_id in drop_ids {
                 match &drop_id {
-                    DroppedId::Db {
-                        db_id,
-                        db_name,
-                        tables,
-                    } => {
-                        if !failed_dbs.contains(db_name) {
+                    DroppedId::Db { db_id, db_name: _ } => {
+                        if !failed_db_ids.contains(db_id) {
                             success_dropped_ids.push(drop_id);
-                        } else {
-                            for (table_id, table_name) in tables.iter() {
-                                if !failed_tables.contains(table_id) {
-                                    success_dropped_ids.push(DroppedId::new_table(
-                                        *db_id,
-                                        *table_id,
-                                        table_name.clone(),
-                                    ));
-                                }
-                            }
                         }
                     }
                     DroppedId::Table { name: _, id } => {
@@ -201,7 +203,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             }
             info!(
                 "failed dbs:{:?}, failed_tables:{:?}, success_drop_ids:{:?}",
-                failed_dbs, failed_tables, success_dropped_ids
+                failed_db_ids, failed_tables, success_dropped_ids
             );
             self.gc_drop_tables(catalog, success_dropped_ids).await?;
         }

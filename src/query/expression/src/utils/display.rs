@@ -755,7 +755,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             precedence: usize,
             min_precedence: usize,
         ) -> String {
-            if precedence < min_precedence {
+            if precedence < min_precedence || matches!(op, "AND" | "OR") {
                 format!(
                     "({} {op} {})",
                     write_expr(lhs, precedence),

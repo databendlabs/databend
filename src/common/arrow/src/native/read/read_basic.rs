@@ -29,6 +29,7 @@ use crate::arrow::error::Result;
 use crate::arrow::io::parquet::read::init_nested;
 use crate::arrow::io::parquet::read::InitNested;
 use crate::arrow::io::parquet::read::NestedState;
+use crate::native::compression::Compression;
 
 pub fn read_validity<R: NativeReadBuf>(
     reader: &mut R,
@@ -171,13 +172,17 @@ pub fn read_u32<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u32> {
     Ok(u32::from_le_bytes(buf.try_into().unwrap()))
 }
 
-pub fn read_compress_header<R: Read>(r: &mut R) -> Result<(u8, usize, usize)> {
-    let mut header = vec![0u8; 9];
-    r.read_exact(&mut header)?;
+pub fn read_compress_header<R: Read>(
+    r: &mut R,
+    scratch: &mut Vec<u8>,
+) -> Result<(Compression, usize, usize)> {
+    scratch.reserve(9);
+    let temp_data = unsafe { std::slice::from_raw_parts_mut(scratch.as_mut_ptr(), 9) };
+    r.read_exact(temp_data)?;
     Ok((
-        header[0],
-        u32::from_le_bytes(header[1..5].try_into().unwrap()) as usize,
-        u32::from_le_bytes(header[5..9].try_into().unwrap()) as usize,
+        Compression::from_codec(temp_data[0])?,
+        u32::from_le_bytes(temp_data[1..5].try_into().unwrap()) as usize,
+        u32::from_le_bytes(temp_data[5..9].try_into().unwrap()) as usize,
     ))
 }
 

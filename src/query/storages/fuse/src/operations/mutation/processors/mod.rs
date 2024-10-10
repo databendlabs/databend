@@ -16,5 +16,6 @@ mod compact_source;
 mod mutation_source;
 
 pub use compact_source::CompactSource;
+pub use compact_source::CompactTransform;
 pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;

@@ -29,7 +29,7 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::storages::fuse::get_snapshot_referenced_segments;
 
@@ -200,7 +200,7 @@ pub async fn do_gc_orphan_files(
     // 2.2 Delete all the orphan segment files to be purged
     let purged_file_num = segment_locations_to_be_purged.len();
     fuse_table
-        .try_purge_location_files_and_cache::<CompactSegmentInfo>(
+        .try_purge_location_files_and_cache::<SegmentInfo, _>(
             ctx.clone(),
             HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
         )

@@ -7,6 +7,9 @@ USE test_window_partition_spill
 statement ok
 set window_partition_spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
 
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
 query T
 SELECT SUM(number + a + b)
 FROM (

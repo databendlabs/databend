@@ -26,12 +26,8 @@ use databend_common_storages_fuse::FuseTable;
 // (TableName, file, file size)
 pub type VacuumDropFileInfo = (String, String, u64);
 
-// (drop_files, failed_dbs, failed_tables)
-pub type VacuumDropTablesResult = Result<(
-    Option<Vec<VacuumDropFileInfo>>,
-    HashSet<String>,
-    HashSet<u64>,
-)>;
+// (drop_files, failed_tables)
+pub type VacuumDropTablesResult = Result<(Option<Vec<VacuumDropFileInfo>>, HashSet<u64>)>;
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
