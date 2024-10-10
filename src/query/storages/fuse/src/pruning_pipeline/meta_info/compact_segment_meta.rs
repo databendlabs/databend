@@ -25,7 +25,7 @@ impl CompactSegmentMeta {
     }
 }
 
-#[typetag::serde(name = "segment_location_meta")]
+#[typetag::serde(name = "compact_segment_meta")]
 impl BlockMetaInfo for CompactSegmentMeta {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals CompactSegmentMeta")
