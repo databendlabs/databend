@@ -511,8 +511,9 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     // To fix issue #16588, if target table is rewritten as an empty scan, that means
     // the condition is false and the match branch can never be executed.
     // Therefore, the match evaluators can be reset.
+    let inner_rel_op = input_s_expr.plan.rel_op();
     if !mutation.matched_evaluators.is_empty() {
-        match input_s_expr.plan.rel_op() {
+        match inner_rel_op {
             RelOp::ConstantTableScan => {
                 mutation.matched_evaluators = vec![MatchedEvaluator {
                     condition: None,
@@ -522,7 +523,11 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
             }
             RelOp::Join => {
                 let right_child = input_s_expr.child(1)?;
-                if right_child.plan.rel_op() == RelOp::ConstantTableScan {
+                let mut right_child_rel = right_child.plan.rel_op();
+                if right_child_rel == RelOp::Exchange {
+                    right_child_rel = right_child.child(0)?.plan.rel_op();
+                }
+                if right_child_rel == RelOp::ConstantTableScan {
                     mutation.matched_evaluators = vec![MatchedEvaluator {
                         condition: None,
                         update: None,
@@ -536,7 +541,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
 
     input_s_expr = match mutation.mutation_type {
         MutationType::Merge => {
-            if mutation.distributed {
+            if mutation.distributed && inner_rel_op == RelOp::Join {
                 let join = Join::try_from(input_s_expr.plan().clone())?;
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
                 let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
