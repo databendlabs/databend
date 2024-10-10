@@ -748,4 +748,8 @@ impl Settings {
     pub fn get_max_spill_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_spill_io_requests")
     }
+
+    pub fn get_enable_columnar_segment_info(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_columnar_segment_info")? == 1)
+    }
 }

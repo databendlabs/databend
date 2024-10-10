@@ -35,6 +35,7 @@ use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
+pub type ColumnarSegmentInfoCache = InMemoryLruCache<ColumnarSegmentInfo>;
 
 pub type BlockMetaCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
 

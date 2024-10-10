@@ -17,6 +17,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 use arrow::array::Array;
+use arrow::array::AsArray;
 use arrow::array::Date32Array;
 use arrow::array::Decimal128Array;
 use arrow::array::Decimal256Array;
@@ -348,12 +349,22 @@ impl ColumnarSegmentInfo {
         value: SegmentInfo,
         schema: &TableSchema,
     ) -> std::result::Result<Self, ErrorCode> {
-        let record_batch = block_metas_to_columnar(&value.blocks, schema)?;
+        let data_block = block_metas_to_columnar(&value.blocks, schema)?;
         Ok(Self {
             format_version: value.format_version,
             summary: value.summary,
-            blocks: record_batch,
+            blocks: data_block,
         })
+    }
+
+    pub fn block_location(&self, idx: usize) -> &str {
+        let array = self.blocks.column(3).as_struct();
+        let location_array = array.column(0).as_string::<i32>();
+        location_array.value(idx)
+    }
+
+    pub fn block_meta(&self, _idx: usize) -> Arc<BlockMeta> {
+        todo!()
     }
 }
 
@@ -512,7 +523,7 @@ fn block_metas_to_columnar(
         )?;
         let nulls = blocks
             .iter()
-            .map(|b| b.col_stats.get(&table_field.column_id).is_some())
+            .map(|b| b.col_stats.contains_key(&table_field.column_id))
             .collect::<Vec<_>>();
         let arrays: Vec<Arc<dyn Array>> = vec![
             Arc::new(min),
@@ -583,7 +594,7 @@ fn block_metas_to_columnar(
     }
 
     let schema = Schema::new(fields);
-    let record_batch = RecordBatch::try_new(Arc::new(schema), columns)?;
+    let record_batch = RecordBatch::try_new(Arc::new(schema.clone()), columns)?;
     Ok(record_batch)
 }
 
