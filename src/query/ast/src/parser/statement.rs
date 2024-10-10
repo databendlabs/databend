@@ -1285,6 +1285,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let describe_user = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
+        },
+        |(_, _, user)| Statement::DescribeUser { user },
+    );
     let create_user = map_res(
         rule! {
             CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2241,6 +2247,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #abort
         ),
         rule!(
+            #show_users : "`SHOW USERS`"
+            | #describe_user: "`DESCRIBE USER <user_name>`"
+            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
+            | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
+            | #show_roles : "`SHOW ROLES`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
+            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
+            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
+        ),
+        rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
@@ -2290,21 +2312,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
-        ),
-        rule!(
-            #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
-            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
-            | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
-            | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
-            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
-            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #set_role: "`SET [DEFAULT] ROLE <role>`"
-            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
-            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_stage: "`CREATE [OR REPLACE] STAGE [ IF NOT EXISTS ] <stage_name>

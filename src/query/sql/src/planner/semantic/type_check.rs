@@ -1805,6 +1805,7 @@ impl<'a> TypeChecker<'a> {
             DataType::Null => DataType::Null,
             DataType::Binary => DataType::Binary,
             DataType::String => DataType::String,
+            DataType::Variant => DataType::Variant,
             _ => {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "array_reduce does not support type '{:?}'",
@@ -1827,6 +1828,35 @@ impl<'a> TypeChecker<'a> {
         args: &[&Expr],
         lambda: &Lambda,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if func_name.starts_with("json_") && !args.is_empty() {
+            let func_name = &func_name[5..];
+            let mut new_args: Vec<Expr> = args.iter().map(|v| (*v).to_owned()).collect();
+            new_args[0] = Expr::Cast {
+                span: new_args[0].span(),
+                expr: Box::new(new_args[0].clone()),
+                target_type: TypeName::Array(Box::new(TypeName::Variant)),
+                pg_style: false,
+            };
+
+            let args: Vec<&Expr> = new_args.iter().collect();
+            let result = self.resolve_lambda_function(span, func_name, &args, lambda)?;
+
+            let target_type = if result.1.is_nullable() {
+                DataType::Variant.wrap_nullable()
+            } else {
+                DataType::Variant
+            };
+
+            let result_expr = ScalarExpr::CastExpr(CastExpr {
+                span: new_args[0].span(),
+                is_try: false,
+                argument: Box::new(result.0.clone()),
+                target_type: Box::new(target_type.clone()),
+            });
+
+            return Ok(Box::new((result_expr, target_type)));
+        }
+
         if matches!(
             self.bind_context.expr_context,
             ExprContext::InLambdaFunction

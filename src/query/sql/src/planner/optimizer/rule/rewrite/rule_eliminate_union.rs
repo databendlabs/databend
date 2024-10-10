@@ -75,6 +75,9 @@ impl Rule for RuleEliminateUnion {
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
 
+        // If left child is empty, we won't eliminate it
+        // Because the schema of the union is from left child, and the union node's parent relies on the schema
+        // And the parent's schema has been binded during the binder phase.
         if Self::is_empty_scan(left_child)? && Self::is_empty_scan(right_child)? {
             // If both children are empty, replace with EmptyResultScan
             let union_output_columns = union
@@ -96,9 +99,6 @@ impl Rule for RuleEliminateUnion {
             );
             let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
             state.add_result(result);
-        } else if Self::is_empty_scan(left_child)? {
-            // If left child is empty, use right child
-            state.add_result(right_child.clone());
         } else if Self::is_empty_scan(right_child)? {
             // If right child is empty, use left child
             state.add_result(left_child.clone());
