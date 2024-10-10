@@ -60,7 +60,6 @@ runs:
         esac
         if [[ ! -z "${flags}" ]]; then
           echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
-#          echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
         fi
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
