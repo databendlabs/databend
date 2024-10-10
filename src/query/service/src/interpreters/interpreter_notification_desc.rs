@@ -57,7 +57,7 @@ impl Interpreter for DescNotificationInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[fastrace::trace]

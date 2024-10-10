@@ -25,3 +25,4 @@ pub use reader::ParquetRSFullReader;
 pub use reader::ParquetRSReaderBuilder;
 pub use reader::ParquetRSRowGroupReader;
 pub use row_group::InMemoryRowGroup;
+pub use utils::transform_record_batch;

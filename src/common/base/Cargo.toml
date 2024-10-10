@@ -31,7 +31,7 @@ databend-common-exception = { workspace = true }
 enquote = "1.1.0"
 fastrace = { workspace = true }
 futures = { workspace = true }
-libc = "0.2.153"
+libc = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 micromarshal = "0.5.0"
@@ -50,6 +50,7 @@ prometheus-parse = "0.2.3"
 rand = { workspace = true, features = ["serde1"] }
 regex = { workspace = true }
 replace_with = "0.1.7"
+rustix = "0.38.37"
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

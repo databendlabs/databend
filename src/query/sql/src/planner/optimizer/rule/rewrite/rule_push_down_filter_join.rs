@@ -178,13 +178,17 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
             JoinPredicate::Both { is_equal_op, .. } => {
-                if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+                if matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+                    || join.single_to_inner.is_some()
+                {
                     if is_equal_op {
                         push_down_predicates.push(predicate);
                     } else {
                         non_equi_predicates.push(predicate);
                     }
-                    join.join_type = JoinType::Inner;
+                    if join.join_type == JoinType::Cross {
+                        join.join_type = JoinType::Inner;
+                    }
                 } else {
                     original_predicates.push(predicate);
                 }

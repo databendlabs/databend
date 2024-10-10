@@ -227,15 +227,15 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                 // perf
                                 {
                                     Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadCount,
+                                        ProfileStatisticsName::RemoteSpillReadCount,
                                         1,
                                     );
                                     Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadBytes,
+                                        ProfileStatisticsName::RemoteSpillReadBytes,
                                         data.len(),
                                     );
                                     Profile::record_usize_profile(
-                                        ProfileStatisticsName::SpillReadTime,
+                                        ProfileStatisticsName::RemoteSpillReadTime,
                                         instant.elapsed().as_millis() as usize,
                                     );
                                 }

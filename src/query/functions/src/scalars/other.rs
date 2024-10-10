@@ -24,6 +24,7 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float32Type;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt32Type;
@@ -59,8 +60,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use databend_common_io::number::f64_to_char;
-use databend_common_io::number::i64_to_char;
+use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -401,7 +401,41 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match i64_to_char(value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_i64(value))
+                {
+                    Ok(s) => {
+                        builder.put_str(&s);
+                        builder.commit_row()
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row()
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
+        "to_char",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
+            |value, fmt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f32(*value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
@@ -427,7 +461,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match f64_to_char(*value, fmt) {
+                // TODO: We should cache FmtCacheEntry
+                match fmt
+                    .parse::<FmtCacheEntry>()
+                    .and_then(|entry| entry.process_f64(*value))
+                {
                     Ok(s) => {
                         builder.put_str(&s);
                         builder.commit_row()
@@ -439,7 +477,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                 }
             },
         ),
-    )
+    );
 }
 
 /// Compute `grouping` by `grouping_id` and `cols`.

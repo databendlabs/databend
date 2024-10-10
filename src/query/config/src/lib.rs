@@ -49,6 +49,7 @@ pub use inner::CatalogConfig;
 pub use inner::CatalogHiveConfig;
 pub use inner::DiskCacheKeyReloadPolicy;
 pub use inner::InnerConfig;
+pub use inner::SpillConfig;
 pub use inner::ThriftProtocol;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_GIT_SEMVER;

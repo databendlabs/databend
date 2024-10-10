@@ -12,23 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_settings::Settings;
-use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 
-use crate::sessions::QueryContext;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 use crate::spillers::SpilledData;
 use crate::spillers::Spiller;
-use crate::spillers::SpillerConfig;
-use crate::spillers::SpillerType;
 
 /// The `WindowPartitionBuffer` is used to control memory usage of Window operator.
 pub struct WindowPartitionBuffer {
@@ -46,19 +38,11 @@ pub struct WindowPartitionBuffer {
 
 impl WindowPartitionBuffer {
     pub fn new(
-        ctx: Arc<QueryContext>,
+        spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
         spill_settings: WindowSpillSettings,
     ) -> Result<Self> {
-        // Create an inner `Spiller` to spill data.
-        let spill_config = SpillerConfig::create(query_spill_prefix(
-            ctx.get_tenant().tenant_name(),
-            &ctx.get_id(),
-        ));
-        let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(ctx.clone(), operator, spill_config, SpillerType::Window)?;
-
         // Create a `PartitionBuffer` to store partitioned data.
         let partition_buffer = PartitionBuffer::create(num_partitions);
         let restored_partition_buffer = PartitionBuffer::create(num_partitions);
@@ -296,7 +280,7 @@ pub struct WindowSpillSettings {
 }
 
 impl WindowSpillSettings {
-    pub fn new(settings: Arc<Settings>, num_threads: usize) -> Result<Self> {
+    pub fn new(settings: &Settings, num_threads: usize) -> Result<Self> {
         let global_memory_ratio =
             std::cmp::min(settings.get_window_partition_spilling_memory_ratio()?, 100) as f64
                 / 100_f64;

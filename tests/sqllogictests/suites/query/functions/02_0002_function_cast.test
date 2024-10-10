@@ -477,5 +477,10 @@ select cast(position as String), cast(trim as String), cast(substring as String)
 ----
 3 3 3
 
+query TTT
+select '[1,2,"3"]'::Variant a, a::Array(Variant) b, b::Variant = a;
+----
+[1,2,"3"] ['1','2','"3"'] 1
+
 statement ok
 drop table t
