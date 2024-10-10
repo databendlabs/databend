@@ -230,7 +230,7 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_tables_history(ListTableReq::new(
+            .list_tables_history(ListTableReq::new(
                 self.get_tenant(),
                 self.db_info.database_id,
             ))

@@ -1560,7 +1560,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
+    async fn list_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // List tables by tenant, db_id.

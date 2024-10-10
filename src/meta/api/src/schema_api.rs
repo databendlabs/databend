@@ -220,7 +220,8 @@ pub trait SchemaApi: Send + Sync {
         history_ident: &TableIdHistoryIdent,
     ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError>;
 
-    async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
+    /// Get history of all tables in the specified database.
+    async fn list_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
 
     /// List all tables in the database.
     ///
