@@ -76,7 +76,18 @@ impl AsyncSystemTable for UsersTable {
             .iter()
             .map(|user| user.grants.roles().iter().sorted().join(", ").to_string())
             .collect();
-
+        let mut network_policies: Vec<Option<String>> = users
+            .iter()
+            .map(|x| x.option.network_policy().cloned())
+            .collect();
+        let mut password_policies: Vec<Option<String>> = users
+            .iter()
+            .map(|x| x.option.password_policy().cloned())
+            .collect();
+        let mut must_change_passwords: Vec<Option<bool>> = users
+            .iter()
+            .map(|x| x.option.must_change_password().cloned())
+            .collect();
         let mut created_on: Vec<Option<i64>> = users
             .iter()
             .map(|user| Some(user.created_on.timestamp_micros()))
@@ -95,6 +106,9 @@ impl AsyncSystemTable for UsersTable {
             is_configureds.push("YES".to_string());
             disableds.push(false);
             roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+            network_policies.push(None);
+            password_policies.push(None);
+            must_change_passwords.push(None);
             created_on.push(None);
             update_on.push(None);
         }
@@ -109,6 +123,9 @@ impl AsyncSystemTable for UsersTable {
             StringType::from_data(is_configureds),
             BooleanType::from_data(disableds),
             StringType::from_data(roles),
+            StringType::from_opt_data(network_policies),
+            StringType::from_opt_data(password_policies),
+            BooleanType::from_opt_data(must_change_passwords),
             TimestampType::from_opt_data(created_on),
             TimestampType::from_opt_data(update_on),
         ]))
@@ -127,6 +144,18 @@ impl UsersTable {
             TableField::new("is_configured", TableDataType::String),
             TableField::new("disabled", TableDataType::Boolean),
             TableField::new("roles", TableDataType::String),
+            TableField::new(
+                "network_policy",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            TableField::new(
+                "password_policy",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            TableField::new(
+                "must_change_password",
+                TableDataType::Nullable(Box::new(TableDataType::Boolean)),
+            ),
             TableField::new(
                 "created_on",
                 TableDataType::Nullable(Box::new(TableDataType::Timestamp)),

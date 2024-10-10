@@ -72,6 +72,7 @@ use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
@@ -363,6 +364,10 @@ impl InterpreterFactory {
             Plan::AlterUser(alter_user) => Ok(Arc::new(AlterUserInterpreter::try_create(
                 ctx,
                 *alter_user.clone(),
+            )?)),
+            Plan::DescUser(desc_user) => Ok(Arc::new(DescUserInterpreter::try_create(
+                ctx,
+                *desc_user.clone(),
             )?)),
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
