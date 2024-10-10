@@ -183,7 +183,7 @@ impl Database for DefaultDatabase {
         let metas = self
             .ctx
             .meta
-            .get_table_meta_history(&TableIdHistoryIdent {
+            .get_gc_ready_tables(&TableIdHistoryIdent {
                 database_id: self.db_info.database_id.db_id,
                 table_name: table_name.to_string(),
             })
@@ -230,7 +230,7 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .list_tables_history(ListTableReq::new(
+            .list_gc_ready_tables(ListTableReq::new(
                 self.get_tenant(),
                 self.db_info.database_id,
             ))

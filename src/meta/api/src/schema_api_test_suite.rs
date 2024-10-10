@@ -1835,7 +1835,7 @@ impl SchemaApiTestSuite {
                     let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
 
                     let got = mt
-                        .get_table_meta_history(&TableIdHistoryIdent {
+                        .get_gc_ready_tables(&TableIdHistoryIdent {
                             database_id: cur_db.database_id.db_id,
                             table_name: tbl_name.to_string(),
                         })
@@ -4003,7 +4003,7 @@ impl SchemaApiTestSuite {
             assert!(table_id >= 1, "table id >= 1");
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             assert_eq!(res.len(), 1);
@@ -4021,7 +4021,7 @@ impl SchemaApiTestSuite {
             upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             assert_eq!(res.len(), 0);
@@ -4659,7 +4659,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4691,7 +4691,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4709,7 +4709,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4736,7 +4736,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4759,7 +4759,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4787,7 +4787,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4804,7 +4804,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4837,7 +4837,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let _res = mt.create_table(req.clone()).await?;
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -4876,7 +4876,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -4905,7 +4905,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_tables_history(ListTableReq::new(&tenant, db_id))
+                .list_gc_ready_tables(ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {

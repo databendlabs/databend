@@ -213,15 +213,16 @@ pub trait SchemaApi: Send + Sync {
     /// Get a [`TableNIV`] by `database_id, table_name`.
     async fn get_table_in_db(&self, req: &DBIdTableName) -> Result<Option<TableNIV>, MetaError>;
 
-    /// Retrieves the table metadata history for a given `database-id, table-name`:
-    /// [`TableIdHistoryIdent`].
-    async fn get_table_meta_history(
+    /// Retrieves the tables under the given `database-id, table-name`
+    /// that have been dropped for long enough time and is ready for gc.
+    async fn get_gc_ready_tables(
         &self,
         history_ident: &TableIdHistoryIdent,
     ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError>;
 
-    /// Get history of all tables in the specified database.
-    async fn list_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
+    /// Get history of all tables in the specified database,
+    /// that have been dropped for long enough time and is ready for gc.
+    async fn list_gc_ready_tables(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
 
     /// List all tables in the database.
     ///
