@@ -53,12 +53,16 @@ impl DistinctToGroupBy {
                                 distinct,
                                 name,
                                 args,
+                                window,
                                 ..
                             },
                     },
                 alias,
             } = &select_list[0]
             {
+                if window.is_some() {
+                    return;
+                }
                 let sub_query_name = "_distinct_group_by_subquery";
                 if ((name.name.to_ascii_lowercase() == "count" && *distinct)
                     || name.name.to_ascii_lowercase() == "count_distinct")

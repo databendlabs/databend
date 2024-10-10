@@ -25,7 +25,6 @@ use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition::Target;
@@ -42,11 +41,9 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
-use futures::TryStreamExt;
 use log::debug;
 
 use crate::kv_app_error::KVAppError;
-use crate::kv_pb_api::KVPbApi;
 use crate::reply::txn_reply_to_api_result;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
@@ -142,19 +139,6 @@ where
     }
 
     Ok(seq_values)
-}
-
-/// Return a vec of structured key(such as `DatabaseNameIdent`), such as:
-/// all the `db_name` with prefix `__fd_database/<tenant>/`.
-pub async fn list_keys<K>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &DirName<K>,
-) -> Result<Vec<K>, MetaError>
-where
-    K: kvapi::Key + 'static,
-{
-    let key_stream = kv_api.list_pb_keys(key).await?;
-    key_stream.try_collect::<Vec<_>>().await
 }
 
 /// List kvs whose value's type is `u64`.
@@ -305,6 +289,20 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
     }
 }
 
+pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
+where
+    K: kvapi::Key,
+    K::ValueType: FromToProto + 'static,
+{
+    let p = value.to_pb().map_err(|e| InvalidArgument::new(e, ""))?;
+
+    let mut buf = vec![];
+    prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
+
+    Ok(TxnOp::put(key.to_string_key(), buf))
+}
+
+/// Deprecate this. Replace it with `txn_put_pb().with_ttl()`
 pub fn txn_op_put_pb<K>(
     key: &K,
     value: &K::ValueType,

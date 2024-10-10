@@ -131,7 +131,6 @@ pub(crate) async fn load_inverted_index_file<'a>(
 #[fastrace::trace]
 pub(crate) async fn load_inverted_index_directory<'a>(
     dal: Operator,
-    field_nums: usize,
     index_path: &'a str,
 ) -> Result<InvertedIndexDirectory> {
     // load inverted index meta, contains the offsets of each files.
@@ -154,7 +153,7 @@ pub(crate) async fn load_inverted_index_directory<'a>(
 
     let files: Vec<_> = try_join_all(futs).await?.into_iter().collect();
     // use those files to create inverted index directory
-    let directory = InvertedIndexDirectory::try_create(field_nums, files)?;
+    let directory = InvertedIndexDirectory::try_create(files)?;
 
     Ok(directory)
 }

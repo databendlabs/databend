@@ -30,11 +30,11 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
-use super::interpreter_table_create::is_valid_block_per_segment;
-use super::interpreter_table_create::is_valid_bloom_index_columns;
-use super::interpreter_table_create::is_valid_create_opt;
-use super::interpreter_table_create::is_valid_data_retention_period;
-use super::interpreter_table_create::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
+use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
+use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;

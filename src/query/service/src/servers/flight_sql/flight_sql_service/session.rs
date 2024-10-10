@@ -64,7 +64,7 @@ impl FlightSqlServiceImpl {
     pub(super) fn get_user_password(metadata: &MetadataMap) -> Result<(String, String), String> {
         let basic = "Basic ";
         let authorization = Self::get_header_value(metadata, "authorization")
-            .ok_or("authorization not parsable".to_string())?;
+            .ok_or_else(|| "authorization not parsable".to_string())?;
 
         if !authorization.starts_with(basic) {
             return Err(format!("Auth type not implemented: {authorization}"));

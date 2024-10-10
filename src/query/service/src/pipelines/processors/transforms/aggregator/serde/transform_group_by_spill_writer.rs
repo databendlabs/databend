@@ -267,10 +267,13 @@ pub fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
 
         // perf
         {
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
             Profile::record_usize_profile(
-                ProfileStatisticsName::SpillWriteTime,
+                ProfileStatisticsName::RemoteSpillWriteBytes,
+                write_bytes,
+            );
+            Profile::record_usize_profile(
+                ProfileStatisticsName::RemoteSpillWriteTime,
                 instant.elapsed().as_millis() as usize,
             );
         }
@@ -360,10 +363,13 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         // perf
         {
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
             Profile::record_usize_profile(
-                ProfileStatisticsName::SpillWriteTime,
+                ProfileStatisticsName::RemoteSpillWriteBytes,
+                write_bytes,
+            );
+            Profile::record_usize_profile(
+                ProfileStatisticsName::RemoteSpillWriteTime,
                 instant.elapsed().as_millis() as usize,
             );
         }

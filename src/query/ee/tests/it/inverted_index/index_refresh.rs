@@ -143,7 +143,6 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         &index_version,
     );
 
-    let field_nums = query_fields.len();
     let has_score = true;
     let need_position = false;
     let mut field_ids = HashSet::new();
@@ -177,7 +176,6 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         let matched_rows = index_reader
             .clone()
             .do_filter(
-                field_nums,
                 need_position,
                 has_score,
                 query.box_clone(),
@@ -185,7 +183,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
                 &index_record,
                 &fuzziness,
                 tokenizer_manager,
-                block_meta.row_count as u32,
+                block_meta.row_count,
                 &index_loc,
             )
             .await?;

@@ -43,7 +43,7 @@ module.exports = async ({ context, core }) => {
               {
                 tag: "a",
                 text: "Release Notes",
-                href: `https://github.com/datafuselabs/databend/releases/tag/${VERSION}`,
+                href: `https://github.com/databendlabs/databend/releases/tag/${VERSION}`,
               },
             ],
           ],
