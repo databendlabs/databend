@@ -1,0 +1,120 @@
+use std::sync::Arc;
+
+use databend_common_catalog::plan::block_id_in_segment;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::metrics_inc_blocks_range_pruning_after;
+use databend_common_metrics::storage::metrics_inc_blocks_range_pruning_before;
+use databend_common_metrics::storage::metrics_inc_bytes_block_range_pruning_after;
+use databend_common_metrics::storage::metrics_inc_bytes_block_range_pruning_before;
+use databend_common_metrics::storage::metrics_inc_pruning_milliseconds;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::RangePruner;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use opendal::Operator;
+
+use crate::pruning::PruningContext;
+use crate::pruning_pipeline::meta_info::block_pruning_result::BlockPruningResult;
+use crate::pruning_pipeline::meta_info::extract_segment_result::ExtractSegmentResult;
+use crate::pruning_pipeline::processor::compact_read_transform::CompactReadTransform;
+
+/// BlockPruningTransform Workflow
+/// 1. Internal column pruning at block level
+/// 2. Range pruning at block level
+/// 3. Page pruning at block level
+pub struct BlockPruningTransform {
+    pub pruning_ctx: Arc<PruningContext>,
+}
+
+impl BlockPruningTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> databend_common_exception::Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+            input,
+            output,
+            BlockPruningTransform { pruning_ctx },
+        )))
+    }
+}
+
+impl BlockMetaAccumulatingTransform<ExtractSegmentResult> for BlockPruningTransform {
+    const NAME: &'static str = "BlockPruningTransform";
+
+    fn transform(
+        &mut self,
+        meta: ExtractSegmentResult,
+    ) -> databend_common_exception::Result<Option<DataBlock>> {
+        let limit_pruner = self.pruning_ctx.limit_pruner.clone();
+        let range_pruner = self.pruning_ctx.range_pruner.clone();
+        let page_pruner = self.pruning_ctx.page_pruner.clone();
+
+        let block_meta_indexes = self.internal_column_pruning(&meta.block_metas);
+        let mut result = Vec::with_capacity(block_meta_indexes.len());
+        let block_num = meta.block_metas.len();
+        for (block_idx, block_meta) in block_meta_indexes {
+            // check limit speculatively
+            if limit_pruner.exceeded() {
+                break;
+            }
+            let row_count = block_meta.row_count;
+            if range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
+                && limit_pruner.within_limit(row_count)
+            {
+                let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
+                if keep {
+                    result.push((
+                        Some(BlockMetaIndex {
+                            segment_idx: meta.segment_location.segment_idx,
+                            block_idx,
+                            range,
+                            page_size: block_meta.page_size() as usize,
+                            block_id: block_id_in_segment(block_num, block_idx),
+                            block_location: block_meta.as_ref().location.0.clone(),
+                            segment_location: meta.segment_location.location.0.clone(),
+                            snapshot_location: meta.segment_location.snapshot_loc.clone(),
+                            matched_rows: None,
+                        }),
+                        block_meta.clone(),
+                    ))
+                }
+            }
+        }
+
+        Ok(Some(DataBlock::empty_with_meta(
+            BlockPruningResult::create(result),
+        )))
+    }
+}
+
+impl BlockPruningTransform {
+    /// Apply internal column pruning at block level
+    fn internal_column_pruning(
+        &self,
+        block_metas: &[Arc<BlockMeta>],
+    ) -> Vec<(usize, Arc<BlockMeta>)> {
+        match &self.pruning_ctx.internal_column_pruner {
+            Some(pruner) => block_metas
+                .iter()
+                .enumerate()
+                .filter(|(_, block_meta)| {
+                    pruner.should_keep(BLOCK_NAME_COL_NAME, &block_meta.location.0)
+                })
+                .map(|(index, block_meta)| (index, block_meta.clone()))
+                .collect(),
+            None => block_metas
+                .iter()
+                .enumerate()
+                .map(|(index, block_meta)| (index, block_meta.clone()))
+                .collect(),
+        }
+    }
+}
