@@ -183,13 +183,10 @@ impl Database for DefaultDatabase {
         let metas = self
             .ctx
             .meta
-            .get_table_meta_history(
-                self.db_info.name_ident.database_name(),
-                &TableIdHistoryIdent {
-                    database_id: self.db_info.database_id.db_id,
-                    table_name: table_name.to_string(),
-                },
-            )
+            .get_table_meta_history(&TableIdHistoryIdent {
+                database_id: self.db_info.database_id.db_id,
+                table_name: table_name.to_string(),
+            })
             .await?;
 
         let table_infos: Vec<Arc<TableInfo>> = metas

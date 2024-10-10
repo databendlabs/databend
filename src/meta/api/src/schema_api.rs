@@ -213,11 +213,12 @@ pub trait SchemaApi: Send + Sync {
     /// Get a [`TableNIV`] by `database_id, table_name`.
     async fn get_table_in_db(&self, req: &DBIdTableName) -> Result<Option<TableNIV>, MetaError>;
 
+    /// Retrieves the table metadata history for a given `database-id, table-name`:
+    /// [`TableIdHistoryIdent`].
     async fn get_table_meta_history(
         &self,
-        database_name: &str,
-        table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError>;
+        history_ident: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError>;
 
     async fn get_tables_history(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
 

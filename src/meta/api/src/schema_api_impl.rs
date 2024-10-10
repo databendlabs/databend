@@ -1549,29 +1549,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn get_table_meta_history(
         &self,
-        database_name: &str,
-        table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
-        let table_name = &table_id_history.table_name;
+        history_ident: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
+        let Some(seq_table_id_list) = self.get_pb(history_ident).await? else {
+            return Ok(vec![]);
+        };
 
-        let (_seq, table_id_list) = self.get_pb_seq_and_value(table_id_history).await?;
-
-        let table_id_list = table_id_list.ok_or_else(|| {
-            AppError::from(UnknownTable::new(
-                table_name,
-                format!("get_table_history: {}.{}", database_name, table_name),
-            ))
-        })?;
-
-        let now = Utc::now();
-
-        let metas = get_table_meta_history(self, &now, table_id_list).await?;
-
-        debug!(
-            name :% =(&table_id_history);
-            "get_table_meta_history"
-        );
-        return Ok(metas);
+        get_table_meta_history(self, &Utc::now(), seq_table_id_list.data).await
     }
 
     #[logcall::logcall]
@@ -3054,12 +3038,12 @@ async fn get_table_meta_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     now: &DateTime<Utc>,
     tb_id_list: TableIdList,
-) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
+) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
     let mut tb_metas = vec![];
 
-    let inner_keys = tb_id_list.id_list.into_iter().map(TableId::new);
+    let table_ids = tb_id_list.id_list.into_iter().map(TableId::new);
 
-    let kvs = kv_api.get_pb_vec(inner_keys).await?;
+    let kvs = kv_api.get_pb_vec(table_ids).await?;
 
     for (k, table_meta) in kvs {
         let Some(table_meta) = table_meta else {

@@ -1835,7 +1835,7 @@ impl SchemaApiTestSuite {
                     let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
 
                     let got = mt
-                        .get_table_meta_history(db_name, &TableIdHistoryIdent {
+                        .get_table_meta_history(&TableIdHistoryIdent {
                             database_id: cur_db.database_id.db_id,
                             table_name: tbl_name.to_string(),
                         })
