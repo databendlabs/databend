@@ -35,6 +35,7 @@ use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::TempDirManager;
 
 use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
@@ -146,6 +147,7 @@ impl GlobalServices {
             &config.query.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
+        TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;

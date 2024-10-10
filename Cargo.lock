@@ -222,7 +222,7 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror",
- "typed-builder",
+ "typed-builder 0.19.1",
  "uuid",
 ]
 
@@ -757,7 +757,7 @@ dependencies = [
  "futures-lite 2.3.0",
  "parking",
  "polling 3.7.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -808,7 +808,7 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-lite 1.13.0",
- "gloo-timers",
+ "gloo-timers 0.2.6",
  "kv-log-macro",
  "log",
  "memchr",
@@ -1408,6 +1408,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4fa97bb310c33c811334143cf64c5bb2b7b3c06e453db6b095d7061eff8f113"
+dependencies = [
+ "fastrand 2.1.0",
+ "gloo-timers 0.3.0",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.73"
 source = "git+https://github.com/rust-lang/backtrace-rs.git?rev=72265be#72265bea210891ae47bbe6d4f17b493ef0606619"
@@ -1952,7 +1963,7 @@ dependencies = [
  "io-lifetimes 2.0.3",
  "ipnet",
  "maybe-owned",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
  "winx",
 ]
@@ -1976,7 +1987,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes 2.0.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
 ]
 
 [[package]]
@@ -1989,7 +2000,7 @@ dependencies = [
  "cap-primitives",
  "iana-time-zone",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "winx",
 ]
 
@@ -3092,7 +3103,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "serde",
  "serde_json",
  "serfig",
@@ -3163,7 +3174,7 @@ dependencies = [
  "lz4",
  "num",
  "num-traits",
- "opendal",
+ "opendal 0.49.0",
  "ordered-float 4.2.2",
  "proptest",
  "quanta 0.11.1",
@@ -3256,6 +3267,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "replace_with",
+ "rustix 0.38.37",
  "semver",
  "serde",
  "serde_json",
@@ -3408,7 +3420,7 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
- "opendal",
+ "opendal 0.49.0",
  "parquet",
  "paste",
  "prost 0.12.6",
@@ -3708,6 +3720,7 @@ dependencies = [
  "databend-common-proto-conv",
  "fastrace 0.7.2",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "maplit",
@@ -3744,7 +3757,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal",
+ "opendal 0.49.0",
  "paste",
  "prost 0.12.6",
  "serde",
@@ -3997,7 +4010,7 @@ dependencies = [
  "flate2",
  "futures",
  "lz4",
- "opendal",
+ "opendal 0.49.0",
  "parquet-format-safe",
  "rand 0.8.5",
  "seq-macro",
@@ -4199,7 +4212,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal",
+ "opendal 0.49.0",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prqlc",
@@ -4234,7 +4247,7 @@ dependencies = [
  "flagset",
  "futures",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4345,7 +4358,7 @@ dependencies = [
  "itertools 0.10.5",
  "jsonb",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4392,7 +4405,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "recursive",
  "serde",
  "typetag",
@@ -4412,22 +4425,19 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-pipeline-core",
- "databend-common-storage",
  "databend-common-storages-parquet",
- "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "fastrace 0.7.2",
+ "futures",
  "iceberg",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
  "ordered-float 4.2.2",
- "parquet",
  "serde",
  "tokio",
  "typetag",
@@ -4508,7 +4518,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4544,7 +4554,7 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4591,7 +4601,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal",
+ "opendal 0.49.0",
  "parquet",
  "serde",
  "serde_json",
@@ -4632,7 +4642,7 @@ dependencies = [
  "enum-as-inner 0.6.0",
  "futures",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "parquet",
  "serde",
  "serde_json",
@@ -4697,7 +4707,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal",
+ "opendal 0.49.0",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4950,7 +4960,7 @@ dependencies = [
  "jsonb",
  "jwt-simple 0.11.9",
  "log",
- "opendal",
+ "opendal 0.49.0",
  "tantivy",
  "tempfile",
 ]
@@ -5021,7 +5031,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
- "backon",
+ "backon 0.4.4",
  "clap",
  "databend-common-arrow",
  "databend-common-base",
@@ -5119,7 +5129,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
- "backon",
+ "backon 0.4.4",
  "base64 0.21.7",
  "bumpalo",
  "byte-unit",
@@ -5222,7 +5232,7 @@ dependencies = [
  "num",
  "num_cpus",
  "once_cell",
- "opendal",
+ "opendal 0.49.0",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5376,6 +5386,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.3",
  "rayon",
+ "rustix 0.38.37",
  "siphasher",
  "tempfile",
 ]
@@ -5419,7 +5430,7 @@ dependencies = [
  "databend-common-exception",
  "fastrace 0.7.2",
  "log",
- "opendal",
+ "opendal 0.49.0",
 ]
 
 [[package]]
@@ -6398,7 +6409,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e5768da2206272c81ef0b5e951a41862938a6070da63bcea197899942d3b947"
 dependencies = [
  "cfg-if",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
 ]
 
@@ -6679,7 +6690,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "033b337d725b97690d86893f9de22b67b80dcc4e9ad815f348254c38119db8fb"
 dependencies = [
  "io-lifetimes 2.0.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
 ]
 
@@ -6699,7 +6710,7 @@ version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7e180ac76c23b45e767bd7ae9579bc0bb458618c4bc71835926e098e61d15f8"
 dependencies = [
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
 ]
 
@@ -7535,7 +7546,7 @@ dependencies = [
  "itoa",
  "libc",
  "memmap2 0.9.4",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "smallvec",
  "thiserror",
 ]
@@ -7697,7 +7708,7 @@ dependencies = [
  "gix-command",
  "gix-config-value",
  "parking_lot 0.12.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "thiserror",
 ]
 
@@ -7980,6 +7991,18 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -8510,7 +8533,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -8659,8 +8682,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "651dfca7c429918e164607a549287cfdd1e7814d2e4cb577d0d6dc57fe19b785"
+source = "git+https://github.com/apache/iceberg-rust/?rev=c3549836796f93aa3ad22276af788aa3d92533a1#c3549836796f93aa3ad22276af788aa3d92533a1"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -8680,11 +8702,13 @@ dependencies = [
  "fnv",
  "futures",
  "itertools 0.13.0",
+ "moka",
  "murmur3",
  "once_cell",
- "opendal",
+ "opendal 0.50.0",
  "ordered-float 4.2.2",
  "parquet",
+ "paste",
  "reqwest",
  "rust_decimal",
  "serde",
@@ -8694,7 +8718,7 @@ dependencies = [
  "serde_repr",
  "serde_with",
  "tokio",
- "typed-builder",
+ "typed-builder 0.20.0",
  "url",
  "uuid",
 ]
@@ -8702,8 +8726,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a04f1f48f0f15e42c910fafb57edb0dd309c936cd285b1089fa3d4a07d1ef09"
+source = "git+https://github.com/apache/iceberg-rust/?rev=c3549836796f93aa3ad22276af788aa3d92533a1#c3549836796f93aa3ad22276af788aa3d92533a1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8714,7 +8737,7 @@ dependencies = [
  "pilota",
  "serde_json",
  "tokio",
- "typed-builder",
+ "typed-builder 0.20.0",
  "uuid",
  "volo-thrift",
 ]
@@ -8722,8 +8745,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f351c7b964fa6f3b4f976f8de3f16f1bf84eea8478606aaebdfd6a871d6b082c"
+source = "git+https://github.com/apache/iceberg-rust/?rev=c3549836796f93aa3ad22276af788aa3d92533a1#c3549836796f93aa3ad22276af788aa3d92533a1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -8736,7 +8758,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tokio",
- "typed-builder",
+ "typed-builder 0.20.0",
  "uuid",
 ]
 
@@ -9508,9 +9530,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.155"
+version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
+checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
 
 [[package]]
 name = "libflate"
@@ -9543,7 +9565,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -9923,7 +9945,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2cffa4ad52c6f791f4f8b15f0c05f9824b2ced1160e88cc393d64fff9a8ac64"
 dependencies = [
- "rustix 0.38.34",
+ "rustix 0.38.37",
 ]
 
 [[package]]
@@ -10727,7 +10749,7 @@ dependencies = [
  "futures",
  "futures-util",
  "object_store",
- "opendal",
+ "opendal 0.49.0",
  "pin-project",
  "tokio",
 ]
@@ -10770,7 +10792,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-trait",
- "backon",
+ "backon 0.4.4",
  "base64 0.22.1",
  "bytes",
  "chrono",
@@ -10795,6 +10817,36 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "opendal"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36e44fc43be9ffe18dad3e3ef9d61c1ae01991ee6f1c8c026978c35777a711bf"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "backon 1.2.0",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "crc32c",
+ "flagset",
+ "futures",
+ "getrandom 0.2.15",
+ "http 1.1.0",
+ "log",
+ "md-5",
+ "once_cell",
+ "percent-encoding",
+ "quick-xml 0.36.1",
+ "reqsign",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]
@@ -10948,7 +11000,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tonic 0.12.2",
+ "tonic 0.12.3",
 ]
 
 [[package]]
@@ -10962,7 +11014,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prost 0.13.1",
  "serde",
- "tonic 0.12.2",
+ "tonic 0.12.3",
 ]
 
 [[package]]
@@ -11650,7 +11702,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi 0.4.0",
  "pin-project-lite",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -11901,7 +11953,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "procfs-core",
- "rustix 0.38.34",
+ "rustix 0.38.37",
 ]
 
 [[package]]
@@ -12053,7 +12105,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18bec9b0adc4eba778b33684b7ba3e7137789434769ee3ce3930463ef904cfca"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.58",
@@ -12197,7 +12249,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "portable-atomic",
  "pyo3-build-config",
  "pyo3-ffi",
@@ -13222,9 +13274,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.34"
+version = "0.38.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70dc5ec042f7a43c4a73241207cecc9873a06d45debb38b329f8541d85c2730f"
+checksum = "8acb788b847c24f28525660c4d7758620a7210875711f79e7f663cc152726811"
 dependencies = [
  "bitflags 2.6.0",
  "errno",
@@ -14736,7 +14788,7 @@ dependencies = [
  "cap-std",
  "fd-lock",
  "io-lifetimes 2.0.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
  "winx",
 ]
@@ -14926,7 +14978,7 @@ dependencies = [
  "cfg-if",
  "fastrand 2.1.0",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.59.0",
 ]
 
@@ -14955,7 +15007,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
 dependencies = [
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.48.0",
 ]
 
@@ -15223,9 +15275,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "267ac89e0bec6e691e5813911606935d77c476ff49024f98abcea3e7b15e37af"
+checksum = "4f4e6ce100d0eb49a2734f8c0812bcd324cf357d21810932c5df6b96ef2b86f1"
 dependencies = [
  "futures-core",
  "pin-project-lite",
@@ -15358,9 +15410,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6f6ba989e4b2c58ae83d862d3a3e27690b6e3ae630d0deb59f3697f32aa88ad"
+checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -15557,7 +15609,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -15573,7 +15625,16 @@ version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06fbd5b8de54c5f7c91f6fe4cebb949be2125d7758e630bb58b1d831dbce600"
 dependencies = [
- "typed-builder-macro",
+ "typed-builder-macro 0.19.1",
+]
+
+[[package]]
+name = "typed-builder"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e14ed59dc8b7b26cacb2a92bad2e8b1f098806063898ab42a3bd121d7d45e75"
+dependencies = [
+ "typed-builder-macro 0.20.0",
 ]
 
 [[package]]
@@ -15581,6 +15642,17 @@ name = "typed-builder-macro"
 version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9534daa9fd3ed0bd911d462a37f172228077e7abf18c18a5f67199d959205f8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
+name = "typed-builder-macro"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "560b82d656506509d43abe30e0ba64c56b1953ab3d4fe7ba5902747a7a3cedd5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -16030,7 +16102,7 @@ dependencies = [
  "io-lifetimes 2.0.3",
  "log",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "system-interface",
  "thiserror",
  "tracing",
@@ -16196,7 +16268,7 @@ dependencies = [
  "once_cell",
  "paste",
  "rayon",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "semver",
  "serde",
  "serde_derive",
@@ -16239,7 +16311,7 @@ dependencies = [
  "bincode 1.3.3",
  "directories-next",
  "log",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "serde",
  "serde_derive",
  "sha2",
@@ -16328,7 +16400,7 @@ dependencies = [
  "anyhow",
  "cc",
  "cfg-if",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "wasmtime-asm-macros",
  "wasmtime-versioned-export-macros",
  "windows-sys 0.52.0",
@@ -16342,7 +16414,7 @@ checksum = "983ca409f2cd66385ce49486c022da0128acb7910c055beb5230998b49c6084c"
 dependencies = [
  "object 0.33.0",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "wasmtime-versioned-export-macros",
 ]
 
@@ -16375,7 +16447,7 @@ dependencies = [
  "memoffset",
  "paste",
  "psm",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "sptr",
  "wasm-encoder 0.202.0",
  "wasmtime-asm-macros",
