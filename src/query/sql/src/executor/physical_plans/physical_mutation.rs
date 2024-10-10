@@ -370,7 +370,7 @@ impl PhysicalPlanBuilder {
 
         let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
         for (field_index, value) in field_index_map {
-            // Safe to set field index, to fix issue #16581.
+            // Safe to set field index, to fix issue #16588.
             if let Ok(value) = output_schema.index_of(value) {
                 field_index_of_input_schema.insert(*field_index, value);
             }

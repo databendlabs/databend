@@ -49,6 +49,7 @@ use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
 use crate::plans::Operator;
 use crate::plans::Plan;
@@ -506,22 +507,31 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
     mutation.distributed = opt_ctx.enable_distributed_optimization;
 
-    // To fix issue #16581, if target table is rewritten as an empty scan, that means
+    let schema = mutation.schema();
+    // To fix issue #16588, if target table is rewritten as an empty scan, that means
     // the condition is false and the match branch can never be executed.
-    // Therefore, the match evaluators can be cleared.
-    match input_s_expr.plan.rel_op() {
-        RelOp::ConstantTableScan => {
-            mutation.matched_evaluators.clear();
-            mutation.strategy = MutationStrategy::NotMatchedOnly;
-        }
-        RelOp::Join => {
-            let right_child = input_s_expr.child(1)?;
-            if right_child.plan.rel_op() == RelOp::ConstantTableScan {
-                mutation.matched_evaluators.clear();
-                mutation.strategy = MutationStrategy::NotMatchedOnly;
+    // Therefore, the match evaluators can be reset.
+    if !mutation.matched_evaluators.is_empty() {
+        match input_s_expr.plan.rel_op() {
+            RelOp::ConstantTableScan => {
+                mutation.matched_evaluators = vec![MatchedEvaluator {
+                    condition: None,
+                    update: None,
+                }];
+                mutation.can_try_update_column_only = false;
             }
+            RelOp::Join => {
+                let right_child = input_s_expr.child(1)?;
+                if right_child.plan.rel_op() == RelOp::ConstantTableScan {
+                    mutation.matched_evaluators = vec![MatchedEvaluator {
+                        condition: None,
+                        update: None,
+                    }];
+                    mutation.can_try_update_column_only = false;
+                }
+            }
+            _ => (),
         }
-        _ => (),
     }
 
     input_s_expr = match mutation.mutation_type {
@@ -557,7 +567,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     };
 
     Ok(Plan::DataMutation {
-        schema: mutation.schema(),
+        schema,
         s_expr: Box::new(SExpr::create_unary(
             Arc::new(RelOperator::Mutation(mutation)),
             Arc::new(input_s_expr),

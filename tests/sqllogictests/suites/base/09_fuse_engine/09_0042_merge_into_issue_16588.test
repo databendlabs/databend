@@ -1,8 +1,8 @@
 statement ok
-create or replace database i16581;
+create or replace database i16588;
 
 statement ok
-use i16581;
+use i16588;
 
 statement ok
 create table base(a int);
@@ -10,10 +10,10 @@ create table base(a int);
 statement ok
 create table sink(a int);
 
-query I
+query II
 merge into sink using base on 1 != 1 when matched then update * when not matched then insert *;
 ----
-0
+0 0
 
 query I
 merge into sink using base on 1 != 1 when matched then update *;
@@ -21,4 +21,4 @@ merge into sink using base on 1 != 1 when matched then update *;
 0
 
 statement ok
-drop database i16581;
+drop database i16588;
