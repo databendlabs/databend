@@ -275,7 +275,7 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_dio", DefaultSettingValue{ 
+                ("enable_dio", DefaultSettingValue{
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables Direct IO.",
                     mode: SettingMode::Both,
@@ -689,8 +689,8 @@ impl DefaultSettings {
                     desc: "Set numeric default_order_by_null mode",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::String(vec![
-                        "nulls_first".into(), "nulls_last".into(), 
-                        "nulls_first_on_asc_last_on_desc".into(), "nulls_last_on_asc_first_on_desc".into(), 
+                        "nulls_first".into(), "nulls_last".into(),
+                        "nulls_first_on_asc_last_on_desc".into(), "nulls_last_on_asc_first_on_desc".into(),
                     ])),
                 }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
@@ -941,6 +941,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=1024*1024)),
                 }),
+                ("enable_pruning_pipeline", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable pruning pipeline",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                })
             ]);
 
             Ok(Arc::new(DefaultSettings {

@@ -151,6 +151,11 @@ impl FuseTable {
                 });
             }
         }
+        let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
+        if enable_prune_pipeline {
+            let meta_pipeline =
+                self.build_prune_pipeline(self.schema_with_stream(), plan.clone(), ctx.clone());
+        }
         if !lazy_init_segments.is_empty() {
             let table = self.clone();
             let table_schema = self.schema_with_stream();
