@@ -188,35 +188,36 @@ async fn do_prune(
             continue;
         }
 
-        let block_metas = &segment.blocks;
-        // let col_refs: Vec<_> = range_index.expr.column_refs().into_iter().collect();
-        // let mut col_stats = Vec::new();
-        // for (col_name, _) in col_refs {
-        //     let column_ids = range_index.schema.leaf_columns_of(&col_name);
-        //     let col_stat = column_ids
-        //         .iter()
-        //         .map(|column_id| block_metas.column_by_name(&column_id.to_string()))
-        //         .collect::<Vec<_>>();
-        //     col_stats.push(col_stat);
+        todo!()
+        // let block_metas = &segment.blocks;
+        // // let col_refs: Vec<_> = range_index.expr.column_refs().into_iter().collect();
+        // // let mut col_stats = Vec::new();
+        // // for (col_name, _) in col_refs {
+        // //     let column_ids = range_index.schema.leaf_columns_of(&col_name);
+        // //     let col_stat = column_ids
+        // //         .iter()
+        // //         .map(|column_id| block_metas.column_by_name(&column_id.to_string()))
+        // //         .collect::<Vec<_>>();
+        // //     col_stats.push(col_stat);
+        // // }
+        // let block_num = block_metas.num_rows();
+        // for block_idx in 0..block_num {
+        //     let input_domains = HashMap::new();
+        //     if should_keep(range_index, input_domains)? {
+        //         let block_meta_index = BlockMetaIndex {
+        //             segment_idx: segment_location.segment_idx,
+        //             block_idx,
+        //             range: None,
+        //             page_size: 0,
+        //             block_id: block_id_in_segment(block_num, block_idx),
+        //             block_location: segment.block_location(block_idx).to_string(),
+        //             segment_location: segment_location.location.0.clone(),
+        //             snapshot_location: segment_location.snapshot_loc.clone(),
+        //             matched_rows: None,
+        //         };
+        //         keeped_blocks.push((block_meta_index, segment.block_meta(block_idx)));
+        //     }
         // }
-        let block_num = block_metas.num_rows();
-        for block_idx in 0..block_num {
-            let input_domains = HashMap::new();
-            if should_keep(range_index, input_domains)? {
-                let block_meta_index = BlockMetaIndex {
-                    segment_idx: segment_location.segment_idx,
-                    block_idx,
-                    range: None,
-                    page_size: 0,
-                    block_id: block_id_in_segment(block_num, block_idx),
-                    block_location: segment.block_location(block_idx).to_string(),
-                    segment_location: segment_location.location.0.clone(),
-                    snapshot_location: segment_location.snapshot_loc.clone(),
-                    matched_rows: None,
-                };
-                keeped_blocks.push((block_meta_index, segment.block_meta(block_idx)));
-            }
-        }
     }
     Ok(PruneResult {
         keeped_blocks,
