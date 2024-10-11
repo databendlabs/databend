@@ -37,7 +37,7 @@ runs:
         tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
         pip install pyspark
-        python tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
+        python3 tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
 
     - name: Run sqllogic Tests with Standalone lib
       shell: bash
