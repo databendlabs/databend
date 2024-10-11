@@ -56,7 +56,7 @@ use crate::meta::Statistics;
 
 /// BlockMeta.col_stats is empty, and ColumnStatistics is stored in columnar_block_metas.
 ///
-/// It is a minimal implemention for now, some other fields of block_metas(col_metas, cluster_stats) will be stored in columnar_metas later.
+/// It is a minimal implementation for now, some other fields of block_metas(col_metas, cluster_stats) will be stored in columnar_block_metas later.
 pub struct ColumnarSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,
