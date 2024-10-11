@@ -81,6 +81,7 @@ pub struct Spiller {
     operator: Operator,
     location_prefix: String,
     disk_spill: Option<Arc<TempDir>>,
+    use_dio: bool,
     _spiller_type: SpillerType,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
@@ -98,7 +99,7 @@ impl Spiller {
         operator: Operator,
         config: SpillerConfig,
     ) -> Result<Self> {
-        let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
+        let settings = ctx.get_settings();
         let SpillerConfig {
             location_prefix,
             disk_spill,
@@ -109,8 +110,9 @@ impl Spiller {
             operator,
             location_prefix,
             disk_spill,
+            use_dio: settings.get_enable_dio()?,
             _spiller_type: spiller_type,
-            join_spilling_partition_bits,
+            join_spilling_partition_bits: settings.get_join_spilling_partition_bits()?,
             partition_location: Default::default(),
             columns_layout: Default::default(),
             partition_spilled_bytes: Default::default(),
@@ -383,7 +385,7 @@ impl Spiller {
                 writer.close().await?;
                 written
             }
-            Location::Local(path) => buf.into_file(path).await?,
+            Location::Local(path) => buf.into_file(path, self.use_dio).await?,
         };
         debug_assert_eq!(size, written);
         Ok(location)

@@ -188,7 +188,10 @@ impl TempDirManager {
     fn insufficient_disk(&self, size: u64) -> Result<bool> {
         let stat = statvfs(self.root.as_ref().unwrap().as_ref())
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        Ok(stat.f_bavail < self.reserved + (size + stat.f_frsize - 1) / stat.f_frsize)
+
+        debug_assert_eq!(stat.f_frsize, self.alignment.as_usize());
+        let n = (size + self.alignment.as_usize() as u64 - 1) >> self.alignment.log2();
+        Ok(stat.f_bavail < self.reserved + n)
     }
 }
 

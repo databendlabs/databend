@@ -27,6 +27,7 @@ use std::path::Path;
 use std::ptr::Alignment;
 use std::ptr::NonNull;
 
+use rustix::fs::OFlags;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 
@@ -43,7 +44,11 @@ impl DmaAllocator {
     }
 
     fn real_layout(&self, layout: Layout) -> Layout {
-        Layout::from_size_align(layout.size(), self.0.as_usize()).unwrap()
+        if layout.align() >= self.0.as_usize() {
+            layout
+        } else {
+            Layout::from_size_align(layout.size(), self.0.as_usize()).unwrap()
+        }
     }
 
     fn real_cap(&self, cap: usize) -> usize {
@@ -110,68 +115,46 @@ struct DmaFile {
     buf: Option<DmaBuffer>,
 }
 
-#[cfg(target_os = "linux")]
-pub mod linux {
-    use rustix::fs::OFlags;
-
-    use super::*;
-
-    impl DmaFile {
-        pub(super) async fn open_raw(path: impl AsRef<Path>) -> io::Result<File> {
-            File::options()
-                .read(true)
-                .custom_flags(OFlags::DIRECT.bits() as i32)
-                .open(path)
-                .await
-        }
-
-        pub(super) async fn create_raw(path: impl AsRef<Path>) -> io::Result<File> {
-            File::options()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .custom_flags((OFlags::DIRECT | OFlags::EXCL).bits() as i32)
-                .open(path)
-                .await
-        }
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-pub mod not_linux {
-    use rustix::fs::OFlags;
-
-    use super::*;
-
-    impl DmaFile {
-        /// Attempts to open a file in read-only mode.
-        pub(super) async fn open_raw(path: impl AsRef<Path>) -> io::Result<File> {
-            File::options().read(true).open(path).await
-        }
-
-        /// Opens a file in write-only mode.
-        pub(super) async fn create_raw(path: impl AsRef<Path>) -> io::Result<File> {
-            File::options()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .custom_flags(OFlags::EXCL.bits() as i32)
-                .open(path)
-                .await
-        }
-    }
-}
-
 impl DmaFile {
+    async fn open_raw(path: impl AsRef<Path>, dio: bool) -> io::Result<File> {
+        let mut flags = 0;
+        #[cfg(target_os = "linux")]
+        if dio {
+            flags = OFlags::DIRECT.bits() as i32
+        }
+
+        File::options()
+            .read(true)
+            .custom_flags(flags)
+            .open(path)
+            .await
+    }
+
+    async fn create_raw(path: impl AsRef<Path>, dio: bool) -> io::Result<File> {
+        let mut flags = OFlags::EXCL;
+        #[cfg(target_os = "linux")]
+        if dio {
+            flags |= OFlags::DIRECT;
+        }
+
+        File::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .custom_flags(flags.bits() as i32)
+            .open(path)
+            .await
+    }
+
     /// Attempts to open a file in read-only mode.
-    async fn open(path: impl AsRef<Path>) -> io::Result<DmaFile> {
-        let file = DmaFile::open_raw(path).await?;
+    async fn open(path: impl AsRef<Path>, dio: bool) -> io::Result<DmaFile> {
+        let file = DmaFile::open_raw(path, dio).await?;
         open_dma(file).await
     }
 
     /// Opens a file in write-only mode.
-    async fn create(path: impl AsRef<Path>) -> io::Result<DmaFile> {
-        let file = DmaFile::create_raw(path).await?;
+    async fn create(path: impl AsRef<Path>, dio: bool) -> io::Result<DmaFile> {
+        let file = DmaFile::create_raw(path, dio).await?;
         open_dma(file).await
     }
 
@@ -309,9 +292,9 @@ impl DmaWriteBuf {
         (self.data.len() - 1) * self.chunk + self.data.last().unwrap().len()
     }
 
-    pub async fn into_file(mut self, path: impl AsRef<Path>) -> io::Result<usize> {
+    pub async fn into_file(mut self, path: impl AsRef<Path>, dio: bool) -> io::Result<usize> {
         let mut file = DmaFile {
-            fd: DmaFile::create_raw(path).await?,
+            fd: DmaFile::create_raw(path, dio).await?,
             alignment: self.allocator.0,
             buf: None,
         };
@@ -387,7 +370,7 @@ pub async fn dma_write_file_vectored<'a>(
     path: impl AsRef<Path>,
     bufs: &'a [IoSlice<'a>],
 ) -> io::Result<usize> {
-    let mut file = DmaFile::create(path.as_ref()).await?;
+    let mut file = DmaFile::create(path.as_ref(), true).await?;
 
     let file_length = bufs.iter().map(|buf| buf.len()).sum();
     if file_length == 0 {
@@ -445,7 +428,7 @@ pub async fn dma_read_file(
     mut writer: impl io::Write,
 ) -> io::Result<usize> {
     const BUFFER_SIZE: usize = 1024 * 1024;
-    let mut file = DmaFile::open(path.as_ref()).await?;
+    let mut file = DmaFile::open(path.as_ref(), true).await?;
     let buf = Vec::with_capacity_in(
         file.align_up(BUFFER_SIZE),
         DmaAllocator::new(file.alignment),
@@ -480,7 +463,7 @@ pub async fn dma_read_file_range(
     path: impl AsRef<Path>,
     range: Range<u64>,
 ) -> io::Result<(DmaBuffer, Range<usize>)> {
-    let mut file = DmaFile::open(path.as_ref()).await?;
+    let mut file = DmaFile::open(path.as_ref(), true).await?;
 
     let align_start = file.align_down(range.start as usize);
     let align_end = file.align_up(range.end as usize);
@@ -526,24 +509,26 @@ mod tests {
     async fn test_read_write() {
         let _ = std::fs::remove_file("test_file");
 
-        run_test(0).await.unwrap();
-        run_test(100).await.unwrap();
-        run_test(200).await.unwrap();
+        for dio in [true, false] {
+            run_test(0, dio).await.unwrap();
+            run_test(100, dio).await.unwrap();
+            run_test(200, dio).await.unwrap();
 
-        run_test(4096 - 1).await.unwrap();
-        run_test(4096).await.unwrap();
-        run_test(4096 + 1).await.unwrap();
+            run_test(4096 - 1, dio).await.unwrap();
+            run_test(4096, dio).await.unwrap();
+            run_test(4096 + 1, dio).await.unwrap();
 
-        run_test(4096 * 2 - 1).await.unwrap();
-        run_test(4096 * 2).await.unwrap();
-        run_test(4096 * 2 + 1).await.unwrap();
+            run_test(4096 * 2 - 1, dio).await.unwrap();
+            run_test(4096 * 2, dio).await.unwrap();
+            run_test(4096 * 2 + 1, dio).await.unwrap();
 
-        run_test(1024 * 1024 * 3 - 1).await.unwrap();
-        run_test(1024 * 1024 * 3).await.unwrap();
-        run_test(1024 * 1024 * 3 + 1).await.unwrap();
+            run_test(1024 * 1024 * 3 - 1, dio).await.unwrap();
+            run_test(1024 * 1024 * 3, dio).await.unwrap();
+            run_test(1024 * 1024 * 3 + 1, dio).await.unwrap();
+        }
     }
 
-    async fn run_test(n: usize) -> io::Result<()> {
+    async fn run_test(n: usize, dio: bool) -> io::Result<()> {
         let filename = "test_file";
         let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
 
@@ -558,7 +543,7 @@ mod tests {
         assert_eq!(length, want.len());
         assert_eq!(got, want);
 
-        let file = DmaFile::open(filename).await?;
+        let file = DmaFile::open(filename, dio).await?;
         let align = file.alignment;
         drop(file);
 
@@ -566,7 +551,7 @@ mod tests {
 
         let mut buf = DmaWriteBuf::new(align, align.as_usize());
         buf.write_all(&want)?;
-        let length = buf.into_file(filename).await?;
+        let length = buf.into_file(filename, dio).await?;
 
         assert_eq!(length, want.len());
 
@@ -628,7 +613,7 @@ mod tests {
         let bufs = vec![IoSlice::new(&want)];
         dma_write_file_vectored(filename, &bufs).await.unwrap();
 
-        let mut file = DmaFile::open(filename).await.unwrap();
+        let mut file = DmaFile::open(filename, true).await.unwrap();
         let buf = Vec::with_capacity_in(file_size, DmaAllocator::new(file.alignment));
         file.set_buffer(buf);
 

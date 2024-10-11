@@ -273,6 +273,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_dio", DefaultSettingValue{ 
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables Direct IO.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
