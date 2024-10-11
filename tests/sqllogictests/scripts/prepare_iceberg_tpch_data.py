@@ -10,8 +10,9 @@ spark = SparkSession.builder \
     .config("spark.sql.catalog.iceberg.warehouse", "s3://iceberg-tpch/") \
     .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin") \
     .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password") \
-    .config("spark.sql.catalog.iceberg.client.region", "us-east-1") \
+    .config("spark.sql.catalog.iceberg.s3.path-style-access", "true") \
     .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9000") \
+    .config("spark.sql.catalog.iceberg.client.region", "us-east-1") \
     .config("spark.jars.packages",
             "org.apache.iceberg:iceberg-aws-bundle:1.6.1,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1") \
     .getOrCreate()

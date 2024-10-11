@@ -29,10 +29,9 @@ services:
       - CATALOG_WAREHOUSE=s3://iceberg-tpch
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_PATH_STYLE_ACCESS=true
     depends_on:
       - minio
-    links:
-      - minio:icebergdata.minio
     expose:
       - 8181
     ports:
