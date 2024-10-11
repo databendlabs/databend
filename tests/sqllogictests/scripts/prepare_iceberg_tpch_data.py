@@ -1,6 +1,8 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType, DateType
 
+data_path = "tests/sqllogictests/data/tests/suites/0_stateless/13_tpch/data"
+
 spark = SparkSession.builder \
     .appName("CSV to Iceberg REST Catalog") \
     .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog") \
@@ -37,7 +39,7 @@ tables = {
             StructField("l_shipmode", StringType(), True),
             StructField("l_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/lineitem.tbl"
+        f"{data_path}/lineitem.tbl"
     ),
     "orders": (
         StructType([
@@ -51,7 +53,7 @@ tables = {
             StructField("o_shippriority", IntegerType(), True),
             StructField("o_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/orders.tbl"
+        f"{data_path}/orders.tbl"
     ),
     "customer": (
         StructType([
@@ -64,7 +66,7 @@ tables = {
             StructField("c_mktsegment", StringType(), True),
             StructField("c_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/customer.tbl"
+        f"{data_path}/customer.tbl"
     ),
     "nation": (
         StructType([
@@ -73,7 +75,7 @@ tables = {
             StructField("n_regionkey", IntegerType(), True),
             StructField("n_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/nation.tbl"
+        f"{data_path}/nation.tbl"
     ),
     "region": (
         StructType([
@@ -81,7 +83,7 @@ tables = {
             StructField("r_name", StringType(), True),
             StructField("r_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/region.tbl"
+        f"{data_path}/region.tbl"
     ),
     "part": (
         StructType([
@@ -95,7 +97,7 @@ tables = {
             StructField("p_retailprice", DoubleType(), True),
             StructField("p_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/part.tbl"
+        f"{data_path}/part.tbl"
     ),
     "supplier": (
         StructType([
@@ -107,7 +109,7 @@ tables = {
             StructField("s_acctbal", DoubleType(), True),
             StructField("s_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/supplier.tbl"
+        f"{data_path}/supplier.tbl"
     ),
     "partsupp": (
         StructType([
@@ -117,7 +119,7 @@ tables = {
             StructField("ps_supplycost", DoubleType(), True),
             StructField("ps_comment", StringType(), True)
         ]),
-        "tests/sqllogictests/data/partsupp.tbl"
+        f"{data_path}/partsupp.tbl"
     )
 }
 
