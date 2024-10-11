@@ -27,6 +27,15 @@ runs:
       shell: bash
       run: |
         docker compose -f tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml up -d
+        
+        # Prepare Iceberg TPCH data
+        data_dir="tests/sqllogictests/data"
+        mkdir -p $data_dir
+        if [ ! -d ${data_dir}/tpch.tar.gz ]; then
+          curl -s -o ${data_dir}/tpch.tar.gz https://ci.databend.com/dataset/stateful/tpch.tar.gz
+        fi
+        tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
+        
         pip install pyspark
         python tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
 
