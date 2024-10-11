@@ -14,6 +14,7 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom_rule::rule;
 
 use super::query::with;
 use crate::ast::CopyIntoLocationOption;
@@ -22,6 +23,7 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
+use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
 use crate::parser::common::comma_separated_list0;
@@ -29,6 +31,7 @@ use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
 use crate::parser::common::table_ref;
 use crate::parser::common::IResult;
+use crate::parser::common::*;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
@@ -39,7 +42,6 @@ use crate::parser::statement::hint;
 use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
 use crate::parser::Input;
-use crate::rule;
 
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
@@ -137,6 +139,13 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
     )(i)
 }
 
+pub fn literal_string_or_variable(i: Input) -> IResult<LiteralStringOrVariable> {
+    alt((
+        map(literal_string, LiteralStringOrVariable::Literal),
+        map(variable_ident, LiteralStringOrVariable::Variable),
+    ))(i)
+}
+
 fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
     alt((
         map(
@@ -144,7 +153,7 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             |(_, _, _, files, _)| CopyIntoTableOption::Files(files),
         ),
         map(
-            rule! { PATTERN ~ "=" ~ #literal_string },
+            rule! { PATTERN ~ ^"=" ~ ^#literal_string_or_variable },
             |(_, _, pattern)| CopyIntoTableOption::Pattern(pattern),
         ),
         map(rule! { #file_format_clause }, |options| {

@@ -50,6 +50,7 @@ use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
+use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -289,6 +290,11 @@ impl TableFunctionFactory {
         creators.insert(
             "task_history".to_string(),
             (next_id(), Arc::new(TaskHistoryTable::create)),
+        );
+
+        creators.insert(
+            "show_variables".to_string(),
+            (next_id(), Arc::new(ShowVariables::create)),
         );
 
         TableFunctionFactory {

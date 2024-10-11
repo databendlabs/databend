@@ -21,6 +21,7 @@ pub use compact_part::CompactExtraInfo;
 pub use compact_part::CompactLazyPartInfo;
 pub use compact_part::CompactTaskInfo;
 pub use mutation_meta::ClusterStatsGenType;
+pub use mutation_meta::CompactSourceMeta;
 pub use mutation_meta::SerializeBlock;
 pub use mutation_meta::SerializeDataMeta;
 pub use mutation_part::DeletedSegmentInfo;

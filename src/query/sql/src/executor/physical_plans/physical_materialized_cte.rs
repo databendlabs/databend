@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::ColumnBinding;
 use crate::ColumnSet;
@@ -31,12 +32,13 @@ pub struct MaterializedCte {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub cte_idx: IndexType,
-    pub left_output_columns: Vec<ColumnBinding>,
+    pub cte_scan_offset: Vec<usize>,
+    pub materialized_output_columns: Vec<ColumnBinding>,
 }
 
 impl MaterializedCte {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let fields = self.right.output_schema()?.fields().clone();
+        let fields = self.left.output_schema()?.fields().clone();
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -49,36 +51,35 @@ impl PhysicalPlanBuilder {
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let left_output_column = RelExpr::with_s_expr(s_expr)
-            .derive_relational_prop_child(0)?
-            .output_columns
-            .clone();
-        let right_used_column = RelExpr::with_s_expr(s_expr)
-            .derive_relational_prop_child(1)?
-            .used_columns
-            .clone();
-        // Get the intersection of `left_used_column` and `right_used_column`
-        let left_required = left_output_column
-            .intersection(&right_used_column)
-            .cloned()
-            .collect::<ColumnSet>();
+        self.cte_output_columns
+            .insert(cte.cte_idx, cte.materialized_output_columns.clone());
+        self.cet_used_column_offsets
+            .insert(cte.cte_idx, HashSet::new());
+        let left = Box::new(self.build(s_expr.child(0)?, required).await?);
 
-        let mut required_output_columns = vec![];
-        for column in cte.left_output_columns.iter() {
-            if left_required.contains(&column.index) {
-                required_output_columns.push(column.clone());
+        let mut materialize_required = ColumnSet::new();
+        let mut materialized_output_columns = vec![];
+        let mut cte_scan_offset = Vec::with_capacity(cte.materialized_output_columns.len());
+        let used_column_offset = self.cet_used_column_offsets.get(&cte.cte_idx).unwrap();
+        for (offset, column) in cte.materialized_output_columns.iter().enumerate() {
+            if used_column_offset.contains(&offset) {
+                cte_scan_offset.push(materialized_output_columns.len());
+                materialize_required.insert(column.index);
+                materialized_output_columns.push(column.clone());
+            } else {
+                cte_scan_offset.push(0);
             }
         }
-        self.cte_output_columns
-            .insert(cte.cte_idx, required_output_columns.clone());
+        let right = Box::new(self.build(s_expr.child(1)?, materialize_required).await?);
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
             plan_id: 0,
-            left: Box::new(self.build(s_expr.child(0)?, left_required).await?),
-            right: Box::new(self.build(s_expr.child(1)?, required).await?),
+            left,
+            right,
             cte_idx: cte.cte_idx,
-            left_output_columns: required_output_columns,
+            cte_scan_offset,
+            materialized_output_columns,
         }))
     }
 }

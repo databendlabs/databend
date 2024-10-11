@@ -1132,3 +1132,8 @@ query T
 select to_timestamp('2022-03-27 07:54:31.12');
 ----
 2022-03-27 07:54:31.120000
+
+query T
+SELECT DATE_ADD('week', 1, TODAY())=DATE_ADD('day', 7, TODAY())
+----
+1

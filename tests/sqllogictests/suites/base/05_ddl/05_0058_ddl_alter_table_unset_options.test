@@ -1,0 +1,36 @@
+statement ok
+create or replace database test_alter_table_unset;
+
+statement ok
+use test_alter_table_unset;
+
+statement ok
+create or replace table t(a int);
+
+# (Only) The following options are allowed
+#block_per_segment
+#block_size_threshold
+#data_retention_period_in_hours
+#row_avg_depth_threshold
+#row_per_block
+#row_per_page
+
+statement ok
+alter table t unset options (block_per_segment, block_size_threshold, data_retention_period_in_hours, row_avg_depth_threshold, row_per_block, row_per_page);
+
+
+# If only one option needs to be unset, the brackets can be omitted
+statement ok
+alter table t unset options data_retention_period_in_hours;
+
+# option name is case insensitive
+statement ok
+alter table t unset options DATA_retention_period_in_hours;
+
+# not allowed
+statement error 1301
+alter table t unset options(database_id);
+
+# not allowed
+statement error 1301
+alter table t unset options(database_id, snapshot_location, data_retention_period_in_hours);

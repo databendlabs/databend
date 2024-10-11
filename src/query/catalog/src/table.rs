@@ -220,7 +220,6 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        append_mode: AppendMode,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, append_mode);
@@ -335,9 +334,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        consume: bool,
+        with_options: &str,
     ) -> Result<String> {
-        let (_, _, _, _) = (ctx, database_name, table_name, consume);
+        let (_, _, _, _) = (ctx, database_name, table_name, with_options);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -540,13 +539,6 @@ pub enum CompactTarget {
     Blocks(Option<usize>),
     // compact segments
     Segments,
-}
-
-pub enum AppendMode {
-    // From INSERT and RECUSTER operation
-    Normal,
-    // From COPY, Streaming load operation
-    Copy,
 }
 
 pub trait ColumnStatisticsProvider: Send {

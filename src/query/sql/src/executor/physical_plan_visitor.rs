@@ -200,6 +200,7 @@ pub trait PhysicalPlanReplacer {
             group_by_display: plan.group_by_display.clone(),
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
+            rank_limit: plan.rank_limit.clone(),
         }))
     }
 
@@ -214,7 +215,6 @@ pub trait PhysicalPlanReplacer {
             agg_funcs: plan.agg_funcs.clone(),
             group_by_display: plan.group_by_display.clone(),
             stat_info: plan.stat_info.clone(),
-            limit: plan.limit,
         }))
     }
 
@@ -277,15 +277,16 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_materialized_cte(&mut self, plan: &MaterializedCte) -> Result<PhysicalPlan> {
-        let left = self.replace(&plan.left)?;
         let right = self.replace(&plan.right)?;
+        let left = self.replace(&plan.left)?;
 
         Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
             cte_idx: plan.cte_idx,
-            left_output_columns: plan.left_output_columns.clone(),
+            cte_scan_offset: plan.cte_scan_offset.clone(),
+            materialized_output_columns: plan.materialized_output_columns.clone(),
         }))
     }
 

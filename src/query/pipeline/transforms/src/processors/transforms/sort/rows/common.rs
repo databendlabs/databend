@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
+
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -35,6 +38,7 @@ pub type CommonRows = BinaryColumn;
 
 impl Rows for BinaryColumn {
     type Item<'a> = &'a [u8];
+    type Type = BinaryType;
 
     fn len(&self) -> usize {
         self.len()
@@ -52,8 +56,8 @@ impl Rows for BinaryColumn {
         col.as_binary().cloned()
     }
 
-    fn data_type() -> DataType {
-        DataType::Binary
+    fn slice(&self, range: Range<usize>) -> Self {
+        self.slice(range)
     }
 }
 

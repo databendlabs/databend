@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::UInt64Type;
@@ -34,6 +36,7 @@ use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -47,6 +50,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_storages_fuse::FuseTable;
 
+use super::HookOperator;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -88,8 +92,27 @@ impl Interpreter for InsertMultiTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let physical_plan = self.build_physical_plan().await?;
-        let build_res =
+        let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        // Execute hook.
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_compact_after_multi_table_insert()?
+        {
+            for (_, (db, tbl)) in &self.plan.target_tables {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    // multi table insert only support default catalog
+                    CATALOG_DEFAULT.to_string(),
+                    db.to_string(),
+                    tbl.to_string(),
+                    MutationKind::Insert,
+                    LockTableOption::LockNoRetry,
+                );
+                hook_operator.execute(&mut build_res.main_pipeline).await;
+            }
+        }
         Ok(build_res)
     }
 

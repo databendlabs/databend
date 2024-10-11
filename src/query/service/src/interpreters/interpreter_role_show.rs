@@ -46,7 +46,7 @@ impl Interpreter for ShowRolesInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[fastrace::trace]

@@ -26,6 +26,7 @@ use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -108,7 +109,7 @@ impl LockManager {
             ctx.get_current_user()?.name,       // user
             ctx.get_cluster().local_id.clone(), // node
             query_id.clone(),                   // query_id
-            expire_secs,
+            Duration::from_secs(expire_secs),
         );
 
         let catalog = ctx.get_catalog(catalog_name).await?;
@@ -129,10 +130,15 @@ impl LockManager {
 
         loop {
             // List all revisions and check if the current is the minimum.
-            let reply = catalog
+            let mut rev_list = catalog
                 .list_lock_revisions(list_table_lock_req.clone())
-                .await?;
-            let rev_list = reply.into_iter().map(|(x, _)| x).collect::<Vec<_>>();
+                .await?
+                .into_iter()
+                .map(|(x, _)| x)
+                .collect::<Vec<_>>();
+            // list_lock_revisions are returned in big-endian order,
+            // we need to sort them in ascending numeric order.
+            rev_list.sort();
             let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
                 ErrorCode::TableLockExpired(format!(
@@ -144,8 +150,12 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-                let extend_table_lock_req =
-                    ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
+                let extend_table_lock_req = ExtendLockRevReq::new(
+                    lock_key.clone(),
+                    revision,
+                    Duration::from_secs(expire_secs),
+                    true,
+                );
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
@@ -153,14 +163,15 @@ impl LockManager {
                 break;
             }
 
+            let elapsed = start.elapsed();
             // if no need retry, return error directly.
-            if !should_retry {
+            if !should_retry || elapsed >= duration {
                 catalog
                     .delete_lock_revision(delete_table_lock_req.clone())
                     .await?;
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table is locked by other session, please retry later(elapsed: {:?})",
-                    start.elapsed()
+                    elapsed
                 )));
             }
 
@@ -173,8 +184,18 @@ impl LockManager {
                 filter_type: FilterType::Delete.into(),
             };
             let mut watch_stream = meta_api.watch(req).await?;
+
+            let lock_meta = meta_api.get_pb(&watch_delete_ident).await?;
+            if lock_meta.is_none() {
+                log::warn!(
+                    "Lock revision '{}' already does not exist, skipping",
+                    rev_list[position - 1]
+                );
+                continue;
+            }
+
             // Add a timeout period for watch.
-            match timeout(duration, async move {
+            match timeout(duration.abs_diff(elapsed), async move {
                 while let Some(Ok(resp)) = watch_stream.next().await {
                     if let Some(event) = resp.event {
                         if event.current.is_none() {

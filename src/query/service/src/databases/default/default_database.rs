@@ -15,23 +15,22 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::CannotAccessShareTable;
+use databend_common_meta_app::app_error::UnknownTable;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -42,15 +41,12 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::SeqValue;
-use log::error;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -78,11 +74,30 @@ impl DefaultDatabase {
     }
 
     async fn list_table_infos(&self) -> Result<Vec<Arc<TableInfo>>> {
-        let table_infos = self
+        let db_id = self.db_info.database_id;
+
+        let name_id_metas = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .list_tables(ListTableReq::new(self.get_tenant(), db_id))
             .await?;
+
+        let table_infos = name_id_metas
+            .iter()
+            .map(|(name, id, meta)| {
+                Arc::new(TableInfo {
+                    ident: TableIdent {
+                        table_id: id.table_id,
+                        seq: meta.seq(),
+                    },
+                    desc: format!("'{}'.'{}'", self.get_db_name(), name),
+                    name: name.to_string(),
+                    meta: meta.data.clone(),
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                })
+            })
+            .collect::<Vec<_>>();
 
         if self.ctx.disable_table_info_refresh {
             Ok(table_infos)
@@ -124,15 +139,32 @@ impl Database for DefaultDatabase {
     // Get one table by db and table name.
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self
-            .ctx
-            .meta
-            .get_table(GetTableReq::new(
-                self.get_tenant(),
-                self.get_db_name(),
+        let name_ident = DBIdTableName::new(self.get_db_info().database_id.db_id, table_name);
+        let table_niv = self.ctx.meta.get_table_in_db(&name_ident).await?;
+
+        let Some(table_niv) = table_niv else {
+            return Err(AppError::from(UnknownTable::new(
                 table_name,
+                format!("get_table: '{}'.'{}'", self.get_db_name(), table_name),
             ))
-            .await?;
+            .into());
+        };
+
+        let (_name, id, seq_meta) = table_niv.unpack();
+
+        let table_info = TableInfo {
+            ident: TableIdent {
+                table_id: id.table_id,
+                seq: seq_meta.seq,
+            },
+            desc: format!("'{}'.'{}'", self.get_db_name(), table_name),
+            name: table_name.to_string(),
+            meta: seq_meta.data,
+            db_type: DatabaseType::NormalDB,
+            catalog_info: Default::default(),
+        };
+
+        let table_info = Arc::new(table_info);
 
         let table_info = if self.ctx.disable_table_info_refresh {
             table_info
@@ -148,31 +180,13 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn get_table_history(&self, table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        if let Some(ref share_name_ident_raw) = self.db_info.meta.from_share {
-            let share_ident = share_name_ident_raw.clone().to_tident(());
-            error!(
-                "get_table_history {:?} from share {:?}",
-                self.db_info.name_ident, share_ident,
-            );
-            return Err(ErrorCode::from(KVAppError::AppError(
-                AppError::CannotAccessShareTable(CannotAccessShareTable::new(
-                    &self.db_info.name_ident.tenant().tenant,
-                    share_ident.name(),
-                    table_name,
-                )),
-            )));
-        }
-
         let metas = self
             .ctx
             .meta
-            .get_table_meta_history(
-                self.db_info.name_ident.database_name(),
-                &TableIdHistoryIdent {
-                    database_id: self.db_info.database_id.db_id,
-                    table_name: table_name.to_string(),
-                },
-            )
+            .get_retainable_tables(&TableIdHistoryIdent {
+                database_id: self.db_info.database_id.db_id,
+                table_name: table_name.to_string(),
+            })
             .await?;
 
         let table_infos: Vec<Arc<TableInfo>> = metas
@@ -190,7 +204,6 @@ impl Database for DefaultDatabase {
                     ),
                     name: table_name.to_string(),
                     meta: seqv.data,
-                    tenant: self.db_info.name_ident.tenant_name().to_string(),
                     db_type: DatabaseType::NormalDB,
                     catalog_info: Default::default(),
                 })
@@ -217,10 +230,23 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .get_tables_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
+            .list_retainable_tables(ListTableReq::new(
+                self.get_tenant(),
+                self.db_info.database_id,
+            ))
             .await?
             .into_iter()
-            .filter(|i| i.meta.drop_on.is_some())
+            .filter(|i| i.value().drop_on.is_some())
+            .map(|niv| {
+                Arc::new(TableInfo::new_full(
+                    self.get_db_name(),
+                    &niv.name().table_name,
+                    TableIdent::new(niv.id().table_id, niv.value().seq()),
+                    niv.value().data.clone(),
+                    Arc::new(CatalogInfo::default()),
+                    DatabaseType::NormalDB,
+                ))
+            })
             .collect::<Vec<_>>();
 
         let mut table_infos = self.list_table_infos().await?;
@@ -243,7 +269,7 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()> {
         let res = self.ctx.meta.undrop_table(req).await?;
         Ok(res)
     }

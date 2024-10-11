@@ -26,7 +26,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -252,7 +251,6 @@ impl Table for MemoryTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
-        _: AppendMode,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Ok(())

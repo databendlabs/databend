@@ -26,6 +26,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
@@ -43,18 +44,18 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
-use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
-use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
-use crate::interpreters::InterpreterMetrics;
-use crate::interpreters::InterpreterQueryLog;
+use super::hook::vacuum_hook::hook_disk_temp_dir;
+use super::hook::vacuum_hook::hook_vacuum_temp_files;
+use super::interpreter_txn_commit::CommitInterpreter;
+use super::InterpreterMetrics;
+use super::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::http::v1::ClientSessionManager;
+use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
@@ -87,8 +88,10 @@ pub trait Interpreter: Sync + Send {
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        let make_error = || "failed to execute interpreter";
+
         ctx.set_status_info("building pipeline");
-        ctx.check_aborting()?;
+        ctx.check_aborting().with_context(make_error)?;
         if self.is_ddl() {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
@@ -187,11 +190,6 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     let typ = session.get_type();
     if typ.is_user_session() {
         SessionManager::instance().status.write().query_finish(now);
-        if typ == SessionType::HTTPQuery {
-            if let Some(cid) = session.get_client_session_id() {
-                ClientSessionManager::instance().on_query_finish(&cid, &session)
-            }
-        }
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
@@ -205,9 +203,15 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
 ///
 /// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
 pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
-    let mut planner = Planner::new(ctx.clone());
+    let mut planner = Planner::new_with_sample_executor(
+        ctx.clone(),
+        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
+    );
     let result = planner.plan_sql(sql).await;
-    let short_sql = short_sql(sql.to_string());
+    let short_sql = short_sql(
+        sql.to_string(),
+        ctx.get_settings().get_short_sql_max_length()?,
+    );
     let mut stmt = if let Ok((_, extras)) = &result {
         Some(extras.statement.clone())
     } else {
@@ -281,6 +285,8 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
     }
 
     hook_vacuum_temp_files(&query_ctx)?;
+
+    hook_disk_temp_dir(&query_ctx)?;
 
     let err_opt = match &info.res {
         Ok(_) => None,

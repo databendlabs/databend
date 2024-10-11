@@ -62,7 +62,7 @@ impl Dataframe {
             catalog: None,
             alias: None,
             temporal: None,
-            consume: false,
+            with_options: None,
             pivot: None,
             unpivot: None,
             sample: None,
@@ -84,12 +84,11 @@ impl Dataframe {
         let (s_expr, bind_context) = if db == Some("system") && table_name == "one" {
             let catalog = CATALOG_DEFAULT;
             let database = "system";
-            let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder.resolve_data_source(
-                tenant.tenant_name(),
                 catalog,
                 database,
                 "one",
+                None,
                 None,
                 query_ctx.clone().get_abort_checker(),
             )?;
@@ -407,7 +406,6 @@ impl Dataframe {
             &self.bind_context,
             order_items,
             &select_list,
-            &mut scalar_items,
             self.s_expr,
         )?;
 
@@ -466,7 +464,7 @@ impl Dataframe {
                 catalog: None,
                 alias: None,
                 temporal: None,
-                consume: false,
+                with_options: None,
                 pivot: None,
                 unpivot: None,
                 sample: None,

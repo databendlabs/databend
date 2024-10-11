@@ -25,8 +25,10 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
-use databend_common_pipeline_transforms::processors::BlockCompactor;
-use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::Mutation;
@@ -242,11 +244,26 @@ impl PipelineBuilder {
         // little blocks, it will cause high latency.
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
-                Ok(ProcessorPtr::create(TransformCompact::try_create(
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                     transform_input_port,
                     transform_output_port,
-                    BlockCompactor::new(block_thresholds),
-                )?))
+                    BlockCompactBuilder::new(block_thresholds),
+                )))
+            },
+            transform_len,
+        )?;
+        if need_match {
+            builder.add_items_prepend(vec![create_dummy_item()]);
+        }
+        self.main_pipeline.add_pipe(builder.finalize());
+
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+                    transform_input_port,
+                    transform_output_port,
+                    TransformCompactBlock::default(),
+                )))
             },
             transform_len,
         )?;

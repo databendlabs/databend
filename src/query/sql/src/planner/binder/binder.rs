@@ -37,7 +37,7 @@ use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -55,6 +55,7 @@ use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
@@ -95,6 +96,7 @@ pub struct Binder {
     // Save the bound context for materialized cte, the key is cte_idx
     pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
     pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    pub m_cte_materialized_indexes: HashMap<IndexType, IndexType>,
     /// Use `IndexMap` because need to keep the insertion order
     /// Then wrap materialized ctes to main plan.
     pub ctes_map: Box<IndexMap<String, CteInfo>>,
@@ -128,6 +130,7 @@ impl<'a> Binder {
             metadata,
             m_cte_bound_ctx: Default::default(),
             m_cte_bound_s_expr: Default::default(),
+            m_cte_materialized_indexes: Default::default(),
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
@@ -166,11 +169,11 @@ impl<'a> Binder {
                         continue;
                     }
                     let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-                    let left_output_columns = cte_info.columns.clone();
+                    let materialized_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx })),
-                        Arc::new(cte_s_expr.clone()),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { cte_idx: cte_info.cte_idx, materialized_output_columns, materialized_indexes: self.m_cte_materialized_indexes.clone() })),
                         Arc::new(s_expr),
+                        Arc::new(cte_s_expr.clone()),
                     );
                 }
 
@@ -234,6 +237,7 @@ impl<'a> Binder {
             Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
             Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
             Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
+            Statement::ShowVariables { show_options } => self.bind_show_variables(bind_context, show_options).await?,
             Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
             Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
@@ -313,8 +317,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
+            Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
+                user: user.clone().into(),
+            })),
 
             // Roles
             Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
@@ -488,43 +495,6 @@ impl<'a> Binder {
                     .await?
             }
 
-            // share statements
-            Statement::CreateShareEndpoint(stmt) => {
-                self.bind_create_share_endpoint(stmt).await?
-            }
-            Statement::ShowShareEndpoint(stmt) => {
-                self.bind_show_share_endpoint(stmt).await?
-            }
-            Statement::DropShareEndpoint(stmt) => {
-                self.bind_drop_share_endpoint(stmt).await?
-            }
-            Statement::CreateShare(stmt) => {
-                self.bind_create_share(stmt).await?
-            }
-            Statement::DropShare(stmt) => {
-                self.bind_drop_share(stmt).await?
-            }
-            Statement::GrantShareObject(stmt) => {
-                self.bind_grant_share_object(stmt).await?
-            }
-            Statement::RevokeShareObject(stmt) => {
-                self.bind_revoke_share_object(stmt).await?
-            }
-            Statement::AlterShareTenants(stmt) => {
-                self.bind_alter_share_accounts(stmt).await?
-            }
-            Statement::DescShare(stmt) => {
-                self.bind_desc_share(stmt).await?
-            }
-            Statement::ShowShares(stmt) => {
-                self.bind_show_shares(stmt).await?
-            }
-            Statement::ShowObjectGrantPrivileges(stmt) => {
-                self.bind_show_object_grant_privileges(stmt).await?
-            }
-            Statement::ShowGrantsOfShare(stmt) => {
-                self.bind_show_grants_of_share(stmt).await?
-            }
             Statement::CreateDatamaskPolicy(stmt) => {
                 self.bind_create_data_mask_policy(stmt).await?
             }
@@ -628,6 +598,34 @@ impl<'a> Binder {
                 self.bind_set_priority(priority, object_id).await?
             },
             Statement::System(stmt) => self.bind_system(stmt).await?,
+            Statement::CreateProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_create_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+            }
+            }
+            Statement::DropProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_drop_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
+            }  }
+            Statement::ShowProcedures { show_options } => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_show_procedures(bind_context, show_options).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
+            }  }
+            Statement::DescProcedure(stmt) => { if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                self.bind_desc_procedure(stmt).await?
+            } else {
+                return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+            }  }
+            Statement::CallProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_call_procedure(bind_context, stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
+                }
+                }
         };
 
         match plan.kind() {
@@ -928,9 +926,7 @@ impl<'a> Binder {
         }
         // check inverted index license
         if !bind_context.inverted_index_map.is_empty() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;

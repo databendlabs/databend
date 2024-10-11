@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -253,7 +252,6 @@ impl Interpreter for InsertInterpreter {
             None,
             vec![],
             self.plan.overwrite,
-            AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             table_meta_timestamps,
         )?;

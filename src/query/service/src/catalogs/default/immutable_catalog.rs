@@ -21,6 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -38,7 +39,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -50,7 +50,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
@@ -84,13 +83,11 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -235,6 +232,23 @@ impl Catalog for ImmutableCatalog {
         }
     }
 
+    async fn mget_databases(
+        &self,
+        _tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        let mut res: Vec<Arc<dyn Database>> = vec![];
+        for db_name in db_names {
+            let db_name = db_name.database_name();
+            if db_name == "system" {
+                res.push(self.sys_db.clone());
+            } else if db_name == "information_schema" {
+                res.push(self.info_schema_db.clone());
+            }
+        }
+        Ok(res)
+    }
+
     async fn mget_database_names_by_ids(
         &self,
         _tenant: &Tenant,
@@ -310,13 +324,13 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop table in system database",
         ))
     }
 
-    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop table by id in system database",
         ))
@@ -477,26 +491,17 @@ impl Catalog for ImmutableCatalog {
     // Virtual column
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 

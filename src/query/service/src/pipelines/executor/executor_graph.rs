@@ -34,6 +34,7 @@ use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
@@ -822,7 +823,9 @@ impl RunningGraph {
     }
 
     /// Flag the graph should finish and no more tasks should be scheduled.
-    pub fn should_finish(&self, cause: Result<()>) -> Result<()> {
+    pub fn should_finish<C>(&self, cause: Result<(), C>) -> Result<()> {
+        let cause = cause.with_context(|| "should finish");
+
         if self.0.should_finish.load(Ordering::SeqCst) {
             return Ok(());
         }
@@ -995,7 +998,16 @@ impl Debug for ExecutingGraph {
         write!(
             f,
             "{:?}",
-            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
+            Dot::with_attr_getters(
+                &self.graph,
+                &[Config::EdgeNoLabel],
+                &|_, edge| format!(
+                    "{} -> {}",
+                    edge.weight().output_index,
+                    edge.weight().input_index
+                ),
+                &|_, (_, _)| String::new(),
+            )
         )
     }
 }

@@ -292,6 +292,7 @@ where F: SnapshotGenerator + Send + 'static
                     self.ctx.txn_mgr(),
                     table_info.ident.table_id,
                     self.table_meta_timestamps,
+                    table_info.name.as_str(),
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {

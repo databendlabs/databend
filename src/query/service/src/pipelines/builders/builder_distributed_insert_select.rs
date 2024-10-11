@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table::AppendMode;
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
@@ -64,7 +63,6 @@ impl PipelineBuilder {
         table.append_data(
             self.ctx.clone(),
             &mut self.main_pipeline,
-            AppendMode::Normal,
             insert_select.table_meta_timestamps,
         )?;
 

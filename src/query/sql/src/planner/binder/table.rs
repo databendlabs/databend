@@ -48,13 +48,10 @@ use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
-use databend_common_sharing::ShareEndpointClient;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -153,14 +150,28 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+    fn bind_cte_scan(
+        &mut self,
+        cte_info: &CteInfo,
+        mut bind_context: BindContext,
+    ) -> Result<(SExpr, BindContext)> {
         let blocks = Arc::new(RwLock::new(vec![]));
         self.ctx
             .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
         // Get the fields in the cte
         let mut fields = vec![];
         let mut offsets = vec![];
-        for (idx, column) in cte_info.columns.iter().enumerate() {
+        let mut materialized_indexes = vec![];
+        for (idx, column) in bind_context.columns.iter_mut().enumerate() {
+            let materialized_index = column.index;
+            materialized_indexes.push(materialized_index);
+            column.index = self.metadata.write().add_derived_column(
+                column.column_name.clone(),
+                *column.data_type.clone(),
+                None,
+            );
+            self.m_cte_materialized_indexes
+                .insert(column.index, materialized_index);
             fields.push(DataField::new(
                 column.index.to_string().as_str(),
                 *column.data_type.clone(),
@@ -171,13 +182,14 @@ impl Binder {
             CteScan {
                 cte_idx: (cte_info.cte_idx, cte_info.used_count),
                 fields,
+                materialized_indexes,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
                 stat: Arc::new(StatInfo::default()),
             }
             .into(),
         ));
-        Ok(cte_scan)
+        Ok((cte_scan, bind_context))
     }
 
     pub(crate) fn bind_cte(
@@ -216,7 +228,6 @@ impl Binder {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-            share_paramas: None,
         };
 
         let (s_expr, mut res_bind_context) =
@@ -299,8 +310,7 @@ impl Binder {
                 cte_info.used_count += 1;
             });
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        let s_expr = self.bind_cte_scan(&cte_info)?;
-        Ok((s_expr, new_bind_context))
+        self.bind_cte_scan(&cte_info, new_bind_context)
     }
 
     pub(crate) fn bind_r_cte_scan(
@@ -488,38 +498,13 @@ impl Binder {
         ))
     }
 
-    pub fn resolve_share_reference_data_source(
-        &self,
-        share_params: &ShareDBParams,
-        tenant: &str,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        databend_common_base::runtime::block_on(async move {
-            let client = ShareEndpointClient::new();
-
-            let mut table_info = client
-                .get_reference_table_by_name(share_params, tenant, database_name, table_name)
-                .await?;
-            table_info.db_type = DatabaseType::ShareDB(share_params.clone());
-            let table = self
-                .ctx
-                .get_catalog(catalog_name)
-                .await?
-                .get_table_by_info(&table_info)?;
-
-            Ok(table)
-        })
-    }
-
     pub fn resolve_data_source(
         &self,
-        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        max_batch_size: Option<u64>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
@@ -529,7 +514,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table(catalog_name, database_name, table_name)
+                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {

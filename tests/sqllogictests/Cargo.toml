@@ -16,16 +16,20 @@ name = "databend-sqllogictests"
 [dependencies]
 async-trait = { workspace = true }
 clap = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 env_logger = "0.10.0"
 futures-util = { workspace = true }
+msql-srv = "0.11.0"
 mysql_async = { workspace = true }
+mysql_common = "0.32.4"
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = "1.0.150"
 serde_json = { workspace = true }
-sqllogictest = "0.19.1"
+sqllogictest = "0.21.0"
+sqlparser = "0.50.0"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }

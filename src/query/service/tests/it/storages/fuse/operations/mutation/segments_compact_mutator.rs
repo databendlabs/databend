@@ -36,7 +36,6 @@ use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
@@ -671,7 +670,8 @@ impl CompactSegmentTestFixture {
             cluster_key_id,
             max_theads,
             &fuse_segment_io,
-            segment_writer.clone(),
+            data_accessor,
+            location_gen,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -1028,7 +1028,8 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             Some(cluster_key_id),
             chunk_size,
             &fuse_segment_io,
-            segment_writer.clone(),
+            &data_accessor,
+            &location_gen,
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

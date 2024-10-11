@@ -294,6 +294,7 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
         .meta
         .options
         .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
+    table_info.desc = "`default`.`t`".to_string();
 
     use test_accessor::AccessorFaultyDeletion;
     // Operator with mocked accessor that will fail on `remove_all`
@@ -305,9 +306,8 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
     let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(tables, None).await;
-    assert!(result.is_err());
-
+    let result = do_vacuum_drop_table(tables, None).await?;
+    assert!(!result.1.is_empty());
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
 
@@ -321,7 +321,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         .meta
         .options
         .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
-
+    table_info.desc = "`default`.`t`".to_string();
     use test_accessor::AccessorFaultyDeletion;
 
     // Case 1: non-parallel vacuum dropped tables
@@ -334,12 +334,12 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
         let tables = vec![table];
         let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
 
         // verify that errors of deletions are not swallowed
-        assert!(result.is_err());
+        assert!(!result.1.is_empty());
     }
 
     // Case 2: parallel vacuum dropped tables
@@ -351,11 +351,11 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
         let tables = vec![table.clone(), table];
         let num_threads = 2;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
         // verify that errors of deletions are not swallowed
-        assert!(result.is_err());
+        assert!(!result.1.is_empty());
     }
 
     Ok(())
@@ -416,6 +416,7 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     };
 
     let table_info = TableInfo {
+        desc: "`default`.`t`".to_string(),
         meta,
         ..Default::default()
     };
@@ -427,8 +428,8 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
     let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(tables, None).await;
-    assert!(result.is_err());
+    let result = do_vacuum_drop_table(tables, None).await?;
+    assert!(!result.1.is_empty());
 
     // verify that accessor.delete() was called
     assert!(!accessor.hit_delete_operation());

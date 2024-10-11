@@ -19,21 +19,12 @@ use std::intrinsics::unlikely;
 
 use databend_common_base::containers::FixedHeap;
 use databend_common_exception::Result;
-use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::DataBlock;
 
-use super::sort::CommonRows;
 use super::sort::Cursor;
 use super::sort::CursorOrder;
-use super::sort::DateConverter;
-use super::sort::DateRows;
 use super::sort::Rows;
-use super::sort::StringConverter;
-use super::sort::StringRows;
-use super::sort::TimestampConverter;
-use super::sort::TimestampRows;
 use super::transform_sort_merge_base::MergeSort;
-use super::transform_sort_merge_base::TransformSortMergeBase;
 
 /// This is a specific version of [`super::transform_sort_merge::TransformSortMerge`] which sort blocks with limit.
 pub struct TransformSortMergeLimit<R: Rows> {
@@ -193,19 +184,3 @@ impl<R: Rows> TransformSortMergeLimit<R> {
         output_blocks
     }
 }
-
-pub(super) type MergeSortLimitDateImpl = TransformSortMergeLimit<DateRows>;
-pub(super) type MergeSortLimitDate =
-    TransformSortMergeBase<MergeSortLimitDateImpl, DateRows, DateConverter>;
-
-pub(super) type MergeSortLimitTimestampImpl = TransformSortMergeLimit<TimestampRows>;
-pub(super) type MergeSortLimitTimestamp =
-    TransformSortMergeBase<MergeSortLimitTimestampImpl, TimestampRows, TimestampConverter>;
-
-pub(super) type MergeSortLimitStringImpl = TransformSortMergeLimit<StringRows>;
-pub(super) type MergeSortLimitString =
-    TransformSortMergeBase<MergeSortLimitStringImpl, StringRows, StringConverter>;
-
-pub(super) type MergeSortLimitCommonImpl = TransformSortMergeLimit<CommonRows>;
-pub(super) type MergeSortLimitCommon =
-    TransformSortMergeBase<MergeSortLimitCommonImpl, CommonRows, CommonConverter>;

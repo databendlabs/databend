@@ -33,6 +33,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -53,6 +54,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -70,7 +72,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -82,7 +83,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
@@ -115,7 +115,6 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -123,7 +122,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -570,11 +568,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn check_aborting(&self) -> Result<()> {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         todo!()
     }
 
-    fn get_error(&self) -> Option<ErrorCode> {
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         todo!()
     }
 
@@ -706,6 +704,16 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_table_with_batch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
@@ -755,14 +763,6 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
-        todo!()
-    }
-
-    fn set_compaction_num_block_hint(&self, _enable: u64) {
-        todo!()
-    }
-
-    fn get_compaction_num_block_hint(&self) -> u64 {
         todo!()
     }
 
@@ -958,6 +958,14 @@ impl Catalog for FakedCatalog {
         self.cat.get_db_name_by_id(db_id).await
     }
 
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        self.cat.mget_databases(tenant, db_names).await
+    }
+
     #[async_backtrace::framed]
     async fn mget_database_names_by_ids(
         &self,
@@ -1005,7 +1013,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<()> {
         todo!()
     }
 
@@ -1099,26 +1107,17 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 

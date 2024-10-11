@@ -257,6 +257,20 @@ impl SetOptionsPlan {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct UnsetOptionsPlan {
+    pub options: Vec<String>,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl UnsetOptionsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 // Table add column
 #[derive(Clone, Debug)]
 pub struct AddTableColumnPlan {

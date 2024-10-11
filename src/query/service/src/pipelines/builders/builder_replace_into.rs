@@ -35,6 +35,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -326,10 +327,13 @@ impl PipelineBuilder {
             Arc::new(target_schema.clone().into()),
         )?;
 
+        let block_thresholds = table.get_block_thresholds();
+        build_compact_block_pipeline(&mut self.main_pipeline, block_thresholds)?;
+
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
-            table.get_block_thresholds(),
+            block_thresholds,
             Some(modified_schema),
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"

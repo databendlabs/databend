@@ -51,6 +51,7 @@ impl Config {
             storage: self.storage.mask_display(),
             catalog: self.catalog,
             cache: self.cache,
+            spill: self.spill,
             background: self.background,
             catalogs: self.catalogs,
         }

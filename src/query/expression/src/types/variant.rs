@@ -19,6 +19,7 @@ use std::ops::Range;
 use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use jsonb::Value;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -179,8 +180,8 @@ impl ValueType for VariantType {
     }
 
     #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
     }
 }
 
@@ -193,6 +194,17 @@ impl ArgType for VariantType {
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
+    }
+}
+
+impl VariantType {
+    pub fn create_column_from_variants(variants: &[Value]) -> BinaryColumn {
+        let mut builder = BinaryColumnBuilder::with_capacity(variants.len(), 0);
+        for v in variants {
+            v.write_to_vec(&mut builder.data);
+            builder.commit_row();
+        }
+        builder.build()
     }
 }
 

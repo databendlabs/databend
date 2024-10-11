@@ -28,7 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storages_fuse::io::SegmentWriter;
+use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
@@ -60,7 +60,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, Default::default());
 
     let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
@@ -88,7 +87,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
+        let segment_location = location_generator.gen_segment_info_location();
+        segment
+            .write_meta(&data_accessor, &segment_location)
+            .await?;
+        Ok::<_, ErrorCode>(((segment_location, SegmentInfo::VERSION), location))
     };
 
     let mut test_segment_locations = vec![];

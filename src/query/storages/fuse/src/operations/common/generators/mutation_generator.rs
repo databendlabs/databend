@@ -64,6 +64,7 @@ impl SnapshotGenerator for MutationGenerator {
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
+        _table_name: &str,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
         match &self.conflict_resolve_ctx {

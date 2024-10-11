@@ -26,6 +26,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::CheckAbort;
@@ -80,6 +81,8 @@ use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+
+pub struct ContextError;
 
 #[derive(Debug)]
 pub struct ProcessInfo {
@@ -174,8 +177,12 @@ pub trait TableContext: Send + Sync {
     fn set_can_scan_from_agg_index(&self, enable: bool);
     fn get_enable_sort_spill(&self) -> bool;
     fn set_enable_sort_spill(&self, enable: bool);
-    fn set_compaction_num_block_hint(&self, hint: u64);
-    fn get_compaction_num_block_hint(&self) -> u64;
+    fn set_compaction_num_block_hint(&self, _table_name: &str, _hint: u64) {
+        unimplemented!()
+    }
+    fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
+        unimplemented!()
+    }
     fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
     fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
     fn set_lazy_mutation_delete(&self, lazy: bool);
@@ -193,7 +200,7 @@ pub trait TableContext: Send + Sync {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
-    fn check_aborting(&self) -> Result<()>;
+    fn check_aborting(&self) -> Result<(), ContextError>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
@@ -205,12 +212,12 @@ pub trait TableContext: Send + Sync {
             }
 
             fn try_check_aborting(&self) -> Result<()> {
-                self.this.check_aborting()
+                self.this.check_aborting().with_context(|| "query aborted")
             }
         }
         Arc::new(Checker { this: self })
     }
-    fn get_error(&self) -> Option<ErrorCode>;
+    fn get_error(&self) -> Option<ErrorCode<ContextError>>;
     fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
@@ -263,6 +270,14 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
+
+    async fn get_table_with_batch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>>;
 
     async fn filter_out_copied_files(
         &self,

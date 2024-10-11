@@ -84,10 +84,9 @@ fn stat_body(
     opt_validity_size: Option<u32>,
     physical_type: PhysicalType,
 ) -> Result<PageInfo> {
-    let codec = buffer[0];
+    let codec = Compression::from_codec(buffer[0])?;
     let compressed_size = u32::from_le_bytes(buffer[1..5].try_into().unwrap());
     let uncompressed_size = u32::from_le_bytes(buffer[5..9].try_into().unwrap());
-    let codec = Compression::from_codec(codec)?;
     *buffer = &buffer[9..];
 
     let body = match codec {
@@ -209,7 +208,7 @@ mod test {
             array.validity().is_some(),
         );
         let schema = Schema::from(vec![field.clone()]);
-        let mut writer = NativeWriter::new(&mut bytes, schema, options);
+        let mut writer = NativeWriter::new(&mut bytes, schema, options).unwrap();
 
         writer.start().unwrap();
         writer.write(&Chunk::new(vec![array])).unwrap();

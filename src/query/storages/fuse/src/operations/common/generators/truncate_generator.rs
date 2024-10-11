@@ -61,6 +61,7 @@ impl SnapshotGenerator for TruncateGenerator {
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
+        _table_name: &str,
     ) -> Result<TableSnapshot> {
         TableSnapshot::try_new(
             prev_table_seq,

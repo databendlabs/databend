@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -37,7 +36,6 @@ impl PipelineBuilder {
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        append_mode: AppendMode,
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
@@ -46,7 +44,6 @@ impl PipelineBuilder {
         table.append_data(
             ctx.clone(),
             main_pipeline,
-            append_mode,
             table_meta_timestamps,
         )?;
         table.commit_insertion(
@@ -68,12 +65,11 @@ impl PipelineBuilder {
         main_pipeline: &mut Pipeline,
         table: Arc<dyn Table>,
         source_schema: DataSchemaRef,
-        append_mode: AppendMode,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
-        table.append_data(ctx, main_pipeline, append_mode, table_meta_timestamps)?;
+        table.append_data(ctx, main_pipeline, table_meta_timestamps)?;
 
         Ok(())
     }

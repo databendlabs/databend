@@ -23,7 +23,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
-use databend_query::servers::http::v1::string_block::StringBlock;
+use databend_query::servers::http::v1::StringBlock;
 use pretty_assertions::assert_eq;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {

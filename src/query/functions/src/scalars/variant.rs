@@ -48,6 +48,7 @@ use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -62,7 +63,12 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
+use jsonb::array_distinct;
+use jsonb::array_except;
+use jsonb::array_insert;
+use jsonb::array_intersection;
 use jsonb::array_length;
+use jsonb::array_overlap;
 use jsonb::as_bool;
 use jsonb::as_f64;
 use jsonb::as_i64;
@@ -1325,6 +1331,116 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ctx.set_error(output.len(), err.to_string());
                 };
                 output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<VariantType, Int32Type, VariantType, VariantType, _, _>(
+        "json_array_insert",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<VariantType, Int32Type, VariantType, VariantType>(
+            |val, pos, new_val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                match array_insert(val, pos, new_val, &mut output.data) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "json_array_distinct",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            match array_distinct(val, &mut output.data) {
+                Ok(_) => {}
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
+        "json_array_intersection",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
+            |val1, val2, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                match array_intersection(val1, val2, &mut output.data) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
+        "json_array_except",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
+            |val1, val2, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                match array_except(val1, val2, &mut output.data) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "json_array_overlap",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
+            |val1, val2, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                match array_overlap(val1, val2) {
+                    Ok(res) => {
+                        output.push(res);
+                    }
+                    Err(err) => {
+                        output.push(false);
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
             },
         ),
     );

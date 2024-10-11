@@ -18,12 +18,9 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_storages_fuse::FuseTable;
@@ -42,7 +39,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    ) -> Result<()> {
         catalog.create_virtual_column(req).await
     }
 
@@ -51,7 +48,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    ) -> Result<()> {
         catalog.update_virtual_column(req).await
     }
 
@@ -60,7 +57,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    ) -> Result<()> {
         catalog.drop_virtual_column(req).await
     }
 

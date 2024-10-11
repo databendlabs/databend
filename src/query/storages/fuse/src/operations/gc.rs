@@ -32,6 +32,7 @@ use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use log::error;
@@ -124,7 +125,7 @@ impl FuseTable {
                     "gc: aborted query, because the server is shutting down or the query was killed. table: {}, ident {}",
                     self.table_info.desc, self.table_info.ident,
                 );
-                return Err(err);
+                return Err(err.with_context("failed to read snapshot"));
             }
 
             let results = snapshots_io
@@ -591,7 +592,7 @@ impl FuseTable {
                 }
             }
 
-            self.try_purge_location_files_and_cache::<InvertedIndexMeta>(
+            self.try_purge_location_files_and_cache::<InvertedIndexMeta, _>(
                 ctx.clone(),
                 inverted_indexes_to_be_purged,
             )
@@ -602,7 +603,7 @@ impl FuseTable {
         let blooms_count = blooms_to_be_purged.len();
         if blooms_count > 0 {
             counter.blooms += blooms_count;
-            self.try_purge_location_files_and_cache::<BloomIndexMeta>(
+            self.try_purge_location_files_and_cache::<BloomIndexMeta, _>(
                 ctx.clone(),
                 blooms_to_be_purged,
             )
@@ -613,7 +614,7 @@ impl FuseTable {
         let segments_count = segments_to_be_purged.len();
         if segments_count > 0 {
             counter.segments += segments_count;
-            self.try_purge_location_files_and_cache::<CompactSegmentInfo>(
+            self.try_purge_location_files_and_cache::<SegmentInfo, _>(
                 ctx.clone(),
                 segments_to_be_purged,
             )
@@ -633,7 +634,7 @@ impl FuseTable {
         let ts_count = ts_to_be_purged.len();
         if ts_count > 0 {
             counter.table_statistics += ts_count;
-            self.try_purge_location_files_and_cache::<TableSnapshotStatistics>(
+            self.try_purge_location_files_and_cache::<TableSnapshotStatistics, _>(
                 ctx.clone(),
                 ts_to_be_purged,
             )
@@ -644,7 +645,7 @@ impl FuseTable {
         let snapshots_count = snapshots_to_be_purged.len();
         if snapshots_count > 0 {
             counter.snapshots += snapshots_count;
-            self.try_purge_location_files_and_cache::<TableSnapshot>(
+            self.try_purge_location_files_and_cache::<TableSnapshot, _>(
                 ctx.clone(),
                 snapshots_to_be_purged,
             )
@@ -680,13 +681,13 @@ impl FuseTable {
 
     // Purge file by location chunks.
     #[async_backtrace::framed]
-    pub async fn try_purge_location_files_and_cache<T>(
+    pub async fn try_purge_location_files_and_cache<T, C>(
         &self,
         ctx: Arc<dyn TableContext>,
         locations_to_be_purged: HashSet<String>,
     ) -> Result<()>
     where
-        T: CachedObject<T>,
+        T: CachedObject<C>,
     {
         if let Some(cache) = T::cache() {
             for loc in locations_to_be_purged.iter() {

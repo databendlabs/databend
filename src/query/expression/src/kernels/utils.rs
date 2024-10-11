@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::take::BIT_MASK;
+
 /// # Safety
 ///
 /// * `ptr` must be [valid] for writes of `size_of::<T>()` bytes.
@@ -52,6 +54,45 @@ pub unsafe fn copy_advance_aligned<T>(src: *const T, ptr: &mut *mut T, count: us
         std::ptr::copy_nonoverlapping(src, *ptr, count);
         *ptr = ptr.add(count);
     }
+}
+
+/// # Safety
+/// * `src` + `src_idx`(in bits) must be [valid] for reads of `len` bits.
+/// * `ptr` must be [valid] for writes of `len` bits.
+pub unsafe fn copy_continuous_bits(
+    ptr: &mut *mut u8,
+    src: &[u8],
+    mut dst_idx: usize,
+    mut src_idx: usize,
+    len: usize,
+) -> (u8, usize) {
+    let mut unset_bits = 0;
+    let chunks = BitChunks::new(src, src_idx, len);
+    chunks.iter().for_each(|chunk| {
+        unset_bits += chunk.count_zeros();
+        copy_advance_aligned(&chunk as *const _ as *const u8, ptr, 8);
+    });
+
+    let mut remainder = chunks.remainder_len();
+    dst_idx += len - remainder;
+    src_idx += len - remainder;
+
+    let mut buf = 0;
+    while remainder > 0 {
+        if (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0 {
+            buf |= BIT_MASK[dst_idx % 8];
+        } else {
+            unset_bits += 1;
+        }
+        src_idx += 1;
+        dst_idx += 1;
+        remainder -= 1;
+        if dst_idx % 8 == 0 {
+            store_advance_aligned(buf, ptr);
+            buf = 0;
+        }
+    }
+    (buf, unset_bits as usize)
 }
 
 /// # Safety

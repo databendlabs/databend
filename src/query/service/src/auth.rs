@@ -18,7 +18,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -35,11 +34,10 @@ pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
+#[derive(Clone)]
 pub enum Credential {
     DatabendToken {
         token: String,
-        token_type: TokenType,
-        set_user: bool,
     },
     Jwt {
         token: String,
@@ -50,6 +48,13 @@ pub enum Credential {
         password: Option<Vec<u8>>,
         client_ip: Option<String>,
     },
+    NoNeed,
+}
+
+impl Credential {
+    pub fn need_refresh(&self) -> bool {
+        matches!(self, Credential::DatabendToken { .. })
+    }
 }
 
 impl AuthMgr {
@@ -76,25 +81,21 @@ impl AuthMgr {
         &self,
         session: &mut Session,
         credential: &Credential,
-    ) -> Result<Option<String>> {
+        need_user_info: bool,
+    ) -> Result<(String, Option<String>)> {
         let user_api = UserApiProvider::instance();
         match credential {
-            Credential::DatabendToken {
-                token,
-                set_user,
-                token_type,
-            } => {
-                let claim = ClientSessionManager::instance()
-                    .verify_token(token, token_type.clone())
-                    .await?;
+            Credential::NoNeed => Ok(("".to_string(), None)),
+            Credential::DatabendToken { token } => {
+                let claim = ClientSessionManager::instance().verify_token(token).await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
-                if *set_user {
-                    let identity = UserIdentity::new(claim.user, "%");
+                if need_user_info {
+                    let identity = UserIdentity::new(claim.user.clone(), "%");
                     session.set_current_tenant(tenant.clone());
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
-                Ok(Some(claim.session_id))
+                Ok((claim.user, Some(claim.session_id)))
             }
             Credential::Jwt {
                 token: t,
@@ -156,15 +157,15 @@ impl AuthMgr {
                 };
 
                 session.set_authed_user(user, jwt.custom.role).await?;
-                Ok(None)
+                Ok((user_name, None))
             }
             Credential::Password {
-                name: n,
+                name,
                 password: p,
                 client_ip,
             } => {
                 let tenant = session.get_current_tenant();
-                let identity = UserIdentity::new(n, "%");
+                let identity = UserIdentity::new(name, "%");
                 let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
@@ -201,7 +202,7 @@ impl AuthMgr {
                 authed?;
 
                 session.set_authed_user(user, None).await?;
-                Ok(None)
+                Ok((name.to_string(), None))
             }
         }
     }

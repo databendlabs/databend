@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
 use databend_common_meta_types::anyerror::AnyError;
+use http::StatusCode;
 use log::info;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
@@ -32,11 +33,13 @@ use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::IntoEndpoint;
+use poem::IntoResponse;
 use poem::Route;
 
 use super::v1::discovery_nodes;
 use super::v1::logout_handler;
 use super::v1::upload_to_stage;
+use super::v1::HttpQueryContext;
 use crate::servers::http::middleware::json_response;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
@@ -45,7 +48,7 @@ use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::query_route;
-use crate::servers::http::v1::renew_handler;
+use crate::servers::http::v1::refresh_handler;
 use crate::servers::Server;
 
 #[derive(Copy, Clone)]
@@ -79,6 +82,12 @@ echo '{}' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}/?query=INSERT%20INTO%20test%
 pub struct HttpHandler {
     shutdown_handler: HttpShutdownHandler,
     kind: HttpHandlerKind,
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn verify_handler(_ctx: &HttpQueryContext) -> poem::Result<impl IntoResponse> {
+    Ok(StatusCode::OK)
 }
 
 impl HttpHandler {
@@ -118,10 +127,17 @@ impl HttpHandler {
                 )),
             )
             .at(
-                "/session/renew",
-                post(renew_handler).with(HTTPSessionMiddleware::create(
+                "/session/refresh",
+                post(refresh_handler).with(HTTPSessionMiddleware::create(
                     self.kind,
                     EndpointKind::Refresh,
+                )),
+            )
+            .at(
+                "/auth/verify",
+                get(verify_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Verify,
                 )),
             )
             .at(
@@ -142,7 +158,7 @@ impl HttpHandler {
                 "/discovery_nodes",
                 get(discovery_nodes).with(HTTPSessionMiddleware::create(
                     self.kind,
-                    EndpointKind::StartQuery,
+                    EndpointKind::NoAuth,
                 )),
             );
 

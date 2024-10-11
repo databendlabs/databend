@@ -19,14 +19,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::meta::Versioned;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 
@@ -102,7 +99,7 @@ impl SegmentsIO {
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
                 }
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                .in_span(Span::enter_with_local_parent(func_path!()))
             })
         });
 
@@ -115,20 +112,5 @@ impl SegmentsIO {
             "fuse-req-segments-worker".to_owned(),
         )
         .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn write_segment(dal: Operator, serialized_segment: SerializedSegment) -> Result<()> {
-        assert_eq!(
-            serialized_segment.segment.format_version,
-            SegmentInfo::VERSION
-        );
-        let raw_bytes = serialized_segment.segment.to_bytes()?;
-        let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
-        dal.write(&serialized_segment.path, raw_bytes).await?;
-        if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.insert(serialized_segment.path, compact_segment_info);
-        }
-        Ok(())
     }
 }

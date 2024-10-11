@@ -13,4 +13,5 @@
 pub mod arg;
 pub mod client;
 pub mod error;
+pub mod mock_source;
 pub mod util;

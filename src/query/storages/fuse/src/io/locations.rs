@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_storages_common_table_meta::meta::trim_v5_object_prefix;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
+use databend_storages_common_table_meta::meta::trim_vacuum2_object_prefix;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
@@ -25,7 +26,9 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::V5_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use uuid::Uuid;
+use uuid::Version;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
@@ -177,7 +180,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = trim_v5_object_prefix(splits[len - 1]);
+        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 
@@ -189,7 +192,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = trim_v5_object_prefix(splits[len - 1]);
+        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
@@ -227,22 +230,21 @@ trait SnapshotLocationCreator {
 impl SnapshotLocationCreator for SnapshotVersion {
     // todo rename this
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
-        match self {
-            SnapshotVersion::V0(_)
-            | SnapshotVersion::V1(_)
-            | SnapshotVersion::V2(_)
-            | SnapshotVersion::V3(_)
-            | SnapshotVersion::V4(_) => {
-                // V5_OBJECT_KEY_PREFIX 'g' is larger than all the simple form uuid generated previously
-                format!(
-                    "{}/{}/{V5_OBJECT_KEY_PREFIX}{}{}",
-                    prefix.as_ref(),
-                    FUSE_TBL_SNAPSHOT_PREFIX,
-                    id.simple(),
-                    self.suffix(),
-                )
-            }
-        }
+        let vacuum_prefix = if id
+            .get_version()
+            .is_some_and(|v| matches!(v, Version::SortRand))
+        {
+            VACUUM2_OBJECT_KEY_PREFIX
+        } else {
+            ""
+        };
+        format!(
+            "{}/{}/{vacuum_prefix}{}{}",
+            prefix.as_ref(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+            id.simple(),
+            self.suffix(),
+        )
     }
 
     fn suffix(&self) -> String {

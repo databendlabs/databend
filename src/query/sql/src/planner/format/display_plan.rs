@@ -64,6 +64,7 @@ impl Plan {
             Plan::RenameTable(_) => Ok("RenameTable".to_string()),
             Plan::ModifyTableComment(_) => Ok("ModifyTableComment".to_string()),
             Plan::SetOptions(_) => Ok("SetOptions".to_string()),
+            Plan::UnsetOptions(_) => Ok("UnsetOptions".to_string()),
             Plan::RenameTableColumn(_) => Ok("RenameTableColumn".to_string()),
             Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
             Plan::ModifyTableColumn(_) => Ok("ModifyTableColumn".to_string()),
@@ -135,6 +136,7 @@ impl Plan {
             Plan::AlterUDF(_) => Ok("AlterUDF".to_string()),
             Plan::DropUDF(_) => Ok("DropUDF".to_string()),
             Plan::AlterUser(_) => Ok("AlterUser".to_string()),
+            Plan::DescUser(_) => Ok("DescUser".to_string()),
             Plan::CreateRole(_) => Ok("CreateRole".to_string()),
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),
@@ -146,19 +148,7 @@ impl Plan {
             Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),
             Plan::Kill(_) => Ok("Kill".to_string()),
 
-            Plan::CreateShareEndpoint(_) => Ok("CreateShareEndpoint".to_string()),
-            Plan::ShowShareEndpoint(_) => Ok("ShowShareEndpoint".to_string()),
-            Plan::DropShareEndpoint(_) => Ok("DropShareEndpoint".to_string()),
-            Plan::CreateShare(_) => Ok("CreateShare".to_string()),
-            Plan::DropShare(_) => Ok("DropShare".to_string()),
-            Plan::GrantShareObject(_) => Ok("GrantShareObject".to_string()),
-            Plan::RevokeShareObject(_) => Ok("RevokeShareObject".to_string()),
-            Plan::AlterShareTenants(_) => Ok("AlterShareTenants".to_string()),
-            Plan::DescShare(_) => Ok("DescShare".to_string()),
-            Plan::ShowShares(_) => Ok("ShowShares".to_string()),
             Plan::ShowRoles(_) => Ok("ShowRoles".to_string()),
-            Plan::ShowObjectGrantPrivileges(_) => Ok("ShowObjectGrantPrivileges".to_string()),
-            Plan::ShowGrantTenantsOfShare(_) => Ok("ShowGrantTenantsOfShare".to_string()),
             Plan::RevertTable(_) => Ok("RevertTable".to_string()),
 
             // data mask
@@ -204,6 +194,11 @@ impl Plan {
 
             // Stored procedures
             Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
+            Plan::CreateProcedure(_) => Ok("CreateProcedure".to_string()),
+            Plan::DropProcedure(_) => Ok("DropProcedure".to_string()),
+            Plan::CallProcedure(_) => Ok("CallProcedure".to_string()),
+            // Plan::ShowCreateProcedure(_) => Ok("ShowCreateProcedure".to_string()),
+            // Plan::RenameProcedure(_) => Ok("ProcedureDatabase".to_string()),
 
             // sequence
             Plan::CreateSequence(_) => Ok("CreateSequence".to_string()),

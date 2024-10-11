@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -180,7 +179,6 @@ impl PipelineBuilder {
                     main_pipeline,
                     to_table.clone(),
                     plan_required_values_schema.clone(),
-                    AppendMode::Copy,
                     plan.table_meta_timestamps,
                 )?
             }
@@ -190,7 +188,6 @@ impl PipelineBuilder {
                 main_pipeline,
                 to_table.clone(),
                 plan_required_values_schema.clone(),
-                AppendMode::Copy,
                 plan.table_meta_timestamps,
             )?,
         }
@@ -236,7 +233,7 @@ impl PipelineBuilder {
                 let req = UpsertTableCopiedFileReq {
                     file_info: copied_file_tree,
                     ttl: Some(Duration::from_hours(expire_hours)),
-                    fail_if_duplicated: !force,
+                    insert_if_not_exists: !force,
                 };
                 Some(req)
             }

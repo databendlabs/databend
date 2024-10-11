@@ -32,7 +32,6 @@ members = [
     "src/query/codegen",
     "src/query/config",
     "src/query/catalog",
-    "src/query/sharing",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -63,7 +62,6 @@ members = [
     "src/query/storages/null",
     "src/query/storages/orc",
     "src/query/storages/random",
-    "src/query/storages/share",
     "src/query/storages/stage",
     "src/query/storages/stream",
     "src/query/storages/system",
@@ -151,7 +149,6 @@ databend-common-proto-conv = { path = "src/meta/proto-conv" }
 databend-common-protos = { path = "src/meta/protos" }
 databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
-databend-common-sharing = { path = "src/query/sharing" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
 databend-common-storage = { path = "src/common/storage" }
@@ -167,7 +164,6 @@ databend-common-storages-orc = { path = "src/query/storages/orc" }
 databend-common-storages-parquet = { path = "src/query/storages/parquet" }
 databend-common-storages-random = { path = "src/query/storages/random" }
 databend-common-storages-result-cache = { path = "src/query/storages/result_cache" }
-databend-common-storages-share = { path = "src/query/storages/share" }
 databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
@@ -248,9 +244,13 @@ geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
 geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
+iceberg = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
+iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
+iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
 itertools = "0.10.5"
-jsonb = "0.4.1"
+jsonb = "0.4.3"
 jwt-simple = "0.11.0"
+libc = { version = "0.2.158" }
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
 object_store_opendal = "0.46"
@@ -273,6 +273,7 @@ opendal = { version = "0.49.0", features = [
     "services-moka",
     "services-webhdfs",
     "services-huggingface",
+    "services-redis",
 ] }
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
     "serde",
@@ -285,13 +286,8 @@ ordq = "0.2.0"
 parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
-sha2 = "0.10.8"
-# TODO: let's use native tls instead.
-iceberg = { version = "0.3.0" }
-iceberg-catalog-hms = { version = "0.3.0" }
-iceberg-catalog-rest = { version = "0.3.0" }
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
-proj4rs = { version = "0.1.3", features = ["geo-types", "crs-definitions"] }
+proj4rs = { version = "0.1.4", features = ["geo-types", "crs-definitions"] }
 prometheus-client = "0.22"
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
@@ -311,9 +307,12 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 serde_stacker = { version = "0.1" }
 serde_with = { version = "3.8.1" }
 serfig = "0.1.0"
+sha2 = "0.10.8"
 sled = { version = "0.34", default-features = false }
 stream-more = "0.1.3"
 tantivy = "0.22.0"
+tantivy-common = "0.7.0"
+tantivy-jieba = "0.11.0"
 thiserror = { version = "1" }
 tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 tokio = { version = "1.35.0", features = ["full"] }
@@ -327,19 +326,19 @@ walkdir = "2.3.2"
 xorfilter-rs = "0.5"
 
 # Observability
-fastrace = { version = "0.6", features = ["enable"] }
-fastrace-opentelemetry = "0.6"
+fastrace = { version = "0.7", features = ["enable"] }
+fastrace-opentelemetry = "0.7"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.23", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.16", features = [
+opentelemetry = { version = "0.24", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.17", features = [
     "trace",
     "logs",
     "grpc-tonic",
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.23", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.24", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
@@ -399,14 +398,21 @@ arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0"
 arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
-async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
-async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
-backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
+async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
+async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = [
+    "std",
+    "serialize-serde",
+] }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
-ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "c7525d9" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "1745375" }
-recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
+orc-rust = { git = "https://github.com/datafuse-extras/datafusion-orc", rev = "03372b97" }
+recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

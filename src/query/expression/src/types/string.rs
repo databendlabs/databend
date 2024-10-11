@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
 use std::ops::Range;
 
@@ -169,6 +170,11 @@ impl ValueType for StringType {
     }
 
     #[inline(always)]
+    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
+        left.cmp(right)
+    }
+
+    #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left == right
     }
@@ -260,6 +266,10 @@ impl StringColumn {
 
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
+    }
+
+    pub fn current_buffer_len(&self) -> usize {
+        (*self.offsets().last().unwrap() - *self.offsets().first().unwrap()) as _
     }
 
     pub fn data(&self) -> &Buffer<u8> {

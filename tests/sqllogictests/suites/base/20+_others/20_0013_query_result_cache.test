@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS t1 (a INT not null);
 statement ok
 INSERT INTO t1 VALUES (1), (2), (3);
 
+statement ok
+set enable_parallel_multi_merge_sort = 0;
+
 query I
 SELECT * FROM t1 ORDER BY a;
 ----

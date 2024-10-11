@@ -36,6 +36,7 @@ use crate::table::OPT_KEY_TEMP_PREFIX;
 pub const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
+pub const VACUUM2_OBJECT_KEY_PREFIX: &str = "g";
 
 pub const V5_OBJECT_KEY_PREFIX: char = 'g';
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
@@ -161,6 +162,71 @@ pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -
         prefix = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, temp_prefix, prefix);
     }
     Ok(prefix)
+}
+
+#[inline]
+pub fn trim_vacuum2_object_prefix(key: &str) -> &str {
+    key.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX).unwrap_or(key)
+}
+
+// Extracts the UUID part from the object key.
+// For example, given a path like:
+//   bucket/root/115/122/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet
+//   bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet
+// The function should return: 0191114d30fd78b89fae8e5c88327725
+pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::Result<&str> {
+    if let Some(file_stem) = Path::new(path).file_stem() {
+        let file_name = file_stem
+            .to_str()
+            .unwrap() // path is always valid utf8 string
+            .split('_')
+            .collect::<Vec<&str>>();
+        let uuid = trim_vacuum2_object_prefix(file_name[0]);
+        Ok(uuid)
+    } else {
+        Err(ErrorCode::StorageOther(format!(
+            "Illegal object key, no file stem found: {}",
+            path
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::base::uuid::Uuid;
+
+    use super::*;
+
+    #[test]
+    fn test_trim_vacuum2_object_prefix() {
+        let uuid = Uuid::now_v7();
+        assert_eq!(
+            trim_vacuum2_object_prefix(&format!("g{}", uuid)),
+            uuid.to_string()
+        );
+        assert_eq!(
+            trim_vacuum2_object_prefix(&uuid.to_string()),
+            uuid.to_string()
+        );
+    }
+
+    #[test]
+    fn test_try_extract_uuid_str_from_path() {
+        let test_cases = vec![
+            (
+                "bucket/root/115/122/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet",
+                "0191114d30fd78b89fae8e5c88327725",
+            ),
+            (
+                "bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet",
+                "0191114d30fd78b89fae8e5c88327725",
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            assert_eq!(try_extract_uuid_str_from_path(input).unwrap(), expected);
+        }
+    }
 }
 
 #[cfg(test)]

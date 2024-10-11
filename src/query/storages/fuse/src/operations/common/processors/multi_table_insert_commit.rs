@@ -263,6 +263,7 @@ async fn build_update_table_meta_req(
         txn_mgr,
         table.get_id(),
         table_meta_timestamps,
+        table.name(),
     )?;
 
     // write snapshot

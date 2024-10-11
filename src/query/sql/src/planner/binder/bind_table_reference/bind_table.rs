@@ -17,13 +17,16 @@ use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
+use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_with_options::check_with_opt_valid;
+use databend_common_catalog::table_with_options::get_with_opt_consume;
+use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -45,7 +48,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
-        consume: bool,
+        with_options: &Option<WithOptions>,
         sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
         let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
@@ -55,6 +58,16 @@ impl Binder {
             table_identifier.table_name(),
             table_identifier.table_name_alias(),
         );
+
+        let (consume, max_batch_size, with_opts_str) = if let Some(with_options) = with_options {
+            check_with_opt_valid(with_options)?;
+            let consume = get_with_opt_consume(with_options)?;
+            let max_batch_size = get_with_opt_max_batch_size(with_options)?;
+            let with_opts_str = format!(" {with_options}");
+            (consume, max_batch_size, with_opts_str)
+        } else {
+            (false, None, String::new())
+        };
 
         // Check and bind common table expression
         let ctes_map = self.ctes_map.clone();
@@ -84,26 +97,16 @@ impl Binder {
             };
         }
 
-        let tenant = self.ctx.get_tenant();
-
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
-        let table_meta = if let Some(share_params) = &bind_context.share_paramas {
-            self.resolve_share_reference_data_source(
-                share_params,
-                tenant.tenant_name(),
-                catalog.as_str(),
-                database.as_str(),
-                table_name.as_str(),
-            )?
-        } else {
+        let table_meta = {
             match self.resolve_data_source(
-                tenant.tenant_name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
+                max_batch_size,
                 self.ctx.clone().get_abort_checker(),
             ) {
                 Ok(table) => table,
@@ -169,7 +172,7 @@ impl Binder {
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
-                    consume,
+                    &with_opts_str,
                 ))?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
@@ -205,14 +208,6 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
-                // if it is a share view, save Share Params to child bind context to resolve reference tables
-                let share_paramas =
-                    if let DatabaseType::ShareDB(params) = &table_meta.get_table_info().db_type {
-                        Some(params.clone())
-                    } else {
-                        None
-                    };
-
                 // TODO(leiysky): this check is error-prone,
                 // we should find a better way to do this.
                 Self::check_view_dep(bind_context, &database, &table_name)?;
@@ -224,7 +219,6 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                new_bind_context.share_paramas = share_paramas;
                 new_bind_context.view_info = Some((database.clone(), table_name));
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(

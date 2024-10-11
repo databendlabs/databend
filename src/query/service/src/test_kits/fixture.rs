@@ -17,10 +17,8 @@ use std::str;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
-use databend_common_catalog::table::AppendMode;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
@@ -115,7 +113,7 @@ impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         {
-            drop_guard(move || {
+            databend_common_base::runtime::drop_guard(move || {
                 databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
             })
         }
@@ -853,7 +851,6 @@ impl TestFixture {
         table.append_data(
             ctx.clone(),
             &mut build_res.main_pipeline,
-            AppendMode::Normal,
             Default::default(),
         )?;
         if commit {

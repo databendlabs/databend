@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+
 mod context;
 pub mod exception;
 mod exception_backtrace;

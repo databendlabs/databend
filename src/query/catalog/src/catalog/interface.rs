@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -36,7 +37,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -49,7 +49,6 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -88,7 +87,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -100,7 +98,6 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -183,20 +180,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>>;
 
-    async fn create_virtual_column(
-        &self,
-        req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply>;
+    async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()>;
 
-    async fn update_virtual_column(
-        &self,
-        req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply>;
+    async fn update_virtual_column(&self, req: UpdateVirtualColumnReq) -> Result<()>;
 
-    async fn drop_virtual_column(
-        &self,
-        req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply>;
+    async fn drop_virtual_column(&self, req: DropVirtualColumnReq) -> Result<()>;
 
     async fn list_virtual_columns(
         &self,
@@ -236,6 +224,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     // Get the db name by meta id.
     async fn get_db_name_by_id(&self, db_ids: MetaId) -> Result<String>;
+
+    // Mget dbs by DatabaseNameIdent.
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>>;
 
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
@@ -295,9 +290,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply>;
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply>;
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<()>;
 
-    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<UndropTableReply> {
+    async fn undrop_table_by_id(&self, _req: UndropTableByIdReq) -> Result<()> {
         unimplemented!("TODO")
     }
 
@@ -484,13 +479,22 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    fn get_stream_source_table(
+        &self,
+        _stream_desc: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Option<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
             "'get_stream_source_table' not implemented",
         ))
     }
 
-    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(
+        &self,
+        _stream: TableInfo,
+        _source: TableInfo,
+        _max_batch_size: Option<u64>,
+    ) {
         unimplemented!()
     }
 

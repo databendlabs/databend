@@ -30,7 +30,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -57,7 +56,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_sharing::create_share_table_operator;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::parse_hilbert_cluster_key;
@@ -88,7 +86,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -145,7 +142,6 @@ impl FuseTable {
     pub async fn refresh_schema(table_info: Arc<TableInfo>) -> Result<Arc<TableInfo>> {
         // check if table is AttachedReadOnly in a lighter way
         let need_refresh_schema = match table_info.db_type {
-            DatabaseType::ShareDB(_) => false,
             DatabaseType::NormalDB => {
                 table_info.meta.storage_params.is_some()
                     && Self::is_table_attached(&table_info.meta.options)
@@ -177,11 +173,6 @@ impl FuseTable {
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_params) => {
-                let operator =
-                    create_share_table_operator(&share_params, table_info.ident.table_id)?;
-                (operator, FuseTableType::SharedReadOnly)
-            }
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
@@ -367,20 +358,6 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn snapshot_loc(&self) -> Result<Option<String>> {
         match self.table_info.db_type {
-            DatabaseType::ShareDB(_) => {
-                let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-                match self.operator.read(url).await {
-                    Ok(data) => {
-                        let bs = data.to_vec();
-                        let s = str::from_utf8(&bs)?;
-                        Ok(Some(s.to_string()))
-                    }
-                    Err(e) => {
-                        error!("read share snapshot location error: {:?}", e);
-                        Ok(None)
-                    }
-                }
-            }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
@@ -480,6 +457,10 @@ impl FuseTable {
             Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64)
         };
         Ok(retention_period)
+    }
+
+    pub fn get_storage_format(&self) -> FuseStorageFormat {
+        self.storage_format
     }
 }
 
@@ -704,7 +685,6 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        append_mode: AppendMode,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         self.do_append_data(ctx, pipeline, append_mode, table_meta_timestamps)
@@ -959,7 +939,7 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
-        _consume: bool,
+        _with_options: &str,
     ) -> Result<String> {
         let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {
@@ -987,7 +967,7 @@ impl Table for FuseTable {
     fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let min_rows_per_block = (max_rows_per_block * 4).div_ceil(5);
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,

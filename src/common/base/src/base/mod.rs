@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod dma;
 mod net;
+mod ordered_float;
 mod profiling;
 mod progress;
 mod select;
@@ -26,8 +28,13 @@ mod take_mut;
 mod uniq_id;
 mod watch_notify;
 
+pub use dma::dma_buffer_as_vec;
+pub use dma::dma_read_file;
+pub use dma::dma_read_file_range;
+pub use dma::dma_write_file_vectored;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
+pub use ordered_float::OrderedFloat;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;
