@@ -2249,9 +2249,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #show_users : "`SHOW USERS`"
             | #describe_user: "`DESCRIBE USER <user_name>`"
-            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
-            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
-            | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
+            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
+            | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
