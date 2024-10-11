@@ -390,7 +390,7 @@ pub enum RewriteKind {
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,
-    ShowDictionaries(String, String),
+    ShowDictionaries(String),
 
     ShowStreams(String),
 

@@ -398,33 +398,31 @@ impl Binder {
         stmt: &ShowDictionariesStmt,
     ) -> Result<Plan> {
         let ShowDictionariesStmt {
-            catalog,
             database,
-            full,
             limit,
         } = stmt;
 
-        let database = self.check_database_exist(catalog, database).await?;
-        let catalog_name = match catalog {
-            None => self.ctx.get_current_catalog(),
-            Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog).await?;
-                catalog
-            }
-        };
-
         let mut select_builder = SelectBuilder::from("system.dictionaries");
 
-        if *full {
-            select_builder
-                .with_column("catalog AS Catalog")
-                .with_column("database AS Database")
-                .with_column("dictionary_id");
-        }
-        select_builder.with_column(format!("name AS `Dictionaries_in_{database}`"));
+        let database = self.check_database_exist(self.ctx.get_default_catalog(),database).await?;
+        
+        select_builder
+            .with_column("database AS Database")
+            .with_column("name AS Dictionaries")
+            .with_column("dictionary_id AS DictionaryId")
+            .with_column("key_names AS KeyNames")
+            .with_column("key_types AS keyTypes")
+            .with_column("attribute_names AS AttributeNames")
+            .with_column("attribute_types AS AttributeTypes")
+            .with_column("source AS Source")
+            .with_column("comment AS Comment")
+            .with_column("created_on AS create_time")
+            .with_column("updated_on AS update_time");
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder
+            .with_order_by("database")
+            .with_order_by("name");
+
         select_builder.with_filter(format!("database = '{database}'"));
 
         match limit {
@@ -441,7 +439,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowDictionaries(catalog_name, database),
+            RewriteKind::ShowDictionaries(database),
         )
         .await
     }
