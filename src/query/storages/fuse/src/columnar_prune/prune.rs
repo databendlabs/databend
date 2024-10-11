@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
@@ -157,7 +156,7 @@ async fn do_prune(
         range_index,
         inverse_range_index,
     } = prune_ctx.as_ref();
-    let mut keeped_blocks = Vec::new();
+    let keeped_blocks = Vec::new();
     let mut deleted_segments = Vec::new();
 
     for segment_location in segments {

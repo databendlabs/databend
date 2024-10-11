@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow::array::Array;
-use arrow::array::AsArray;
 use arrow::array::Date32Array;
 use arrow::array::Decimal128Array;
 use arrow::array::Decimal256Array;
@@ -48,24 +47,12 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use serde::Deserialize;
-use serde::Serialize;
 
-use super::super::v2;
-use crate::meta::format::decode_segment_header;
-use crate::meta::format::encode;
-use crate::meta::format::read_and_deserialize;
-use crate::meta::format::MetaCompression;
-use crate::meta::format::SegmentHeader;
-use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
 use crate::meta::v2::BlockMeta;
-use crate::meta::ColumnMeta;
 use crate::meta::ColumnStatistics;
 use crate::meta::FormatVersion;
-use crate::meta::MetaEncoding;
 use crate::meta::SegmentInfo;
 use crate::meta::Statistics;
-use crate::meta::Versioned;
 
 /// BlockMeta.col_stats is empty, and ColumnStatistics is stored in columnar_block_metas.
 ///
