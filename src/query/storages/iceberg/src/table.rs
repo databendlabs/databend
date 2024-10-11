@@ -281,6 +281,6 @@ impl Table for IcebergTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        true
+        false
     }
 }
