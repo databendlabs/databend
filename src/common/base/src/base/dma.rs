@@ -16,6 +16,7 @@ use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::Global;
 use std::alloc::Layout;
+use std::fmt;
 use std::io;
 use std::io::IoSlice;
 use std::io::SeekFrom;
@@ -24,7 +25,7 @@ use std::ops::Range;
 use std::os::fd::BorrowedFd;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::ptr::Alignment;
+use std::ptr;
 use std::ptr::NonNull;
 
 use rustix::fs::OFlags;
@@ -32,6 +33,71 @@ use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 
 use crate::runtime::spawn_blocking;
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+
+pub struct Alignment(ptr::Alignment);
+
+impl Alignment {
+    pub const MIN: Self = Self(ptr::Alignment::MIN);
+
+    #[inline]
+    pub const fn new(align: usize) -> Option<Self> {
+        match ptr::Alignment::new(align) {
+            Some(a) => Some(Alignment(a)),
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub const fn as_usize(self) -> usize {
+        self.0.as_usize()
+    }
+
+    #[inline]
+    pub const fn align_up(self, value: usize) -> usize {
+        (value + self.as_usize() - 1) & self.mask()
+    }
+
+    #[inline]
+    pub const fn align_down(self, value: usize) -> usize {
+        value & self.mask()
+    }
+
+    #[inline]
+    pub const fn align_up_count(self, value: usize) -> usize {
+        (value + self.as_usize() - 1) >> self.log2()
+    }
+
+    #[inline]
+    pub const fn align_down_count(self, value: usize) -> usize {
+        value >> self.log2()
+    }
+
+    #[inline]
+    pub const fn mask(self) -> usize {
+        self.0.mask()
+    }
+
+    #[inline]
+    pub const fn log2(self) -> u32 {
+        self.0.log2()
+    }
+}
+
+impl fmt::Debug for Alignment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl TryFrom<usize> for Alignment {
+    type Error = std::num::TryFromIntError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        Ok(Alignment(value.try_into()?))
+    }
+}
 
 unsafe impl Send for DmaAllocator {}
 
@@ -52,7 +118,7 @@ impl DmaAllocator {
     }
 
     fn real_cap(&self, cap: usize) -> usize {
-        align_up(self.0, cap)
+        self.0.align_up(cap)
     }
 }
 
@@ -164,12 +230,12 @@ impl DmaFile {
 
     /// Aligns `value` up to the memory alignment requirement for this file.
     pub fn align_up(&self, value: usize) -> usize {
-        align_up(self.alignment, value)
+        self.alignment.align_up(value)
     }
 
     /// Aligns `value` down to the memory alignment requirement for this file.
     pub fn align_down(&self, value: usize) -> usize {
-        align_down(self.alignment, value)
+        self.alignment.align_down(value)
     }
 
     /// Return the alignment requirement for this file. The returned alignment value can be used
@@ -227,14 +293,6 @@ impl DmaFile {
     }
 }
 
-pub fn align_up(alignment: Alignment, value: usize) -> usize {
-    (value + alignment.as_usize() - 1) & alignment.mask()
-}
-
-pub fn align_down(alignment: Alignment, value: usize) -> usize {
-    value & alignment.mask()
-}
-
 async fn open_dma(file: File) -> io::Result<DmaFile> {
     let stat = fstatvfs(&file).await?;
     let alignment = Alignment::new(stat.f_bsize.max(512) as usize).unwrap();
@@ -280,7 +338,7 @@ impl DmaWriteBuf {
         DmaWriteBuf {
             allocator: DmaAllocator::new(align),
             data: Vec::new(),
-            chunk: align_up(align, chunk),
+            chunk: align.align_up(chunk),
         }
     }
 
@@ -504,6 +562,16 @@ pub async fn dma_read_file_range(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_alignment() {
+        let a = Alignment::new(4).unwrap();
+
+        assert_eq!(8, a.align_up(5));
+        assert_eq!(4, a.align_down(5));
+        assert_eq!(2, a.align_up_count(5));
+        assert_eq!(1, a.align_down_count(5));
+    }
 
     #[tokio::test]
     async fn test_read_write() {

@@ -24,13 +24,13 @@ use std::ops::Deref;
 use std::ops::Drop;
 use std::path::Path;
 use std::path::PathBuf;
-use std::ptr::Alignment;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
 
+use databend_common_base::base::Alignment;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_config::SpillConfig;
@@ -189,8 +189,8 @@ impl TempDirManager {
         let stat = statvfs(self.root.as_ref().unwrap().as_ref())
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
 
-        debug_assert_eq!(stat.f_frsize, self.alignment.as_usize());
-        let n = (size + self.alignment.as_usize() as u64 - 1) >> self.alignment.log2();
+        debug_assert_eq!(stat.f_frsize, self.alignment.as_usize() as u64);
+        let n = self.alignment.align_up_count(size as usize) as u64;
         Ok(stat.f_bavail < self.reserved + n)
     }
 }

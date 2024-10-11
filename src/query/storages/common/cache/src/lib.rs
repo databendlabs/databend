@@ -15,7 +15,6 @@
 #![feature(write_all_vectored)]
 #![feature(associated_type_defaults)]
 #![feature(assert_matches)]
-#![feature(ptr_alignment_type)]
 
 mod cache;
 mod caches;

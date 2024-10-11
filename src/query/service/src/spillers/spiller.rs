@@ -17,12 +17,12 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Range;
-use std::ptr::Alignment;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::dma_buffer_as_vec;
 use databend_common_base::base::dma_read_file_range;
+use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
