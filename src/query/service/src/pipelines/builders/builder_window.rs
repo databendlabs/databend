@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::table_context::TableContext;
@@ -24,6 +25,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
+use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
@@ -141,11 +143,6 @@ impl PipelineBuilder {
         // Settings.
         let settings = self.ctx.get_settings();
         let num_partitions = settings.get_window_num_partitions()?;
-        let max_block_size = settings.get_max_block_size()? as usize;
-        let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
-        let window_spill_settings = WindowSpillSettings::new(settings.clone(), num_processors)?;
 
         let plan_schema = window_partition.output_schema()?;
 
@@ -169,12 +166,17 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let have_order_col = window_partition.after_exchange.unwrap_or(false);
-
         self.main_pipeline.exchange(
             num_processors,
             WindowPartitionExchange::create(partition_by.clone(), num_partitions),
         );
+
+        let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
+        let temp_dir_manager = TempDirManager::instance();
+        let disk_spill = temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id());
+
+        let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
+        let have_order_col = window_partition.after_exchange.unwrap_or(false);
 
         let processor_id = AtomicUsize::new(0);
         self.main_pipeline.add_transform(|input, output| {
@@ -183,16 +185,14 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     input,
                     output,
-                    processor_id.fetch_add(1, std::sync::atomic::Ordering::AcqRel),
+                    &settings,
+                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
                     num_processors,
                     num_partitions,
                     window_spill_settings.clone(),
+                    disk_spill.clone(),
                     sort_desc.clone(),
                     plan_schema.clone(),
-                    max_block_size,
-                    sort_block_size,
-                    sort_spilling_batch_bytes,
-                    enable_loser_tree,
                     have_order_col,
                 )?,
             )))

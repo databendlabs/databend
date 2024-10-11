@@ -53,13 +53,12 @@ use crate::io::TableMetaLocationGenerator;
 pub struct InvertedIndexPruner {
     dal: Operator,
     has_score: bool,
-    field_nums: usize,
     index_name: String,
     index_version: String,
     need_position: bool,
     tokenizer_manager: TokenizerManager,
     query: Box<dyn Query>,
-    field_ids: HashSet<usize>,
+    field_ids: HashSet<u32>,
     index_record: IndexRecordOption,
     fuzziness: Option<u8>,
 }
@@ -84,7 +83,7 @@ impl InvertedIndexPruner {
             let mut field_ids = HashSet::new();
             query.query_terms(&mut |term, pos| {
                 let field = term.field();
-                let field_id = field.field_id() as usize;
+                let field_id = field.field_id();
                 field_ids.insert(field_id);
                 if pos {
                     need_position = true;
@@ -93,14 +92,12 @@ impl InvertedIndexPruner {
 
             // whether need to generate score internl column
             let has_score = inverted_index_info.has_score;
-            let field_nums = inverted_index_info.index_schema.num_fields();
             let index_name = inverted_index_info.index_name.clone();
             let index_version = inverted_index_info.index_version.clone();
 
             return Ok(Some(Arc::new(InvertedIndexPruner {
                 dal,
                 has_score,
-                field_nums,
                 index_name,
                 index_version,
                 need_position,
@@ -130,7 +127,6 @@ impl InvertedIndexPruner {
 
         let matched_rows = inverted_index_reader
             .do_filter(
-                self.field_nums,
                 self.need_position,
                 self.has_score,
                 self.query.box_clone(),
@@ -138,7 +134,7 @@ impl InvertedIndexPruner {
                 &self.index_record,
                 &self.fuzziness,
                 self.tokenizer_manager.clone(),
-                row_count as u32,
+                row_count,
                 &index_loc,
             )
             .await?;

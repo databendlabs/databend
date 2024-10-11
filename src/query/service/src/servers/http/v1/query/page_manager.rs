@@ -25,9 +25,9 @@ use log::debug;
 use log::info;
 use parking_lot::RwLock;
 
+use super::string_block::block_to_strings;
+use super::string_block::StringBlock;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
-use crate::servers::http::v1::string_block::block_to_strings;
-use crate::servers::http::v1::StringBlock;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {

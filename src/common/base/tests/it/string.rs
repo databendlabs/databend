@@ -111,9 +111,10 @@ fn test_mask_connection_info() {
 
 #[test]
 fn test_short_sql() {
+    let max_length: u64 = 128;
     // Test case 1: SQL query shorter than 128 characters
     let sql1 = "SELECT * FROM users WHERE id = 1;".to_string();
-    assert_eq!(short_sql(sql1.clone()), sql1);
+    assert_eq!(short_sql(sql1.clone(), max_length), sql1);
 
     // Test case 2: SQL query longer than 128 characters and starts with "INSERT"
     let long_sql_insert = "INSERT INTO users (id, name, email) VALUES ".to_string()
@@ -123,23 +124,32 @@ fn test_short_sql() {
         let truncated: String = long_sql_insert.graphemes(true).take(128).collect();
         truncated + &format!("...[{} more characters]", expected_length_insert)
     };
-    assert_eq!(short_sql(long_sql_insert.clone()), expected_result_insert);
+    assert_eq!(
+        short_sql(long_sql_insert.clone(), max_length),
+        expected_result_insert
+    );
 
     // Test case 3: SQL query longer than 128 characters but does not start with "INSERT"
     let long_sql_update =
         "UPDATE users SET name = 'John' WHERE id = 1;".to_string() + &"id = 1 OR ".repeat(20); // Make sure this creates a string longer than 128 characters
-    assert_eq!(short_sql(long_sql_update.clone()), long_sql_update);
+    assert_eq!(
+        short_sql(long_sql_update.clone(), max_length),
+        long_sql_update
+    );
 
     // Test case 4: Empty SQL query
     let empty_sql = "".to_string();
-    assert_eq!(short_sql(empty_sql.clone()), empty_sql);
+    assert_eq!(short_sql(empty_sql.clone(), max_length), empty_sql);
 
     // Test case 5: SQL query with leading whitespace
     let sql_with_whitespace =
         "   INSERT INTO users (id, name, email) VALUES (1, 'John Doe', 'john@example.com');"
             .to_string();
     let trimmed_sql = sql_with_whitespace.trim_start().to_string();
-    assert_eq!(short_sql(sql_with_whitespace.clone()), trimmed_sql);
+    assert_eq!(
+        short_sql(sql_with_whitespace.clone(), max_length),
+        trimmed_sql
+    );
 
     // Test case 6: SQL query with multiple emojis to test truncation at an emoji point
     let emoji_sql = "INSERT INTO users (id, name) VALUES (1, 'John Doe 😊😊😊😊😊😊😊😊😊😊');"
@@ -150,5 +160,8 @@ fn test_short_sql() {
         let remaining_length = emoji_sql.graphemes(true).count().saturating_sub(128);
         truncated + &format!("...[{} more characters]", remaining_length)
     };
-    assert_eq!(short_sql(emoji_sql.clone()), expected_emoji_result);
+    assert_eq!(
+        short_sql(emoji_sql.clone(), max_length),
+        expected_emoji_result
+    );
 }

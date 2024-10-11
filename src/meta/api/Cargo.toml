@@ -27,6 +27,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"

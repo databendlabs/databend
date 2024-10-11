@@ -54,6 +54,36 @@ pub struct DropUserPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DescUserPlan {
+    pub user: UserIdentity,
+}
+
+impl DescUserPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("name", DataType::String),
+            DataField::new("hostname", DataType::String),
+            DataField::new("auth_type", DataType::String),
+            DataField::new("default_role", DataType::String),
+            DataField::new("roles", DataType::String),
+            DataField::new("disabled", DataType::Boolean),
+            DataField::new(
+                "network_policy",
+                DataType::Nullable(Box::new(DataType::String)),
+            ),
+            DataField::new(
+                "password_policy",
+                DataType::Nullable(Box::new(DataType::String)),
+            ),
+            DataField::new(
+                "must_change_password",
+                DataType::Nullable(Box::new(DataType::Boolean)),
+            ),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateRolePlan {
     pub if_not_exists: bool,
     pub role_name: String,

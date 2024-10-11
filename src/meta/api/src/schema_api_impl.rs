@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fmt::Display;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +27,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::display::display_slice::DisplaySliceExt;
+use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -65,6 +67,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -140,7 +143,6 @@ use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableInfoFilter;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -175,7 +177,6 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -198,7 +199,6 @@ use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
-use crate::list_keys;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
@@ -218,6 +218,7 @@ use crate::util::deserialize_struct_get_response;
 use crate::util::mget_pb_values;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
+use crate::util::txn_put_pb;
 use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
 use crate::SchemaApi;
@@ -636,7 +637,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListDatabaseReq,
         include_non_retainable: bool,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_ident = DatabaseIdHistoryIdent::new(&req.tenant, "dummy");
@@ -650,26 +651,23 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let ids = db_id_list
                 .id_list
                 .iter()
-                .map(|db_id| DatabaseId { db_id: *db_id })
-                .collect::<Vec<_>>();
+                .map(|db_id| DatabaseId { db_id: *db_id });
 
-            for db_ids in ids.chunks(DEFAULT_MGET_SIZE) {
-                let id_metas = self.get_pb_vec(db_ids.iter().cloned()).await?;
+            let id_metas = self.get_pb_vec(ids).await?;
 
-                for (db_id, db_meta) in id_metas {
-                    let Some(db_meta) = db_meta else {
-                        error!("get_database_history cannot find {:?} db_meta", db_id);
-                        continue;
-                    };
+            for (db_id, db_meta) in id_metas {
+                let Some(db_meta) = db_meta else {
+                    error!("get_database_history cannot find {:?} db_meta", db_id);
+                    continue;
+                };
 
-                    let db = DatabaseInfo {
-                        database_id: db_id,
-                        name_ident: DatabaseNameIdent::new_from(db_id_list_key.clone()),
-                        meta: db_meta,
-                    };
+                let db = DatabaseInfo {
+                    database_id: db_id,
+                    name_ident: DatabaseNameIdent::new_from(db_id_list_key.clone()),
+                    meta: db_meta,
+                };
 
-                    dbs.insert(db_id.db_id, Arc::new(db));
-                }
+                dbs.insert(db_id.db_id, Arc::new(db));
             }
         }
 
@@ -704,7 +702,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = DatabaseNameIdent::new(req.tenant(), "dummy");
@@ -1479,43 +1477,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         };
 
-        let table_id = {
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id: *seq_db_id.data,
-                table_name: tenant_dbname_tbname.table_name.clone(),
-            };
-
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            assert_table_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
-
-            table_id
+        let dbid_tbname = DBIdTableName {
+            db_id: *seq_db_id.data,
+            table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let tbid = TableId { table_id };
+        let table_niv = self.get_table_in_db(&dbid_tbname).await?;
 
-        let seq_meta = self.get_pb(&tbid).await?;
-
-        let Some(seq_meta) = seq_meta else {
-            Err(AppError::from(UnknownTable::new(
+        let Some(table_niv) = table_niv else {
+            return Err(AppError::from(UnknownTable::new(
                 &tenant_dbname_tbname.table_name,
                 format!("get_table: {}", tenant_dbname_tbname),
-            )))?
+            ))
+            .into());
         };
 
-        debug!(
-            ident :% =(&tbid),
-            name :% =(tenant_dbname_tbname),
-            table_meta :? =(&seq_meta);
-            "get_table"
-        );
+        let (_name, id, seq_meta) = table_niv.unpack();
 
         let db_type = DatabaseType::NormalDB;
 
         let tb_info = TableInfo {
             ident: TableIdent {
-                table_id: tbid.table_id,
+                table_id: id.table_id,
                 seq: seq_meta.seq,
             },
             desc: format!(
@@ -1534,43 +1517,53 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_meta_history(
+    async fn get_table_in_db(
         &self,
-        database_name: &str,
-        table_id_history: &TableIdHistoryIdent,
-    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
-        let table_name = &table_id_history.table_name;
+        name_ident: &DBIdTableName,
+    ) -> Result<Option<TableNIV>, MetaError> {
+        debug!(req :? =(name_ident); "SchemaApi: {}", func_name!());
 
-        let (_seq, table_id_list) = self.get_pb_seq_and_value(table_id_history).await?;
+        let table_id = {
+            // Get table by tenant, db_id, table_name to assert presence.
 
-        let table_id_list = table_id_list.ok_or_else(|| {
-            AppError::from(UnknownTable::new(
-                table_name,
-                format!("get_table_history: {}.{}", database_name, table_name),
-            ))
-        })?;
+            let (tb_id_seq, table_id) = get_u64_value(self, name_ident).await?;
+            if tb_id_seq == 0 {
+                return Ok(None);
+            }
 
-        let now = Utc::now();
+            table_id
+        };
 
-        let metas = get_table_meta_history(self, &now, table_id_list).await?;
+        let tbid = TableId { table_id };
 
-        debug!(
-            name :% =(&table_id_history);
-            "get_table_meta_history"
-        );
-        return Ok(metas);
+        let seq_meta = self.get_pb(&tbid).await?;
+
+        let Some(seq_meta) = seq_meta else {
+            return Ok(None);
+        };
+
+        Ok(Some(TableNIV::new(name_ident.clone(), tbid, seq_meta)))
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_tables_history(
+    async fn get_retainable_tables(
         &self,
-        req: ListTableReq,
-        db_name: &str,
-    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+        history_ident: &TableIdHistoryIdent,
+    ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
+        let Some(seq_table_id_list) = self.get_pb(history_ident).await? else {
+            return Ok(vec![]);
+        };
+
+        get_retainable_table_metas(self, &Utc::now(), seq_table_id_list.data).await
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_retainable_tables(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        // List tables by tenant, db_id, table_name.
+        // List tables by tenant, db_id.
         let table_id_history_ident = TableIdHistoryIdent {
             database_id: req.database_id.db_id,
             table_name: "dummy".to_string(),
@@ -1578,62 +1571,25 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let dir_name = DirName::new(table_id_history_ident);
 
-        let table_id_list_keys = list_keys(self, &dir_name).await?;
+        let ident_histories = self.list_pb_vec(&dir_name).await?;
 
-        let mut tbs_info_list = vec![];
+        let mut res = vec![];
         let now = Utc::now();
-        let keys: Vec<String> = table_id_list_keys
-            .iter()
-            .map(|table_id_list_key| {
-                TableIdHistoryIdent {
-                    database_id: req.database_id.db_id,
-                    table_name: table_id_list_key.table_name.clone(),
-                }
-                .to_string_key()
-            })
-            .collect();
 
-        let mut table_id_list_keys_iter = table_id_list_keys.into_iter();
-        for c in keys.chunks(DEFAULT_MGET_SIZE) {
-            let tb_id_list_seq_vec: Vec<(u64, Option<TableIdList>)> =
-                mget_pb_values(self, c).await?;
-            for (tb_id_list_seq, tb_id_list_opt) in tb_id_list_seq_vec {
-                let table_id_list_key = table_id_list_keys_iter.next().unwrap();
-                let tb_id_list = if tb_id_list_seq == 0 {
-                    continue;
-                } else {
-                    match tb_id_list_opt {
-                        Some(list) => list,
-                        None => {
-                            continue;
-                        }
-                    }
-                };
+        for (ident, history) in ident_histories {
+            debug!(name :% =(&ident); "get_tables_history");
 
-                debug!(
-                    name :% =(&table_id_list_key);
-                    "get_tables_history"
-                );
+            let id_metas = get_retainable_table_metas(self, &now, history.data).await?;
 
-                let metas = get_table_meta_history(self, &now, tb_id_list).await?;
-                let tb_info_list: Vec<Arc<TableInfo>> = metas
-                    .into_iter()
-                    .map(|(table_id, seqv)| {
-                        Arc::new(TableInfo {
-                            ident: TableIdent::new(table_id.table_id, seqv.seq()),
-                            desc: format!("'{}'.'{}'", db_name, table_id_list_key.table_name,),
-                            name: table_id_list_key.table_name.to_string(),
-                            meta: seqv.data,
-                            db_type: DatabaseType::NormalDB,
-                            catalog_info: Default::default(),
-                        })
-                    })
-                    .collect();
-                tbs_info_list.extend(tb_info_list);
-            }
+            let table_nivs = id_metas.into_iter().map(|(table_id, seq_meta)| {
+                let name = DBIdTableName::new(ident.database_id, ident.table_name.clone());
+                TableNIV::new(name, table_id, seq_meta)
+            });
+
+            res.extend(table_nivs);
         }
 
-        return Ok(tbs_info_list);
+        return Ok(res);
     }
 
     #[logcall::logcall]
@@ -1657,11 +1613,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .map(|id| TableId { table_id: id })
             .collect::<Vec<_>>();
 
-        let mut seq_metas = vec![];
-        for chunk in ids.chunks(DEFAULT_MGET_SIZE) {
-            let got = self.get_pb_values_vec(chunk.to_vec()).await?;
-            seq_metas.extend(got);
-        }
+        let seq_metas = self.get_pb_values_vec(ids.clone()).await?;
 
         let res = names
             .into_iter()
@@ -2644,123 +2596,105 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let the_limit = req.limit.unwrap_or(usize::MAX);
 
-        if let TableInfoFilter::DroppedTableOrDroppedDatabase(retention_boundary) = &req.filter {
+        let drop_time_range = req.drop_time_range;
+
+        if req.database_name.is_none() {
             let db_infos = self
                 .get_tenant_history_databases(
                     ListDatabaseReq {
-                        tenant: req.inner.tenant().clone(),
+                        tenant: req.tenant.clone(),
                     },
                     true,
                 )
                 .await?;
 
-            let mut vacuum_table_infos = vec![];
+            let mut vacuum_tables = vec![];
             let mut vacuum_ids = vec![];
 
             for db_info in db_infos {
-                if vacuum_table_infos.len() >= the_limit {
+                if vacuum_tables.len() >= the_limit {
                     return Ok(ListDroppedTableResp {
-                        drop_table_infos: vacuum_table_infos,
+                        vacuum_tables,
                         drop_ids: vacuum_ids,
                     });
                 }
 
-                // If boundary is None, it means choose all tables.
-                // Thus, we just choose a very large time.
-                let boundary = retention_boundary.unwrap_or(DateTime::<Utc>::MAX_UTC);
-
-                let vacuum_db = {
-                    let drop_on = db_info.meta.drop_on;
-                    drop_on.is_some() && drop_on <= Some(boundary)
-                };
+                let vacuum_db = drop_time_range.contains(&db_info.meta.drop_on);
 
                 // If to vacuum a db, just vacuum all tables.
                 // Otherwise, choose only dropped tables(before retention time).
-                let filter = if vacuum_db {
-                    TableInfoFilter::All
+                let table_drop_time_range = if vacuum_db {
+                    None..Some(DateTime::<Utc>::MAX_UTC)
                 } else {
-                    TableInfoFilter::DroppedTables(*retention_boundary)
+                    drop_time_range.clone()
                 };
 
-                let db_filter = (filter, db_info.clone());
+                let capacity = the_limit - vacuum_tables.len();
+                let table_nivs = get_history_tables_for_gc(
+                    self,
+                    table_drop_time_range,
+                    db_info.database_id.db_id,
+                    capacity,
+                )
+                .await?;
 
-                let capacity = the_limit - vacuum_table_infos.len();
-                let table_infos = do_get_table_history(self, db_filter, capacity).await?;
-
-                // A DB can be removed only when all its tables are removed.
-                if vacuum_db && capacity >= table_infos.len() {
-                    vacuum_ids.push(DroppedId::Db {
-                        db_id: db_info.database_id.db_id,
-                        db_name: db_info.name_ident.database_name().to_string(),
-                        tables: table_infos
-                            .iter()
-                            .map(|(table_info, _)| {
-                                (table_info.ident.table_id, table_info.name.clone())
-                            })
-                            .collect(),
-                    });
-                } else {
-                    for (table_info, db_id) in table_infos.iter().take(capacity) {
-                        vacuum_ids.push(DroppedId::new_table(
-                            *db_id,
-                            table_info.ident.table_id,
-                            table_info.name.clone(),
-                        ));
-                    }
+                for table_niv in table_nivs.iter() {
+                    vacuum_ids.push(DroppedId::from(table_niv.clone()));
                 }
 
-                vacuum_table_infos.extend(
-                    table_infos
-                        .iter()
-                        .take(capacity)
-                        .map(|(table_info, _)| table_info.clone()),
-                );
+                let db_name = db_info.name_ident.database_name().to_string();
+                let db_name_ident = db_info.name_ident.clone();
+
+                // A DB can be removed only when all its tables are removed.
+                if vacuum_db && capacity > table_nivs.len() {
+                    vacuum_ids.push(DroppedId::Db {
+                        db_id: db_info.database_id.db_id,
+                        db_name: db_name.clone(),
+                    });
+                }
+
+                vacuum_tables.extend(std::iter::repeat(db_name_ident).zip(table_nivs));
             }
 
             return Ok(ListDroppedTableResp {
-                drop_table_infos: vacuum_table_infos,
+                vacuum_tables,
                 drop_ids: vacuum_ids,
             });
         }
 
-        let tenant_dbname = &req.inner;
+        let database_name = req.database_name.clone().unwrap();
+        let tenant_dbname = DatabaseNameIdent::new(&req.tenant, database_name);
 
         // Get db by name to ensure presence
         let res = get_db_or_err(
             self,
-            tenant_dbname,
+            &tenant_dbname,
             format!("get_table_history: {}", tenant_dbname.display()),
         )
         .await;
 
-        let (seq_db_id, db_meta) = match res {
+        let (seq_db_id, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
             }
         };
 
-        let db_info = Arc::new(DatabaseInfo {
-            database_id: seq_db_id.data,
-            name_ident: req.inner.clone(),
-            meta: db_meta,
-        });
-        let db_filter = (req.filter, db_info);
-        let table_infos = do_get_table_history(self, db_filter, the_limit).await?;
-        let mut drop_ids = vec![];
-        let mut drop_table_infos = vec![];
+        let database_id = seq_db_id.data;
+        let table_nivs =
+            get_history_tables_for_gc(self, drop_time_range.clone(), database_id.db_id, the_limit)
+                .await?;
 
-        for (table_info, db_id) in table_infos.iter().take(the_limit) {
-            drop_ids.push(DroppedId::new_table(
-                *db_id,
-                table_info.ident.table_id,
-                table_info.name.clone(),
-            ));
-            drop_table_infos.push(table_info.clone());
+        let mut drop_ids = vec![];
+        let mut vacuum_tables = vec![];
+
+        for niv in table_nivs {
+            drop_ids.push(DroppedId::from(niv.clone()));
+            vacuum_tables.push((tenant_dbname.clone(), niv));
         }
 
         Ok(ListDroppedTableResp {
-            drop_table_infos,
+            vacuum_tables,
             drop_ids,
         })
     }
@@ -2769,11 +2703,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError> {
         for drop_id in req.drop_ids {
             match drop_id {
-                DroppedId::Db {
-                    db_id,
-                    db_name,
-                    tables: _,
-                } => gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?,
+                DroppedId::Db { db_id, db_name } => {
+                    gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?
+                }
                 DroppedId::Table { name, id } => {
                     gc_dropped_table_by_id(self, &req.tenant, &name, &id).await?
                 }
@@ -3093,8 +3025,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             req.tenant.clone(),
             DictionaryIdentity::new(req.db_id, "dummy".to_string()),
         );
-        let dir = DirName::new_with_level(dictionary_ident, 2);
-
+        let dir = DirName::new(dictionary_ident);
         let name_id_values = self.list_id_value(&dir).await?;
         Ok(name_id_values
             .map(|(name, _seq_id, seq_meta)| (name.dict_name(), seq_meta.data))
@@ -3102,34 +3033,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 }
 
-async fn get_table_meta_history(
+async fn get_retainable_table_metas(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     now: &DateTime<Utc>,
     tb_id_list: TableIdList,
-) -> Result<Vec<(TableId, SeqV<TableMeta>)>, KVAppError> {
+) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
     let mut tb_metas = vec![];
 
-    let inner_keys = tb_id_list
-        .id_list
-        .into_iter()
-        .map(TableId::new)
-        .collect::<Vec<_>>();
+    let table_ids = tb_id_list.id_list.into_iter().map(TableId::new);
 
-    for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
-        let kvs = kv_api.get_pb_vec(c.iter().cloned()).await?;
+    let kvs = kv_api.get_pb_vec(table_ids).await?;
 
-        for (k, table_meta) in kvs {
-            let Some(table_meta) = table_meta else {
-                error!("get_table_history cannot find {:?} table_meta", k);
-                continue;
-            };
+    for (k, table_meta) in kvs {
+        let Some(table_meta) = table_meta else {
+            error!("get_table_history cannot find {:?} table_meta", k);
+            continue;
+        };
 
-            if !is_drop_time_retainable(table_meta.drop_on, *now) {
-                continue;
-            }
+        if is_drop_time_retainable(table_meta.drop_on, *now) {
             tb_metas.push((k, table_meta));
         }
     }
+
     Ok(tb_metas)
 }
 
@@ -3531,22 +3456,40 @@ fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     )
 }
 
+/// Lists all dropped and non-dropped tables belonging to a Database,
+/// returns those tables that are eligible for garbage collection,
+/// i.e., whose dropped time is in the specified range.
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
-async fn batch_filter_table_info(
+async fn get_history_tables_for_gc(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    args: &[(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)],
-    filter_tb_infos: &mut Vec<(Arc<TableInfo>, u64)>,
-) -> Result<(), KVAppError> {
-    let table_id_idents = args
-        .iter()
-        .map(|(_f, _db, table_id, _table_name)| TableId::new(*table_id));
+    drop_time_range: Range<Option<DateTime<Utc>>>,
+    db_id: u64,
+    limit: usize,
+) -> Result<Vec<TableNIV>, KVAppError> {
+    let ident = TableIdHistoryIdent {
+        database_id: db_id,
+        table_name: "dummy".to_string(),
+    };
+    let dir_name = DirName::new(ident);
+    let table_history_kvs = kv_api.list_pb_vec(&dir_name).await?;
+
+    let mut args = vec![];
+
+    for (ident, table_history) in table_history_kvs {
+        for table_id in table_history.id_list.iter() {
+            args.push((TableId::new(*table_id), ident.table_name.clone()));
+        }
+    }
+
+    let mut filter_tb_infos = vec![];
+
+    let limited_args = &args[..std::cmp::min(limit, args.len())];
+    let table_id_idents = limited_args.iter().map(|(table_id, _)| table_id.clone());
 
     let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
-    for (seq_meta, (filter, db_info, table_id, table_name)) in
-        seq_metas.into_iter().zip(args.iter())
-    {
+    for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(limited_args.iter()) {
         let Some(seq_meta) = seq_meta else {
             error!(
                 "batch_filter_table_info cannot find {:?} table_meta",
@@ -3555,145 +3498,24 @@ async fn batch_filter_table_info(
             continue;
         };
 
-        if let TableInfoFilter::DroppedTables(retention_boundary) = filter {
-            let Some(meta_drop_on) = seq_meta.drop_on else {
-                continue;
-            };
-
-            if meta_drop_on > retention_boundary.unwrap_or(DateTime::<Utc>::MAX_UTC) {
-                continue;
-            }
+        if !drop_time_range.contains(&seq_meta.data.drop_on) {
+            continue;
         }
 
-        let tb_info = TableInfo {
-            ident: TableIdent {
-                table_id: *table_id,
-                seq: seq_meta.seq,
-            },
-            desc: format!("'{}'.'{}'", db_info.name_ident.database_name(), table_name,),
-            name: (*table_name).clone(),
-            meta: seq_meta.data,
-            db_type: DatabaseType::NormalDB,
-            catalog_info: Default::default(),
-        };
-
-        filter_tb_infos.push((Arc::new(tb_info), db_info.database_id.db_id));
-    }
-
-    Ok(())
-}
-
-type TableFilterInfoList<'a> = Vec<(&'a TableInfoFilter, &'a Arc<DatabaseInfo>, u64, String)>;
-
-#[logcall::logcall(input = "")]
-#[fastrace::trace]
-async fn get_gc_table_info(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    limit: usize,
-    table_id_list: &TableFilterInfoList<'_>,
-) -> Result<Vec<(Arc<TableInfo>, u64)>, KVAppError> {
-    let table_id_list = &table_id_list[..std::cmp::min(limit, table_id_list.len())];
-
-    let mut filter_tb_infos = vec![];
-
-    for chunk in table_id_list.chunks(DEFAULT_MGET_SIZE) {
-        batch_filter_table_info(kv_api, chunk, &mut filter_tb_infos).await?;
+        filter_tb_infos.push(TableNIV::new(
+            DBIdTableName::new(db_id, table_name.clone()),
+            table_id.clone(),
+            seq_meta,
+        ));
     }
 
     Ok(filter_tb_infos)
 }
 
-#[logcall::logcall(input = "")]
-#[fastrace::trace]
-async fn do_get_table_history(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_filter: (TableInfoFilter, Arc<DatabaseInfo>),
-    limit: usize,
-) -> Result<Vec<(Arc<TableInfo>, u64)>, KVAppError> {
-    let mut filter_tb_infos = vec![];
-
-    // step 1: list db table name with db id
-    let mut filter_db_info_with_table_id_key_list: Vec<(
-        &TableInfoFilter,
-        &Arc<DatabaseInfo>,
-        TableIdHistoryIdent,
-    )> = vec![];
-
-    let (filter, db_info) = db_filter;
-    let db_id = db_info.database_id.db_id;
-
-    // List tables by tenant, db_id, table_name.
-    let dbid_tbname_idlist = TableIdHistoryIdent {
-        database_id: db_id,
-        table_name: "dummy".to_string(),
-    };
-    let dir_name = DirName::new(dbid_tbname_idlist);
-    let strm = kv_api.list_pb_keys(&dir_name).await?;
-    let table_id_list_keys = strm.try_collect::<Vec<_>>().await?;
-
-    let keys = table_id_list_keys
-        .iter()
-        .map(|table_id_list_key| (&filter, &db_info, table_id_list_key.clone()))
-        .collect::<Vec<_>>();
-
-    filter_db_info_with_table_id_key_list.extend(keys);
-
-    // step 2: list all table id of table by table name
-    let keys = filter_db_info_with_table_id_key_list
-        .iter()
-        .map(|(_, db_info, table_id_list_key)| TableIdHistoryIdent {
-            database_id: db_info.database_id.db_id,
-            table_name: table_id_list_key.table_name.clone(),
-        })
-        .collect::<Vec<_>>();
-
-    let mut filter_db_info_with_table_id_list: TableFilterInfoList<'_> = vec![];
-    let mut table_id_list_keys_iter = filter_db_info_with_table_id_key_list.into_iter();
-    for c in keys.chunks(DEFAULT_MGET_SIZE) {
-        let strm = kv_api.get_pb_values(c.to_vec()).await?;
-        let table_id_list_vec = strm
-            .try_filter_map(|x| async move { Ok(x) })
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        for seq_table_id_list in table_id_list_vec {
-            let (filter, db_info, table_id_list_key) = table_id_list_keys_iter.next().unwrap();
-            let tb_id_list = seq_table_id_list.data;
-
-            let id_list: Vec<(&TableInfoFilter, &Arc<DatabaseInfo>, u64, String)> = tb_id_list
-                .id_list
-                .iter()
-                .map(|id| (filter, db_info, *id, table_id_list_key.table_name.clone()))
-                .collect();
-
-            filter_db_info_with_table_id_list.extend(id_list);
-            if filter_db_info_with_table_id_list.len() < DEFAULT_MGET_SIZE {
-                continue;
-            }
-
-            let ret = get_gc_table_info(kv_api, limit, &filter_db_info_with_table_id_list).await?;
-            filter_tb_infos.extend(ret);
-            filter_db_info_with_table_id_list.clear();
-
-            if filter_tb_infos.len() >= limit {
-                return Ok(filter_tb_infos);
-            }
-        }
-
-        if !filter_db_info_with_table_id_list.is_empty() {
-            let ret = get_gc_table_info(kv_api, limit, &filter_db_info_with_table_id_list).await?;
-            filter_tb_infos.extend(ret);
-            filter_db_info_with_table_id_list.clear();
-
-            if filter_tb_infos.len() >= limit {
-                return Ok(filter_tb_infos);
-            }
-        }
-    }
-
-    Ok(filter_tb_infos)
-}
-
+/// Permanently remove a dropped database from the meta-service.
+///
+/// Upon calling this method, the dropped database must be already marked as `gc_in_progress`,
+/// then remove all **dropped and non-dropped** tables in the database.
 async fn gc_dropped_db_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
@@ -3701,99 +3523,83 @@ async fn gc_dropped_db_by_id(
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
-    let dbid_idlist = DatabaseIdHistoryIdent::new(tenant, db_name);
-    let (db_id_list_seq, db_id_list_opt) = kv_api.get_pb_seq_and_value(&dbid_idlist).await?;
-
-    let mut db_id_list = match db_id_list_opt {
-        Some(list) => list,
-        None => return Ok(()),
+    let db_id_history_ident = DatabaseIdHistoryIdent::new(tenant, db_name);
+    let Some(seq_dbid_list) = kv_api.get_pb(&db_id_history_ident).await? else {
+        return Ok(());
     };
-    for (i, dbid) in db_id_list.id_list.iter().enumerate() {
-        if *dbid != db_id {
-            continue;
-        }
-        let dbid = DatabaseId { db_id };
-        let (db_meta_seq, _db_meta) = kv_api.get_pb_seq_and_value(&dbid).await?;
-        if db_meta_seq == 0 {
-            return Ok(());
-        }
-        let id_to_name = DatabaseIdToName { db_id };
-        let (name_ident_seq, _name_ident) = kv_api.get_pb_seq_and_value(&id_to_name).await?;
-        if name_ident_seq == 0 {
-            return Ok(());
-        }
 
-        let dbid_tbname_idlist = TableIdHistoryIdent {
-            database_id: db_id,
-            table_name: "".to_string(),
-        };
+    let mut db_id_list = seq_dbid_list.data;
 
-        let dir_name = DirName::new(dbid_tbname_idlist);
-
-        let table_id_list_keys = list_keys(kv_api, &dir_name).await?;
-        let keys: Vec<String> = table_id_list_keys
-            .iter()
-            .map(|table_id_list_key| {
-                TableIdHistoryIdent {
-                    database_id: db_id,
-                    table_name: table_id_list_key.table_name.clone(),
-                }
-                .to_string_key()
-            })
-            .collect();
-
-        let mut txn = TxnRequest::default();
-
-        for c in keys.chunks(DEFAULT_MGET_SIZE) {
-            let tb_id_list_seq_vec: Vec<(u64, Option<TableIdList>)> =
-                mget_pb_values(kv_api, c).await?;
-            let mut iter = c.iter();
-            for (tb_id_list_seq, tb_id_list_opt) in tb_id_list_seq_vec {
-                let tb_id_list = match tb_id_list_opt {
-                    Some(list) => list,
-                    None => {
-                        continue;
-                    }
-                };
-
-                for tb_id in tb_id_list.id_list {
-                    let table_id_ident = TableId { table_id: tb_id };
-                    remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
-                    remove_data_for_dropped_table(kv_api, &table_id_ident, &mut txn).await?;
-                    remove_index_for_dropped_table(kv_api, tenant, &table_id_ident, &mut txn)
-                        .await?;
-                }
-
-                let id_key = iter.next().unwrap();
-                txn.if_then.push(TxnOp::delete(id_key));
-                txn.condition
-                    .push(TxnCondition::eq_seq(id_key, tb_id_list_seq));
-            }
-
-            // for id_key in c {
-            // if_then.push(txn_op_del(id_key));
-            // }
-        }
-        db_id_list.id_list.remove(i);
-        txn.condition
-            .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
-        if db_id_list.id_list.is_empty() {
-            txn.if_then.push(txn_op_del(&dbid_idlist));
-        } else {
-            // save new db id list
-            txn.if_then
-                .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
-        }
-
-        txn.condition.push(txn_cond_seq(&dbid, Eq, db_meta_seq));
-        txn.if_then.push(txn_op_del(&dbid));
-        txn.condition
-            .push(txn_cond_seq(&id_to_name, Eq, name_ident_seq));
-        txn.if_then.push(txn_op_del(&id_to_name));
-
-        let _resp = kv_api.transaction(txn).await?;
-        break;
+    // If the db_id is not in the list, return.
+    if db_id_list.id_list.remove_first(&db_id).is_none() {
+        return Ok(());
     }
+
+    let dbid = DatabaseId { db_id };
+    let Some(seq_db_meta) = kv_api.get_pb(&dbid).await? else {
+        return Ok(());
+    };
+
+    // TODO: enable this when gc_in_progress is set.
+    // if !seq_db_meta.gc_in_progress {
+    //     let err = UnknownDatabaseId::new(
+    //         db_id,
+    //         "database is not in gc_in_progress state, \
+    //         can not gc. \
+    //         First mark the database as gc_in_progress, \
+    //         then gc is allowed.",
+    //     );
+    //     return Err(AppError::from(err).into());
+    // }
+
+    let id_to_name = DatabaseIdToName { db_id };
+    let Some(seq_name) = kv_api.get_pb(&id_to_name).await? else {
+        return Ok(());
+    };
+
+    let table_history_ident = TableIdHistoryIdent {
+        database_id: db_id,
+        table_name: "dummy".to_string(),
+    };
+    let dir_name = DirName::new(table_history_ident);
+
+    let table_history_items = kv_api.list_pb_vec(&dir_name).await?;
+
+    let mut txn = TxnRequest::default();
+
+    for (ident, table_history) in table_history_items {
+        for tb_id in table_history.id_list.iter() {
+            let table_id_ident = TableId { table_id: *tb_id };
+
+            // TODO: mark table as gc_in_progress
+
+            remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
+            let _ = remove_data_for_dropped_table(kv_api, &table_id_ident, &mut txn).await?;
+            remove_index_for_dropped_table(kv_api, tenant, &table_id_ident, &mut txn).await?;
+        }
+
+        txn.condition
+            .push(txn_cond_eq_seq(&ident, table_history.seq));
+        txn.if_then.push(txn_op_del(&ident));
+    }
+
+    txn.condition
+        .push(txn_cond_eq_seq(&db_id_history_ident, seq_dbid_list.seq));
+    if db_id_list.id_list.is_empty() {
+        txn.if_then.push(txn_op_del(&db_id_history_ident));
+    } else {
+        // save new db id list
+        txn.if_then
+            .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
+    }
+
+    txn.condition.push(txn_cond_eq_seq(&dbid, seq_db_meta.seq));
+    txn.if_then.push(txn_op_del(&dbid));
+    txn.condition
+        .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
+    txn.if_then.push(txn_op_del(&id_to_name));
+
+    let _resp = kv_api.transaction(txn).await?;
 
     Ok(())
 }
@@ -3818,7 +3624,7 @@ async fn gc_dropped_table_by_id(
         let mut txn = TxnRequest::default();
 
         // 1)
-        remove_data_for_dropped_table(kv_api, table_id_ident, &mut txn).await?;
+        let _ = remove_data_for_dropped_table(kv_api, table_id_ident, &mut txn).await?;
 
         // 2)
         let table_id_history_ident = TableIdHistoryIdent {
@@ -3889,28 +3695,32 @@ async fn update_txn_to_remove_table_history(
         txn.if_then
             .push(txn_op_put_pb(table_id_history_ident, &history, None)?);
     }
+
     Ok(())
 }
 
+/// Update TxnRequest to remove a dropped table's own data.
+///
+/// This function returns the updated TxnRequest,
+/// or Err of the reason in string if it can not proceed.
 async fn remove_data_for_dropped_table(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: &TableId,
     txn: &mut TxnRequest,
-) -> Result<(), KVAppError> {
+) -> Result<Result<(), String>, MetaError> {
     let seq_meta = kv_api.get_pb(table_id).await?;
 
     let Some(seq_meta) = seq_meta else {
-        error!(
-            "gc_dropped_table_by_id cannot find {:?} table_meta",
-            table_id
-        );
-        return Ok(());
+        let err = format!("cannot find TableMeta by id: {:?}, ", table_id);
+        error!("{}", err);
+        return Ok(Err(err));
     };
 
     // TODO: enable this check. Currently when gc db, the table may not be dropped.
     // if seq_meta.data.drop_on.is_none() {
-    //     warn!("gc_dropped_table_by_id {:?} is not dropped", table_id);
-    //     return Ok(());
+    //     let err = format!("Table {:?} is not dropped, can not remove", table_id);
+    //     warn!("{}", err);
+    //     return Ok(Err(err));
     // }
 
     txn_delete_exact(txn, table_id, seq_meta.seq);
@@ -3926,7 +3736,7 @@ async fn remove_data_for_dropped_table(
         txn_delete_exact(txn, &id_to_name, seq_name.seq);
     }
 
-    Ok(())
+    Ok(Ok(()))
 }
 
 async fn remove_index_for_dropped_table(
