@@ -222,7 +222,7 @@ pub trait Table: Sync + Send {
         pipeline: &mut Pipeline,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, append_mode);
+        let (_, _) = (ctx, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'append_data' operation is not available for the table '{}'. Current table engine: '{}'.",

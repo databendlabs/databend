@@ -169,33 +169,14 @@ pub fn trim_vacuum2_object_prefix(key: &str) -> &str {
     key.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX).unwrap_or(key)
 }
 
-// Extracts the UUID part from the object key.
-// For example, given a path like:
-//   bucket/root/115/122/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet
-//   bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet
-// The function should return: 0191114d30fd78b89fae8e5c88327725
-pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::Result<&str> {
-    if let Some(file_stem) = Path::new(path).file_stem() {
-        let file_name = file_stem
-            .to_str()
-            .unwrap() // path is always valid utf8 string
-            .split('_')
-            .collect::<Vec<&str>>();
-        let uuid = trim_vacuum2_object_prefix(file_name[0]);
-        Ok(uuid)
-    } else {
-        Err(ErrorCode::StorageOther(format!(
-            "Illegal object key, no file stem found: {}",
-            path
-        )))
-    }
-}
-
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
+
     use databend_common_base::base::uuid::Uuid;
 
-    use super::*;
+    use crate::meta::trim_vacuum2_object_prefix;
+    use crate::meta::try_extract_uuid_str_from_path;
 
     #[test]
     fn test_trim_vacuum2_object_prefix() {
@@ -227,11 +208,6 @@ mod tests {
             assert_eq!(try_extract_uuid_str_from_path(input).unwrap(), expected);
         }
     }
-}
-
-#[cfg(test)]
-#[allow(clippy::items_after_test_module)]
-mod tests {
     fn assert_order_preserved(
         ts1: chrono::DateTime<chrono::Utc>,
         ts2: chrono::DateTime<chrono::Utc>,

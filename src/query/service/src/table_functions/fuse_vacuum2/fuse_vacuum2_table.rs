@@ -28,8 +28,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_storages_fuse::table_functions::parse_db_tb_args;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
@@ -82,10 +82,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
         ctx: &Arc<dyn TableContext>,
         _: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::Vacuum)?;
+        LicenseManagerSwitch::instance().check_enterprise_enabled(ctx.get_license_key(), Vacuum)?;
 
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let res = match &self.args {

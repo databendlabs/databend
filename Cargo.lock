@@ -3719,8 +3719,6 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "fastrace 0.7.2",
- "enumflags2",
- "fastrace",
  "futures",
  "itertools 0.10.5",
  "log",

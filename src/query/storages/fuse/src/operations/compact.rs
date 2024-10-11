@@ -19,12 +19,6 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::StreamContext;
-use databend_storages_common_table_meta::meta::Statistics;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::BlockCompactMutator;
@@ -66,7 +60,6 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             self.operator.clone(),
             self.cluster_key_id(),
-            self.get_id(),
         )?;
 
         if !segment_mutator.target_select().await? {

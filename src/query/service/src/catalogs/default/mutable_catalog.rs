@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -76,6 +77,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
@@ -90,8 +92,6 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::SetLVTReply;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableIdent;
@@ -767,7 +767,11 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.list_dictionaries(req).await?)
     }
 
-    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply> {
-        Ok(self.ctx.meta.set_table_lvt(req).await?)
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime> {
+        Ok(self.ctx.meta.set_table_lvt(name_ident, value).await?)
     }
 }

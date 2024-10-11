@@ -687,7 +687,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        self.do_append_data(ctx, pipeline, append_mode, table_meta_timestamps)
+        self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
 
     fn commit_insertion(

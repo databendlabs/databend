@@ -51,7 +51,6 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
-    table_id: u64,
 }
 
 impl SegmentCompactMutator {
@@ -61,7 +60,6 @@ impl SegmentCompactMutator {
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
         default_cluster_key_id: Option<u32>,
-        table_id: u64,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -70,7 +68,6 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
-            table_id,
         })
     }
 
@@ -358,7 +355,9 @@ impl<'a> SegmentCompactor<'a> {
 
         // 2.2 write down new segment
         let new_segment = SegmentInfo::new(blocks, new_statistics);
-        let location = self.location_generator.gen_segment_info_location();
+        let location = self
+            .location_generator
+            .gen_segment_info_location(Default::default());
         new_segment
             .write_meta_through_cache(self.operator, &location)
             .await?;

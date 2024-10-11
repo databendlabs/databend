@@ -266,7 +266,6 @@ async fn build_mutator(
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
         tbl.cluster_key_id(),
-        tbl.get_id(),
     )?;
 
     if segment_mutator.target_select().await? {
@@ -664,7 +663,6 @@ impl CompactSegmentTestFixture {
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_theads = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let segment_writer = SegmentWriter::new(data_accessor, location_gen, Default::default());
         let seg_acc = SegmentCompactor::new(
             block_per_seg,
             cluster_key_id,
@@ -975,7 +973,6 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, Default::default());
     let compact_segment_reader =
         MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
     let fuse_segment_io = SegmentsIO::create(ctx.clone(), data_accessor.clone(), schema);

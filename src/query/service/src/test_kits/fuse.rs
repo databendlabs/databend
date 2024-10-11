@@ -154,12 +154,6 @@ pub async fn generate_segments(
             location_generator.gen_segment_info_location(table_meta_timestamps)
         };
         segment_info.write_meta(dal, location.as_str()).await?;
-        let segment_location = (location, SegmentInfo::VERSION);
-        segs.push((segment_location, segment_info))
-        let location = fuse_table
-            .meta_location_generator()
-            .gen_segment_info_location();
-        segment_info.write_meta(dal, &location).await?;
         segs.push(((location, SegmentInfo::VERSION), segment_info))
     }
     Ok(segs)

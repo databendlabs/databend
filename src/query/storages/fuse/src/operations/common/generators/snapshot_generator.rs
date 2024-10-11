@@ -56,7 +56,7 @@ pub trait SnapshotGenerator {
             &previous,
             prev_table_seq,
             table_meta_timestamps,
-            table_name
+            table_name,
         )?;
         decorate_snapshot(&mut snapshot, txn_mgr, previous, table_id)?;
         Ok(snapshot)
@@ -69,6 +69,7 @@ pub trait SnapshotGenerator {
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
+        table_name: &str,
     ) -> Result<TableSnapshot>;
 }
 
@@ -92,14 +93,5 @@ pub fn decorate_snapshot(
         let previous_of_previous = previous.as_ref().and_then(|prev| prev.prev_snapshot_id);
         snapshot.prev_snapshot_id = previous_of_previous;
     }
-
-    fn do_generate_new_snapshot(
-        &self,
-        schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
-        previous: &Option<Arc<TableSnapshot>>,
-        prev_table_seq: Option<u64>,
-        table_name: &str,
-    ) -> Result<TableSnapshot>;
     Ok(())
 }

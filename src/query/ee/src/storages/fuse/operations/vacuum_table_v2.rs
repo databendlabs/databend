@@ -22,8 +22,9 @@ use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
@@ -36,7 +37,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::info;
 use uuid::Version;
-
 #[async_backtrace::framed]
 pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<Vec<String>> {
     let start = std::time::Instant::now();
@@ -266,10 +266,10 @@ async fn set_lvt(
     };
 
     let lvt_point = cat
-        .set_table_lvt(SetLVTReq {
-            table_id: fuse_table.get_table_info().ident.table_id,
-            time: lvt_point_candidate,
-        })
+        .set_table_lvt(
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTime::new(lvt_point_candidate),
+        )
         .await?
         .time;
     Ok(Some(lvt_point))

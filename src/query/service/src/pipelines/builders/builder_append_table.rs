@@ -41,11 +41,7 @@ impl PipelineBuilder {
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
-        table.append_data(
-            ctx.clone(),
-            main_pipeline,
-            table_meta_timestamps,
-        )?;
+        table.append_data(ctx.clone(), main_pipeline, table_meta_timestamps)?;
         table.commit_insertion(
             ctx,
             main_pipeline,
