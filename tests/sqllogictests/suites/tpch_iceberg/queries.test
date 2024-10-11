@@ -22,7 +22,7 @@ select
     avg(l_discount) as avg_disc,
     count(*) as count_order
 from
-    ctl."iceberg.tpch".lineitem
+    ctl.tpch.lineitem
 where
         l_shipdate <= add_days(to_date('1998-12-01'), -90)
 group by
@@ -49,11 +49,11 @@ select
     s_phone,
     s_comment
 from
-    ctl."iceberg.tpch".part,
-    ctl."iceberg.tpch".supplier,
-    ctl."iceberg.tpch".partsupp,
-    ctl."iceberg.tpch".nation,
-    ctl."iceberg.tpch".region
+    ctl.tpch.part,
+    ctl.tpch.supplier,
+    ctl.tpch.partsupp,
+    ctl.tpch.nation,
+    ctl.tpch.region
 where
         p_partkey = ps_partkey
   and s_suppkey = ps_suppkey
@@ -66,10 +66,10 @@ where
     select
         min(ps_supplycost)
     from
-        ctl."iceberg.tpch".partsupp,
-        ctl."iceberg.tpch".supplier,
-        ctl."iceberg.tpch".nation,
-        ctl."iceberg.tpch".region
+        ctl.tpch.partsupp,
+        ctl.tpch.supplier,
+        ctl.tpch.nation,
+        ctl.tpch.region
     where
             p_partkey = ps_partkey
       and s_suppkey = ps_suppkey
@@ -136,9 +136,9 @@ select
     o_orderdate,
     o_shippriority
 from
-    ctl."iceberg.tpch".customer,
-    ctl."iceberg.tpch".orders,
-    ctl."iceberg.tpch".lineitem
+    ctl.tpch.customer,
+    ctl.tpch.orders,
+    ctl.tpch.lineitem
 where
         c_mktsegment = 'BUILDING'
   and c_custkey = o_custkey
@@ -166,7 +166,7 @@ select
     o_orderpriority,
     count(*) as order_count
 from
-    ctl."iceberg.tpch".orders
+    ctl.tpch.orders
 where
         o_orderdate >= to_date('1993-07-01')
   and o_orderdate < add_months(to_date('1993-07-01'), 3)
@@ -174,7 +174,7 @@ where
         select
             *
         from
-            ctl."iceberg.tpch".lineitem
+            ctl.tpch.lineitem
         where
                 l_orderkey = o_orderkey
           and l_commitdate < l_receiptdate
@@ -196,12 +196,12 @@ select
     n_name,
     ceil(sum(l_extendedprice * (1 - l_discount)) / 10) as revenue
 from
-    ctl."iceberg.tpch".customer,
-    ctl."iceberg.tpch".orders,
-    ctl."iceberg.tpch".lineitem,
-    ctl."iceberg.tpch".supplier,
-    ctl."iceberg.tpch".nation,
-    ctl."iceberg.tpch".region
+    ctl.tpch.customer,
+    ctl.tpch.orders,
+    ctl.tpch.lineitem,
+    ctl.tpch.supplier,
+    ctl.tpch.nation,
+    ctl.tpch.region
 where
         c_custkey = o_custkey
   and l_orderkey = o_orderkey
@@ -228,7 +228,7 @@ query I
 select
    truncate(sum(l_extendedprice * l_discount),3) as revenue
 from
-   ctl."iceberg.tpch".lineitem
+   ctl.tpch.lineitem
 where
    l_shipdate >= '1994-01-01'
    and l_shipdate < date_add(year, 1, to_date('1994-01-01'))
@@ -252,12 +252,12 @@ from
             extract(year from l_shipdate) as l_year,
             l_extendedprice * (1 - l_discount) as volume
         from
-            ctl."iceberg.tpch".supplier,
-            ctl."iceberg.tpch".lineitem,
-            ctl."iceberg.tpch".orders,
-            ctl."iceberg.tpch".customer,
-            ctl."iceberg.tpch".nation n1,
-            ctl."iceberg.tpch".nation n2
+            ctl.tpch.supplier,
+            ctl.tpch.lineitem,
+            ctl.tpch.orders,
+            ctl.tpch.customer,
+            ctl.tpch.nation n1,
+            ctl.tpch.nation n2
         where
                 s_suppkey = l_suppkey
           and o_orderkey = l_orderkey
@@ -299,14 +299,14 @@ from
             l_extendedprice * (1 - l_discount) as volume,
             n2.n_name as nation
         from
-            ctl."iceberg.tpch".part,
-            ctl."iceberg.tpch".supplier,
-            ctl."iceberg.tpch".lineitem,
-            ctl."iceberg.tpch".orders,
-            ctl."iceberg.tpch".customer,
-            ctl."iceberg.tpch".nation n1,
-            ctl."iceberg.tpch".nation n2,
-            ctl."iceberg.tpch".region
+            ctl.tpch.part,
+            ctl.tpch.supplier,
+            ctl.tpch.lineitem,
+            ctl.tpch.orders,
+            ctl.tpch.customer,
+            ctl.tpch.nation n1,
+            ctl.tpch.nation n2,
+            ctl.tpch.region
         where
                 p_partkey = l_partkey
           and s_suppkey = l_suppkey
@@ -340,12 +340,12 @@ from
             extract(year from o_orderdate) as o_year,
             truncate(l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity, 100) as amount
         from
-            ctl."iceberg.tpch".part,
-            ctl."iceberg.tpch".supplier,
-            ctl."iceberg.tpch".lineitem,
-            ctl."iceberg.tpch".partsupp,
-            ctl."iceberg.tpch".orders,
-            ctl."iceberg.tpch".nation
+            ctl.tpch.part,
+            ctl.tpch.supplier,
+            ctl.tpch.lineitem,
+            ctl.tpch.partsupp,
+            ctl.tpch.orders,
+            ctl.tpch.nation
         where
                 s_suppkey = l_suppkey
           and ps_suppkey = l_suppkey
@@ -380,10 +380,10 @@ select
     c_phone,
     c_comment
 from
-    ctl."iceberg.tpch".customer,
-    ctl."iceberg.tpch".orders,
-    ctl."iceberg.tpch".lineitem,
-    ctl."iceberg.tpch".nation
+    ctl.tpch.customer,
+    ctl.tpch.orders,
+    ctl.tpch.lineitem,
+    ctl.tpch.nation
 where
         c_custkey = o_custkey
   and l_orderkey = o_orderkey
@@ -414,9 +414,9 @@ select
     ps_partkey,
     sum(ps_supplycost * ps_availqty) as value
 from
-    ctl."iceberg.tpch".partsupp,
-    ctl."iceberg.tpch".supplier,
-    ctl."iceberg.tpch".nation
+    ctl.tpch.partsupp,
+    ctl.tpch.supplier,
+    ctl.tpch.nation
 where
     ps_suppkey = s_suppkey
   and s_nationkey = n_nationkey
@@ -427,9 +427,9 @@ group by
     select
     sum(ps_supplycost * ps_availqty) * 0.000002
     from
-    ctl."iceberg.tpch".partsupp,
-    ctl."iceberg.tpch".supplier,
-    ctl."iceberg.tpch".nation
+    ctl.tpch.partsupp,
+    ctl.tpch.supplier,
+    ctl.tpch.nation
     where
     ps_suppkey = s_suppkey
                   and s_nationkey = n_nationkey
@@ -556,8 +556,8 @@ select
             else 0
         end) as low_line_count
 from
-    ctl."iceberg.tpch".orders,
-    ctl."iceberg.tpch".lineitem
+    ctl.tpch.orders,
+    ctl.tpch.lineitem
 where
         o_orderkey = l_orderkey
   and l_shipmode in ('MAIL', 'SHIP')
@@ -584,9 +584,9 @@ from
             c_custkey,
             count(o_orderkey) as c_count
         from
-            ctl."iceberg.tpch".customer
+            ctl.tpch.customer
                 left outer join
-            ctl."iceberg.tpch".orders
+            ctl.tpch.orders
             on c_custkey = o_custkey
                 and o_comment not like '%pending%deposits%'
         group by
@@ -646,8 +646,8 @@ select
                              else 0
             end) / sum(l_extendedprice * (1 - l_discount)), 5) as promo_revenue
 from
-    ctl."iceberg.tpch".lineitem,
-    ctl."iceberg.tpch".part
+    ctl.tpch.lineitem,
+    ctl.tpch.part
 where
         l_partkey = p_partkey
   and l_shipdate >= to_date('1995-09-01')
@@ -662,7 +662,7 @@ with revenue as (
         l_suppkey as supplier_no,
         truncate(sum(l_extendedprice * (1 - l_discount)), 2) as total_revenue
     from
-        ctl."iceberg.tpch".lineitem
+        ctl.tpch.lineitem
     where
             l_shipdate >= to_date ('1996-01-01')
       and l_shipdate < to_date ('1996-04-01')
@@ -675,7 +675,7 @@ select
     s_phone,
     total_revenue
 from
-    ctl."iceberg.tpch".supplier,
+    ctl.tpch.supplier,
     revenue
 where
         s_suppkey = supplier_no
@@ -697,7 +697,7 @@ with revenue as materialized (
         l_suppkey as supplier_no,
         truncate(sum(l_extendedprice * (1 - l_discount)), 2) as total_revenue
     from
-        ctl."iceberg.tpch".lineitem
+        ctl.tpch.lineitem
     where
             l_shipdate >= to_date ('1996-01-01')
       and l_shipdate < to_date ('1996-04-01')
@@ -710,7 +710,7 @@ select
     s_phone,
     total_revenue
 from
-    ctl."iceberg.tpch".supplier,
+    ctl.tpch.supplier,
     revenue
 where
         s_suppkey = supplier_no
@@ -734,8 +734,8 @@ select
     p_size,
     count(distinct ps_suppkey) as supplier_cnt
 from
-    ctl."iceberg.tpch".partsupp,
-    ctl."iceberg.tpch".part
+    ctl.tpch.partsupp,
+    ctl.tpch.part
 where
         p_partkey = ps_partkey
   and p_brand <> 'Brand#45'
@@ -745,7 +745,7 @@ where
     select
         s_suppkey
     from
-        ctl."iceberg.tpch".supplier
+        ctl.tpch.supplier
     where
             s_comment like '%Customer%Complaints%'
 )
@@ -786,8 +786,8 @@ query I
 select
         truncate(sum(l_extendedprice) / 7.0,8) as avg_yearly
 from
-    ctl."iceberg.tpch".lineitem,
-    ctl."iceberg.tpch".part
+    ctl.tpch.lineitem,
+    ctl.tpch.part
 where
         p_partkey = l_partkey
   and p_brand = 'Brand#23'
@@ -796,7 +796,7 @@ where
     select
             0.2 * avg(l_quantity)
     from
-        ctl."iceberg.tpch".lineitem
+        ctl.tpch.lineitem
     where
             l_partkey = p_partkey
 );
@@ -808,8 +808,8 @@ query I
 SELECT
   TRUNCATE(sum(l_extendedprice) / 7.0, 8) AS avg_yearly
 FROM
-  ctl."iceberg.tpch".lineitem,
-  ctl."iceberg.tpch".part
+  ctl.tpch.lineitem,
+  ctl.tpch.part
 WHERE
   p_partkey = l_partkey
   AND p_brand = 'Brand#23'
@@ -818,7 +818,7 @@ WHERE
     SELECT
       0.2 * (sum(l_quantity) / count(l_quantity))
     FROM
-      ctl."iceberg.tpch".lineitem
+      ctl.tpch.lineitem
     WHERE
       l_partkey = p_partkey
   );
@@ -835,15 +835,15 @@ select
     o_totalprice,
     sum(l_quantity)
 from
-    ctl."iceberg.tpch".customer,
-    ctl."iceberg.tpch".orders,
-    ctl."iceberg.tpch".lineitem
+    ctl.tpch.customer,
+    ctl.tpch.orders,
+    ctl.tpch.lineitem
 where
         o_orderkey in (
         select
             l_orderkey
         from
-            ctl."iceberg.tpch".lineitem
+            ctl.tpch.lineitem
         group by
             l_orderkey having
                 sum(l_quantity) > 300
@@ -871,8 +871,8 @@ query I
 select
     truncate(sum(l_extendedprice* (1 - l_discount)),3) as revenue
 from
-    ctl."iceberg.tpch".lineitem,
-    ctl."iceberg.tpch".part
+    ctl.tpch.lineitem,
+    ctl.tpch.part
 where
     (
                 p_partkey = l_partkey
@@ -945,20 +945,20 @@ select
     s_name,
     s_address
 from
-    ctl."iceberg.tpch".supplier,
-    ctl."iceberg.tpch".nation
+    ctl.tpch.supplier,
+    ctl.tpch.nation
 where
         s_suppkey in (
         select
             ps_suppkey
         from
-            ctl."iceberg.tpch".partsupp
+            ctl.tpch.partsupp
         where
                 ps_partkey in (
                 select
                     p_partkey
                 from
-                    ctl."iceberg.tpch".part
+                    ctl.tpch.part
                 where
                         p_name like 'forest%'
             )
@@ -966,7 +966,7 @@ where
             select
                     0.5 * sum(l_quantity)
             from
-                ctl."iceberg.tpch".lineitem
+                ctl.tpch.lineitem
             where
                     l_partkey = ps_partkey
               and l_suppkey = ps_suppkey
@@ -995,10 +995,10 @@ select
     s_name,
     truncate(count(*),4) as numwait
 from
-    ctl."iceberg.tpch".supplier,
-    ctl."iceberg.tpch".lineitem l1,
-    ctl."iceberg.tpch".orders,
-    ctl."iceberg.tpch".nation
+    ctl.tpch.supplier,
+    ctl.tpch.lineitem l1,
+    ctl.tpch.orders,
+    ctl.tpch.nation
 where
         s_suppkey = l1.l_suppkey
   and o_orderkey = l1.l_orderkey
@@ -1008,7 +1008,7 @@ where
         select
             *
         from
-            ctl."iceberg.tpch".lineitem l2
+            ctl.tpch.lineitem l2
         where
                 l2.l_orderkey = l1.l_orderkey
           and l2.l_suppkey <> l1.l_suppkey
@@ -1017,7 +1017,7 @@ where
         select
             *
         from
-            ctl."iceberg.tpch".lineitem l3
+            ctl.tpch.lineitem l3
         where
                 l3.l_orderkey = l1.l_orderkey
           and l3.l_suppkey <> l1.l_suppkey
@@ -1091,7 +1091,7 @@ from
             substring(c_phone from 1 for 2) as cntrycode,
             c_acctbal
         from
-            ctl."iceberg.tpch".customer
+            ctl.tpch.customer
         where
                 substring(c_phone from 1 for 2) in
                 ('13', '31', '23', '29', '30', '18', '17')
@@ -1099,7 +1099,7 @@ from
             select
                 avg(c_acctbal)
             from
-                ctl."iceberg.tpch".customer
+                ctl.tpch.customer
             where
                     c_acctbal > 0.00
               and substring(c_phone from 1 for 2) in
@@ -1109,7 +1109,7 @@ from
                 select
                     *
                 from
-                    ctl."iceberg.tpch".orders
+                    ctl.tpch.orders
                 where
                         o_custkey = c_custkey
             )
