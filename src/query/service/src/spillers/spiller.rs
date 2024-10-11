@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::io;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
@@ -36,6 +37,8 @@ use databend_common_expression::DataBlock;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use opendal::Operator;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncSeekExt;
 
 use crate::sessions::QueryContext;
 
@@ -244,12 +247,18 @@ impl Spiller {
                 deserialize_block(columns_layout, &data)
             }
             Location::Local(path) => {
-                let file_size = path.size();
-                debug_assert_eq!(file_size, columns_layout.iter().sum::<usize>());
-                let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
-                let data = &buf[range];
-                record_local_read_profile(&instant, data.len());
-                deserialize_block(columns_layout, data)
+                debug_assert_eq!(path.size(), columns_layout.iter().sum::<usize>());
+                if !self.use_dio {
+                    let data = tokio::fs::read(path).await?;
+                    record_local_read_profile(&instant, data.len());
+                    deserialize_block(columns_layout, &data)
+                } else {
+                    let file_size = path.size();
+                    let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
+                    let data = &buf[range];
+                    record_local_read_profile(&instant, data.len());
+                    deserialize_block(columns_layout, data)
+                }
             }
         };
 
@@ -349,10 +358,23 @@ impl Spiller {
                 Ok(deserialize_block(columns_layout, &data))
             }
             Location::Local(path) => {
-                let (buf, range) = dma_read_file_range(path, data_range).await?;
-                let data = &buf[range];
-                record_local_read_profile(&instant, data.len());
-                Ok(deserialize_block(columns_layout, data))
+                if !self.use_dio {
+                    let mut file = tokio::fs::File::open(path).await?;
+                    file.seek(io::SeekFrom::Start(data_range.start)).await?;
+
+                    let mut data = Vec::new();
+                    file.take(data_range.count() as u64)
+                        .read_to_end(&mut data)
+                        .await?;
+
+                    record_local_read_profile(&instant, data.len());
+                    Ok(deserialize_block(columns_layout, &data))
+                } else {
+                    let (buf, range) = dma_read_file_range(path, data_range).await?;
+                    let data = &buf[range];
+                    record_local_read_profile(&instant, data.len());
+                    Ok(deserialize_block(columns_layout, data))
+                }
             }
         }
     }
