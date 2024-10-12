@@ -397,15 +397,12 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowDictionariesStmt,
     ) -> Result<Plan> {
-        let ShowDictionariesStmt {
-            database,
-            limit,
-        } = stmt;
+        let ShowDictionariesStmt { database, limit } = stmt;
 
         let mut select_builder = SelectBuilder::from("system.dictionaries");
 
-        let database = self.check_database_exist(self.ctx.get_default_catalog(),database).await?;
-        
+        let database = database.clone().unwrap().name;
+
         select_builder
             .with_column("database AS Database")
             .with_column("name AS Dictionaries")

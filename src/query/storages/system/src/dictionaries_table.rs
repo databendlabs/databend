@@ -73,6 +73,7 @@ impl AsyncSystemTable for DictionariesTable {
         let mut key_types = vec![];
         let mut attribute_names = vec![];
         let mut attribute_types = vec![];
+
         let mut sources = vec![];
         let mut comments = vec![];
         let mut created_ons = vec![];
@@ -81,7 +82,7 @@ impl AsyncSystemTable for DictionariesTable {
         let catalog = ctx.get_default_catalog()?;
         let databases = catalog.list_databases(&tenant).await?;
         for database in databases {
-            let db_id = database.get_db_info().database_id;
+            let db_id = database.get_db_info().database_id.db_id;
             let req = ListDictionaryReq {
                 tenant: tenant.clone(),
                 db_id,
@@ -93,11 +94,9 @@ impl AsyncSystemTable for DictionariesTable {
                 names.push(dict_name.clone());
 
                 let dict_name_ident = DictionaryNameIdent::new(
-                    tenant.clone(), 
-                    DictionaryIdentity::new(
-                        db_id,
-                        dict_name.clone()
-                ));
+                    tenant.clone(),
+                    DictionaryIdentity::new(db_id, dict_name.clone()),
+                );
                 let reply = catalog.get_dictionary(dict_name_ident).await?.unwrap();
                 let dict_id = reply.dictionary_id;
                 dict_ids.push(dict_id);
@@ -109,7 +108,7 @@ impl AsyncSystemTable for DictionariesTable {
                 created_ons.push(created_on);
                 let updated_on = dict_meta.updated_on.unwrap().timestamp();
                 updated_ons.push(updated_on);
-                
+
                 let schema = dict_meta.schema;
                 let fields = schema.fields;
                 let primary_column_ids = dict_meta.primary_column_ids;
@@ -135,12 +134,13 @@ impl AsyncSystemTable for DictionariesTable {
                 let options = dict_meta.options;
                 if let Some(password) = options.get_mut("password") {
                     *password = "[hidden]".to_string();
-                } 
-                let options_str: Vec<String> = options.iter()
+                }
+                let options_str: Vec<String> = options
+                    .iter()
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect();
                 let options_joined = options_str.join(" ");
-                let source = format!("{}({})", source, options_joined);
+                let source = format!("{}({})", dict_source, options_joined);
                 sources.push(source);
             }
         }
@@ -170,10 +170,22 @@ impl DictionariesTable {
                 "dictionary_id",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            TableField::new("key_names", TableDataType::Array(Box::new(TableDataType::String))),
-            TableField::new("key_types", TableDataType::Array(Box::new(TableDataType))),
-            TableField::new("attribute_names", TableDataType::String),
-            TableField::new("attribute_types", TableDataType::String),
+            TableField::new(
+                "key_names",
+                TableDataType::Array(Box::new(TableDataType::String)),
+            ),
+            TableField::new(
+                "key_types",
+                TableDataType::Array(Box::new(TableDataType::String)),
+            ),
+            TableField::new(
+                "attribute_names",
+                TableDataType::Array(Box::new(TableDataType::String)),
+            ),
+            TableField::new(
+                "attribute_types",
+                TableDataType::Array(Box::new(TableDataType::String)),
+            ),
             TableField::new("source", TableDataType::String),
             TableField::new("comment", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
