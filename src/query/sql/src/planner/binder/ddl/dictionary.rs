@@ -32,7 +32,6 @@ use databend_common_meta_app::schema::DictionaryMeta;
 use itertools::Itertools;
 use log::debug;
 
-use crate::normalize_identifier;
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
