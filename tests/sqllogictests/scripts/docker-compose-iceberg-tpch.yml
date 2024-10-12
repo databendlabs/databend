@@ -28,7 +28,7 @@ services:
       - AWS_REGION=us-east-1
       - CATALOG_WAREHOUSE=s3://iceberg-tpch/
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-      - CATALOG_S3_ENDPOINT=http://127.0.0.1:9900
+      - CATALOG_S3_ENDPOINT=http://127.0.0.1:9000
       - CATALOG_INCLUDE__CREDENTIALS=true
       - CATALOG_S3_ACCESS__KEY__ID=admin
       - CATALOG_S3_SECRET__ACCESS__KEY=password
