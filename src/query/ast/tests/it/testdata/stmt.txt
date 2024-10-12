@@ -22377,7 +22377,7 @@ DropUDF {
 
 
 ---------- Input ----------
-EXECUTE IMMEDIATE 
+EXECUTE IMMEDIATE
 $$
 BEGIN
     LOOP

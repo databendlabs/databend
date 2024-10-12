@@ -73,6 +73,19 @@ error:
 
 
 ---------- Input ----------
+$ abc + 3
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | $ abc + 3
+  | ^
+  | |
+  | unexpected `$`, expecting `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, `::`, or 30 more ...
+  | while parsing expression
+
+
+---------- Input ----------
 [ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
 ---------- Output ---------
 error: 
