@@ -1,4 +1,7 @@
 statement ok
+DROP CATALOG ctl;
+
+statement ok
 CREATE CATALOG ctl
 TYPE=ICEBERG
 CONNECTION=(

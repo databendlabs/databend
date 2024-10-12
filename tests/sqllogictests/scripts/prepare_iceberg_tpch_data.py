@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType, DateType
+from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType, DateType, DecimalType
 
 data_path = "tests/sqllogictests/data/tests/suites/0_stateless/13_tpch/data"
 
@@ -26,10 +26,10 @@ tables = {
             StructField("l_partkey", IntegerType(), True),
             StructField("l_suppkey", IntegerType(), True),
             StructField("l_linenumber", IntegerType(), True),
-            StructField("l_quantity", DoubleType(), True),
-            StructField("l_extendedprice", DoubleType(), True),
-            StructField("l_discount", DoubleType(), True),
-            StructField("l_tax", DoubleType(), True),
+            StructField("l_quantity", DecimalType(15, 2), True),
+            StructField("l_extendedprice", DecimalType(15, 2), True),
+            StructField("l_discount", DecimalType(15, 2), True),
+            StructField("l_tax", DecimalType(15, 2), True),
             StructField("l_returnflag", StringType(), True),
             StructField("l_linestatus", StringType(), True),
             StructField("l_shipdate", DateType(), True),
@@ -46,7 +46,7 @@ tables = {
             StructField("o_orderkey", IntegerType(), True),
             StructField("o_custkey", IntegerType(), True),
             StructField("o_orderstatus", StringType(), True),
-            StructField("o_totalprice", DoubleType(), True),
+            StructField("o_totalprice", DecimalType(15, 2), True),
             StructField("o_orderdate", DateType(), True),
             StructField("o_orderpriority", StringType(), True),
             StructField("o_clerk", StringType(), True),
@@ -62,7 +62,7 @@ tables = {
             StructField("c_address", StringType(), True),
             StructField("c_nationkey", IntegerType(), True),
             StructField("c_phone", StringType(), True),
-            StructField("c_acctbal", DoubleType(), True),
+            StructField("c_acctbal", DecimalType(15, 2), True),
             StructField("c_mktsegment", StringType(), True),
             StructField("c_comment", StringType(), True)
         ]),
@@ -94,7 +94,7 @@ tables = {
             StructField("p_type", StringType(), True),
             StructField("p_size", IntegerType(), True),
             StructField("p_container", StringType(), True),
-            StructField("p_retailprice", DoubleType(), True),
+            StructField("p_retailprice", DecimalType(15, 2), True),
             StructField("p_comment", StringType(), True)
         ]),
         f"{data_path}/part.tbl"
@@ -106,7 +106,7 @@ tables = {
             StructField("s_address", StringType(), True),
             StructField("s_nationkey", IntegerType(), True),
             StructField("s_phone", StringType(), True),
-            StructField("s_acctbal", DoubleType(), True),
+            StructField("s_acctbal", DecimalType(15, 2), True),
             StructField("s_comment", StringType(), True)
         ]),
         f"{data_path}/supplier.tbl"
@@ -116,7 +116,7 @@ tables = {
             StructField("ps_partkey", IntegerType(), True),
             StructField("ps_suppkey", IntegerType(), True),
             StructField("ps_availqty", IntegerType(), True),
-            StructField("ps_supplycost", DoubleType(), True),
+            StructField("ps_supplycost", DecimalType(15, 2), True),
             StructField("ps_comment", StringType(), True)
         ]),
         f"{data_path}/partsupp.tbl"
@@ -125,11 +125,16 @@ tables = {
 
 for table_name, (schema, file_path) in tables.items():
     full_table_name = f"iceberg.tpch.{table_name}"
-    spark.sql(f"""
+
+    #spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
+
+    create_table = f"""
     CREATE OR REPLACE TABLE {full_table_name} (
         {', '.join([f'{field.name} {field.dataType.simpleString()}' for field in schema.fields])}
     ) USING iceberg;
-    """)
+    """
+    print(create_table)
+    spark.sql(create_table)
 
     df = spark.read.csv(file_path, header=False, sep="|", schema=schema)
     df.write.format("iceberg").mode("overwrite").save(full_table_name)
