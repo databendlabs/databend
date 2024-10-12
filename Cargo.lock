@@ -1808,6 +1808,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "buf-list"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56bd1685d994a3e2a3ed802eb1ecee8cb500b0ad4df48cb4d5d1a2f04749c3a"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5141,9 +5150,11 @@ dependencies = [
  "backoff",
  "backon 0.4.4",
  "base64 0.21.7",
+ "buf-list",
  "bumpalo",
  "byte-unit",
  "byteorder",
+ "bytes",
  "chrono",
  "chrono-tz 0.8.6",
  "config",

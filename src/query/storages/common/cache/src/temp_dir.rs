@@ -70,6 +70,8 @@ impl TempDirManager {
             if create_dir_all(&path).is_err() {
                 (None, 0, Alignment::MIN)
             } else {
+                let path = path.canonicalize()?.into_boxed_path();
+
                 let stat =
                     statvfs(path.as_ref()).map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
 
@@ -260,6 +262,10 @@ impl TempDir {
     pub fn block_alignment(&self) -> Alignment {
         self.manager.alignment
     }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 struct DirInfo {
@@ -436,10 +442,13 @@ mod tests {
 
         deleted.sort();
 
+        let pwd = std::env::current_dir()?.canonicalize()?;
         assert_eq!(
             vec![
-                PathBuf::from("test_data2/test_tenant/unknown_query1").into_boxed_path(),
-                PathBuf::from("test_data2/test_tenant/unknown_query2").into_boxed_path(),
+                pwd.join("test_data2/test_tenant/unknown_query1")
+                    .into_boxed_path(),
+                pwd.join("test_data2/test_tenant/unknown_query2")
+                    .into_boxed_path(),
             ],
             deleted
         );

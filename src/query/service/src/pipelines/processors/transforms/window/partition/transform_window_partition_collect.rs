@@ -34,7 +34,6 @@ use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_cache::TempDir;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
@@ -42,6 +41,7 @@ use super::WindowSpillSettings;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 #[derive(Debug, Clone, Copy)]
@@ -99,7 +99,7 @@ impl TransformWindowPartitionCollect {
         num_processors: usize,
         num_partitions: usize,
         spill_settings: WindowSpillSettings,
-        disk_spill: Option<Arc<TempDir>>,
+        disk_spill: Option<SpillerDiskConfig>,
         sort_desc: Vec<SortColumnDescription>,
         schema: DataSchemaRef,
         have_order_col: bool,
