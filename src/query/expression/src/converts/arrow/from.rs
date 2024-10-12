@@ -73,7 +73,13 @@ impl DataBlock {
         schema: &DataSchema,
         batch: &RecordBatch,
     ) -> Result<(Self, DataSchema)> {
-        assert_eq!(schema.num_fields(), batch.num_columns());
+        assert_eq!(
+            schema.num_fields(),
+            batch.num_columns(),
+            "expect schema: {:?}, actual schema: {:?}",
+            schema.fields,
+            batch.schema().fields
+        );
 
         if schema.fields().len() != batch.num_columns() {
             return Err(ErrorCode::Internal(format!(
