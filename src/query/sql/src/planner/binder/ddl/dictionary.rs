@@ -419,7 +419,7 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        if database.len()!=0 {
+        if database.len() != 0 {
             select_builder.with_filter(format!("database = '{database}'"));
         }
         match limit {
