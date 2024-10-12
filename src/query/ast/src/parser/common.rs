@@ -294,7 +294,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {
-    map(rule! { ColumnVariable }, |t| t.text()[1..].to_string())(i)
+    map(rule! { IdentVariable }, |t| t.text()[1..].to_string())(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.

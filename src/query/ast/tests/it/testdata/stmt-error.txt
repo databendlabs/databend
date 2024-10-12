@@ -892,7 +892,7 @@ error:
   --> SQL:1:23
   |
 1 | drop table IDENTIFIER(a)
-  | ----                  ^ unexpected `a`, expecting `ColumnVariable` or `:`
+  | ----                  ^ unexpected `a`, expecting `IdentVariable` or `:`
   | |                      
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
