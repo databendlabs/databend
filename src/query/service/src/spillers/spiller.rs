@@ -362,10 +362,10 @@ impl Spiller {
                     let mut file = tokio::fs::File::open(path).await?;
                     file.seek(io::SeekFrom::Start(data_range.start)).await?;
 
-                    let mut data = Vec::new();
-                    file.take(data_range.count() as u64)
-                        .read_to_end(&mut data)
-                        .await?;
+                    let n = data_range.count();
+                    let mut data = Vec::with_capacity(n);
+                    unsafe { data.set_len(n) };
+                    file.read_exact(&mut data).await?;
 
                     record_local_read_profile(&instant, data.len());
                     Ok(deserialize_block(columns_layout, &data))
