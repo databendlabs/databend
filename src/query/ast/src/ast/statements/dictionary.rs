@@ -138,7 +138,7 @@ impl Display for ShowDictionariesStmt {
             write!(f, " FROM {database}")?;
         }
         if let Some(limit) = &self.limit {
-            write!(f, "{limit}")?;
+            write!(f, " {limit}")?;
         }
         Ok(())
     }

@@ -106,9 +106,12 @@ impl AsyncSystemTable for DictionariesTable {
                     let comment = dict_meta.comment;
                     comments.push(comment);
 
-                    let created_on = dict_meta.created_on.timestamp();
+                    let created_on = dict_meta.created_on.timestamp_micros();
                     created_ons.push(created_on);
-                    let updated_on = dict_meta.updated_on.unwrap().timestamp();
+                    let updated_on = match dict_meta.updated_on {
+                        Some(updated_on) => updated_on.timestamp_micros(),
+                        None => created_on,
+                    };
                     updated_ons.push(updated_on);
 
                     let schema = dict_meta.schema;

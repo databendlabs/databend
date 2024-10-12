@@ -400,27 +400,28 @@ impl Binder {
 
         let mut select_builder = SelectBuilder::from("system.dictionaries");
 
-        let database = database.clone().unwrap().name;
+        let database = match database {
+            Some(db) => db.name.clone(),
+            None => "".to_string(),
+        };
 
         select_builder
             .with_column("database AS Database")
-            .with_column("name AS Dictionaries")
-            .with_column("dictionary_id AS DictionaryId")
-            .with_column("key_names AS KeyNames")
-            .with_column("key_types AS keyTypes")
-            .with_column("attribute_names AS AttributeNames")
-            .with_column("attribute_types AS AttributeTypes")
+            .with_column("name AS Dictionary")
+            .with_column("key_names AS Key_Names")
+            .with_column("key_types AS key_Types")
+            .with_column("attribute_names AS Attribute_Names")
+            .with_column("attribute_types AS Attribute_Types")
             .with_column("source AS Source")
-            .with_column("comment AS Comment")
-            .with_column("created_on AS create_time")
-            .with_column("updated_on AS update_time");
+            .with_column("comment AS Comment");
 
         select_builder
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
-
+        if database.len()!=0 {
+            select_builder.with_filter(format!("database = '{database}'"));
+        }
         match limit {
             None => (),
             Some(ShowLimit::Like { pattern }) => {

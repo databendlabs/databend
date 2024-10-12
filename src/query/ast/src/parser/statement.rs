@@ -957,13 +957,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_dictionaries = map(
         rule! {
-            SHOW ~ DICTIONARIES ~ FROM ~ #ident? ~ #show_limit?
+            SHOW ~ DICTIONARIES ~ ((FROM|IN) ~ #ident)? ~ #show_limit?
         },
-        |(_, _, _, db, limit)| {
-            Statement::ShowDictionaries(ShowDictionariesStmt {
-                database: db,
-                limit,
-            })
+        |(_, _, db, limit)| {
+            let database = match db {
+                Some((_, d)) => Some(d),
+                _ => None,
+            };
+            Statement::ShowDictionaries(ShowDictionariesStmt { database, limit })
         },
     );
     let show_create_dictionary = map(
