@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -313,7 +314,7 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         let prefix_loc = format!("{}{}", prefix, snapshot_id);
-        let prefix_loc_v5 = format!("{}g{}", prefix, snapshot_id);
+        let prefix_loc_v5 = format!("{}{}{}", prefix, VACUUM2_OBJECT_KEY_PREFIX, snapshot_id);
 
         let files = self
             .list_files(prefix, |loc, modified| {

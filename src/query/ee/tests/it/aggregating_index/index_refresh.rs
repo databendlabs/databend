@@ -40,6 +40,7 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use derive_visitor::DriveMut;
 use futures_util::TryStreamExt;
 
@@ -86,7 +87,11 @@ async fn test_refresh_agg_index() -> Result<()> {
     indexes.sort();
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes);
 
@@ -128,7 +133,11 @@ async fn test_refresh_agg_index() -> Result<()> {
         indexes.sort();
         let blocks_remove_prefix_g = blocks
             .iter()
-            .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+            .map(|b| {
+                b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                    .unwrap_or(b)
+                    .to_string()
+            })
             .collect::<Vec<_>>();
         assert_eq!(blocks_remove_prefix_g, indexes);
 
@@ -274,7 +283,11 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
     indexes_0.sort();
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes_0);
 
@@ -319,7 +332,11 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes_0);
 
@@ -408,7 +425,11 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     indexes_1.sort();
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes_1);
 
@@ -471,7 +492,11 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     let indexes_0 = collect_file_names(&agg_index_path_0)?;
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes_0);
 
@@ -482,7 +507,11 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     let indexes_1 = collect_file_names(&agg_index_path_1)?;
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes_1);
 
@@ -528,7 +557,11 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     indexes_0.sort();
     let blocks_remove_prefix_g = blocks
         .iter()
-        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .map(|b| {
+            b.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX)
+                .unwrap_or(b)
+                .to_string()
+        })
         .collect::<Vec<_>>();
     assert_eq!(blocks_remove_prefix_g, indexes_0);
 
