@@ -1,0 +1,46 @@
+name: "Test sqllogic iceberg tpch"
+description: "Running sqllogic tests in standalone mode"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+  handlers:
+    description: "logic test handlers, choices: mysql,http,clickhouse"
+    required: true
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_bendsql
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+    - name: Iceberg Setup for (ubuntu-latest only)
+      shell: bash
+      run: |
+        docker compose -f tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml up -d
+
+        # Prepare Iceberg TPCH data
+        data_dir="tests/sqllogictests/data"
+        mkdir -p $data_dir
+        if [ ! -d ${data_dir}/tpch.tar.gz ]; then
+          curl -s -o ${data_dir}/tpch.tar.gz https://ci.databend.com/dataset/stateful/tpch.tar.gz
+        fi
+        tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
+
+        pip install pyspark
+        python3 tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
+
+    - name: Run sqllogic Tests with Standalone lib
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}
