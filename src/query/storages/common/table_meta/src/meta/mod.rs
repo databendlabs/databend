@@ -37,8 +37,7 @@ pub use statistics::*;
 // currently, used by versioned readers only
 pub(crate) use testing::*;
 pub use utils::parse_storage_prefix;
-pub use utils::trim_v5_object_prefix;
-pub use utils::trim_vacuum2_object_prefix;
+pub use utils::trim_object_prefix;
 pub use utils::try_extract_uuid_str_from_path;
 pub use utils::uuid_from_date_time;
 pub use utils::TableMetaTimestamps;

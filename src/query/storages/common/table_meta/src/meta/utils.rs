@@ -127,7 +127,7 @@ pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::
             .unwrap() // path is always valid utf8 string
             .split('_')
             .collect::<Vec<&str>>();
-        let uuid = trim_v5_object_prefix(file_name[0]);
+        let uuid = trim_object_prefix(file_name[0]);
         Ok(uuid)
     } else {
         Err(ErrorCode::StorageOther(format!(
@@ -135,11 +135,6 @@ pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::
             path
         )))
     }
-}
-
-#[inline]
-pub fn trim_v5_object_prefix(key: &str) -> &str {
-    key.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX).unwrap_or(key)
 }
 
 pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -> Result<String> {
@@ -164,8 +159,10 @@ pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -
 }
 
 #[inline]
-pub fn trim_vacuum2_object_prefix(key: &str) -> &str {
-    key.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX).unwrap_or(key)
+pub fn trim_object_prefix(key: &str) -> &str {
+    // if object key (the file_name/stem part only) starts with a char which is larger
+    // than 'f', strip it off
+    if key > "f" { &key[1..] } else { key }
 }
 
 #[cfg(test)]
@@ -174,20 +171,18 @@ mod tests {
 
     use databend_common_base::base::uuid::Uuid;
 
-    use crate::meta::trim_vacuum2_object_prefix;
+    use crate::meta::trim_object_prefix;
     use crate::meta::try_extract_uuid_str_from_path;
+    use crate::meta::VACUUM2_OBJECT_KEY_PREFIX;
 
     #[test]
     fn test_trim_vacuum2_object_prefix() {
         let uuid = Uuid::now_v7();
         assert_eq!(
-            trim_vacuum2_object_prefix(&format!("g{}", uuid)),
+            trim_object_prefix(&format!("{}{}", VACUUM2_OBJECT_KEY_PREFIX, uuid)),
             uuid.to_string()
         );
-        assert_eq!(
-            trim_vacuum2_object_prefix(&uuid.to_string()),
-            uuid.to_string()
-        );
+        assert_eq!(trim_object_prefix(&uuid.to_string()), uuid.to_string());
     }
 
     #[test]

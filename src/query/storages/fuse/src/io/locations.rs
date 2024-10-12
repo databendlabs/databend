@@ -16,8 +16,8 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::trim_object_prefix;
 use databend_storages_common_table_meta::meta::trim_v5_object_prefix;
-use databend_storages_common_table_meta::meta::trim_vacuum2_object_prefix;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -179,7 +179,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
+        let block_name = trim_object_prefix(splits[len - 1]);
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 
@@ -191,7 +191,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
+        let block_name = trim_object_prefix(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
