@@ -36,9 +36,8 @@ use crate::table::OPT_KEY_TEMP_PREFIX;
 pub const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
-pub const VACUUM2_OBJECT_KEY_PREFIX: &str = "g";
+pub const VACUUM2_OBJECT_KEY_PREFIX: &str = "h";
 
-pub const V5_OBJECT_KEY_PREFIX: char = 'g';
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
@@ -140,7 +139,7 @@ pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::
 
 #[inline]
 pub fn trim_v5_object_prefix(key: &str) -> &str {
-    key.strip_prefix(V5_OBJECT_KEY_PREFIX).unwrap_or(key)
+    key.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX).unwrap_or(key)
 }
 
 pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -> Result<String> {

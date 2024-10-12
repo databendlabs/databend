@@ -25,7 +25,6 @@ use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::V5_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use uuid::Uuid;
 use uuid::Version;
@@ -79,7 +78,7 @@ impl TableMetaLocationGenerator {
             "{}/{}/{}{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
-            V5_OBJECT_KEY_PREFIX,
+            VACUUM2_OBJECT_KEY_PREFIX,
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );
@@ -106,7 +105,7 @@ impl TableMetaLocationGenerator {
             "{}/{}/{}{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
-            V5_OBJECT_KEY_PREFIX,
+            VACUUM2_OBJECT_KEY_PREFIX,
             segment_uuid.as_simple(),
             SegmentInfo::VERSION,
         )
