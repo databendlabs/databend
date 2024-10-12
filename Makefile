@@ -48,6 +48,10 @@ run-debug: build
 run-debug-management: build
 	bash ./scripts/ci/deploy/databend-query-management-mode.sh
 
+kill:
+	killall databend-query
+	killall databend-meta
+
 build:
 	bash ./scripts/build/build-debug.sh
 

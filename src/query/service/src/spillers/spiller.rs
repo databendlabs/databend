@@ -273,7 +273,12 @@ impl Spiller {
             }
             (Location::Remote(loc), _) => self.operator.read(loc).await?,
         };
-        record_remote_read_profile(&instant, data.len());
+
+        match location {
+            Location::Remote(_) => record_remote_read_profile(&instant, data.len()),
+            Location::Local(_) => record_local_read_profile(&instant, data.len()),
+        }
+
         let block = deserialize_block(columns_layout, data);
         Ok(block)
     }
@@ -374,7 +379,11 @@ impl Spiller {
             }
             (Location::Remote(loc), _) => self.operator.read_with(loc).range(data_range).await?,
         };
-        record_remote_read_profile(&instant, data.len());
+
+        match location {
+            Location::Remote(_) => record_remote_read_profile(&instant, data.len()),
+            Location::Local(_) => record_local_read_profile(&instant, data.len()),
+        }
         Ok(deserialize_block(columns_layout, data))
     }
 
