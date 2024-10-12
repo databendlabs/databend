@@ -1,5 +1,5 @@
 statement ok
-DROP CATALOG ctl;
+DROP CATALOG IF EXISTS ctl;
 
 statement ok
 CREATE CATALOG ctl
