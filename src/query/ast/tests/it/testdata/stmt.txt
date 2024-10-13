@@ -9279,7 +9279,9 @@ Query(
                         options: SelectStageOptions {
                             files: None,
                             pattern: Some(
-                                "[.]*parquet",
+                                Literal(
+                                    "[.]*parquet",
+                                ),
                             ),
                             file_format: Some(
                                 "tsv",
@@ -16830,7 +16832,9 @@ Query(
                         options: SelectStageOptions {
                             files: None,
                             pattern: Some(
-                                "*.parquet",
+                                Literal(
+                                    "*.parquet",
+                                ),
                             ),
                             file_format: None,
                             connection: {

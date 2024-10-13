@@ -56,9 +56,14 @@ impl Binder {
                     _ => databend_common_base::runtime::block_on(self.ctx.get_file_format(f))?,
                 }
             }
+            let pattern = match &options.pattern {
+                None => None,
+                Some(pattern) => Some(Self::resolve_copy_pattern(self.ctx.clone(), pattern)?),
+            };
+
             let files_info = StageFilesInfo {
                 path,
-                pattern: options.pattern.clone(),
+                pattern,
                 files: options.files.clone(),
             };
             let table_ctx = self.ctx.clone();

@@ -1571,7 +1571,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -4952,6 +4952,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
@@ -5425,10 +5426,14 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "bytes",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-metrics",
  "fastrace 0.7.2",
+ "futures",
  "log",
  "opendal 0.49.0",
 ]
@@ -8682,7 +8687,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.3.0"
-source = "git+https://github.com/apache/iceberg-rust/?rev=c3549836796f93aa3ad22276af788aa3d92533a1#c3549836796f93aa3ad22276af788aa3d92533a1"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=a0e74b1412ae7ce4b857c251bcbb3179b7713fb6#a0e74b1412ae7ce4b857c251bcbb3179b7713fb6"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -8704,6 +8709,7 @@ dependencies = [
  "itertools 0.13.0",
  "moka",
  "murmur3",
+ "num-bigint",
  "once_cell",
  "opendal 0.50.0",
  "ordered-float 4.2.2",
@@ -8726,7 +8732,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.3.0"
-source = "git+https://github.com/apache/iceberg-rust/?rev=c3549836796f93aa3ad22276af788aa3d92533a1#c3549836796f93aa3ad22276af788aa3d92533a1"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=a0e74b1412ae7ce4b857c251bcbb3179b7713fb6#a0e74b1412ae7ce4b857c251bcbb3179b7713fb6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8745,7 +8751,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.3.0"
-source = "git+https://github.com/apache/iceberg-rust/?rev=c3549836796f93aa3ad22276af788aa3d92533a1#c3549836796f93aa3ad22276af788aa3d92533a1"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=a0e74b1412ae7ce4b857c251bcbb3179b7713fb6#a0e74b1412ae7ce4b857c251bcbb3179b7713fb6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -9236,8 +9242,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bbc6531bb5e8401565ee91098fbdf3a78bca480256075ea4230a042b87c3a8c"
+source = "git+https://github.com/databendlabs/jsonb?rev=c7525d9#c7525d93ad7b1e800df982e49a6e0e6454bd308e"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -12072,7 +12077,7 @@ checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
  "heck 0.5.0",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "once_cell",
@@ -12092,7 +12097,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.58",
