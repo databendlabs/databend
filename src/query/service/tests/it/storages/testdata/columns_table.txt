@@ -255,6 +255,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'miss'                            | 'system'             | 'caches'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'must_change_password'            | 'system'             | 'users'                | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       |
 | 'mysql_connection_id'             | 'system'             | 'processes'            | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
 | 'name'                            | 'system'             | 'background_jobs'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'caches'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -286,6 +287,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                            | 'system'             | 'users'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'views'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'views_with_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'network_policy'                  | 'system'             | 'users'                | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'next_schedule_time'              | 'system'             | 'tasks'                | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'next_task_scheduled_time'        | 'system'             | 'background_jobs'      | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'node'                            | 'system'             | 'backtrace'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -327,6 +329,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'packed'                          | 'information_schema' | 'statistics'           | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'parent_plan_id'                  | 'system'             | 'queries_profiling'    | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
 | 'partitions_sha'                  | 'system'             | 'query_cache'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'password_policy'                 | 'system'             | 'users'                | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'plan_id'                         | 'system'             | 'queries_profiling'    | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
 | 'plan_name'                       | 'system'             | 'queries_profiling'    | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'port'                            | 'system'             | 'clusters'             | 'UInt16'              | 'SMALLINT UNSIGNED' | ''       | ''       | 'NO'     | ''       |

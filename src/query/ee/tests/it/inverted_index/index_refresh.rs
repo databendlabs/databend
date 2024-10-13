@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InvertedIndexInfo;
@@ -39,6 +40,7 @@ use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use tantivy::schema::IndexRecordOption;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -60,6 +62,8 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let handler = get_inverted_index_handler();
 
     let ctx = fixture.new_query_ctx().await?;
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let settings = ReadSettings::from_ctx(&table_ctx)?;
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
@@ -143,7 +147,6 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         &index_version,
     );
 
-    let field_nums = query_fields.len();
     let has_score = true;
     let need_position = false;
     let mut field_ids = HashSet::new();
@@ -177,7 +180,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         let matched_rows = index_reader
             .clone()
             .do_filter(
-                field_nums,
+                &settings,
                 need_position,
                 has_score,
                 query.box_clone(),
@@ -185,7 +188,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
                 &index_record,
                 &fuzziness,
                 tokenizer_manager,
-                block_meta.row_count as u32,
+                block_meta.row_count,
                 &index_loc,
             )
             .await?;

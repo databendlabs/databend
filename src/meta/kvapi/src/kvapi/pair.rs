@@ -16,6 +16,35 @@ use databend_common_meta_types::SeqV;
 
 use crate::kvapi;
 
+/// A Key-Value pair for type Key. The value does not have a seq number.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BasicPair<K>
+where K: kvapi::Key
+{
+    key: K,
+    value: K::ValueType,
+}
+
+impl<K> BasicPair<K>
+where K: kvapi::Key
+{
+    pub fn new(key: K, value: K::ValueType) -> Self {
+        Self { key, value }
+    }
+
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    pub fn value(&self) -> &K::ValueType {
+        &self.value
+    }
+
+    pub fn unpack(self) -> (K, K::ValueType) {
+        (self.key, self.value)
+    }
+}
+
 /// A Key-Value pair for type Key. The value has a seq number.
 pub struct Pair<K>
 where K: kvapi::Key

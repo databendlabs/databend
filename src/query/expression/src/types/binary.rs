@@ -205,6 +205,10 @@ impl BinaryColumn {
         self.offsets.len() - 1
     }
 
+    pub fn current_buffer_len(&self) -> usize {
+        (*self.offsets().last().unwrap() - *self.offsets().first().unwrap()) as _
+    }
+
     pub fn data(&self) -> &Buffer<u8> {
         &self.data
     }

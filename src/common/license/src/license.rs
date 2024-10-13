@@ -245,7 +245,6 @@ impl Feature {
                         )));
                     }
                 }
-
                 Ok(true)
             }
             (Feature::Test, Feature::Test)

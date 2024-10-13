@@ -87,7 +87,6 @@ impl LicenseManager for RealLicenseManager {
     fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
         let public_key = ES256PublicKey::from_pem(self.public_key.as_str())
             .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
-
         match public_key.verify_token::<LicenseInfo>(raw, None) {
             Ok(v) => Ok(v),
             Err(cause) => match cause.downcast_ref::<JWTError>() {
@@ -111,7 +110,6 @@ impl LicenseManager for RealLicenseManager {
                     v.value().expires_at,
                 )));
             }
-
             return Ok(v.custom.get_storage_quota());
         }
 

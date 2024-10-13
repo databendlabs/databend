@@ -1285,6 +1285,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let describe_user = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
+        },
+        |(_, _, user)| Statement::DescribeUser { user },
+    );
     let create_user = map_res(
         rule! {
             CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2067,10 +2073,25 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
     let create_procedure = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
         },
-        |(_, opt_or_replace, _, name, args, _, return_type, _, _, opt_comment, _, script)| {
-            let create_option = parse_create_option(opt_or_replace.is_some(), false)?;
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            name,
+            args,
+            _,
+            return_type,
+            _,
+            _,
+            opt_comment,
+            _,
+            script,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
             let name = ProcedureIdentity {
                 name: name.to_string(),
@@ -2137,10 +2158,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let drop_procedure = map(
         rule! {
-            DROP ~ PROCEDURE ~ #ident ~ #procedure_type_name
+            DROP ~ PROCEDURE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #procedure_type_name
         },
-        |(_, _, name, args)| {
+        |(_, _, opt_if_exists, name, args)| {
             Statement::DropProcedure(DropProcedureStmt {
+                if_exists: opt_if_exists.is_some(),
                 name: ProcedureIdentity {
                     name: name.to_string(),
                     args_type: if args.is_empty() {
@@ -2225,6 +2247,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #abort
         ),
         rule!(
+            #show_users : "`SHOW USERS`"
+            | #describe_user: "`DESCRIBE USER <user_name>`"
+            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
+            | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
+            | #show_roles : "`SHOW ROLES`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
+            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
+            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
+        ),
+        rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
@@ -2274,21 +2312,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
-        ),
-        rule!(
-            #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
-            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
-            | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
-            | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
-            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
-            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #set_role: "`SET [DEFAULT] ROLE <role>`"
-            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
-            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_stage: "`CREATE [OR REPLACE] STAGE [ IF NOT EXISTS ] <stage_name>
@@ -3445,6 +3468,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
     );
 
+    let unset_table_options = map(
+        rule! {
+            UNSET ~ OPTIONS ~ #unset_source
+        },
+        |(_, _, targets)| AlterTableAction::UnsetOptions { targets },
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -3457,6 +3487,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #recluster_table
         | #revert_table
         | #set_table_options
+        | #unset_table_options
     )(i)
 }
 

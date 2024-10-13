@@ -17,7 +17,6 @@ use std::str;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::InnerConfig;
@@ -114,7 +113,7 @@ impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         {
-            drop_guard(move || {
+            databend_common_base::runtime::drop_guard(move || {
                 databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
             })
         }

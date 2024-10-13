@@ -179,6 +179,8 @@ impl HashJoinProbeState {
 
         if !next_process_state {
             probe_state.process_state = None
+        } else {
+            probe_state.probe_unmatched_indexes_count = 0;
         }
 
         Ok(result_blocks)

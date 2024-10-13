@@ -487,7 +487,12 @@ impl QueryContextShared {
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
         {
             let mut running_query = self.running_query.write();
-            *running_query = Some(short_sql(query));
+            *running_query = Some(short_sql(
+                query,
+                self.get_settings()
+                    .get_short_sql_max_length()
+                    .unwrap_or(1000),
+            ));
         }
 
         {

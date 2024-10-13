@@ -136,7 +136,7 @@ impl PipelineBuilder {
 
                 self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
                         .with_block_size_hit(sort_block_size)
                         .remove_order_col_at_last();
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
