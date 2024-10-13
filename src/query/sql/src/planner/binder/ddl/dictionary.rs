@@ -400,11 +400,6 @@ impl Binder {
 
         let mut select_builder = SelectBuilder::from("system.dictionaries");
 
-        let database = match database {
-            Some(db) => db.name.clone(),
-            None => "".to_string(),
-        };
-
         select_builder
             .with_column("database AS Database")
             .with_column("name AS Dictionary")
@@ -419,9 +414,12 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        if database.len() != 0 {
-            select_builder.with_filter(format!("database = '{database}'"));
+        let mut db_name = String::new();
+        if let Some(db) = database {
+            select_builder.with_filter(format!("database = '{}'", db.name));
+            db_name = db.name.clone();
         }
+
         match limit {
             None => (),
             Some(ShowLimit::Like { pattern }) => {
@@ -436,7 +434,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowDictionaries(database),
+            RewriteKind::ShowDictionaries(db_name),
         )
         .await
     }
