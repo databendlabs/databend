@@ -88,3 +88,37 @@ pub fn capture() -> Option<ErrorCodeBacktrace> {
         },
     }
 }
+
+pub enum StackFrame {
+    UnSymbol,
+}
+
+//
+pub struct StackTrace {
+    frames: Vec<StackFrame>,
+}
+
+impl StackTrace {
+    pub fn capture() -> StackTrace {
+        let mut frames = Vec::with_capacity(50);
+        Self::capture_frames(&mut frames);
+        StackTrace { frames }
+    }
+
+    fn capture_frames(frames: &mut Vec<StackFrame>) {
+        // Safety:
+        unsafe {
+            backtrace::trace_unsynchronized(|frame| {
+                frames.push(StackFrame::UnSymbol);
+                frames.len() != frames.capacity()
+            });
+        }
+    }
+}
+
+struct SymbolIndex {}
+
+impl SymbolIndex {
+    pub fn find_() {
+    }
+}

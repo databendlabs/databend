@@ -3420,6 +3420,7 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
+ "libc",
  "opendal 0.49.0",
  "parquet",
  "paste",
