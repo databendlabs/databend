@@ -15,6 +15,597 @@ insert into t select number, number + 1 from numbers(1000)
 
 query T
 explain analyze graphical select * from t where a = 1
+----
+{
+     "query_id": "cf4f1301-f025-4063-9af6-1b0d45833444",
+     "profiles": [
+       {
+         "id": 0,
+         "name": "Filter",
+         "parent_id": null,
+         "title": "is_true(t.a (#0) = 1)",
+         "labels": [
+           {
+             "name": "Filter condition",
+             "value": [
+               "is_true(t.a (#0) = 1)"
+             ]
+           }
+         ],
+         "statistics": [
+           335653,
+           0,
+           0,
+           0,
+           1,
+           10,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0
+         ],
+         "errors": []
+       },
+       {
+         "id": 1,
+         "name": "TableScan",
+         "parent_id": 0,
+         "title": "default.'testdb'.'t'",
+         "labels": [
+           {
+             "name": "Full table name",
+             "value": [
+               "default.'testdb'.'t'"
+             ]
+           },
+           {
+             "name": "Total partitions",
+             "value": [
+               "1"
+             ]
+           },
+           {
+             "name": "Columns (2 / 2)",
+             "value": [
+               "a",
+               "b"
+             ]
+           }
+         ],
+         "statistics": [
+           1581627,
+           0,
+           0,
+           0,
+           1000,
+           8250,
+           8250,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0,
+           0
+         ],
+         "metrics": {
+           "b2OT6rxZRL97WI7VooUa82": [
+             {
+               "name": "opendal_requests_total",
+               "labels": {
+                 "scheme": "fs",
+                 "op": "blocking_read"
+               },
+               "value": {
+                 "Counter": 1.0
+               }
+             },
+             {
+               "name": "opendal_request_duration_seconds_sum",
+               "labels": {
+                 "op": "blocking_read",
+                 "scheme": "fs"
+               },
+               "value": {
+                 "Untyped": 0.000085252
+               }
+             },
+             {
+               "name": "opendal_request_duration_seconds_count",
+               "labels": {
+                 "op": "blocking_read",
+                 "scheme": "fs"
+               },
+               "value": {
+                 "Untyped": 2.0
+               }
+             },
+             {
+               "name": "opendal_request_duration_seconds_bucket",
+               "labels": {
+                 "op": "blocking_read",
+                 "scheme": "fs"
+               },
+               "value": {
+                 "Histogram": [
+                   {
+                     "less_than": 0.01,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 0.02,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 0.04,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 0.08,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 0.16,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 0.32,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 0.64,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 1.28,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 2.56,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 5.12,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 10.24,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 20.48,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 40.96,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 81.92,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 163.84,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 327.68,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 9.223372036854776e18,
+                     "count": 2.0
+                   }
+                 ]
+               }
+             },
+             {
+               "name": "opendal_bytes_histogram_sum",
+               "labels": {
+                 "scheme": "fs",
+                 "op": "blocking_read"
+               },
+               "value": {
+                 "Untyped": 3869.0
+               }
+             },
+             {
+               "name": "opendal_bytes_histogram_count",
+               "labels": {
+                 "op": "blocking_read",
+                 "scheme": "fs"
+               },
+               "value": {
+                 "Untyped": 2.0
+               }
+             },
+             {
+               "name": "opendal_bytes_histogram_bucket",
+               "labels": {
+                 "op": "blocking_read",
+                 "scheme": "fs"
+               },
+               "value": {
+                 "Histogram": [
+                   {
+                     "less_than": 1.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 2.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 4.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 8.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 16.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 32.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 64.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 128.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 256.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 512.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 1024.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 2048.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 4096.0,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 8192.0,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 16384.0,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 32768.0,
+                     "count": 2.0
+                   },
+                   {
+                     "less_than": 9.223372036854776e18,
+                     "count": 2.0
+                   }
+                 ]
+               }
+             },
+             {
+               "name": "opendal_bytes_total",
+               "labels": {
+                 "scheme": "fs",
+                 "op": "blocking_read"
+               },
+               "value": {
+                 "Counter": 3869.0
+               }
+             },
+             {
+               "name": "cache_access_count_total",
+               "labels": {
+                 "cache_name": "Unknown"
+               },
+               "value": {
+                 "Counter": 2.0
+               }
+             },
+             {
+               "name": "cache_miss_count_total",
+               "labels": {
+                 "cache_name": "Unknown"
+               },
+               "value": {
+                 "Counter": 2.0
+               }
+             },
+             {
+               "name": "fuse_remote_io_deserialize_milliseconds",
+               "value": {
+                 "Histogram": [
+                   {
+                     "less_than": 10.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 50.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 100.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 250.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 500.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 1000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 2500.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 5000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 10000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 20000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 30000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 60000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 300000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 600000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 1800000.0,
+                     "count": 1.0
+                   },
+                   {
+                     "less_than": 9.223372036854776e18,
+                     "count": 1.0
+                   }
+                 ]
+               }
+             }
+           ]
+         },
+         "errors": []
+       }
+     ],
+     "statistics_desc": {
+       "CpuTime": {
+         "desc": "The time spent to process in nanoseconds",
+         "display_name": "cpu time",
+         "index": 0,
+         "unit": "NanoSeconds",
+         "plain_statistics": false
+       },
+       "WaitTime": {
+         "desc": "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for I/O",
+         "display_name": "wait time",
+         "index": 1,
+         "unit": "NanoSeconds",
+         "plain_statistics": false
+       },
+       "ExchangeRows": {
+         "desc": "The number of data rows exchange between nodes in cluster mode",
+         "display_name": "exchange rows",
+         "index": 2,
+         "unit": "Rows",
+         "plain_statistics": true
+       },
+       "ExchangeBytes": {
+         "desc": "The number of data bytes exchange between nodes in cluster mode",
+         "display_name": "exchange bytes",
+         "index": 3,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "OutputRows": {
+         "desc": "The number of rows from the physical plan output to the next physical plan",
+         "display_name": "output rows",
+         "index": 4,
+         "unit": "Rows",
+         "plain_statistics": true
+       },
+       "OutputBytes": {
+         "desc": "The number of bytes from the physical plan output to the next physical plan",
+         "display_name": "output bytes",
+         "index": 5,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "ScanBytes": {
+         "desc": "The bytes scanned of query",
+         "display_name": "bytes scanned",
+         "index": 6,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "ScanCacheBytes": {
+         "desc": "The bytes scanned from cache of query",
+         "display_name": "bytes scanned from cache",
+         "index": 7,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "ScanPartitions": {
+         "desc": "The partitions scanned of query",
+         "display_name": "partitions scanned",
+         "index": 8,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "RemoteSpillWriteCount": {
+         "desc": "The number of remote spilled by write",
+         "display_name": "numbers remote spilled by write",
+         "index": 9,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "RemoteSpillWriteBytes": {
+         "desc": "The bytes remote spilled by write",
+         "display_name": "bytes remote spilled by write",
+         "index": 10,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "RemoteSpillWriteTime": {
+         "desc": "The time spent to write remote spill in millisecond",
+         "display_name": "remote spilled time by write",
+         "index": 11,
+         "unit": "MillisSeconds",
+         "plain_statistics": false
+       },
+       "RemoteSpillReadCount": {
+         "desc": "The number of remote spilled by read",
+         "display_name": "numbers remote spilled by read",
+         "index": 12,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "RemoteSpillReadBytes": {
+         "desc": "The bytes remote spilled by read",
+         "display_name": "bytes remote spilled by read",
+         "index": 13,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "RemoteSpillReadTime": {
+         "desc": "The time spent to read remote spill in millisecond",
+         "display_name": "remote spilled time by read",
+         "index": 14,
+         "unit": "MillisSeconds",
+         "plain_statistics": false
+       },
+       "LocalSpillWriteCount": {
+         "desc": "The number of local spilled by write",
+         "display_name": "numbers local spilled by write",
+         "index": 15,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "LocalSpillWriteBytes": {
+         "desc": "The bytes local spilled by write",
+         "display_name": "bytes local spilled by write",
+         "index": 16,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "LocalSpillWriteTime": {
+         "desc": "The time spent to write local spill in millisecond",
+         "display_name": "local spilled time by write",
+         "index": 17,
+         "unit": "MillisSeconds",
+         "plain_statistics": false
+       },
+       "LocalSpillReadCount": {
+         "desc": "The number of local spilled by read",
+         "display_name": "numbers local spilled by read",
+         "index": 18,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "LocalSpillReadBytes": {
+         "desc": "The bytes local spilled by read",
+         "display_name": "bytes local spilled by read",
+         "index": 19,
+         "unit": "Bytes",
+         "plain_statistics": true
+       },
+       "LocalSpillReadTime": {
+         "desc": "The time spent to read local spill in millisecond",
+         "display_name": "local spilled time by read",
+         "index": 20,
+         "unit": "MillisSeconds",
+         "plain_statistics": false
+       },
+       "RuntimeFilterPruneParts": {
+         "desc": "The partitions pruned by runtime filter",
+         "display_name": "parts pruned by runtime filter",
+         "index": 21,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "MemoryUsage": {
+         "desc": "The real time memory usage",
+         "display_name": "memory usage",
+         "index": 22,
+         "unit": "Bytes",
+         "plain_statistics": false
+       },
+       "ExternalServerRetryCount": {
+         "desc": "The count of external server retry times",
+         "display_name": "external server retry count",
+         "index": 23,
+         "unit": "Count",
+         "plain_statistics": true
+       },
+       "ExternalServerRequestCount": {
+         "desc": "The count of external server request times",
+         "display_name": "external server request count",
+         "index": 24,
+         "unit": "Count",
+         "plain_statistics": true
+       }
+     }
+   }
 
 statement ok
 drop database testdb
