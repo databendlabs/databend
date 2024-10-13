@@ -146,6 +146,9 @@ pub enum TokenKind {
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
 
+    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    IdentVariable,
+
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
