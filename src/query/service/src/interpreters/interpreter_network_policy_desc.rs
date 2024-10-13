@@ -45,7 +45,7 @@ impl Interpreter for DescNetworkPolicyInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[async_backtrace::framed]

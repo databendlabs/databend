@@ -71,6 +71,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -272,6 +273,7 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+    DescUser(Box<DescUserPlan>),
 
     // UDF
     CreateUDF(Box<CreateUDFPlan>),
@@ -485,6 +487,7 @@ impl Plan {
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
+            Plan::DescUser(plan) => plan.schema(),
 
             _ => Arc::new(DataSchema::empty()),
         }

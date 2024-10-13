@@ -1225,6 +1225,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
+            | Plan::DescUser(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task

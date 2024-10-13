@@ -14,6 +14,7 @@
 
 #![feature(try_blocks)]
 #![feature(thread_id_value)]
+#![feature(buf_read_has_data_left)]
 #![allow(clippy::uninlined_format_args)]
 
 mod config;
@@ -22,6 +23,9 @@ mod init;
 mod loggers;
 mod panic_hook;
 mod structlog;
+
+pub use crash_hook::pipe_file;
+pub use crash_hook::SignalListener;
 
 pub use crate::config::Config;
 pub use crate::config::FileConfig;

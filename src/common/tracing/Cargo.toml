@@ -12,9 +12,9 @@ test = true
 
 [dependencies]
 anyhow = { workspace = true }
-backtrace = { workspace = true }
+backtrace = { workspace = true, features = ["std", "serialize-serde"] }
+bincode = { workspace = true }
 chrono = { workspace = true }
-color-backtrace = { version = "0.6" }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 defer = "0.2"
@@ -34,7 +34,6 @@ opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strip-ansi-escapes = "0.2"
 tonic = { workspace = true }
 
 [dev-dependencies]

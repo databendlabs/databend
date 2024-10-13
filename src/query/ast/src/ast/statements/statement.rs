@@ -196,6 +196,9 @@ pub enum Statement {
 
     // User
     ShowUsers,
+    DescribeUser {
+        user: UserIdentity,
+    },
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
@@ -645,6 +648,7 @@ impl Display for Statement {
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
+            Statement::DescribeUser { user } => write!(f, "DESCRIBE USER {user}")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
             Statement::AlterUser(stmt) => write!(f, "{stmt}")?,
