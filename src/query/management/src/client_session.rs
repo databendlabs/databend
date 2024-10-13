@@ -48,10 +48,10 @@ impl ClientSessionMgr {
     fn token_ident(&self, token_hash: &str) -> TokenIdent {
         TokenIdent::new(self.tenant.clone(), token_hash)
     }
-    fn session_ident(&self, session_id: &str, user_name: &str) -> ClientSessionIdent {
+    fn session_ident(&self, user_name: &str, session_id: &str) -> ClientSessionIdent {
         let id = UserSessionId {
-            session_id: session_id.to_string(),
             user_name: user_name.to_string(),
+            session_id: session_id.to_string(),
         };
         ClientSessionIdent::new_generic(self.tenant.clone(), id)
     }
@@ -109,11 +109,11 @@ impl ClientSessionMgr {
     #[fastrace::trace]
     pub async fn upsert_client_session_id(
         &self,
-        client_session_id: &str,
         user_name: &str,
+        client_session_id: &str,
         ttl: Duration,
     ) -> Result<bool> {
-        let ident = self.session_ident(client_session_id, user_name);
+        let ident = self.session_ident(user_name, client_session_id);
         let seq = MatchSeq::GE(0);
         let upsert = UpsertPB::update(ident, ClientSession {})
             .with(seq)
@@ -128,10 +128,10 @@ impl ClientSessionMgr {
     #[fastrace::trace]
     pub async fn get_client_session(
         &self,
-        client_session_id: &str,
         user_name: &str,
+        client_session_id: &str,
     ) -> Result<Option<ClientSession>> {
-        let ident = self.session_ident(client_session_id, user_name);
+        let ident = self.session_ident(user_name, client_session_id);
         let res = self.kv_api.get_pb(&ident).await?;
 
         Ok(res.map(|r| r.data))
@@ -141,11 +141,11 @@ impl ClientSessionMgr {
     #[fastrace::trace]
     pub async fn drop_client_session_id(
         &self,
-        client_session_id: &str,
         user_name: &str,
+        client_session_id: &str,
     ) -> Result<()> {
         let key = self
-            .session_ident(client_session_id, user_name)
+            .session_ident(user_name, client_session_id)
             .to_string_key();
 
         // simply ignore the result

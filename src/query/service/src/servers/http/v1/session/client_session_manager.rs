@@ -358,7 +358,7 @@ impl ClientSessionManager {
         let mut guard = self.session_state.lock();
         guard.entry(key).and_modify(|e| {
             if matches!(e.query_state, QueryState::Idle(_)) {
-                e.query_state = QueryState::Idle(Instant::now());
+                e.query_state = QueryState::InUse;
                 session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
             }
         });
