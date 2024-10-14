@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -96,7 +97,7 @@ impl SegmentPruner {
     }
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum SegmentInfoVariant {
     Compact(Arc<CompactSegmentInfo>),
     Columnar(Arc<ColumnarSegmentInfo>),
@@ -133,6 +134,13 @@ impl SegmentInfoVariant {
         match self {
             SegmentInfoVariant::Compact(info) => &info.summary,
             SegmentInfoVariant::Columnar(info) => &info.summary,
+        }
+    }
+
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        match self {
+            SegmentInfoVariant::Compact(info) => info.block_metas(),
+            SegmentInfoVariant::Columnar(info) => Ok(info.block_metas.clone()),
         }
     }
 }

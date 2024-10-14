@@ -30,7 +30,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::warn;
 use opendal::Operator;
@@ -170,7 +169,7 @@ impl FuseTable {
 
     pub async fn generate_recluster_parts(
         mutator: Arc<ReclusterMutator>,
-        compact_segments: Vec<(SegmentLocation, Arc<SegmentInfoVariant>)>,
+        compact_segments: Vec<(SegmentLocation, SegmentInfoVariant)>,
     ) -> Result<Option<(u64, u64, ReclusterParts)>> {
         let mut selected_segs = vec![];
         let mut block_count = 0;
@@ -183,11 +182,11 @@ impl FuseTable {
 
         let latest = compact_segments.len() - 1;
         for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
-            if !mutator.segment_can_recluster(&compact_segment.1.summary) {
+            if !mutator.segment_can_recluster(&compact_segment.1.summary()) {
                 continue;
             }
 
-            block_count += compact_segment.1.summary.block_count as usize;
+            block_count += compact_segment.1.summary().block_count as usize;
             selected_segs.push(compact_segment);
             if block_count >= mutator.block_per_seg || idx == latest {
                 let selected_segs = std::mem::take(&mut selected_segs);
@@ -227,7 +226,7 @@ impl FuseTable {
         dal: Operator,
         push_down: &Option<PushDownInfo>,
         mut segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(SegmentLocation, Arc<SegmentInfoVariant>)>> {
+    ) -> Result<Vec<(SegmentLocation, SegmentInfoVariant)>> {
         let max_concurrency = {
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
             let v = std::cmp::max(max_threads, 10);

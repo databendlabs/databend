@@ -24,18 +24,18 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
+use crate::pruning::SegmentInfoVariant;
 
 /// Compact segment part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactLazyPartInfo {
     pub segment_indices: Vec<SegmentIndex>,
-    pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
+    pub compact_segments: Vec<SegmentInfoVariant>,
 }
 
 #[typetag::serde(name = "compact_lazy")]
@@ -64,7 +64,7 @@ impl PartInfo for CompactLazyPartInfo {
 impl CompactLazyPartInfo {
     pub fn create(
         segment_indices: Vec<SegmentIndex>,
-        compact_segments: Vec<Arc<CompactSegmentInfo>>,
+        compact_segments: Vec<SegmentInfoVariant>,
     ) -> PartInfoPtr {
         Arc::new(Box::new(CompactLazyPartInfo {
             segment_indices,

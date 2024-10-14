@@ -59,11 +59,32 @@ use crate::meta::Statistics;
 /// BlockMeta.col_stats is empty, and ColumnStatistics is stored in columnar_block_metas.
 ///
 /// It is a minimal implementation for now, some other fields of block_metas(col_metas, cluster_stats) will be stored in columnar_block_metas later.
+#[derive(Clone)]
 pub struct ColumnarSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,
     pub block_metas: Vec<Arc<BlockMeta>>,
     pub columnar_block_metas: DataBlock,
+}
+
+impl serde::Serialize for ColumnarSegmentInfo {
+    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ColumnarSegmentInfo {
+    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        todo!()
+    }
+}
+
+impl PartialEq for ColumnarSegmentInfo {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 
 impl ColumnarSegmentInfo {
