@@ -127,8 +127,7 @@ impl WindowPartitionBuffer {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &option)?
                 {
-                    let data_block = DataBlock::concat(&data_blocks)?;
-                    partitions_to_spill.push((partition_id, data_block));
+                    partitions_to_spill.push((partition_id, data_blocks));
                     accumulated_bytes += partition_memory_size;
                 }
                 if accumulated_bytes >= spill_unit_size {

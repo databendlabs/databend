@@ -15,6 +15,7 @@
 use std::io::Write;
 use std::sync::Arc;
 
+use bytes::Buf;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::infer_table_schema;
@@ -23,12 +24,15 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::table::TableCompression;
+use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Encoding;
+use parquet::errors;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::ChunkReader;
+use parquet::file::reader::Length;
 use parquet::format::FileMetaData;
 
 /// Serialize data blocks to parquet format.
@@ -96,6 +100,36 @@ pub fn bare_blocks_from_parquet<R: ChunkReader + 'static>(data: R) -> Result<Dat
     DataBlock::concat(&blocks)
 }
 
+pub struct Reader(pub Buffer);
+
+impl Length for Reader {
+    fn len(&self) -> u64 {
+        self.0.len() as u64
+    }
+}
+
+impl ChunkReader for Reader {
+    type T = bytes::buf::Reader<Buffer>;
+
+    fn get_read(&self, start: u64) -> errors::Result<Self::T> {
+        let start = start as usize;
+        if start > self.0.remaining() {
+            return Err(errors::ParquetError::IndexOutOfBound(
+                start,
+                self.0.remaining(),
+            ));
+        }
+        let mut r = self.0.clone();
+        r.advance(start);
+        Ok(r.reader())
+    }
+
+    fn get_bytes(&self, start: u64, length: usize) -> errors::Result<bytes::Bytes> {
+        let start = start as usize;
+        Ok(self.0.slice(start..start + length).to_bytes())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
@@ -127,7 +161,9 @@ mod tests {
         let mut data = Vec::new();
         bare_blocks_to_parquet(blocks.clone(), &mut data, TableCompression::LZ4)?;
 
-        let got = bare_blocks_from_parquet(Bytes::from(data))?;
+        let reader = Reader(Buffer::from(Bytes::from(data)));
+
+        let got = bare_blocks_from_parquet(reader)?;
         let want = DataBlock::concat(&blocks)?;
 
         assert_block_value_eq(&want, &got);

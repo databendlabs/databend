@@ -37,8 +37,12 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::read_column;
 use databend_common_expression::arrow::write_column;
 use databend_common_expression::DataBlock;
+use databend_storages_common_blocks::bare_blocks_from_parquet;
+use databend_storages_common_blocks::bare_blocks_to_parquet;
+use databend_storages_common_blocks::Reader;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
+use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Buffer;
 use opendal::Operator;
 
@@ -99,9 +103,15 @@ pub struct Spiller {
     /// 1 partition -> N partition files
     pub partition_location: HashMap<usize, Vec<Location>>,
     /// Record columns layout for spilled data, will be used when read data from disk
-    pub columns_layout: HashMap<Location, Vec<usize>>,
+    pub columns_layout: HashMap<Location, Layout>,
     /// Record how many bytes have been spilled for each partition.
     pub partition_spilled_bytes: HashMap<usize, u64>,
+}
+
+#[derive(Clone)]
+pub enum Layout {
+    ArrowIpc(Box<[usize]>),
+    Parquet,
 }
 
 impl Spiller {
@@ -150,7 +160,7 @@ impl Spiller {
 
         // Spill data to storage.
         let mut encoder = self.block_encoder();
-        encoder.add_block(data_block);
+        encoder.add_blocks(vec![data_block]);
         let data_size = encoder.size();
         let BlocksEncoder {
             buf,
@@ -206,14 +216,14 @@ impl Spiller {
 
     pub async fn spill_with_merged_partitions(
         &mut self,
-        partitioned_data: Vec<(usize, DataBlock)>,
+        partitioned_data: Vec<(usize, Vec<DataBlock>)>,
     ) -> Result<SpilledData> {
         // Serialize data block.
         let mut encoder = self.block_encoder();
         let mut partition_ids = Vec::new();
-        for (partition_id, data_block) in partitioned_data.into_iter() {
+        for (partition_id, data_blocks) in partitioned_data.into_iter() {
             partition_ids.push(partition_id);
-            encoder.add_block(data_block);
+            encoder.add_blocks(data_blocks);
         }
 
         let write_bytes = encoder.size();
@@ -260,13 +270,23 @@ impl Spiller {
         let instant = Instant::now();
         let data = match (location, &self.local_operator) {
             (Location::Local(path), None) => {
-                debug_assert_eq!(path.size(), columns_layout.iter().sum::<usize>());
+                match columns_layout {
+                    Layout::ArrowIpc(layout) => {
+                        debug_assert_eq!(path.size(), layout.iter().sum::<usize>())
+                    }
+                    Layout::Parquet => {}
+                }
                 let file_size = path.size();
                 let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
                 Buffer::from(dma_buffer_as_vec(buf)).slice(range)
             }
             (Location::Local(path), Some(ref local)) => {
-                debug_assert_eq!(path.size(), columns_layout.iter().sum::<usize>());
+                match columns_layout {
+                    Layout::ArrowIpc(layout) => {
+                        debug_assert_eq!(path.size(), layout.iter().sum::<usize>())
+                    }
+                    Layout::Parquet => {}
+                }
                 local
                     .read(path.file_name().unwrap().to_str().unwrap())
                     .await?
@@ -360,7 +380,7 @@ impl Spiller {
         &self,
         location: &Location,
         data_range: Range<usize>,
-        columns_layout: &[usize],
+        columns_layout: &Layout,
     ) -> Result<DataBlock> {
         // Read spilled data from storage.
         let instant = Instant::now();
@@ -443,7 +463,7 @@ pub enum SpilledData {
     Partition(Location),
     MergedPartition {
         location: Location,
-        partitions: Vec<(usize, Range<usize>, Vec<usize>)>,
+        partitions: Vec<(usize, Range<usize>, Layout)>,
     },
 }
 
@@ -456,7 +476,7 @@ pub enum Location {
 struct BlocksEncoder {
     buf: DmaWriteBuf,
     offsets: Vec<usize>,
-    columns_layout: Vec<Vec<usize>>,
+    columns_layout: Vec<Layout>,
 }
 
 impl BlocksEncoder {
@@ -468,19 +488,28 @@ impl BlocksEncoder {
         }
     }
 
-    fn add_block(&mut self, block: DataBlock) {
-        let columns_layout = std::iter::once(self.size())
-            .chain(block.columns().iter().map(|entry| {
-                let column = entry
-                    .value
-                    .convert_to_full_column(&entry.data_type, block.num_rows());
-                write_column(&column, &mut self.buf).unwrap();
-                self.size()
-            }))
-            .map_windows(|x: &[_; 2]| x[1] - x[0])
-            .collect();
+    fn add_blocks(&mut self, blocks: Vec<DataBlock>) {
+        let layout = if true {
+            let block = DataBlock::concat(&blocks).unwrap();
+            let columns_layout = std::iter::once(self.size())
+                .chain(block.columns().iter().map(|entry| {
+                    let column = entry
+                        .value
+                        .convert_to_full_column(&entry.data_type, block.num_rows());
+                    write_column(&column, &mut self.buf).unwrap();
+                    self.size()
+                }))
+                .map_windows(|x: &[_; 2]| x[1] - x[0])
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
 
-        self.columns_layout.push(columns_layout);
+            Layout::ArrowIpc(columns_layout)
+        } else {
+            bare_blocks_to_parquet(blocks, &mut self.buf, TableCompression::LZ4).unwrap();
+            Layout::Parquet
+        };
+
+        self.columns_layout.push(layout);
         self.offsets.push(self.size())
     }
 
@@ -489,18 +518,23 @@ impl BlocksEncoder {
     }
 }
 
-pub fn deserialize_block(columns_layout: &[usize], mut data: Buffer) -> DataBlock {
-    let columns = columns_layout
-        .iter()
-        .map(|&layout| {
-            let ls = BufList::from_iter(data.slice(0..layout));
-            data.advance(layout);
-            let mut cursor = Cursor::new(ls);
-            read_column(&mut cursor).unwrap()
-        })
-        .collect::<Vec<_>>();
+fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> DataBlock {
+    match columns_layout {
+        Layout::ArrowIpc(layout) => {
+            let columns = layout
+                .iter()
+                .map(|&layout| {
+                    let ls = BufList::from_iter(data.slice(0..layout));
+                    data.advance(layout);
+                    let mut cursor = Cursor::new(ls);
+                    read_column(&mut cursor).unwrap()
+                })
+                .collect::<Vec<_>>();
 
-    DataBlock::new_from_columns(columns)
+            DataBlock::new_from_columns(columns)
+        }
+        Layout::Parquet => bare_blocks_from_parquet(Reader(data)).unwrap(),
+    }
 }
 
 pub fn record_remote_write_profile(start: &Instant, write_bytes: usize) {

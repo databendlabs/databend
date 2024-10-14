@@ -5372,6 +5372,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "opendal 0.49.0",
  "parking_lot 0.12.3",
  "parquet",
 ]
