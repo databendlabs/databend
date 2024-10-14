@@ -5368,6 +5368,7 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",

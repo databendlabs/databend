@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+bytes = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
