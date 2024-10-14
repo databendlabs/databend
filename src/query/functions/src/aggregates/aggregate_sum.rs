@@ -15,6 +15,7 @@
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
@@ -80,6 +81,35 @@ where
     }
 }
 
+// #[multiversion::multiversion(targets("x86_64+avx", "x86_64+sse"))]
+#[inline]
+pub fn sum_batch<T, TSum>(inner: Buffer<T>, validity: Option<&Bitmap>) -> TSum
+where
+    T: Number + AsPrimitive<TSum>,
+    TSum: Number + std::ops::AddAssign,
+{
+    match validity {
+        Some(v) if v.unset_bits() > 0 => {
+            let mut sum = TSum::default();
+            inner.iter().zip(v.iter()).for_each(|(t, b)| {
+                if b {
+                    sum += t.as_();
+                }
+            });
+
+            sum
+        }
+        _ => {
+            let mut sum = TSum::default();
+            inner.iter().for_each(|t| {
+                sum += t.as_();
+            });
+
+            sum
+        }
+    }
+}
+
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
     T: ValueType + Sync + Send,
@@ -92,8 +122,20 @@ where
         other: T::ScalarRef<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let other = T::to_owned_scalar(other).as_();
-        self.value += other;
+        let other = T::to_owned_scalar(other);
+        self.value += other.as_();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        validity: Option<&Bitmap>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let col = T::upcast_column(other);
+        let buffer = NumberType::<T::Scalar>::try_downcast_column(&col).unwrap();
+        self.value += sum_batch::<T::Scalar, N::Scalar>(buffer, validity);
         Ok(())
     }
 
