@@ -1165,13 +1165,8 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_window_function = false;
 
-        let frame = self.resolve_window_frame(
-            span,
-            &func,
-            &partitions,
-            &mut order_by,
-            spec.window_frame.clone(),
-        )?;
+        let frame =
+            self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
             span,
@@ -1319,7 +1314,6 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func: &WindowFuncType,
-        partition_by: &[ScalarExpr],
         order_by: &mut [WindowOrderBy],
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
@@ -1354,18 +1348,10 @@ impl<'a> TypeChecker<'a> {
                 });
             }
             WindowFuncType::Ntile(_) => {
-                return Ok(if partition_by.is_empty() {
-                    WindowFuncFrame {
-                        units: WindowFuncFrameUnits::Rows,
-                        start_bound: WindowFuncFrameBound::Preceding(None),
-                        end_bound: WindowFuncFrameBound::Following(None),
-                    }
-                } else {
-                    WindowFuncFrame {
-                        units: WindowFuncFrameUnits::Rows,
-                        start_bound: WindowFuncFrameBound::CurrentRow,
-                        end_bound: WindowFuncFrameBound::CurrentRow,
-                    }
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
             WindowFuncType::CumeDist => {
