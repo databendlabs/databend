@@ -7,6 +7,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
+#[derive(Clone)]
 pub struct BlockPruningResult {
     pub block_metas: Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)>,
 }
@@ -24,7 +25,7 @@ impl BlockMetaInfo for BlockPruningResult {
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone BlockPruningResult")
+        Box::new(self.clone())
     }
 }
 

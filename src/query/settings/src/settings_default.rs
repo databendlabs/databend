@@ -941,7 +941,7 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(1..=1024*1024)),
                 }),
-                ("enable_pruning_pipeline", DefaultSettingValue {
+                ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable pruning pipeline",
                     mode: SettingMode::Both,

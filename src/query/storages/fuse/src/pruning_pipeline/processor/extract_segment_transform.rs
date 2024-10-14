@@ -2,19 +2,31 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
-use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransformer;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_pruner::RangePruner;
-use databend_storages_common_table_meta::meta::BlockMeta;
 
-use crate::pruning_pipeline::meta_info::compact_segment_meta::CompactSegmentMeta;
-use crate::pruning_pipeline::meta_info::extract_segment_result::ExtractSegmentResult;
+use crate::pruning_pipeline::meta_info::CompactSegmentMeta;
+use crate::pruning_pipeline::meta_info::ExtractSegmentResult;
 
 /// ExtractSegmentTransform Workflow:
 /// 1. Extract the pruned segment to blocks
 pub struct ExtractSegmentTransform {}
+
+impl ExtractSegmentTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> databend_common_exception::Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(
+            BlockMetaAccumulatingTransformer::create(input, output, ExtractSegmentTransform {}),
+        ))
+    }
+}
 
 impl BlockMetaAccumulatingTransform<CompactSegmentMeta> for ExtractSegmentTransform {
     const NAME: &'static str = "ExtractSegmentTransform";
@@ -39,7 +51,6 @@ impl BlockMetaAccumulatingTransform<CompactSegmentMeta> for ExtractSegmentTransf
         } else {
             Ok(Arc::new(data.compact_segment.block_metas()?))
         }?;
-
         Ok(Some(DataBlock::empty_with_meta(
             ExtractSegmentResult::create(block_metas, data.location.clone()),
         )))

@@ -8,6 +8,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::SegmentLocation;
 
+#[derive(Clone)]
 pub struct ExtractSegmentResult {
     pub block_metas: Arc<Vec<Arc<BlockMeta>>>,
     pub segment_location: SegmentLocation,
@@ -27,12 +28,12 @@ impl ExtractSegmentResult {
 
 #[typetag::serde(name = "extract_segment_result")]
 impl BlockMetaInfo for ExtractSegmentResult {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExtractSegmentResult")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone ExtractSegmentResult")
+        Box::new(self.clone())
     }
 }
 

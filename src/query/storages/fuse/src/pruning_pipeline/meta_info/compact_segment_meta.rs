@@ -8,6 +8,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::SegmentLocation;
 
+#[derive(Clone)]
 pub struct CompactSegmentMeta {
     pub compact_segment: Arc<CompactSegmentInfo>,
     pub location: SegmentLocation,
@@ -27,12 +28,12 @@ impl CompactSegmentMeta {
 
 #[typetag::serde(name = "compact_segment_meta")]
 impl BlockMetaInfo for CompactSegmentMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals CompactSegmentMeta")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone CompactSegmentMeta")
+        Box::new(self.clone())
     }
 }
 

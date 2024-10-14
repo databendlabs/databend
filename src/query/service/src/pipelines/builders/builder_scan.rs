@@ -29,18 +29,22 @@ use databend_common_sql::executor::physical_plans::ExpressionScan;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::plans::CacheSource;
 
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
 use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::processors::transforms::TransformCacheScan;
 use crate::pipelines::processors::transforms::TransformExpressionScan;
-use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
+        if self.ctx.get_settings().get_enable_prune_pipeline()? {
+            let prune_pipeline = table.build_prune_pipeline(self.ctx.clone(), &scan.source)?;
+            self.pipelines.push(prune_pipeline);
+        }
         table.read_data(
             self.ctx.clone(),
             &scan.source,
