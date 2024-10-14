@@ -9,14 +9,12 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_storages_common_pruner::RangePruner;
 use opendal::Operator;
 
 use crate::io::SegmentsIO;
-use crate::pruning_pipeline::meta_info::compact_segment_meta::CompactSegmentMeta;
-use crate::pruning_pipeline::meta_info::segment_location_meta::SegmentLocationMeta;
+use crate::pruning_pipeline::meta_info::CompactSegmentMeta;
+use crate::pruning_pipeline::meta_info::SegmentLocationMeta;
 
 /// CompactReadTransform Workflow:
 /// 1. Read the compact segment from the location (Async)
@@ -69,7 +67,6 @@ impl AsyncAccumulatingTransform for CompactReadTransform {
                 if !self.range_pruner.should_keep(&info.summary.col_stats, None) {
                     return Ok(None);
                 };
-
                 return Ok(Some(DataBlock::empty_with_meta(
                     CompactSegmentMeta::create(info, meta.segment_location),
                 )));

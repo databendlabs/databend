@@ -3,10 +3,10 @@ use std::fmt::Formatter;
 
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
-use tantivy::Segment;
 
 use crate::SegmentLocation;
 
+#[derive(Clone)]
 pub struct SegmentLocationMeta {
     pub segment_location: SegmentLocation,
 }
@@ -19,12 +19,12 @@ impl SegmentLocationMeta {
 
 #[typetag::serde(name = "segment_location_meta")]
 impl BlockMetaInfo for SegmentLocationMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals SegmentLocationMeta")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone SegmentLocationMeta")
+        Box::new(self.clone())
     }
 }
 

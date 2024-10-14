@@ -20,7 +20,9 @@ use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
 use databend_common_catalog::catalog::StorageDescription;
@@ -39,16 +41,16 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_meta_app::schema::DatabaseType;
@@ -56,16 +58,15 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::parse_hilbert_cluster_key;
-use databend_common_sql::BloomIndexColumns;
-use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
+use databend_common_storage::init_operator;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -73,9 +74,9 @@ use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
-use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -85,26 +86,12 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::TableCompression;
 use log::info;
 use log::warn;
 use opendal::Operator;
 use uuid::Uuid;
 
-use crate::fuse_column::FuseTableColumnStatisticsProvider;
-use crate::fuse_type::FuseTableType;
-use crate::io::MetaReaders;
-use crate::io::SegmentsIO;
-use crate::io::TableMetaLocationGenerator;
-use crate::io::TableSnapshotReader;
-use crate::io::WriteSettings;
-use crate::operations::ChangesDesc;
-use crate::operations::TruncateMode;
-use crate::statistics::reduce_block_statistics;
-use crate::statistics::Trim;
-use crate::FuseStorageFormat;
-use crate::NavigationPoint;
-use crate::Table;
-use crate::TableStatistics;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
@@ -114,6 +101,21 @@ use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use crate::FuseStorageFormat;
+use crate::NavigationPoint;
+use crate::Table;
+use crate::TableStatistics;
+use crate::fuse_column::FuseTableColumnStatisticsProvider;
+use crate::fuse_type::FuseTableType;
+use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
+use crate::io::TableMetaLocationGenerator;
+use crate::io::TableSnapshotReader;
+use crate::io::WriteSettings;
+use crate::operations::ChangesDesc;
+use crate::operations::TruncateMode;
+use crate::statistics::Trim;
+use crate::statistics::reduce_block_statistics;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -132,7 +134,11 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only returns the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    pub(crate) meta_receiver: Arc<Mutex<MetaReceiver>>,
 }
+
+type MetaReceiver = Option<Receiver<Partitions>>;
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -235,6 +241,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            meta_receiver: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -1038,5 +1045,15 @@ impl Table for FuseTable {
 
     fn use_own_sample_block(&self) -> bool {
         true
+    }
+
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<Pipeline> {
+        let (pipeline, receiver) = self.do_build_prune_pipeline(table_ctx, plan)?;
+        self.meta_receiver.lock().unwrap().replace(receiver);
+        Ok(pipeline)
     }
 }

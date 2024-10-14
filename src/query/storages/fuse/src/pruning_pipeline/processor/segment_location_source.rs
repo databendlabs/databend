@@ -1,20 +1,18 @@
 use std::sync::Arc;
 
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_storages_common_pruner::InternalColumnPruner;
 
 use crate::FuseLazyPartInfo;
 use crate::SegmentLocation;
-use crate::pruning_pipeline::meta_info::segment_location_meta::SegmentLocationMeta;
+use crate::pruning_pipeline::meta_info::SegmentLocationMeta;
 
 /// ReadSegmentSource Workflow:
 /// 1. Retrieve the FuseLazyPartInfo
@@ -51,17 +49,20 @@ impl SyncSource for ReadSegmentSource {
                         return Ok(None);
                     }
                 }
-                return Ok(Some(DataBlock::empty_with_meta(
+                Ok(Some(DataBlock::empty_with_meta(
                     SegmentLocationMeta::create(SegmentLocation {
                         segment_idx: part.segment_index,
                         location: part.segment_location.clone(),
                         snapshot_loc: self.snapshot_location.clone(),
                     }),
-                )));
+                )))
+            } else {
+                Err(ErrorCode::Internal(
+                    "ReadSegmentSource failed downcast partition to FuseLazyPartInfo",
+                ))
             }
+        } else {
+            Ok(None)
         }
-        Err(ErrorCode::Internal(
-            "ReadSegmentSource failed downcast partition to FuseLazyPartInfo",
-        ))
     }
 }

@@ -3,27 +3,17 @@ use std::sync::Arc;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableSchemaRef;
-use databend_common_metrics::storage::metrics_inc_blocks_range_pruning_after;
-use databend_common_metrics::storage::metrics_inc_blocks_range_pruning_before;
-use databend_common_metrics::storage::metrics_inc_bytes_block_range_pruning_after;
-use databend_common_metrics::storage::metrics_inc_bytes_block_range_pruning_before;
-use databend_common_metrics::storage::metrics_inc_pruning_milliseconds;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
-use databend_common_pipeline_transforms::processors::BlockMetaTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransformer;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use opendal::Operator;
 
 use crate::pruning::PruningContext;
-use crate::pruning_pipeline::meta_info::block_pruning_result::BlockPruningResult;
-use crate::pruning_pipeline::meta_info::extract_segment_result::ExtractSegmentResult;
-use crate::pruning_pipeline::processor::compact_read_transform::CompactReadTransform;
+use crate::pruning_pipeline::meta_info::BlockPruningResult;
+use crate::pruning_pipeline::meta_info::ExtractSegmentResult;
 
 /// BlockPruningTransform Workflow
 /// 1. Internal column pruning at block level
@@ -35,14 +25,15 @@ pub struct BlockPruningTransform {
 
 impl BlockPruningTransform {
     pub fn create(
+        pruning_ctx: Arc<PruningContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> databend_common_exception::Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-            input,
-            output,
-            BlockPruningTransform { pruning_ctx },
-        )))
+        Ok(ProcessorPtr::create(
+            BlockMetaAccumulatingTransformer::create(input, output, BlockPruningTransform {
+                pruning_ctx,
+            }),
+        ))
     }
 }
 
@@ -88,7 +79,6 @@ impl BlockMetaAccumulatingTransform<ExtractSegmentResult> for BlockPruningTransf
                 }
             }
         }
-
         Ok(Some(DataBlock::empty_with_meta(
             BlockPruningResult::create(result),
         )))
