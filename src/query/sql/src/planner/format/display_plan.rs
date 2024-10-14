@@ -64,6 +64,7 @@ impl Plan {
             Plan::RenameTable(_) => Ok("RenameTable".to_string()),
             Plan::ModifyTableComment(_) => Ok("ModifyTableComment".to_string()),
             Plan::SetOptions(_) => Ok("SetOptions".to_string()),
+            Plan::UnsetOptions(_) => Ok("UnsetOptions".to_string()),
             Plan::RenameTableColumn(_) => Ok("RenameTableColumn".to_string()),
             Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
             Plan::ModifyTableColumn(_) => Ok("ModifyTableColumn".to_string()),
@@ -135,6 +136,7 @@ impl Plan {
             Plan::AlterUDF(_) => Ok("AlterUDF".to_string()),
             Plan::DropUDF(_) => Ok("DropUDF".to_string()),
             Plan::AlterUser(_) => Ok("AlterUser".to_string()),
+            Plan::DescUser(_) => Ok("DescUser".to_string()),
             Plan::CreateRole(_) => Ok("CreateRole".to_string()),
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),
@@ -194,6 +196,7 @@ impl Plan {
             Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
             Plan::CreateProcedure(_) => Ok("CreateProcedure".to_string()),
             Plan::DropProcedure(_) => Ok("DropProcedure".to_string()),
+            Plan::CallProcedure(_) => Ok("CallProcedure".to_string()),
             // Plan::ShowCreateProcedure(_) => Ok("ShowCreateProcedure".to_string()),
             // Plan::RenameProcedure(_) => Ok("ProcedureDatabase".to_string()),
 

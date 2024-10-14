@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
+
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
@@ -52,6 +54,10 @@ impl Rows for BinaryColumn {
 
     fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
         col.as_binary().cloned()
+    }
+
+    fn slice(&self, range: Range<usize>) -> Self {
+        self.slice(range)
     }
 }
 

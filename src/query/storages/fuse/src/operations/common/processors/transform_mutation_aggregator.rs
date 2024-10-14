@@ -40,8 +40,8 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
-use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
@@ -557,12 +557,8 @@ async fn write_segment(
     }
     // create new segment info
     let new_segment = SegmentInfo::new(blocks, new_summary.clone());
-
-    // write the segment info.
-    let serialized_segment = SerializedSegment {
-        path: location.clone(),
-        segment: Arc::new(new_segment),
-    };
-    SegmentsIO::write_segment(dal, serialized_segment).await?;
+    new_segment
+        .write_meta_through_cache(&dal, &location)
+        .await?;
     Ok((location, new_summary))
 }

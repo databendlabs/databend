@@ -24,6 +24,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_functions::is_cacheable_function;
 use databend_common_settings::ChangeValue;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
@@ -162,8 +163,9 @@ impl TableRefVisitor {
             return;
         }
 
-        // If the function is score, we should not cache the plan
-        if func.name.name.to_lowercase() == "score" {
+        let func_name = func.name.name.to_lowercase();
+        // If the function is not suitable for caching, we should not cache the plan
+        if !is_cacheable_function(&func_name) {
             self.cache_miss = true;
         }
     }

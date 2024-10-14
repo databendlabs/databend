@@ -19,6 +19,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -36,7 +37,9 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
+use super::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -118,6 +121,18 @@ impl Display for TableNameIdent {
 pub struct DBIdTableName {
     pub db_id: u64,
     pub table_name: String,
+}
+
+impl DBIdTableName {
+    pub fn new(db_id: u64, table_name: impl ToString) -> Self {
+        DBIdTableName {
+            db_id,
+            table_name: table_name.to_string(),
+        }
+    }
+    pub fn display(&self) -> impl Display {
+        format!("{}.'{}'", self.db_id, self.table_name)
+    }
 }
 
 impl Display for DBIdTableName {
@@ -330,6 +345,7 @@ impl TableInfo {
         }
     }
 
+    /// Deprecated: use `new_full()`. This method sets default values for some fields.
     pub fn new(db_name: &str, table_name: &str, ident: TableIdent, meta: TableMeta) -> TableInfo {
         TableInfo {
             ident,
@@ -337,6 +353,24 @@ impl TableInfo {
             name: table_name.to_string(),
             meta,
             ..Default::default()
+        }
+    }
+
+    pub fn new_full(
+        db_name: &str,
+        table_name: &str,
+        ident: TableIdent,
+        meta: TableMeta,
+        catalog_info: Arc<CatalogInfo>,
+        db_type: DatabaseType,
+    ) -> TableInfo {
+        TableInfo {
+            ident,
+            desc: format!("'{}'.'{}'", db_name, table_name),
+            name: table_name.to_string(),
+            meta,
+            catalog_info,
+            db_type,
         }
     }
 
@@ -448,6 +482,12 @@ impl TableIdList {
         TableIdList::default()
     }
 
+    pub fn new_with_ids(ids: impl IntoIterator<Item = u64>) -> TableIdList {
+        TableIdList {
+            id_list: ids.into_iter().collect(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.id_list.len()
     }
@@ -468,7 +508,7 @@ impl TableIdList {
         self.id_list.pop()
     }
 
-    pub fn last(&mut self) -> Option<&u64> {
+    pub fn last(&self) -> Option<&u64> {
         self.id_list.last()
     }
 }
@@ -652,9 +692,6 @@ impl Display for UndropTableReq {
         )
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UndropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReq {
@@ -879,61 +916,135 @@ impl GetTableReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
-    pub inner: DatabaseNameIdent,
-}
-
-impl Deref for ListTableReq {
-    type Target = DatabaseNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    pub tenant: Tenant,
+    pub database_id: DatabaseId,
 }
 
 impl ListTableReq {
-    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListTableReq {
+    pub fn new(tenant: &Tenant, database_id: DatabaseId) -> ListTableReq {
         ListTableReq {
-            inner: DatabaseNameIdent::new(tenant, db_name),
+            tenant: tenant.clone(),
+            database_id,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TableInfoFilter {
-    // if datatime is some, filter only dropped tables which drop time before that,
-    // else filter all dropped tables
-    Dropped(Option<DateTime<Utc>>),
-    // filter all dropped tables, including all tables in dropped database and dropped tables in exist dbs,
-    // in this case, `ListTableReq`.db_name will be ignored
-    // return Tables in two cases:
-    //  1) if database drop before date time, then all table in this db will be return;
-    //  2) else, return all the tables drop before data time.
-    AllDroppedTables(Option<DateTime<Utc>>),
-    // return all tables, ignore drop on time.
-    All,
+pub struct ListDroppedTableReq {
+    pub tenant: Tenant,
+
+    /// If `database_name` is None, choose all tables in all databases.
+    /// Otherwise, choose only tables in this database.
+    pub database_name: Option<String>,
+
+    /// The time range in which the database/table will be returned.
+    /// choose only tables/databases dropped before this boundary time.
+    /// It can include non-dropped tables/databases with `None..Some()`
+    pub drop_time_range: Range<Option<DateTime<Utc>>>,
+
+    pub limit: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ListDroppedTableReq {
-    pub inner: DatabaseNameIdent,
-    pub filter: TableInfoFilter,
-    pub limit: Option<usize>,
+impl ListDroppedTableReq {
+    pub fn new(tenant: &Tenant) -> ListDroppedTableReq {
+        let rng_start = Some(DateTime::<Utc>::MIN_UTC);
+        let rng_end = Some(DateTime::<Utc>::MAX_UTC);
+        ListDroppedTableReq {
+            tenant: tenant.clone(),
+            database_name: None,
+            drop_time_range: rng_start..rng_end,
+            limit: None,
+        }
+    }
+
+    pub fn with_db(self, db_name: impl ToString) -> Self {
+        Self {
+            database_name: Some(db_name.to_string()),
+            ..self
+        }
+    }
+
+    pub fn with_retention_boundary(self, d: DateTime<Utc>) -> Self {
+        let rng_start = Some(DateTime::<Utc>::MIN_UTC);
+        let rng_end = Some(d);
+        Self {
+            drop_time_range: rng_start..rng_end,
+            ..self
+        }
+    }
+
+    pub fn with_limit(self, limit: usize) -> Self {
+        Self {
+            limit: Some(limit),
+            ..self
+        }
+    }
+
+    pub fn new4(
+        tenant: &Tenant,
+        database_name: Option<impl ToString>,
+        retention_boundary: Option<DateTime<Utc>>,
+        limit: Option<usize>,
+    ) -> ListDroppedTableReq {
+        let rng_start = Some(DateTime::<Utc>::MIN_UTC);
+        let rng_end = if let Some(b) = retention_boundary {
+            Some(b)
+        } else {
+            Some(DateTime::<Utc>::MAX_UTC)
+        };
+        ListDroppedTableReq {
+            tenant: tenant.clone(),
+            database_name: database_name.map(|s| s.to_string()),
+            drop_time_range: rng_start..rng_end,
+            limit,
+        }
+    }
+
+    pub fn database_name(&self) -> Option<&str> {
+        self.database_name.as_deref()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
-    Db {
-        db_id: u64,
-        db_name: String,
-        tables: Vec<(u64, String)>,
-    },
-    // db id, table id, table name
-    Table(u64, u64, String),
+    Db { db_id: u64, db_name: String },
+    Table { name: DBIdTableName, id: TableId },
+}
+
+impl From<TableNIV> for DroppedId {
+    fn from(value: TableNIV) -> Self {
+        let (name, id, _) = value.unpack();
+        Self::Table { name, id }
+    }
+}
+
+impl DroppedId {
+    pub fn new_table_name_id(name: DBIdTableName, id: TableId) -> DroppedId {
+        DroppedId::Table { name, id }
+    }
+
+    pub fn new_table(db_id: u64, table_id: u64, table_name: impl ToString) -> DroppedId {
+        DroppedId::Table {
+            name: DBIdTableName::new(db_id, table_name),
+            id: TableId::new(table_id),
+        }
+    }
+
+    /// Build a string contains essential information for comparison.
+    ///
+    /// Only used for testing.
+    pub fn cmp_key(&self) -> String {
+        match self {
+            DroppedId::Db { db_id, db_name, .. } => format!("db:{}-{}", db_id, db_name),
+            DroppedId::Table { name, id } => format!("table:{:?}-{:?}", name, id),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDroppedTableResp {
-    pub drop_table_infos: Vec<Arc<TableInfo>>,
+    /// The **database_name, (name, id, value)** of a table to vacuum.
+    pub vacuum_tables: Vec<(DatabaseNameIdent, TableNIV)>,
     pub drop_ids: Vec<DroppedId>,
 }
 
@@ -960,6 +1071,16 @@ pub struct TableCopiedFileNameIdent {
     pub file: String,
 }
 
+impl fmt::Display for TableCopiedFileNameIdent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TableCopiedFileNameIdent{{table_id:{}, file:{}}}",
+            self.table_id, self.file
+        )
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileInfo {
     pub etag: Option<String>,
@@ -983,7 +1104,8 @@ pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
     /// If not None, specifies the time-to-live for the keys.
     pub ttl: Option<Duration>,
-    pub fail_if_duplicated: bool,
+    /// If there is already existing key, ignore inserting
+    pub insert_if_not_exists: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -29,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
@@ -42,15 +43,16 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
+use crate::io::block_to_inverted_index;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
-use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -292,7 +294,10 @@ impl AsyncTransform for InvertedIndexTransform {
         let mut writer =
             InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
         writer.add_block(&self.source_schema, &data_block)?;
-        let data = writer.finalize()?;
+
+        let (index_schema, index_block) = writer.finalize()?;
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = block_to_inverted_index(&index_schema, index_block, &mut data)?;
         let index_size = data.len() as u64;
         write_data(data, &self.operator, &index_location).await?;
 

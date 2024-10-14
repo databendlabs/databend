@@ -16,6 +16,7 @@ use std::fmt;
 
 use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_base::display::display_slice::DisplaySliceExt;
+use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -124,31 +125,35 @@ impl fmt::Display for Feature {
 }
 
 impl Feature {
-    pub fn verify(&self, feature: &Feature) -> bool {
+    pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
+        Err(ErrorCode::LicenseKeyInvalid(message.into()))
+    }
+
+    pub fn verify(&self, feature: &Feature) -> Result<bool, ErrorCode> {
         match (self, feature) {
             (Feature::ComputeQuota(c), Feature::ComputeQuota(v)) => {
                 if let Some(thread_num) = c.threads_num {
                     if thread_num <= v.threads_num.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
                 if let Some(max_memory_usage) = c.memory_usage {
                     if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
-                true
+                Ok(true)
             }
             (Feature::StorageQuota(c), Feature::StorageQuota(v)) => {
                 if let Some(max_storage_usage) = c.storage_usage {
                     if max_storage_usage <= v.storage_usage.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
-                true
+                Ok(true)
             }
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)
@@ -161,8 +166,8 @@ impl Feature {
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
-            | (Feature::StorageEncryption, Feature::StorageEncryption) => true,
-            (_, _) => false,
+            | (Feature::StorageEncryption, Feature::StorageEncryption) => Ok(true),
+            (_, _) => Ok(false),
         }
     }
 }

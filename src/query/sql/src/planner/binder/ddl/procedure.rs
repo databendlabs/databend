@@ -30,14 +30,18 @@ use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_users::UserApiProvider;
 
 use crate::binder::show::get_show_options;
+use crate::plans::CallProcedurePlan;
 use crate::plans::CreateProcedurePlan;
 use crate::plans::DropProcedurePlan;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
+use crate::plans::SubqueryType;
 use crate::resolve_type_name;
 use crate::BindContext;
 use crate::Binder;
+use crate::ScalarExpr;
+use crate::TypeChecker;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -56,7 +60,7 @@ impl Binder {
             create_option,
             name,
             language,
-            args: _args,
+            args,
             return_type,
             comment,
             script,
@@ -67,7 +71,7 @@ impl Binder {
         // 1. need parser name: ProcedureNameIdent = name + args
         // 2. need check script's return type and stmt.return_type
 
-        let meta = self.procedure_meta(return_type, script, comment, language)?;
+        let meta = self.procedure_meta(return_type, script, comment, language, args)?;
         Ok(Plan::CreateProcedure(Box::new(CreateProcedurePlan {
             create_option: create_option.clone().into(),
             tenant: tenant.to_owned(),
@@ -77,12 +81,11 @@ impl Binder {
     }
 
     pub async fn bind_drop_procedure(&mut self, stmt: &DropProcedureStmt) -> Result<Plan> {
-        let DropProcedureStmt { name } = stmt;
+        let DropProcedureStmt { name, if_exists } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        // TODO: need parser name: ProcedureNameIdent = name + args
         Ok(Plan::DropProcedure(Box::new(DropProcedurePlan {
-            if_exists: false,
+            if_exists: *if_exists,
             tenant: tenant.to_owned(),
             name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
         })))
@@ -107,22 +110,55 @@ impl Binder {
             .await
     }
 
-    pub async fn bind_call_procedure(&mut self, stmt: &CallProcedureStmt) -> Result<Plan> {
-        let CallProcedureStmt { name, args } = stmt;
+    pub async fn bind_call_procedure(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &CallProcedureStmt,
+    ) -> Result<Plan> {
+        let CallProcedureStmt {
+            name,
+            args: arguments,
+        } = stmt;
         let tenant = self.ctx.get_tenant();
-        // TODO: ProcedureNameIdent = name + args_type. Need to get type in here.
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            true,
+        )?;
+        let mut arg_types = vec![];
+        for argument in arguments {
+            let box (arg, mut arg_type) = type_checker.resolve(argument)?;
+            if let ScalarExpr::SubqueryExpr(subquery) = &arg {
+                if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
+                    arg_type = arg_type.wrap_nullable();
+                }
+            }
+            arg_types.push(arg_type.to_string());
+        }
         let req = GetProcedureReq {
             inner: ProcedureNameIdent::new(
                 tenant.clone(),
-                ProcedureIdentity::new(name, args.join(",")),
+                ProcedureIdentity::new(name, arg_types.join(",")),
             ),
         };
+
         let procedure = UserApiProvider::instance()
             .get_procedure(&tenant, req)
             .await?;
-        Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-            script: procedure.procedure_meta.script,
-        })))
+        if arg_types.is_empty() {
+            Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
+                script: procedure.procedure_meta.script,
+            })))
+        } else {
+            Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
+                script: procedure.procedure_meta.script,
+                arg_names: procedure.procedure_meta.arg_names,
+                args: arguments.clone(),
+            })))
+        }
     }
 
     fn procedure_meta(
@@ -131,7 +167,16 @@ impl Binder {
         script: &str,
         comment: &Option<String>,
         language: &ProcedureLanguage,
+        args: &Option<Vec<ProcedureType>>,
     ) -> Result<ProcedureMeta> {
+        let mut arg_names = vec![];
+        if let Some(args) = args {
+            for arg in args {
+                if let Some(name) = &arg.name {
+                    arg_names.push(name.to_string());
+                }
+            }
+        }
         let mut return_types = Vec::with_capacity(return_type.len());
         for arg_type in return_type {
             return_types.push(DataType::from(&resolve_type_name(
@@ -142,6 +187,7 @@ impl Binder {
 
         Ok(ProcedureMeta {
             return_types,
+            arg_names,
             created_on: Utc::now(),
             updated_on: Utc::now(),
             script: script.to_string(),

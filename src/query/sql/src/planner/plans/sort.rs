@@ -26,6 +26,7 @@ use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -46,6 +47,10 @@ pub struct Sort {
 }
 
 impl Sort {
+    pub fn used_columns(&self) -> ColumnSet {
+        self.items.iter().map(|item| item.index).collect()
+    }
+
     pub fn sort_items_exclude_partition(&self) -> Vec<SortItem> {
         self.items
             .iter()

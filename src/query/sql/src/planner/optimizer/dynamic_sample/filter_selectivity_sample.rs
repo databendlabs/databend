@@ -118,6 +118,7 @@ fn create_count_aggregate(mode: AggregateMode) -> Aggregate {
         group_items: vec![],
         aggregate_functions: vec![ScalarItem {
             scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                span: None,
                 func_name: "count".to_string(),
                 distinct: false,
                 params: vec![],
@@ -127,8 +128,6 @@ fn create_count_aggregate(mode: AggregateMode) -> Aggregate {
             }),
             index: 0,
         }],
-        from_distinct: false,
-        limit: None,
-        grouping_sets: None,
+        ..Default::default()
     }
 }

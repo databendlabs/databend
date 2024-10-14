@@ -51,8 +51,8 @@ async fn test_create_simple_pipeline() -> Result<()> {
             \n    0 [ label = \"BlocksSource\" ]\
             \n    1 [ label = \"DummyTransform\" ]\
             \n    2 [ label = \"SyncSenderSink\" ]\
-            \n    0 -> 1 [ ]\
-            \n    1 -> 2 [ ]\
+            \n    0 -> 1 [ 0 -> 0]\
+            \n    1 -> 2 [ 0 -> 0]\
         \n}\n"
     );
 
@@ -73,10 +73,10 @@ async fn test_create_parallel_simple_pipeline() -> Result<()> {
             \n    3 [ label = \"DummyTransform\" ]\
             \n    4 [ label = \"SyncSenderSink\" ]\
             \n    5 [ label = \"SyncSenderSink\" ]\
-            \n    0 -> 2 [ ]\
-            \n    1 -> 3 [ ]\
-            \n    2 -> 4 [ ]\
-            \n    3 -> 5 [ ]\
+            \n    0 -> 2 [ 0 -> 0]\
+            \n    1 -> 3 [ 0 -> 0]\
+            \n    2 -> 4 [ 0 -> 0]\
+            \n    3 -> 5 [ 0 -> 0]\
         \n}\n"
     );
 
@@ -100,15 +100,15 @@ async fn test_create_resize_pipeline() -> Result<()> {
             \n    6 [ label = \"Resize\" ]\
             \n    7 [ label = \"SyncSenderSink\" ]\
             \n    8 [ label = \"SyncSenderSink\" ]\
-            \n    0 -> 1 [ ]\
-            \n    1 -> 2 [ ]\
-            \n    1 -> 3 [ ]\
-            \n    2 -> 4 [ ]\
-            \n    3 -> 4 [ ]\
-            \n    4 -> 5 [ ]\
-            \n    5 -> 6 [ ]\
-            \n    6 -> 7 [ ]\
-            \n    6 -> 8 [ ]\
+            \n    0 -> 1 [ 0 -> 0]\
+            \n    1 -> 2 [ 0 -> 0]\
+            \n    1 -> 3 [ 1 -> 0]\
+            \n    2 -> 4 [ 0 -> 0]\
+            \n    3 -> 4 [ 0 -> 1]\
+            \n    4 -> 5 [ 0 -> 0]\
+            \n    5 -> 6 [ 0 -> 0]\
+            \n    6 -> 7 [ 0 -> 0]\
+            \n    6 -> 8 [ 1 -> 0]\
         \n}\n"
     );
 

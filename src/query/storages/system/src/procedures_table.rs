@@ -77,7 +77,7 @@ impl AsyncSystemTable for ProceduresTable {
         // +------------------------------------+
         let mut arguments = Vec::with_capacity(procedures.len());
         let mut comments = Vec::with_capacity(procedures.len());
-        let mut created_ons = Vec::with_capacity(procedures.len());
+        let mut created_on_s = Vec::with_capacity(procedures.len());
 
         for procedure in &procedures {
             names.push(procedure.name_ident.procedure_name().name.to_string());
@@ -91,7 +91,7 @@ impl AsyncSystemTable for ProceduresTable {
             descriptions.push("user-defined procedure");
             comments.push(procedure.meta.comment.as_str());
 
-            created_ons.push(procedure.meta.created_on.timestamp_micros());
+            created_on_s.push(procedure.meta.created_on.timestamp_micros());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -100,7 +100,7 @@ impl AsyncSystemTable for ProceduresTable {
             StringType::from_data(arguments),
             StringType::from_data(comments),
             StringType::from_data(descriptions),
-            TimestampType::from_data(created_ons),
+            TimestampType::from_data(created_on_s),
         ]))
     }
 }

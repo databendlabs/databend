@@ -49,8 +49,11 @@ use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
+use crate::plans::Operator;
 use crate::plans::Plan;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
@@ -67,6 +70,7 @@ pub struct OptimizerContext {
     enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+    planning_agg_index: bool,
     #[educe(Debug(ignore))]
     sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
 }
@@ -81,6 +85,7 @@ impl OptimizerContext {
             enable_join_reorder: true,
             enable_dphyp: true,
             sample_executor: None,
+            planning_agg_index: false,
         }
     }
 
@@ -104,6 +109,11 @@ impl OptimizerContext {
         sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
     ) -> Self {
         self.sample_executor = sample_executor;
+        self
+    }
+
+    pub fn with_planning_agg_index(mut self) -> Self {
+        self.planning_agg_index = true;
         self
     }
 }
@@ -327,11 +337,7 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(
-            opt_ctx.table_ctx.clone(),
-            opt_ctx.metadata.clone(),
-            s_expr.clone(),
-        )?;
+        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
@@ -352,6 +358,9 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, opt_ctx).run(&s_expr)?;
 
+    // Run post rewrite rules
+    s_expr = RecursiveOptimizer::new(&[RuleID::SplitAggregate], opt_ctx).run(&s_expr)?;
+
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
@@ -370,7 +379,6 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // After join reorder, Convert some single join to inner join.
     s_expr = SingleToInnerOptimizer::new().run(&s_expr)?;
-
     // Deduplicate join conditions.
     s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
 
@@ -410,8 +418,10 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         }
     };
 
-    s_expr =
-        RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), opt_ctx).run(&s_expr)?;
+    if !opt_ctx.planning_agg_index {
+        s_expr = RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), opt_ctx)
+            .run(&s_expr)?;
+    }
 
     Ok(s_expr)
 }
@@ -426,11 +436,7 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(
-            opt_ctx.table_ctx.clone(),
-            opt_ctx.metadata.clone(),
-            s_expr.clone(),
-        )?;
+        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
@@ -442,8 +448,12 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
         .run(&s_expr)
         .await?;
 
+    // Pull up and infer filter.
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
+    // Run post rewrite rules
+    s_expr = RecursiveOptimizer::new(&[RuleID::SplitAggregate], &opt_ctx).run(&s_expr)?;
 
     // Cost based optimization
     let mut dphyp_optimized = false;
@@ -489,9 +499,41 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
     mutation.distributed = opt_ctx.enable_distributed_optimization;
 
+    let schema = mutation.schema();
+    // To fix issue #16588, if target table is rewritten as an empty scan, that means
+    // the condition is false and the match branch can never be executed.
+    // Therefore, the match evaluators can be reset.
+    let inner_rel_op = input_s_expr.plan.rel_op();
+    if !mutation.matched_evaluators.is_empty() {
+        match inner_rel_op {
+            RelOp::ConstantTableScan => {
+                mutation.matched_evaluators = vec![MatchedEvaluator {
+                    condition: None,
+                    update: None,
+                }];
+                mutation.can_try_update_column_only = false;
+            }
+            RelOp::Join => {
+                let right_child = input_s_expr.child(1)?;
+                let mut right_child_rel = right_child.plan.rel_op();
+                if right_child_rel == RelOp::Exchange {
+                    right_child_rel = right_child.child(0)?.plan.rel_op();
+                }
+                if right_child_rel == RelOp::ConstantTableScan {
+                    mutation.matched_evaluators = vec![MatchedEvaluator {
+                        condition: None,
+                        update: None,
+                    }];
+                    mutation.can_try_update_column_only = false;
+                }
+            }
+            _ => (),
+        }
+    }
+
     input_s_expr = match mutation.mutation_type {
         MutationType::Merge => {
-            if mutation.distributed {
+            if mutation.distributed && inner_rel_op == RelOp::Join {
                 let join = Join::try_from(input_s_expr.plan().clone())?;
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
                 let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
@@ -522,7 +564,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     };
 
     Ok(Plan::DataMutation {
-        schema: mutation.schema(),
+        schema,
         s_expr: Box::new(SExpr::create_unary(
             Arc::new(RelOperator::Mutation(mutation)),
             Arc::new(input_s_expr),

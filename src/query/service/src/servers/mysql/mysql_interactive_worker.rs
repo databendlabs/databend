@@ -29,12 +29,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::StreamExt;
 use log::error;
@@ -194,7 +193,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         let query_id = Uuid::new_v4().to_string();
-        let root = Span::root(full_name!(), SpanContext::random())
+        let root = Span::root(func_path!(), SpanContext::random())
             .with_properties(|| self.base.session.to_fastrace_properties());
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
@@ -430,7 +429,7 @@ impl InteractiveWorkerBase {
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
-            .in_span(Span::enter_with_local_parent(full_name!()))
+            .in_span(Span::enter_with_local_parent(func_path!()))
         })?;
 
         let query_result = query_result.await.map_err_to_code(
@@ -502,9 +501,7 @@ impl InteractiveWorker {
                     .client_session_api(&tenant)
                     .upsert_client_session_id(
                         &session_id,
-                        ClientSession {
-                            user_name: user_name.clone(),
-                        },
+                        &user_name,
                         Duration::from_secs(3600 + 600),
                     )
                     .await

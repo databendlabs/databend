@@ -283,6 +283,14 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             }
             doc
         }
+        AlterTableAction::UnsetOptions { targets } => {
+            let mut doc = RcDoc::line();
+            doc = doc.append(RcDoc::text("UNSET OPTIONS: "));
+            for opt in targets.into_iter() {
+                doc = doc.append(RcDoc::text(format!("{opt} ")));
+            }
+            doc
+        }
     }
 }
 

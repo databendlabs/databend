@@ -14,6 +14,7 @@
 
 use std::cmp::Reverse;
 use std::marker::PhantomData;
+use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,7 +31,7 @@ use super::RowConverter;
 use super::Rows;
 
 /// Rows structure for single simple types. (numbers, date, timestamp)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SimpleRowsAsc<T: ValueType> {
     inner: T::Column,
 }
@@ -66,10 +67,16 @@ where
             None
         }
     }
+
+    fn slice(&self, range: Range<usize>) -> Self {
+        Self {
+            inner: T::slice_column(&self.inner, range),
+        }
+    }
 }
 
 /// Rows structure for single simple types. (numbers, date, timestamp)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SimpleRowsDesc<T: ValueType> {
     inner: T::Column,
 }
@@ -106,6 +113,12 @@ where
             None
         }
     }
+
+    fn slice(&self, range: Range<usize>) -> Self {
+        Self {
+            inner: T::slice_column(&self.inner, range),
+        }
+    }
 }
 
 /// If there is only one sort field and its type is a primitive type,
@@ -129,27 +142,7 @@ where
     }
 
     fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsAsc<T>> {
-        assert!(columns.len() == 1);
-        let col = &columns[0];
-        if col.data_type != T::data_type() {
-            return Err(ErrorCode::Internal(format!(
-                "Cannot convert simple column. Expect data type {:?}, found {:?}",
-                T::data_type(),
-                col.data_type
-            )));
-        }
-
-        let col = match &col.value {
-            Value::Scalar(v) => {
-                let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &col.data_type);
-                builder.build()
-            }
-            Value::Column(c) => c.clone(),
-        };
-
-        Ok(SimpleRowsAsc {
-            inner: T::try_downcast_column(&col).unwrap(),
-        })
+        self.convert_rows(columns, num_rows, true)
     }
 }
 
@@ -168,6 +161,17 @@ where
     }
 
     fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsDesc<T>> {
+        self.convert_rows(columns, num_rows, false)
+    }
+}
+
+impl<T: ArgType> SimpleRowConverter<T> {
+    fn convert_rows<R: Rows>(
+        &mut self,
+        columns: &[BlockEntry],
+        num_rows: usize,
+        asc: bool,
+    ) -> Result<R> {
         assert!(columns.len() == 1);
         let col = &columns[0];
         if col.data_type != T::data_type() {
@@ -186,8 +190,13 @@ where
             Value::Column(c) => c.clone(),
         };
 
-        Ok(SimpleRowsDesc {
-            inner: T::try_downcast_column(&col).unwrap(),
-        })
+        let desc = [SortColumnDescription {
+            offset: 0,
+            asc,
+            nulls_first: false,
+            is_nullable: false,
+        }];
+
+        R::from_column(&col, &desc)
     }
 }

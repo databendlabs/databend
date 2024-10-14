@@ -380,21 +380,24 @@ impl Session {
     }
     pub fn get_temp_table_prefix(&self) -> Result<String> {
         let typ = self.typ.read().clone();
-        match typ {
-            SessionType::MySQL => Ok(self.id.clone()),
+        let session_id = match typ {
+            SessionType::MySQL => self.id.clone(),
             SessionType::HTTPQuery => {
                 if let Some(id) = self.get_client_session_id() {
-                    Ok(id)
+                    id
                 } else {
-                    Err(ErrorCode::BadArguments(
+                    return Err(ErrorCode::BadArguments(
                         "can not use temp table in http handler if token is not used",
-                    ))
+                    ));
                 }
             }
-            t => Err(ErrorCode::BadArguments(format!(
-                "can not use temp table in session type {t}"
-            ))),
-        }
+            t => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "can not use temp table in session type {t}"
+                )));
+            }
+        };
+        Ok(format!("{}/{session_id}", self.get_current_user()?.name))
     }
 }
 

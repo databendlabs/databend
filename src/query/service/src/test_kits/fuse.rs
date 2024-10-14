@@ -29,7 +29,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::merge_statistics;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -132,9 +131,11 @@ pub async fn generate_segments(
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
-        let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
-        segs.push((segment_location, segment_info))
+        let location = fuse_table
+            .meta_location_generator()
+            .gen_segment_info_location();
+        segment_info.write_meta(dal, &location).await?;
+        segs.push(((location, SegmentInfo::VERSION), segment_info))
     }
     Ok(segs)
 }

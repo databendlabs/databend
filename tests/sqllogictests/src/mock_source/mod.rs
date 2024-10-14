@@ -12,5 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod mysql_source;
 mod redis_source;
+pub use mysql_source::run_mysql_source;
 pub use redis_source::run_redis_source;

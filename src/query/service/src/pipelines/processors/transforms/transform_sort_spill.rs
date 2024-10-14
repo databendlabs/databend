@@ -43,6 +43,7 @@ use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 
+use crate::spillers::Location;
 use crate::spillers::Spiller;
 
 enum State {
@@ -77,7 +78,7 @@ pub struct TransformSortSpill<R: Rows> {
     /// Blocks to merge one time.
     num_merge: usize,
     /// Unmerged list of blocks. Each list are sorted.
-    unmerged_blocks: VecDeque<VecDeque<String>>,
+    unmerged_blocks: VecDeque<VecDeque<Location>>,
 
     /// If `ummerged_blocks.len()` < `num_merge`,
     /// we can use a final merger to merge the last few sorted streams to reduce IO.
@@ -269,7 +270,7 @@ where R: Rows + Sync + Send + 'static
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
         debug_assert!(self.num_merge >= 2 && self.batch_rows > 0);
 
-        let location = self.spiller.spill_block(block).await?;
+        let location = self.spiller.spill(block).await?;
 
         self.unmerged_blocks.push_back(vec![location].into());
         Ok(())
@@ -346,7 +347,7 @@ where R: Rows + Sync + Send + 'static
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.async_next_block().await? {
-            let location = self.spiller.spill_block(block).await?;
+            let location = self.spiller.spill(block).await?;
 
             spilled.push_back(location);
         }
@@ -359,7 +360,7 @@ where R: Rows + Sync + Send + 'static
 }
 
 enum BlockStream {
-    Spilled((VecDeque<String>, Arc<Spiller>)),
+    Spilled((VecDeque<Location>, Arc<Spiller>)),
     Block(Option<DataBlock>),
 }
 
@@ -485,12 +486,13 @@ mod tests {
         limit: Option<usize>,
     ) -> Result<TransformSortSpill<SimpleRowsAsc<Int32Type>>> {
         let op = DataOperator::instance().operator();
-        let spiller = Spiller::create(
-            ctx.clone(),
-            op,
-            SpillerConfig::create("_spill_test".to_string()),
-            SpillerType::OrderBy,
-        )?;
+        let spill_config = SpillerConfig {
+            location_prefix: "_spill_test".to_string(),
+            disk_spill: None,
+            spiller_type: SpillerType::OrderBy,
+        };
+
+        let spiller = Spiller::create(ctx.clone(), op, spill_config)?;
 
         let sort_desc = Arc::new(vec![SortColumnDescription {
             offset: 0,
@@ -620,24 +622,6 @@ mod tests {
         );
 
         Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_two_way_merge_sort() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data(None);
-
-        test(ctx, input, expected, 4, 2, false, None).await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_two_way_merge_sort_with_memory_block() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-        let (input, expected) = basic_test_data(None);
-
-        test(ctx, input, expected, 4, 2, true, None).await
     }
 
     async fn basic_test(

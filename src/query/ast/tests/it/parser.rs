@@ -18,22 +18,15 @@ use std::io::Write;
 
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::QuotedIdent;
-use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
-use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Backtrace;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::IResult;
-use databend_common_ast::parser::Input;
-use databend_common_ast::parser::ParseMode;
-use databend_common_ast::rule;
+use databend_common_ast::parser::*;
 use goldenfile::Mint;
+use nom_rule::rule;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
@@ -795,7 +788,7 @@ fn test_statement() {
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"
-            EXECUTE IMMEDIATE 
+            EXECUTE IMMEDIATE
             $$
             BEGIN
                 LOOP
@@ -829,9 +822,29 @@ fn test_statement() {
         r#"describe PROCEDURE p1()"#,
         r#"describe PROCEDURE p1(string, timestamp)"#,
         r#"drop PROCEDURE p1()"#,
+        r#"drop PROCEDURE if exists p1()"#,
         r#"drop PROCEDURE p1(int, string)"#,
         r#"call PROCEDURE p1()"#,
+        r#"call PROCEDURE p1(1, 'x', '2022-02-02'::Date)"#,
         r#"show PROCEDURES like 'p1%'"#,
+        r#"create or replace PROCEDURE p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
+        r#"create PROCEDURE if not exists p1() returns string not null language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;"#,
         r#"create PROCEDURE p1() returns string not null language sql comment = 'test' as $$
             BEGIN
                 LET sum := 0;
@@ -1226,6 +1239,7 @@ fn test_expr_error() {
         r#"1 a"#,
         r#"CAST(col1)"#,
         r#"a.add(b)"#,
+        r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
         r#"
             G.E.B IS NOT NULL

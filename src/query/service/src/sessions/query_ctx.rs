@@ -592,17 +592,26 @@ impl TableContext for QueryContext {
     }
 
     // get a hint at the number of blocks that need to be compacted.
-    fn get_compaction_num_block_hint(&self) -> u64 {
+    fn get_compaction_num_block_hint(&self, table_name: &str) -> u64 {
         self.shared
             .num_fragmented_block_hint
-            .load(Ordering::Acquire)
+            .lock()
+            .get(table_name)
+            .copied()
+            .unwrap_or_default()
     }
 
     // set a hint at the number of blocks that need to be compacted.
-    fn set_compaction_num_block_hint(&self, hint: u64) {
-        self.shared
+    fn set_compaction_num_block_hint(&self, table_name: &str, hint: u64) {
+        let old = self
+            .shared
             .num_fragmented_block_hint
-            .store(hint, Ordering::Release);
+            .lock()
+            .insert(table_name.to_string(), hint);
+        info!(
+            "set_compaction_num_block_hint: table_name {} old hint {:?}, new hint {}",
+            table_name, old, hint
+        );
     }
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {
@@ -1105,11 +1114,18 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        unsafe {
+        let mut license = unsafe {
             self.get_settings()
                 .get_enterprise_license()
                 .unwrap_or_default()
+        };
+
+        // Try load license from embedded env if failed to load from settings.
+        if license.is_empty() {
+            license = env!("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").to_string();
         }
+
+        license
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {

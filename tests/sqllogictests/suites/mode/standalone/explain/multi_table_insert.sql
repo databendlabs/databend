@@ -15,7 +15,7 @@ VALUES    (101, 1, 250.00, '2023-01-01'),
 query T
 EXPLAIN INSERT FIRST
 WHEN order_amount > 1000 THEN INTO processing_updates VALUES (order_id, 'PriorityHandling')
-WHEN order_amount > 500 THEN INTO processing_updates VALUES (order_id, 'ExpressHandling') 
+WHEN order_amount > 500 THEN INTO processing_updates VALUES (order_id, 'ExpressHandling')
 WHEN order_amount > 100 THEN INTO processing_updates VALUES (order_id, 'StandardHandling')
 ELSE INTO processing_updates VALUES (order_id, 'ReviewNeeded')
 SELECT    order_id,
@@ -31,9 +31,9 @@ Commit
         ├── branch 3: orders_placed.order_id (#0), 'ReviewNeeded'
         └── Filter
             ├── branch 0: is_true(orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL))
-            ├── branch 1: is_true(NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL))
-            ├── branch 2: is_true(NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL) AND orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL))
-            ├── branch 3: is_true(NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL))
+            ├── branch 1: is_true((NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)))
+            ├── branch 2: is_true(((NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)) AND orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL)))
+            ├── branch 3: is_true(((NOT orders_placed.order_amount (#2) > CAST(1000 AS Float32 NULL) AND NOT orders_placed.order_amount (#2) > CAST(500 AS Float32 NULL)) AND NOT orders_placed.order_amount (#2) > CAST(100 AS Float32 NULL)))
             └── Duplicate
                 ├── Duplicate data to 4 branch
                 └── TableScan

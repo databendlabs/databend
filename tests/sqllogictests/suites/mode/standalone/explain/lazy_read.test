@@ -97,7 +97,7 @@ RowFetch
         ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
-            ├── filters: [is_true(t_11831.time (#3) >= 1686672000000), is_true(t_11831.time (#3) <= 1686758399000), is_true(t_11831.uid (#0) = 11)]
+            ├── filters: [is_true(t1.time (#3) >= 1686672000000), is_true(t1.time (#3) <= 1686758399000), is_true(t1.uid (#0) = 11)]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_11831
@@ -210,7 +210,7 @@ Limit
             └── estimated rows: 0.00
 
 # Will use lazy materialization
-query T
+query ?
 explain with cte as (select a, a + 1 as X, b + 1 as Y from t_lazy order by a limit 3) select X,Y,a from (select * from cte order by Y limit 2) order by X limit 1;
 ----
 Limit

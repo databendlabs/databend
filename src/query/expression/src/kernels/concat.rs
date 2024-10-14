@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::copy_continuous_bits;
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
@@ -462,7 +463,7 @@ impl Column {
                 }
                 let remaining = len - idx;
                 if remaining > 0 {
-                    let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
                         &mut builder_ptr,
                         bitmap_slice,
                         builder_idx,

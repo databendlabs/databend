@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
@@ -44,8 +45,8 @@ pub const TIMESTAMP_MIN: i64 = -30610224000000000;
 /// Maximum valid timestamp `9999-12-31 23:59:59.999999`, represented by the microsecs offset from 1970-01-01.
 pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 
-pub const MICROS_IN_A_SEC: i64 = 1_000_000;
-pub const MICROS_IN_A_MILLI: i64 = 1_000;
+pub const MICROS_PER_SEC: i64 = 1_000_000;
+pub const MICROS_PER_MILLI: i64 = 1_000;
 
 pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
@@ -193,6 +194,11 @@ impl ValueType for TimestampType {
     }
 
     #[inline(always)]
+    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
+        left.cmp(&right)
+    }
+
+    #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left == right
     }
@@ -256,7 +262,7 @@ impl ArgType for TimestampType {
 }
 
 pub fn microseconds_to_seconds(micros: i64) -> i64 {
-    micros / MICROS_IN_A_SEC
+    micros / MICROS_PER_SEC
 }
 
 pub fn microseconds_to_days(micros: i64) -> i32 {

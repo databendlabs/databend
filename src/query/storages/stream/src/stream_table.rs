@@ -264,10 +264,9 @@ impl StreamTable {
             .get_table_name_by_id(source_table_id)
             .await
             .and_then(|opt| {
-                opt.ok_or(ErrorCode::UnknownTable(format!(
-                    "Unknown table id: '{}'",
-                    source_table_id
-                )))
+                opt.ok_or_else(|| {
+                    ErrorCode::UnknownTable(format!("Unknown table id: '{}'", source_table_id))
+                })
             })
     }
 
@@ -286,7 +285,7 @@ impl StreamTable {
                 let source_table_meta = catalog
                     .get_table_meta_by_id(source_table_id)
                     .await?
-                    .ok_or(ErrorCode::Internal("source database id must be set"))?;
+                    .ok_or_else(|| ErrorCode::Internal("source database id must be set"))?;
                 source_table_meta
                     .data
                     .options

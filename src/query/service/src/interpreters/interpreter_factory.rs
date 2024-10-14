@@ -51,6 +51,7 @@ use crate::interpreters::interpreter_notification_create::CreateNotificationInte
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
 use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
@@ -58,6 +59,7 @@ use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
+use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
 use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
 use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
@@ -70,6 +72,7 @@ use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
@@ -210,6 +213,10 @@ impl InterpreterFactory {
             Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
                 ctx,
                 *set_options.clone(),
+            )?)),
+            Plan::UnsetOptions(targets) => Ok(Arc::new(UnsetOptionsInterpreter::try_create(
+                ctx,
+                *targets.clone(),
             )?)),
             Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
                 ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,
@@ -357,6 +364,10 @@ impl InterpreterFactory {
             Plan::AlterUser(alter_user) => Ok(Arc::new(AlterUserInterpreter::try_create(
                 ctx,
                 *alter_user.clone(),
+            )?)),
+            Plan::DescUser(desc_user) => Ok(Arc::new(DescUserInterpreter::try_create(
+                ctx,
+                *desc_user.clone(),
             )?)),
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
@@ -593,6 +604,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DropProcedure(p) => Ok(Arc::new(DropProcedureInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

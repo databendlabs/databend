@@ -56,7 +56,7 @@ impl Interpreter for DropProcedureInterpreter {
 
         let drop_procedure_req: DropProcedureReq = self.plan.clone().into();
         let _ = UserApiProvider::instance()
-            .drop_procedure(&tenant, drop_procedure_req)
+            .drop_procedure(&tenant, drop_procedure_req, self.plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

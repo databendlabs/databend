@@ -20,7 +20,6 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -88,12 +87,7 @@ impl Table for NullTable {
         Ok(())
     }
 
-    fn append_data(
-        &self,
-        _: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        _: AppendMode,
-    ) -> Result<()> {
+    fn append_data(&self, _: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         Ok(())
     }

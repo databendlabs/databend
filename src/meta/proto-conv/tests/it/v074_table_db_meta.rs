@@ -116,6 +116,7 @@ fn test_decode_v74_database_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
+        gc_in_progress: false,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

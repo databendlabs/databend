@@ -21,7 +21,6 @@ use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -34,30 +33,21 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storage::init_operator;
-use databend_common_storages_parquet::ParquetFilesPart;
-use databend_common_storages_parquet::ParquetPart;
-use databend_common_storages_parquet::ParquetRSPruner;
-use databend_common_storages_parquet::ParquetRSReaderBuilder;
-use databend_storages_common_pruner::RangePrunerCreator;
-use iceberg::spec::DataContentType;
-use iceberg::spec::ManifestContentType;
+use futures::TryStreamExt;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
-use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
 use crate::IcebergCatalog;
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
 /// accessor wrapper as a table
+#[derive(Clone)]
 pub struct IcebergTable {
     info: TableInfo,
     ctl: IcebergCatalog,
@@ -72,7 +62,7 @@ impl IcebergTable {
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let ctl = IcebergCatalog::try_create(info.catalog_info.clone())?;
-        let (db_name, table_name) = info.desc.as_str().split_once(',').ok_or_else(|| {
+        let (db_name, table_name) = info.desc.as_str().rsplit_once('.').ok_or_else(|| {
             ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", &info.desc))
         })?;
         Ok(Box::new(Self {
@@ -90,15 +80,6 @@ impl IcebergTable {
             comment: "ICEBERG Storage Engine".to_string(),
             support_cluster_key: false,
         }
-    }
-
-    fn get_storage_params(&self) -> Result<&StorageParams> {
-        self.info.meta.storage_params.as_ref().ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "Iceberg table {} must have storage parameters",
-                self.info.name
-            ))
-        })
     }
 
     pub async fn load_iceberg_table(
@@ -161,7 +142,8 @@ impl IcebergTable {
         })
     }
 
-    async fn table(&self) -> Result<&iceberg::table::Table> {
+    /// Fetch or init the iceberg table
+    pub async fn table(&self) -> Result<&iceberg::table::Table> {
         self.table
             .get_or_try_init(|| async {
                 let table =
@@ -188,53 +170,10 @@ impl IcebergTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(parts_len, max_threads);
 
-        let table_schema = self.schema();
-        let arrow_schema = table_schema.as_ref().into();
-        let leaf_fields = Arc::new(table_schema.leaf_fields());
-
-        let mut read_options = ParquetReadOptions::default();
-
-        if !ctx.get_settings().get_enable_parquet_page_index()? {
-            read_options = read_options.with_prune_pages(false);
-        }
-
-        if !ctx.get_settings().get_enable_parquet_rowgroup_pruning()? {
-            read_options = read_options.with_prune_row_groups(false);
-        }
-
-        if !ctx.get_settings().get_enable_parquet_prewhere()? {
-            read_options = read_options.with_do_prewhere(false);
-        }
-
-        let pruner = ParquetRSPruner::try_create(
-            ctx.get_function_context()?,
-            table_schema.clone(),
-            leaf_fields,
-            &plan.push_downs,
-            read_options,
-            vec![],
-        )?;
-
-        let sp = self.get_storage_params()?;
-        let op = init_operator(sp)?;
-        let mut builder =
-            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, arrow_schema)?
-                .with_options(read_options)
-                .with_push_downs(plan.push_downs.as_ref())
-                .with_pruner(Some(pruner));
-
-        let parquet_reader = Arc::new(builder.build_full_reader()?);
-
-        // TODO: we need to support top_k.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
             |output| {
-                IcebergTableSource::create(
-                    ctx.clone(),
-                    output,
-                    output_schema.clone(),
-                    parquet_reader.clone(),
-                )
+                IcebergTableSource::create(ctx.clone(), output, output_schema.clone(), self.clone())
             },
             max_threads.max(1),
         )
@@ -244,91 +183,48 @@ impl IcebergTable {
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
-        let metadata = table.metadata_ref();
-        let snapshot = metadata.current_snapshot().ok_or_else(|| {
-            ErrorCode::ReadTableDataError("Iceberg table doesn't have valid snapshot")
-        })?;
+        let mut scan = table.scan();
 
-        let manifest_list = snapshot
-            .load_manifest_list(table.file_io(), &metadata)
-            .await
-            .map_err(|e| {
-                ErrorCode::ReadTableDataError(format!("Cannot load manifest list: {e:?}"))
-            })?;
-
-        let mut data_files = vec![];
-
-        for manifest_file in manifest_list
-            .entries()
-            .iter()
-            .filter(|v| v.content == ManifestContentType::Data)
-        {
-            let manifest = manifest_file
-                .load_manifest(table.file_io())
-                .await
-                .map_err(|e| {
-                    ErrorCode::ReadTableDataError(format!("Cannot load manifest file: {e:?}"))
-                })?;
-            manifest.entries().iter().for_each(|v| {
-                if v.content_type() == DataContentType::Data {
-                    data_files.push(v.data_file().clone());
-                }
-            });
+        if let Some(push_downs) = &push_downs {
+            if let Some(projection) = &push_downs.projection {
+                scan = scan.select(
+                    projection
+                        .project_schema(&self.schema())
+                        .fields
+                        .iter()
+                        .map(|v| v.name.clone()),
+                );
+            }
+            // TODO: Implement filter based on iceberg-rust's scan builder.
+            // if let Some(filter) = &push_downs.filters {}
         }
 
-        let filter = push_downs.as_ref().and_then(|extra| {
-            extra
-                .filters
-                .as_ref()
-                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
-        });
+        let tasks: Vec<_> = scan
+            .build()
+            .map_err(|err| ErrorCode::Internal(format!("iceberg table scan build: {err:?}")))?
+            .plan_files()
+            .await
+            .map_err(|err| ErrorCode::Internal(format!("iceberg table scan plan: {err:?}")))?
+            .try_collect()
+            .await
+            .map_err(|err| ErrorCode::Internal(format!("iceberg table scan collect: {err:?}")))?;
 
-        let schema = self.schema();
-
-        let pruner =
-            RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, filter.as_ref())?;
-
-        // TODO: support other file formats. We only support parquet files now.
         let mut read_rows = 0;
         let mut read_bytes = 0;
-        let total_files = data_files.len();
-        let parts = data_files
+        let total_files = tasks.len();
+        let parts: Vec<_> = tasks
             .into_iter()
-            .filter(|df| {
-                if let Some(stats) = get_stats_of_data_file(&schema, df) {
-                    pruner.should_keep(&stats, None)
-                } else {
-                    true
-                }
+            .map(|v: iceberg::scan::FileScanTask| {
+                read_rows += v.record_count.unwrap_or_default() as usize;
+                read_bytes += v.length as usize;
+                Arc::new(Box::new(IcebergPartInfo::new(v)) as Box<dyn PartInfo>)
             })
-            .map(|v: iceberg::spec::DataFile| {
-                read_rows += v.record_count() as usize;
-                read_bytes += v.file_size_in_bytes() as usize;
-                match v.file_format() {
-                    iceberg::spec::DataFileFormat::Parquet => {
-                        let location = v.file_path().to_string();
-                        Ok(Arc::new(
-                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
-                                ParquetFilesPart {
-                                    files: vec![(location, v.file_size_in_bytes())],
-                                    estimated_uncompressed_size: v.file_size_in_bytes(),
-                                },
-                            ))) as Box<dyn PartInfo>,
-                        ))
-                    }
-                    _ => Err(ErrorCode::Unimplemented(
-                        "Only parquet format is supported for iceberg table",
-                    )),
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        // TODO: more precise pruning.
+            .collect();
 
         Ok((
             PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
@@ -385,6 +281,6 @@ impl Table for IcebergTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        true
+        false
     }
 }
