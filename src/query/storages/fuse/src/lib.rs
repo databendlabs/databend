@@ -23,7 +23,6 @@
 #![feature(slice_take)]
 #![recursion_limit = "256"]
 
-mod columnar_prune;
 mod constants;
 mod fuse_column;
 mod fuse_part;

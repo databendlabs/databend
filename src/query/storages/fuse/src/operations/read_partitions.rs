@@ -43,7 +43,6 @@ use log::info;
 use sha2::Digest;
 use sha2::Sha256;
 
-use crate::columnar_prune;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexBuilder;
 use crate::pruning::create_segment_location_vector;
@@ -188,47 +187,32 @@ impl FuseTable {
             None
         };
 
-        let (block_metas, pruning_stats) =
-            if ctx.get_settings().get_enable_columnar_segment_info()? {
-                columnar_prune::prune(
-                    &ctx,
-                    dal,
-                    table_schema.clone(),
-                    &segments_location,
-                    &push_downs,
-                    self.bloom_index_cols(),
-                    bloom_index_builder,
-                )
-                .await?
-            } else {
-                let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-                    FusePruner::create(
-                        &ctx,
-                        dal,
-                        table_schema.clone(),
-                        &push_downs,
-                        self.bloom_index_cols(),
-                        bloom_index_builder,
-                    )?
-                } else {
-                    let cluster_keys = self.cluster_keys(ctx.clone());
+        let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                dal,
+                table_schema.clone(),
+                &push_downs,
+                self.bloom_index_cols(),
+                bloom_index_builder,
+            )?
+        } else {
+            let cluster_keys = self.cluster_keys(ctx.clone());
 
-                    FusePruner::create_with_pages(
-                        &ctx,
-                        dal,
-                        table_schema,
-                        &push_downs,
-                        self.cluster_key_meta.clone(),
-                        cluster_keys,
-                        self.bloom_index_cols(),
-                        bloom_index_builder,
-                    )?
-                };
-                let block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)> =
-                    pruner.read_pruning(segments_location).await?;
-                let pruning_stats: PruningStatistics = pruner.pruning_stats();
-                (block_metas, pruning_stats)
-            };
+            FusePruner::create_with_pages(
+                &ctx,
+                dal,
+                table_schema,
+                &push_downs,
+                self.cluster_key_meta.clone(),
+                cluster_keys,
+                self.bloom_index_cols(),
+                bloom_index_builder,
+            )?
+        };
+        let block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)> =
+            pruner.read_pruning(segments_location).await?;
+        let pruning_stats: PruningStatistics = pruner.pruning_stats();
 
         info!(
             "prune snapshot block end, final block numbers:{}, cost:{:?}",
