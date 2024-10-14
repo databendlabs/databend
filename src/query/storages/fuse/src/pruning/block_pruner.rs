@@ -23,6 +23,7 @@ use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
+use databend_common_expression::DataBlock;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -47,6 +48,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
+        _columnar_block_metas: Option<DataBlock>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);

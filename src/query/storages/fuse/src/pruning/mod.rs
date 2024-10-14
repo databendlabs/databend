@@ -30,4 +30,5 @@ pub use inverted_index_pruner::InvertedIndexPruner;
 pub use pruner_location::create_segment_location_vector;
 pub use pruner_location::SegmentLocation;
 pub use pruning_statistics::FusePruningStatistics;
+pub use segment_pruner::SegmentInfoVariant;
 pub use segment_pruner::SegmentPruner;

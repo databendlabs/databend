@@ -43,6 +43,8 @@ use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::table_type_to_arrow_type;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -61,7 +63,7 @@ pub struct ColumnarSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,
     pub block_metas: Vec<Arc<BlockMeta>>,
-    pub columnar_block_metas: RecordBatch,
+    pub columnar_block_metas: DataBlock,
 }
 
 impl ColumnarSegmentInfo {
@@ -136,7 +138,7 @@ impl ColumnarSegmentInfo {
     fn block_metas_to_columnar(
         blocks: &[Arc<BlockMeta>],
         table_schema: &TableSchema,
-    ) -> Result<(Vec<Arc<BlockMeta>>, RecordBatch)> {
+    ) -> Result<(Vec<Arc<BlockMeta>>, DataBlock)> {
         let mut fields = Vec::with_capacity(table_schema.fields.len());
         let mut columns: Vec<Arc<dyn Array>> = Vec::with_capacity(table_schema.fields.len());
 
@@ -169,6 +171,8 @@ impl ColumnarSegmentInfo {
 
         let schema = Schema::new(fields);
         let record_batch = RecordBatch::try_new(Arc::new(schema.clone()), columns)?;
+        let (data_block, _) =
+            DataBlock::from_record_batch(&DataSchema::from(table_schema), &record_batch)?;
 
         let block_metas = blocks
             .iter()
@@ -178,7 +182,7 @@ impl ColumnarSegmentInfo {
                 Arc::new(new_block_meta)
             })
             .collect();
-        Ok((block_metas, record_batch))
+        Ok((block_metas, data_block))
     }
 }
 

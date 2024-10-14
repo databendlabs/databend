@@ -40,6 +40,7 @@ use crate::operations::mutation::ReclusterMode;
 use crate::operations::ReclusterMutator;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::PruningContext;
+use crate::pruning::SegmentInfoVariant;
 use crate::pruning::SegmentPruner;
 use crate::FuseTable;
 use crate::SegmentLocation;
@@ -169,7 +170,7 @@ impl FuseTable {
 
     pub async fn generate_recluster_parts(
         mutator: Arc<ReclusterMutator>,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        compact_segments: Vec<(SegmentLocation, Arc<SegmentInfoVariant>)>,
     ) -> Result<Option<(u64, u64, ReclusterParts)>> {
         let mut selected_segs = vec![];
         let mut block_count = 0;
@@ -226,7 +227,7 @@ impl FuseTable {
         dal: Operator,
         push_down: &Option<PushDownInfo>,
         mut segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+    ) -> Result<Vec<(SegmentLocation, Arc<SegmentInfoVariant>)>> {
         let max_concurrency = {
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
             let v = std::cmp::max(max_threads, 10);
@@ -281,7 +282,6 @@ impl FuseTable {
             let res = worker?;
             metas.extend(res);
         }
-
         Ok(metas)
     }
 }

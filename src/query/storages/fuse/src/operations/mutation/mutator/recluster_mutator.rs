@@ -49,6 +49,7 @@ use log::warn;
 use crate::operations::mutation::SegmentCompactChecker;
 use crate::operations::BlockCompactMutator;
 use crate::operations::CompactLazyPartInfo;
+use crate::pruning::SegmentInfoVariant;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
@@ -148,7 +149,7 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     pub async fn target_select(
         &self,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        compact_segments: Vec<(SegmentLocation, Arc<SegmentInfoVariant>)>,
         mode: ReclusterMode,
     ) -> Result<(u64, ReclusterParts)> {
         match mode {
@@ -372,7 +373,7 @@ impl ReclusterMutator {
 
     async fn generate_compact_tasks(
         &self,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        compact_segments: Vec<(SegmentLocation, Arc<SegmentInfoVariant>)>,
     ) -> Result<(u64, ReclusterParts)> {
         debug!("recluster: generate compact tasks");
         let settings = self.ctx.get_settings();

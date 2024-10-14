@@ -341,8 +341,8 @@ impl SegmentCompactChecker {
     pub fn add(
         &mut self,
         idx: SegmentIndex,
-        segment: Arc<CompactSegmentInfo>,
-    ) -> Vec<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
+        segment: Arc<SegmentInfoVariant>,
+    ) -> Vec<Vec<(SegmentIndex, Arc<SegmentInfoVariant>)>> {
         self.total_block_count += segment.summary.block_count;
         if self.total_block_count < self.block_threshold {
             self.segments.push((idx, segment));

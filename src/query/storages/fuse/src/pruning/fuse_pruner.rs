@@ -14,12 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
@@ -42,7 +44,6 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
 use log::warn;
@@ -51,6 +52,7 @@ use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
 
+use super::segment_pruner::SegmentInfoVariant;
 use crate::io::BloomIndexBuilder;
 use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
@@ -332,14 +334,14 @@ impl FusePruner {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
-                        for (segment_location, compact_segment_info) in &pruned_segments {
+                        for (segment_location, segment_info_variant) in &pruned_segments {
                             if let Some(range_index) = &inverse_range_index {
                                 if !range_index
-                                    .should_keep(&compact_segment_info.summary.col_stats, None)
+                                    .should_keep(&segment_info_variant.summary().col_stats, None)
                                 {
                                     deleted_segments.push(DeletedSegmentInfo {
                                         index: segment_location.segment_idx,
-                                        summary: compact_segment_info.summary.clone(),
+                                        summary: segment_info_variant.summary().clone(),
                                     });
                                     continue;
                                 };
@@ -348,34 +350,48 @@ impl FusePruner {
                             // since block metas touched by deletion are not likely to
                             // be accessed soon.
                             let populate_block_meta_cache = false;
-                            let block_metas = Self::extract_block_metas(
+                            let (block_metas, columnar_block_metas) = Self::extract_block_metas(
                                 &segment_location.location.0,
-                                compact_segment_info,
+                                segment_info_variant,
                                 populate_block_meta_cache,
                             )?;
                             res.extend(
                                 block_pruner
-                                    .pruning(segment_location.clone(), block_metas)
+                                    .pruning(
+                                        segment_location.clone(),
+                                        block_metas,
+                                        columnar_block_metas,
+                                    )
                                     .await?,
                             );
                         }
                     } else {
                         let sample_probability = table_sample(&push_down);
                         for (location, info) in pruned_segments {
-                            let mut block_metas =
+                            let (mut block_metas, mut columnar_block_metas) =
                                 Self::extract_block_metas(&location.location.0, &info, true)?;
                             if let Some(probability) = sample_probability {
                                 let mut sample_block_metas = Vec::with_capacity(block_metas.len());
                                 let mut rng = thread_rng();
                                 let bernoulli = Bernoulli::new(probability).unwrap();
-                                for block in block_metas.iter() {
+                                let mut sampled_bitmap = vec![false; block_metas.len()];
+                                for (i, block) in block_metas.iter().enumerate() {
                                     if bernoulli.sample(&mut rng) {
                                         sample_block_metas.push(block.clone());
+                                        sampled_bitmap[i] = true;
                                     }
                                 }
                                 block_metas = Arc::new(sample_block_metas);
+                                if let Some(c) = std::mem::take(&mut columnar_block_metas) {
+                                    columnar_block_metas =
+                                        Some(c.filter_with_bitmap(&Bitmap::from(sampled_bitmap))?);
+                                }
                             }
-                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
+                            res.extend(
+                                block_pruner
+                                    .pruning(location.clone(), block_metas, columnar_block_metas)
+                                    .await?,
+                            );
                         }
                     }
                     Result::<_>::Ok((res, deleted_segments))
@@ -403,20 +419,31 @@ impl FusePruner {
 
     fn extract_block_metas(
         segment_path: &str,
-        segment: &CompactSegmentInfo,
+        segment: &SegmentInfoVariant,
         populate_cache: bool,
-    ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
-        if let Some(cache) = CacheManager::instance().get_block_meta_cache() {
-            if let Some(metas) = cache.get(segment_path) {
-                Ok(metas)
-            } else {
-                match populate_cache {
-                    true => Ok(cache.insert(segment_path.to_string(), segment.block_metas()?)),
-                    false => Ok(Arc::new(segment.block_metas()?)),
-                }
+    ) -> Result<(Arc<Vec<Arc<BlockMeta>>>, Option<DataBlock>)> {
+        match segment {
+            SegmentInfoVariant::Compact(segment) => {
+                let block_metas = if let Some(cache) =
+                    CacheManager::instance().get_block_meta_cache()
+                {
+                    if let Some(metas) = cache.get(segment_path) {
+                        metas
+                    } else {
+                        match populate_cache {
+                            true => cache.insert(segment_path.to_string(), segment.block_metas()?),
+                            false => Arc::new(segment.block_metas()?),
+                        }
+                    }
+                } else {
+                    Arc::new(segment.block_metas()?)
+                };
+                Ok((block_metas, None))
             }
-        } else {
-            Ok(Arc::new(segment.block_metas()?))
+            SegmentInfoVariant::Columnar(segment) => Ok((
+                Arc::new(segment.block_metas.clone()),
+                Some(segment.columnar_block_metas.clone()),
+            )),
         }
     }
 
@@ -450,6 +477,7 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             Arc::new(batch),
+                            None, // stream pruning does not use columnar segment info cache for now, so pass None.
                         )
                         .await?;
 
