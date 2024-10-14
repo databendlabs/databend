@@ -54,6 +54,33 @@ impl UnionAll {
         }
         Ok(used_columns)
     }
+
+    pub fn derive_union_stats(
+        &self,
+        left_stat_info: Arc<StatInfo>,
+        right_stat_info: Arc<StatInfo>,
+    ) -> Result<Arc<StatInfo>> {
+        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
+
+        let precise_cardinality =
+            left_stat_info
+                .statistics
+                .precise_cardinality
+                .and_then(|left_cardinality| {
+                    right_stat_info
+                        .statistics
+                        .precise_cardinality
+                        .map(|right_cardinality| left_cardinality + right_cardinality)
+                });
+
+        Ok(Arc::new(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+            },
+        }))
+    }
 }
 
 impl Operator for UnionAll {
@@ -117,26 +144,7 @@ impl Operator for UnionAll {
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
-
-        let precise_cardinality =
-            left_stat_info
-                .statistics
-                .precise_cardinality
-                .and_then(|left_cardinality| {
-                    right_stat_info
-                        .statistics
-                        .precise_cardinality
-                        .map(|right_cardinality| left_cardinality + right_cardinality)
-                });
-
-        Ok(Arc::new(StatInfo {
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality,
-                column_stats: Default::default(),
-            },
-        }))
+        self.derive_union_stats(left_stat_info, right_stat_info)
     }
 
     fn compute_required_prop_child(
