@@ -44,9 +44,11 @@ async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.4"
 base64 = "0.21.0"
+buf-list = "1.0.3"
 bumpalo = { workspace = true }
 byte-unit = "4.0.19"
 byteorder = { workspace = true }
+bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
