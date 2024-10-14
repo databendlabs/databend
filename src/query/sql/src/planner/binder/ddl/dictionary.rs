@@ -414,11 +414,8 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        let mut db_name = String::new();
-        if let Some(db) = database {
-            select_builder.with_filter(format!("database = '{}'", db.name));
-            db_name = db.name.clone();
-        }
+        let database = self.check_database_exist(&None, database).await?;
+        select_builder.with_filter(format!("database = '{}'", database.clone()));
 
         match limit {
             None => (),
@@ -434,7 +431,7 @@ impl Binder {
         self.bind_rewrite_to_query(
             bind_context,
             query.as_str(),
-            RewriteKind::ShowDictionaries(db_name),
+            RewriteKind::ShowDictionaries(database.clone()),
         )
         .await
     }
