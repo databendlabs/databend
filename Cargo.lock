@@ -2932,6 +2932,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
+ "databend-common-version",
  "databend-enterprise-query",
  "databend-query",
  "databend-storages-common-table-meta",
@@ -3009,7 +3010,6 @@ dependencies = [
  "bytesize",
  "crc32fast",
  "ctrlc",
- "databend-common-building",
  "databend-common-exception",
  "enquote",
  "fastrace",
@@ -3035,7 +3035,6 @@ dependencies = [
  "reqwest",
  "reqwest-hickory-resolver",
  "rustix 0.38.42",
- "semver",
  "serde",
  "serde_json",
  "serde_test",
@@ -3176,12 +3175,12 @@ dependencies = [
  "anyhow",
  "clap",
  "databend-common-base",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-app",
  "databend-common-storage",
  "databend-common-tracing",
+ "databend-common-version",
  "log",
  "pretty_assertions",
  "serde",
@@ -3262,6 +3261,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
+ "databend-common-version",
  "databend_educe",
  "either",
  "enum-as-inner",
@@ -3507,6 +3507,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-proto-conv",
+ "databend-common-version",
  "enumflags2",
  "fastrace",
  "futures",
@@ -3618,7 +3619,6 @@ dependencies = [
  "arrow-flight",
  "async-backtrace",
  "databend-common-base",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
@@ -3626,6 +3626,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
+ "databend-common-version",
  "derive_more",
  "fastrace",
  "futures",
@@ -3734,6 +3735,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "databend-common-version",
  "deepsize",
  "derive_more",
  "display-more",
@@ -3833,7 +3835,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-building",
  "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
@@ -4509,7 +4510,6 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-column",
  "databend-common-compress",
- "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-formats",
@@ -4523,6 +4523,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-common-version",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner",
@@ -4571,7 +4572,6 @@ dependencies = [
  "chrono",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-cloud-control",
  "databend-common-config",
@@ -4592,6 +4592,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-common-users",
+ "databend-common-version",
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",
@@ -4694,6 +4695,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-version"
+version = "0.1.0"
+dependencies = [
+ "databend-common-building",
+ "semver",
+]
+
+[[package]]
 name = "databend-enterprise-aggregating-index"
 version = "0.1.0"
 dependencies = [
@@ -4766,9 +4775,6 @@ dependencies = [
 [[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
-dependencies = [
- "databend-common-building",
-]
 
 [[package]]
 name = "databend-enterprise-ngram-index"
@@ -4793,7 +4799,6 @@ dependencies = [
  "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
@@ -4816,6 +4821,7 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-common-storages-stream",
  "databend-common-tracing",
+ "databend-common-version",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
@@ -5014,7 +5020,6 @@ dependencies = [
  "backon",
  "clap",
  "databend-common-base",
- "databend-common-building",
  "databend-common-grpc",
  "databend-common-http",
  "databend-common-meta-api",
@@ -5028,6 +5033,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
+ "databend-common-version",
  "deepsize",
  "derive_more",
  "display-more",
@@ -5083,6 +5089,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-tracing",
+ "databend-common-version",
  "databend-meta",
  "display-more",
  "fastrace",
@@ -5177,6 +5184,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-tracing",
  "databend-common-users",
+ "databend-common-version",
  "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",

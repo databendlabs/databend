@@ -42,15 +42,15 @@ impl SyncSystemTable for CreditsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let names: Vec<String> = env!("DATABEND_CREDITS_NAMES")
+        let names: Vec<String> = databend_common_version::DATABEND_CREDITS_NAMES
             .split_terminator(',')
             .map(|x| x.trim().to_string())
             .collect();
-        let versions: Vec<String> = env!("DATABEND_CREDITS_VERSIONS")
+        let versions: Vec<String> = databend_common_version::DATABEND_CREDITS_VERSIONS
             .split_terminator(',')
             .map(|x| x.trim().to_string())
             .collect();
-        let licenses: Vec<String> = env!("DATABEND_CREDITS_LICENSES")
+        let licenses: Vec<String> = databend_common_version::DATABEND_CREDITS_LICENSES
             .split_terminator(',')
             .map(|x| x.trim().to_string())
             .collect();
@@ -85,4 +85,9 @@ impl CreditsTable {
 
         SyncOneBlockSystemTable::create(CreditsTable { table_info })
     }
+}
+
+#[test]
+fn test_ssss() {
+    println!("aaa")
 }

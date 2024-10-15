@@ -42,7 +42,7 @@ impl SyncSystemTable for ContributorsTable {
     }
 
     fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let contributors: Vec<String> = env!("DATABEND_COMMIT_AUTHORS")
+        let contributors: Vec<String> = databend_common_version::DATABEND_COMMIT_AUTHORS
             .split_terminator(',')
             .map(|x| x.trim().to_string())
             .collect();

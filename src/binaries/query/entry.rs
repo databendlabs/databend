@@ -20,10 +20,6 @@ use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
-use databend_common_config::DATABEND_COMMIT_VERSION;
-use databend_common_config::DATABEND_GIT_SEMVER;
-use databend_common_config::DATABEND_GIT_SHA;
-use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -31,6 +27,10 @@ use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_GIT_SEMVER;
+use databend_common_version::DATABEND_GIT_SHA;
+use databend_common_version::DATABEND_SEMVER;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::local;
 use databend_query::persistent_log::GlobalPersistentLog;
@@ -220,7 +220,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     {
         set_system_version(
             "query",
-            DATABEND_GIT_SEMVER.as_str(),
+            DATABEND_GIT_SEMVER.expect("DATABEND_GIT_SEMVER can not be None"),
             DATABEND_GIT_SHA.as_str(),
         );
         let address = conf.query.metric_api_address.clone();

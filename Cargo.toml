@@ -28,6 +28,7 @@ members = [
     "src/common/storage",
     "src/common/vector",
     "src/common/license",
+    "src/common/version",
     "src/query/ast",
     "src/query/codegen",
     "src/query/config",
@@ -187,6 +188,7 @@ databend-common-storages-view = { path = "src/query/storages/view" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
+databend-common-version = { path = "src/common/version" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }

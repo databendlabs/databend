@@ -39,7 +39,7 @@ pub use message::Streamed;
 use semver::Version;
 
 pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = option_env!("DATABEND_GIT_SEMVER");
+    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
