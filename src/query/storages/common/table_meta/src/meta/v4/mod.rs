@@ -16,6 +16,7 @@ mod columnar_segment;
 mod segment;
 mod snapshot;
 
+pub use columnar_segment::ColumnarBlockMeta;
 pub use columnar_segment::ColumnarSegmentInfo;
 pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;

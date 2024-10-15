@@ -20,6 +20,7 @@ pub use compact_part::CompactBlockPartInfo;
 pub use compact_part::CompactExtraInfo;
 pub use compact_part::CompactLazyPartInfo;
 pub use compact_part::CompactTaskInfo;
+pub use compact_part::SegmentInfoWithoutColumnarBlockMeta;
 pub use mutation_meta::ClusterStatsGenType;
 pub use mutation_meta::CompactSourceMeta;
 pub use mutation_meta::SerializeBlock;

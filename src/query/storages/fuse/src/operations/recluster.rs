@@ -182,7 +182,7 @@ impl FuseTable {
 
         let latest = compact_segments.len() - 1;
         for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
-            if !mutator.segment_can_recluster(&compact_segment.1.summary()) {
+            if !mutator.segment_can_recluster(compact_segment.1.summary()) {
                 continue;
             }
 

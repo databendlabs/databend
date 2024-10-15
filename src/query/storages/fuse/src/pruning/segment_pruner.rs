@@ -97,7 +97,7 @@ impl SegmentPruner {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(Clone)]
 pub enum SegmentInfoVariant {
     Compact(Arc<CompactSegmentInfo>),
     Columnar(Arc<ColumnarSegmentInfo>),

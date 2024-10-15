@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
@@ -44,6 +44,7 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::ColumnarBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
 use log::warn;
@@ -374,17 +375,24 @@ impl FusePruner {
                                 let mut sample_block_metas = Vec::with_capacity(block_metas.len());
                                 let mut rng = thread_rng();
                                 let bernoulli = Bernoulli::new(probability).unwrap();
-                                let mut sampled_bitmap = vec![false; block_metas.len()];
-                                for (i, block) in block_metas.iter().enumerate() {
+                                let mut sampled_bitmap =
+                                    MutableBitmap::with_capacity(block_metas.len());
+                                for block in block_metas.iter() {
                                     if bernoulli.sample(&mut rng) {
                                         sample_block_metas.push(block.clone());
-                                        sampled_bitmap[i] = true;
+                                        sampled_bitmap.push(true);
+                                    } else {
+                                        sampled_bitmap.push(false);
                                     }
                                 }
                                 block_metas = Arc::new(sample_block_metas);
                                 if let Some(c) = std::mem::take(&mut columnar_block_metas) {
-                                    columnar_block_metas =
-                                        Some(c.filter_with_bitmap(&Bitmap::from(sampled_bitmap))?);
+                                    columnar_block_metas = Some(ColumnarBlockMeta {
+                                        data: c
+                                            .data
+                                            .filter_with_bitmap(&Bitmap::from(sampled_bitmap))?,
+                                        schema: c.schema,
+                                    });
                                 }
                             }
                             res.extend(
@@ -417,11 +425,12 @@ impl FusePruner {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn extract_block_metas(
         segment_path: &str,
         segment: &SegmentInfoVariant,
         populate_cache: bool,
-    ) -> Result<(Arc<Vec<Arc<BlockMeta>>>, Option<DataBlock>)> {
+    ) -> Result<(Arc<Vec<Arc<BlockMeta>>>, Option<ColumnarBlockMeta>)> {
         match segment {
             SegmentInfoVariant::Compact(segment) => {
                 let block_metas = if let Some(cache) =

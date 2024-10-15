@@ -23,11 +23,12 @@ use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
-use databend_common_expression::DataBlock;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnarBlockMeta;
+use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use futures_util::future;
 use log::info;
 
@@ -48,7 +49,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
-        _columnar_block_metas: Option<DataBlock>,
+        columnar_block_metas: Option<ColumnarBlockMeta>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -58,11 +59,21 @@ impl BlockPruner {
             || self.pruning_ctx.inverted_index_pruner.is_some()
         {
             // async pruning with bloom index or inverted index.
-            self.block_pruning(segment_location, block_metas, block_meta_indexes)
-                .await
+            self.block_pruning(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                columnar_block_metas,
+            )
+            .await
         } else {
             // sync pruning without a bloom index and inverted index.
-            self.block_pruning_sync(segment_location, block_metas, block_meta_indexes)
+            self.block_pruning_sync(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                columnar_block_metas,
+            )
         }
     }
 
@@ -95,6 +106,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        columnar_block_metas: Option<ColumnarBlockMeta>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -136,7 +148,14 @@ impl BlockPruner {
                 );
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
-                let should_keep = range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas));
+                let col_stats_from_columnar_block_metas = columnar_block_metas.as_ref().map(|c|
+                    Arc::new(ColumnarSegmentInfo::col_stats(c.clone(), block_idx).unwrap())
+                );
+                let col_stats = match &col_stats_from_columnar_block_metas {
+                    Some(col_stats) => col_stats,
+                    None => &block_meta.col_stats,
+                };
+                let should_keep = range_pruner.should_keep(col_stats, Some(&block_meta.col_metas));
                 if should_keep {
                     // Perf.
                     {
@@ -170,8 +189,13 @@ impl BlockPruner {
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
 
+                                let col_stats = match &col_stats_from_columnar_block_metas {
+                                    Some(col_stats) => col_stats,
+                                    None => &block_meta.col_stats,
+                                };
+
                                 let keep_by_bloom = bloom_pruner
-                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, &block_meta)
+                                    .should_keep(&index_location, index_size, col_stats, column_ids, &block_meta)
                                     .await;
 
                                 let keep = keep_by_bloom && limit_pruner.within_limit(row_count);
@@ -294,6 +318,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        columnar_block_metas: Option<ColumnarBlockMeta>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -318,9 +343,18 @@ impl BlockPruner {
                 break;
             }
             let row_count = block_meta.row_count;
-            if range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
-                && limit_pruner.within_limit(row_count)
-            {
+            let should_keep = match &columnar_block_metas {
+                Some(columnar_block_metas) => {
+                    let col_stats =
+                    // TODO: no need to builld all col stats here.
+                        &ColumnarSegmentInfo::col_stats(columnar_block_metas.clone(), block_idx)?;
+                    range_pruner.should_keep(col_stats, Some(&block_meta.col_metas))
+                }
+                None => {
+                    range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
+                }
+            };
+            if should_keep && limit_pruner.within_limit(row_count) {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_after(1);

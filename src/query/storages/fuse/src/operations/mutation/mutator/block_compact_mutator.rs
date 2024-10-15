@@ -46,6 +46,7 @@ use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::CompactOptions;
+use crate::operations::SegmentInfoWithoutColumnarBlockMeta;
 use crate::pruning::SegmentInfoVariant;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
@@ -510,7 +511,7 @@ impl CompactTaskBuilder {
     async fn build_tasks(
         &mut self,
         segment_indices: Vec<usize>,
-        compact_segments: Vec<SegmentInfoVariant>,
+        compact_segments: Vec<SegmentInfoWithoutColumnarBlockMeta>,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PartInfoPtr>> {
         let mut block_idx = 0;

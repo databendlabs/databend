@@ -15,40 +15,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow::array::Array;
-use arrow::array::Date32Array;
-use arrow::array::Decimal128Array;
-use arrow::array::Decimal256Array;
-use arrow::array::Float32Array;
-use arrow::array::Float64Array;
-use arrow::array::Int16Array;
-use arrow::array::Int32Array;
-use arrow::array::Int64Array;
-use arrow::array::Int8Array;
-use arrow::array::LargeStringArray;
-use arrow::array::RecordBatch;
-use arrow::array::StructArray;
-use arrow::array::TimestampMicrosecondArray;
-use arrow::array::UInt16Array;
-use arrow::array::UInt32Array;
-use arrow::array::UInt64Array;
-use arrow::array::UInt8Array;
-use arrow::buffer::NullBuffer;
-use arrow::datatypes::DataType as ArrowDataType;
-use arrow::datatypes::Field;
-use arrow::datatypes::Fields;
-use arrow::datatypes::Schema;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::table_type_to_arrow_type;
-use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
-use databend_common_expression::Scalar;
+use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 
 use crate::meta::v2::BlockMeta;
 use crate::meta::ColumnStatistics;
@@ -64,36 +46,30 @@ pub struct ColumnarSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,
     pub block_metas: Vec<Arc<BlockMeta>>,
-    pub columnar_block_metas: DataBlock,
+    pub columnar_block_metas: ColumnarBlockMeta,
 }
 
-impl serde::Serialize for ColumnarSegmentInfo {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        todo!()
-    }
+#[derive(Clone)]
+pub struct ColumnarBlockMeta {
+    pub data: DataBlock,
+    pub schema: TableSchemaRef,
 }
 
-impl<'de> serde::Deserialize<'de> for ColumnarSegmentInfo {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        todo!()
-    }
-}
-
-impl PartialEq for ColumnarSegmentInfo {
-    fn eq(&self, other: &Self) -> bool {
-        todo!()
-    }
-}
+const FIELDS_OF_COL_STATS: &[&str] = &[
+    "min",
+    "max",
+    "null_count",
+    "in_memory_size",
+    "distinct_of_values",
+];
 
 impl ColumnarSegmentInfo {
     pub fn try_from_segment_info_and_schema(
         value: SegmentInfo,
         schema: &TableSchema,
     ) -> std::result::Result<Self, ErrorCode> {
-        let (block_metas, columnar_block_metas) =
-            Self::block_metas_to_columnar(&value.blocks, schema)?;
+        let block_metas = Self::build_lite_block_metas(&value.blocks)?;
+        let columnar_block_metas = Self::block_metas_to_columnar(&block_metas, schema)?;
         Ok(Self {
             format_version: value.format_version,
             summary: value.summary,
@@ -102,248 +78,133 @@ impl ColumnarSegmentInfo {
         })
     }
 
-    fn build_sub_fields_of_col_stats(data_type: &TableDataType) -> Fields {
-        vec![
-            Field::new("min", table_type_to_arrow_type(data_type), false),
-            Field::new("max", table_type_to_arrow_type(data_type), false),
-            Field::new("null_count", ArrowDataType::UInt64, false),
-            Field::new("in_memory_size", ArrowDataType::UInt64, false),
-            Field::new("distinct_of_values", ArrowDataType::UInt64, true),
-        ]
-        .into()
-    }
-
-    fn build_sub_arrays_of_col_stats(
-        blocks: &[Arc<BlockMeta>],
-        table_field: &TableField,
-    ) -> Result<Vec<Arc<dyn Array>>> {
-        let null_count: Vec<u64> =
-            Self::col_stat_or_default(blocks, table_field.column_id, |s| s.null_count);
-        let in_memory_size: Vec<u64> =
-            Self::col_stat_or_default(blocks, table_field.column_id, |s| s.in_memory_size);
-        let distinct_of_values: Vec<Option<u64>> =
-            Self::col_stat_or_default(blocks, table_field.column_id, |s| s.distinct_of_values);
-        let min = scalar_iter_to_array(
-            blocks
-                .iter()
-                .map(|b| b.col_stats.get(&table_field.column_id).map(|s| &s.min)),
-            &table_field.data_type,
-        )?;
-        let max = scalar_iter_to_array(
-            blocks
-                .iter()
-                .map(|b| b.col_stats.get(&table_field.column_id).map(|s| &s.max)),
-            &table_field.data_type,
-        )?;
-        let arrays: Vec<Arc<dyn Array>> = vec![
-            Arc::new(min),
-            Arc::new(max),
-            Arc::new(UInt64Array::from(null_count)),
-            Arc::new(UInt64Array::from(in_memory_size)),
-            Arc::new(UInt64Array::from(distinct_of_values)),
-        ];
-        Ok(arrays)
-    }
-
-    fn col_stat_or_default<T: Default>(
-        blocks: &[Arc<BlockMeta>],
-        col_id: u32,
-        which_stat: impl Fn(&ColumnStatistics) -> T + Copy,
-    ) -> Vec<T> {
-        blocks
-            .iter()
-            .map(|b| b.col_stats.get(&col_id).map(which_stat).unwrap_or_default())
-            .collect()
+    fn build_lite_block_metas(blocks: &[Arc<BlockMeta>]) -> Result<Vec<Arc<BlockMeta>>> {
+        let mut block_metas = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            let new_block_meta = BlockMeta {
+                col_stats: HashMap::new(),
+                ..block.as_ref().clone()
+            };
+            block_metas.push(Arc::new(new_block_meta));
+        }
+        Ok(block_metas)
     }
 
     fn block_metas_to_columnar(
         blocks: &[Arc<BlockMeta>],
         table_schema: &TableSchema,
-    ) -> Result<(Vec<Arc<BlockMeta>>, DataBlock)> {
+    ) -> Result<ColumnarBlockMeta> {
         let mut fields = Vec::with_capacity(table_schema.fields.len());
-        let mut columns: Vec<Arc<dyn Array>> = Vec::with_capacity(table_schema.fields.len());
+        let mut columns: Vec<Column> = Vec::with_capacity(table_schema.fields.len());
 
         for table_field in table_schema.fields.iter() {
             if !range_index_supported_type(&table_field.data_type) {
                 continue;
             }
 
-            let sub_fields_of_col_stats =
-                Self::build_sub_fields_of_col_stats(&table_field.data_type);
-            fields.push(Field::new(
-                table_field.column_id.to_string(),
-                ArrowDataType::Struct(sub_fields_of_col_stats.clone()),
-                true, // alter table add column will result in the old block metas having no col_stats of the new column
+            fields.push(TableField::new(
+                &table_field.column_id.to_string(),
+                TableDataType::Nullable(Box::new(TableDataType::Tuple {
+                    fields_name: FIELDS_OF_COL_STATS.iter().map(|s| s.to_string()).collect(),
+                    fields_type: Self::types_of_col_stats(&table_field.data_type),
+                })),
             ));
 
-            let sub_arrays_of_col_stats = Self::build_sub_arrays_of_col_stats(blocks, table_field)?;
+            let data_type = DataType::from(table_field.data_type());
+            let mut nulls = MutableBitmap::with_capacity(blocks.len());
+            let mut mins = ColumnBuilder::with_capacity(&data_type, blocks.len());
+            let mut maxs = ColumnBuilder::with_capacity(&data_type, blocks.len());
+            let mut null_counts = Vec::with_capacity(blocks.len());
+            let mut in_memory_sizes = Vec::with_capacity(blocks.len());
+            let mut distinct_of_values = Vec::with_capacity(blocks.len());
+            for block in blocks {
+                match block.col_stats.get(&table_field.column_id) {
+                    Some(col_stats) => {
+                        nulls.push(true);
+                        mins.push(col_stats.min.as_ref());
+                        maxs.push(col_stats.max.as_ref());
+                        null_counts.push(col_stats.null_count);
+                        in_memory_sizes.push(col_stats.in_memory_size);
+                        distinct_of_values.push(col_stats.distinct_of_values);
+                    }
+                    None => {
+                        nulls.push(false);
+                        mins.push_default();
+                        maxs.push_default();
+                        null_counts.push(Default::default());
+                        in_memory_sizes.push(Default::default());
+                        distinct_of_values.push(Default::default());
+                    }
+                }
+            }
 
-            let nulls = blocks
-                .iter()
-                .map(|b| b.col_stats.contains_key(&table_field.column_id))
-                .collect::<Vec<_>>();
-
-            columns.push(Arc::new(StructArray::try_new(
-                sub_fields_of_col_stats,
-                sub_arrays_of_col_stats,
-                Some(NullBuffer::from(nulls.clone())),
-            )?));
+            columns.push(Column::Nullable(Box::new(NullableColumn::new(
+                Column::Tuple(vec![
+                    mins.build(),
+                    maxs.build(),
+                    UInt64Type::from_data(null_counts),
+                    UInt64Type::from_data(in_memory_sizes),
+                    UInt64Type::from_opt_data(distinct_of_values),
+                ]),
+                Bitmap::from(nulls),
+            ))));
         }
 
-        let schema = Schema::new(fields);
-        let record_batch = RecordBatch::try_new(Arc::new(schema.clone()), columns)?;
-        let (data_block, _) =
-            DataBlock::from_record_batch(&DataSchema::from(table_schema), &record_batch)?;
-
-        let block_metas = blocks
-            .iter()
-            .map(|b| {
-                let mut new_block_meta = b.as_ref().clone();
-                new_block_meta.col_stats = HashMap::new();
-                Arc::new(new_block_meta)
-            })
-            .collect();
-        Ok((block_metas, data_block))
+        let schema = Arc::new(TableSchema::new(fields));
+        let data = DataBlock::new_from_columns(columns);
+        Ok(ColumnarBlockMeta { data, schema })
     }
-}
 
-fn scalar_iter_to_array<'a, I>(iter: I, data_type: &TableDataType) -> Result<Arc<dyn Array>>
-where I: Iterator<Item = Option<&'a Scalar>> {
-    match data_type.remove_nullable() {
-        TableDataType::Number(NumberDataType::Int8) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_int8().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Int8Array::from(values)))
+    fn types_of_col_stats(data_type: &TableDataType) -> Vec<TableDataType> {
+        vec![
+            data_type.clone(),
+            data_type.clone(),
+            TableDataType::Number(NumberDataType::UInt64),
+            TableDataType::Number(NumberDataType::UInt64),
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+        ]
+    }
+
+    pub fn to_lite_segment_info(&self) -> SegmentInfo {
+        SegmentInfo {
+            format_version: self.format_version,
+            summary: self.summary.clone(),
+            blocks: self.block_metas.clone(),
         }
-        TableDataType::Number(NumberDataType::Int16) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_int16().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Int16Array::from(values)))
+    }
+
+    pub fn col_stats(
+        columnar_block_metas: ColumnarBlockMeta,
+        block_id: usize,
+    ) -> Result<HashMap<u32, ColumnStatistics>> {
+        let mut col_stats = HashMap::with_capacity(columnar_block_metas.data.num_columns());
+        for (block_entry, table_field) in columnar_block_metas
+            .data
+            .columns()
+            .iter()
+            .zip(columnar_block_metas.schema.fields())
+        {
+            let col_id = table_field.name.parse::<u32>().unwrap();
+            let column = block_entry.to_column(columnar_block_metas.data.num_rows());
+            let nullable_column = column.into_nullable().unwrap();
+            match nullable_column.index(block_id) {
+                Some(Some(scalar)) => {
+                    let tuple = scalar.as_tuple().unwrap();
+                    col_stats.insert(col_id, ColumnStatistics {
+                        min: tuple[0].to_owned(),
+                        max: tuple[1].to_owned(),
+                        null_count: *tuple[2].as_number().unwrap().as_u_int64().unwrap(),
+                        in_memory_size: *tuple[3].as_number().unwrap().as_u_int64().unwrap(),
+                        distinct_of_values: tuple[4].as_number().map(|n| *n.as_u_int64().unwrap()),
+                    });
+                }
+                Some(None) => {
+                    continue;
+                }
+                None => unreachable!(),
+            }
         }
-        TableDataType::Number(NumberDataType::Int32) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_int32().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Int32Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::Int64) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_int64().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Int64Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::UInt8) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_u_int8().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(UInt8Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::UInt16) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_u_int16().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(UInt16Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::UInt32) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_u_int32().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(UInt32Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::UInt64) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_u_int64().unwrap())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(UInt64Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::Float32) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_float32().unwrap().as_ref())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Float32Array::from(values)))
-        }
-        TableDataType::Number(NumberDataType::Float64) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_number().unwrap().as_float64().unwrap().as_ref())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Float64Array::from(values)))
-        }
-        TableDataType::Date => {
-            let values = iter
-                .map(|s| s.map(|s| *s.as_date().unwrap()).unwrap_or_default())
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Date32Array::from(values)))
-        }
-        TableDataType::Timestamp => {
-            let values = iter
-                .map(|s| s.map(|s| *s.as_timestamp().unwrap()).unwrap_or_default())
-                .collect::<Vec<_>>();
-            Ok(Arc::new(TimestampMicrosecondArray::from(values)))
-        }
-        TableDataType::String => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| s.as_string().unwrap().to_string())
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(LargeStringArray::from(values)))
-        }
-        TableDataType::Decimal(DecimalDataType::Decimal128(_)) => {
-            let values = iter
-                .map(|s| {
-                    s.map(|s| *s.as_decimal().unwrap().as_decimal128().unwrap().0)
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Decimal128Array::from(values)))
-        }
-        TableDataType::Decimal(DecimalDataType::Decimal256(_)) => {
-            let values = iter
-                .map(|s| unsafe {
-                    s.map(|s| {
-                        std::mem::transmute::<_, arrow::datatypes::i256>(
-                            *s.as_decimal().unwrap().as_decimal256().unwrap().0,
-                        )
-                    })
-                    .unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
-            Ok(Arc::new(Decimal256Array::from(values)))
-        }
-        _ => unreachable!(),
+        Ok(col_stats)
     }
 }
 
