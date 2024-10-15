@@ -28,7 +28,6 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
@@ -151,9 +150,6 @@ fn bare_blocks_to_parquet<W: Write + Send>(
 
     let props = WriterProperties::builder()
         .set_compression(Compression::LZ4_RAW)
-        .set_data_page_size_limit(4 * 1024 * 1024)
-        .set_write_batch_size(usize::MAX)
-        .set_max_row_group_size(usize::MAX)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
         .build();

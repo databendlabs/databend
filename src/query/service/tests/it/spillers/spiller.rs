@@ -42,7 +42,7 @@ async fn test_spill_with_partition() -> Result<()> {
         spiller_type: SpillerType::HashJoinBuild,
         location_prefix: query_spill_prefix(tenant.tenant_name(), &ctx.get_id()),
         disk_spill: None,
-        use_parquet: ctx.get_settings().get_spilling_use_parquet(),
+        use_parquet: ctx.get_settings().get_spilling_use_parquet()?,
     };
     let operator = DataOperator::instance().operator();
 

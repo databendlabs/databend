@@ -456,6 +456,7 @@ mod tests {
     use std::sync::Arc;
 
     use databend_common_base::base::tokio;
+    use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
     use databend_common_expression::block_debug::pretty_format_blocks;
     use databend_common_expression::types::DataType;
@@ -490,7 +491,7 @@ mod tests {
             spiller_type: SpillerType::OrderBy,
             location_prefix: "_spill_test".to_string(),
             disk_spill: None,
-            use_parquet: ctx.get_settings().get_spilling_use_parquet(),
+            use_parquet: ctx.get_settings().get_spilling_use_parquet()?,
         };
 
         let spiller = Spiller::create(ctx.clone(), op, spill_config)?;
