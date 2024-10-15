@@ -1083,7 +1083,7 @@ impl DocIdsCollector {
             if let Some(field_id) = self.term_reader.field_id(term_id) {
                 let mut bm25_weight = Bm25Weight::for_terms(&self.term_reader, &phrase_terms)?;
                 if let Some(boost) = boost {
-                    // increase weigth by multiply a optional boost factor
+                    // increase weight by multiply a optional boost factor
                     bm25_weight = bm25_weight.boost_by(boost);
                 }
                 let mut scores = Vec::with_capacity(doc_ids.len() as usize);
@@ -1115,7 +1115,7 @@ impl DocIdsCollector {
                     let mut bm25_weight =
                         Bm25Weight::for_terms(&self.term_reader, &[term.clone()])?;
                     if let Some(boost) = boost {
-                        // increase weigth by multiply a optional boost factor
+                        // increase weight by multiply a optional boost factor
                         bm25_weight = bm25_weight.boost_by(boost);
                     }
                     let mut scores = Vec::with_capacity(doc_ids.len() as usize);
