@@ -143,6 +143,27 @@ impl Display for CopyIntoTableStmt {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq)]
+pub struct CopyIntoLocationOptions {
+    pub single: bool,
+    pub max_file_size: usize,
+    pub detailed_output: bool,
+    pub use_raw_path: bool,
+    pub include_query_id: bool,
+}
+
+impl Default for CopyIntoLocationOptions {
+    fn default() -> Self {
+        Self {
+            single: Default::default(),
+            max_file_size: Default::default(),
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+        }
+    }
+}
+
 /// CopyIntoLocationStmt is the parsed statement of `COPY into <location>  from <table> ...`
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CopyIntoLocationStmt {
@@ -151,9 +172,7 @@ pub struct CopyIntoLocationStmt {
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
     pub file_format: FileFormatOptions,
-    pub single: bool,
-    pub max_file_size: usize,
-    pub detailed_output: bool,
+    pub options: CopyIntoLocationOptions,
 }
 
 impl Display for CopyIntoLocationStmt {
@@ -171,9 +190,11 @@ impl Display for CopyIntoLocationStmt {
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
-        write!(f, " SINGLE = {}", self.single)?;
-        write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
-        write!(f, " DETAILED_OUTPUT = {}", self.detailed_output)?;
+        write!(f, " SINGLE = {}", self.options.single)?;
+        write!(f, " MAX_FILE_SIZE = {}", self.options.max_file_size)?;
+        write!(f, " DETAILED_OUTPUT = {}", self.options.detailed_output)?;
+        write!(f, " INCLUDE_QUERY_ID = {}", self.options.include_query_id)?;
+        write!(f, " USE_RAW_PATH = {}", self.options.use_raw_path)?;
 
         Ok(())
     }
@@ -183,9 +204,11 @@ impl CopyIntoLocationStmt {
     pub fn apply_option(&mut self, opt: CopyIntoLocationOption) {
         match opt {
             CopyIntoLocationOption::FileFormat(v) => self.file_format = v,
-            CopyIntoLocationOption::Single(v) => self.single = v,
-            CopyIntoLocationOption::MaxFileSize(v) => self.max_file_size = v,
-            CopyIntoLocationOption::DetailedOutput(v) => self.detailed_output = v,
+            CopyIntoLocationOption::Single(v) => self.options.single = v,
+            CopyIntoLocationOption::MaxFileSize(v) => self.options.max_file_size = v,
+            CopyIntoLocationOption::DetailedOutput(v) => self.options.detailed_output = v,
+            CopyIntoLocationOption::IncludeQueryID(v) => self.options.include_query_id = v,
+            CopyIntoLocationOption::UseRawPath(v) => self.options.use_raw_path = v,
         }
     }
 }
@@ -482,6 +505,8 @@ pub enum CopyIntoLocationOption {
     FileFormat(FileFormatOptions),
     MaxFileSize(usize),
     Single(bool),
+    IncludeQueryID(bool),
+    UseRawPath(bool),
     DetailedOutput(bool),
 }
 

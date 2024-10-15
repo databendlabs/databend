@@ -110,9 +110,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
                 src,
                 dst,
                 file_format: Default::default(),
-                single: Default::default(),
-                max_file_size: Default::default(),
-                detailed_output: false,
+                options: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -209,6 +207,14 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
         map(
             rule! { DETAILED_OUTPUT ~ "=" ~ #literal_bool },
             |(_, _, detailed_output)| CopyIntoLocationOption::DetailedOutput(detailed_output),
+        ),
+        map(
+            rule! { USE_RAW_PATH ~ "=" ~ #literal_bool },
+            |(_, _, use_raw_path)| CopyIntoLocationOption::UseRawPath(use_raw_path),
+        ),
+        map(
+            rule! {  INCLUDE_QUERY_ID ~ "=" ~ #literal_bool },
+            |(_, _, include_query_id)| CopyIntoLocationOption::IncludeQueryID(include_query_id),
         ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)

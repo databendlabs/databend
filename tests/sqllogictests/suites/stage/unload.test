@@ -81,3 +81,18 @@ select $1, $2 from @unload(file_format => 'tsv');
 1 2
 3 4
 5 6
+
+query
+copy into @unload/a_raw_path.csv from (select 1,2) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=true;
+----
+a_raw_path.csv 4 1
+
+query
+copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=true;
+----
+a_raw_path.csv 4 1
+
+query
+select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
+----
+3 4
