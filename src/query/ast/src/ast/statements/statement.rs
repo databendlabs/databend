@@ -159,9 +159,7 @@ pub enum Statement {
     CreateDictionary(CreateDictionaryStmt),
     DropDictionary(DropDictionaryStmt),
     ShowCreateDictionary(ShowCreateDictionaryStmt),
-    ShowDictionaries {
-        show_options: Option<ShowOptions>,
-    },
+    ShowDictionaries(ShowDictionariesStmt),
 
     // Columns
     ShowColumns(ShowColumnsStmt),
@@ -621,12 +619,7 @@ impl Display for Statement {
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::DropDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDictionary(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowDictionaries { show_options } => {
-                write!(f, "SHOW DICTIONARIES")?;
-                if let Some(show_options) = show_options {
-                    write!(f, " {show_options}")?;
-                }
-            }
+            Statement::ShowDictionaries(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,

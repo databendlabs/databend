@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use std::io::Cursor;
+use std::io::Read;
+use std::io::Seek;
+use std::io::Write;
 
+use databend_common_arrow::arrow;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -21,8 +25,9 @@ use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::datatypes::Schema;
 use databend_common_arrow::arrow::io::ipc::read::read_file_metadata;
 use databend_common_arrow::arrow::io::ipc::read::FileReader;
+use databend_common_arrow::arrow::io::ipc::write::Compression;
 use databend_common_arrow::arrow::io::ipc::write::FileWriter;
-use databend_common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
+use databend_common_arrow::arrow::io::ipc::write::WriteOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -66,29 +71,31 @@ pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
 
 pub fn serialize_column(col: &Column) -> Vec<u8> {
     let mut buffer = Vec::new();
-
-    let schema = Schema::from(vec![col.arrow_field()]);
-    let mut writer = FileWriter::new(&mut buffer, schema, None, IpcWriteOptions::default());
-    writer.start().unwrap();
-    writer
-        .write(
-            &databend_common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
-            None,
-        )
-        .unwrap();
-    writer.finish().unwrap();
-
+    write_column(col, &mut buffer).unwrap();
     buffer
+}
+
+pub fn write_column(col: &Column, w: &mut impl Write) -> arrow::error::Result<()> {
+    let schema = Schema::from(vec![col.arrow_field()]);
+    let mut writer = FileWriter::new(w, schema, None, WriteOptions {
+        compression: Some(Compression::LZ4),
+    });
+    writer.start()?;
+    writer.write(&arrow::chunk::Chunk::new(vec![col.as_arrow()]), None)?;
+    writer.finish()
 }
 
 pub fn deserialize_column(bytes: &[u8]) -> Result<Column> {
     let mut cursor = Cursor::new(bytes);
+    read_column(&mut cursor)
+}
 
-    let metadata = read_file_metadata(&mut cursor)?;
+pub fn read_column<R: Read + Seek>(r: &mut R) -> Result<Column> {
+    let metadata = read_file_metadata(r)?;
     let f = metadata.schema.fields[0].clone();
     let data_field = DataField::try_from(&f)?;
 
-    let mut reader = FileReader::new(cursor, metadata, None, None);
+    let mut reader = FileReader::new(r, metadata, None, None);
     let col = reader
         .next()
         .ok_or_else(|| ErrorCode::Internal("expected one arrow array"))??
