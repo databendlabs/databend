@@ -61,6 +61,7 @@ impl LockHolder {
         let revision = res.revision;
         // metrics.
         record_created_lock_nums(lock_key.lock_type().to_string(), lock_key.get_table_id(), 1);
+        log::debug!("create table lock success, revision={}", revision);
 
         let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
         let extend_table_lock_req = ExtendLockRevReq::new(lock_key.clone(), revision, ttl, false);
@@ -179,7 +180,10 @@ impl LockHolder {
         let mut backoff = set_backoff(Some(Duration::from_millis(2)), None, max_retry_elapsed);
         loop {
             match catalog.delete_lock_revision(req.clone()).await {
-                Ok(_) => break,
+                Ok(_) => {
+                    log::debug!("delete table lock success, revision={}", req.revision);
+                    break;
+                }
                 Err(e) => match backoff.next_backoff() {
                     Some(duration) => {
                         log::debug!(
