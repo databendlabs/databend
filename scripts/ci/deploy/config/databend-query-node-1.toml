@@ -5,6 +5,8 @@
 max_active_sessions = 256
 shutdown_wait_timeout_ms = 5000
 
+max_running_queries = 2
+
 # For flight rpc.
 flight_api_address = "0.0.0.0:9091"
 
@@ -80,7 +82,7 @@ join_spilling_memory_ratio = 60
 [log]
 
 [log.file]
-level = "DEBUG"
+level = "INFO"
 format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
