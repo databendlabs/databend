@@ -515,8 +515,8 @@ impl HashJoinBuildState {
 
                 let space_size = match &keys_state {
                     // safe to unwrap(): offset.len() >= 1.
-                    KeysState::Column(Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col)) => col.offsets().last().unwrap(),
-                    KeysState::Column(Column::String(col) ) => col.offsets().last().unwrap(),
+                    KeysState::Column(Column::Binary(col) | Column::Variant(col) | Column::Bitmap(col)) => col.current_buffer_len(),
+                    KeysState::Column(Column::String(col) ) => col.current_buffer_len(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
                     // must return `Column::Binary` | `Column::String` | `Column::Variant` | `Column::Bitmap`.
                     _ => unreachable!(),
@@ -528,7 +528,7 @@ impl HashJoinBuildState {
                 let mut entry_local_space: Vec<u8> =
                     Vec::with_capacity(valid_num * entry_size);
                 let mut string_local_space: Vec<u8> =
-                    Vec::with_capacity(*space_size as usize);
+                    Vec::with_capacity(space_size as usize);
                 let mut raw_entry_ptr = unsafe { std::mem::transmute::<*mut u8, *mut StringRawEntry>(entry_local_space.as_mut_ptr()) };
                 let mut string_local_space_ptr = string_local_space.as_mut_ptr();
 

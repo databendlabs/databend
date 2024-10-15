@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
@@ -218,68 +219,16 @@ impl<'a> TakeCompactVisitor<'a> {
     }
 
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
-        // Each element of `items` is (string(&[u8]), repeat times).
-        let mut items = Vec::with_capacity(self.indices.len());
-        let mut items_ptr = items.as_mut_ptr();
-
-        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
-        let mut offsets = Vec::with_capacity(self.num_rows + 1);
-        let mut offsets_ptr = offsets.as_mut_ptr();
-        let mut data_size = 0;
-
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            store_advance_aligned::<u64>(0, &mut offsets_ptr);
-            for (index, cnt) in self.indices.iter() {
-                let item = col.index_unchecked(*index as usize);
-                store_advance_aligned((item, *cnt), &mut items_ptr);
-                for _ in 0..*cnt {
-                    data_size += item.len() as u64;
-                    store_advance_aligned(data_size, &mut offsets_ptr);
+        let num_rows = self.num_rows;
+        let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
+        for (index, cnt) in self.indices.iter() {
+            for _ in 0..*cnt {
+                unsafe {
+                    builder.put_slice(col.index_unchecked(*index as usize));
+                    builder.commit_row();
                 }
             }
-            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
-            set_vec_len_by_ptr(&mut items, items_ptr);
         }
-
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-        let mut remain;
-
-        unsafe {
-            for (item, cnt) in items {
-                let len = item.len();
-                if cnt == 1 {
-                    copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
-                    continue;
-                }
-
-                // Using the doubling method to copy the max segment memory.
-                // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
-                // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-                let max_bit_num = 1 << (31 - cnt.leading_zeros());
-                let max_segment = max_bit_num * len;
-                let base_data_ptr = data_ptr;
-                copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
-                let mut cur_segment = len;
-                while cur_segment < max_segment {
-                    copy_advance_aligned(base_data_ptr, &mut data_ptr, cur_segment);
-                    cur_segment <<= 1;
-                }
-
-                // Copy the remaining memory directly.
-                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
-                //  ^^^^ ---> ^^^^
-                remain = cnt as usize - max_bit_num;
-                if remain > 0 {
-                    copy_advance_aligned(base_data_ptr, &mut data_ptr, remain * len);
-                }
-            }
-            set_vec_len_by_ptr(&mut data, data_ptr);
-        }
-
-        BinaryColumn::new(data.into(), offsets.into())
+        builder.build()
     }
 }

@@ -80,14 +80,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         "md5",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data().len() * 32,
+            |col| col.current_buffer_len() * 32,
             |val, output, ctx| {
                 // TODO md5 lib doesn't allow encode into buffer...
-                let old_len = output.data.len();
-                output.data.resize(old_len + 32, 0);
+                let old_len = output.as_inner_mut().data.len();
+                output.as_inner_mut().data.resize(old_len + 32, 0);
                 if let Err(err) = hex::encode_to_slice(
                     Md5Hasher::digest(val).as_slice(),
-                    &mut output.data[old_len..],
+                    &mut output.as_inner_mut().data[old_len..],
                 ) {
                     ctx.set_error(output.len(), err.to_string());
                 }
@@ -100,17 +100,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         "sha",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data().len() * 40,
+            |col| col.current_buffer_len() * 40,
             |val, output, ctx| {
-                let old_len = output.data.len();
-                output.data.resize(old_len + 40, 0);
+                let old_len = output.as_inner_mut().data.len();
+                output.as_inner_mut().data.resize(old_len + 40, 0);
                 // TODO sha1 lib doesn't allow encode into buffer...
                 let mut m = ::sha1::Sha1::new();
                 sha1::digest::Update::update(&mut m, val.as_bytes());
 
-                if let Err(err) =
-                    hex::encode_to_slice(m.finalize().as_slice(), &mut output.data[old_len..])
-                {
+                if let Err(err) = hex::encode_to_slice(
+                    m.finalize().as_slice(),
+                    &mut output.as_inner_mut().data[old_len..],
+                ) {
                     ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
@@ -122,13 +123,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         "blake3",
         |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
-            |col| col.data().len() * 64,
+            |col| col.current_buffer_len() * 64,
             |val, output, ctx| {
-                let old_len = output.data.len();
-                output.data.resize(old_len + 64, 0);
+                let old_len = output.as_inner_mut().data.len();
+                output.as_inner_mut().data.resize(old_len + 64, 0);
                 if let Err(err) = hex::encode_to_slice(
                     blake3::hash(val.as_bytes()).as_bytes(),
-                    &mut output.data[old_len..],
+                    &mut output.as_inner_mut().data[old_len..],
                 ) {
                     ctx.set_error(output.len(), err.to_string());
                 }

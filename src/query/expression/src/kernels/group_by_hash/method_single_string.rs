@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
@@ -57,12 +58,12 @@ impl HashMethod for HashMethodSingleBinary {
             KeysState::Column(Column::Binary(col))
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => {
-                let (data, offsets) = col.into_buffer();
-                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
+                let data = col.into_inner();
+                Ok(Box::new(BinaryKeyAccessor::new(data)))
             }
             KeysState::Column(Column::String(col)) => {
-                let (data, offsets) = col.into_buffer();
-                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
+                let data = col.into_inner();
+                Ok(Box::new(BinaryKeyAccessor::new(data)))
             }
             _ => unreachable!(),
         }
@@ -84,13 +85,12 @@ impl HashMethod for HashMethodSingleBinary {
 }
 
 pub struct BinaryKeyAccessor {
-    data: Buffer<u8>,
-    offsets: Buffer<u64>,
+    data: BinaryViewArray,
 }
 
 impl BinaryKeyAccessor {
-    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
-        Self { data, offsets }
+    pub fn new(data: BinaryViewArray) -> Self {
+        Self { data }
     }
 }
 
@@ -100,9 +100,7 @@ impl KeyAccessor for BinaryKeyAccessor {
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        debug_assert!(index + 1 < self.offsets.len());
-
-        &self.data[*self.offsets.get_unchecked(index) as usize
-            ..*self.offsets.get_unchecked(index + 1) as usize]
+        debug_assert!(index < self.data.len());
+        self.data.value_unchecked(index)
     }
 }

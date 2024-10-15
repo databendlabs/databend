@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
@@ -243,50 +244,13 @@ where I: databend_common_arrow::arrow::types::Index
 
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
         let num_rows = self.indices.len();
-
-        // Each element of `items` is (string pointer(u64), string length), if `string_items_buf`
-        // can be reused, we will not re-allocate memory.
-        let mut items: Option<Vec<(u64, usize)>> = match &self.string_items_buf {
-            Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
-            _ => Some(Vec::with_capacity(num_rows)),
-        };
-        let items = match items.is_some() {
-            true => items.as_mut().unwrap(),
-            false => self.string_items_buf.as_mut().unwrap(),
-        };
-
-        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
-        let col_offset = col.offsets().as_slice();
-        let col_data_ptr = col.data().as_slice().as_ptr();
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut data_size = 0;
-
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
-            *offsets.get_unchecked_mut(0) = 0;
-            for (i, index) in self.indices.iter().enumerate() {
-                let start = *col_offset.get_unchecked(index.to_usize()) as usize;
-                let len = *col_offset.get_unchecked(index.to_usize() + 1) as usize - start;
-                data_size += len as u64;
-                *items.get_unchecked_mut(i) = (col_data_ptr.add(start) as u64, len);
-                *offsets.get_unchecked_mut(i + 1) = data_size;
+        let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
+        for index in self.indices.iter() {
+            unsafe {
+                builder.put_slice(col.index_unchecked(index.to_usize()));
+                builder.commit_row();
             }
         }
-
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-
-        unsafe {
-            for (str_ptr, len) in items.iter() {
-                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
-            }
-            set_vec_len_by_ptr(&mut data, data_ptr);
-        }
-
-        BinaryColumn::new(data.into(), offsets.into())
+        builder.build()
     }
 }

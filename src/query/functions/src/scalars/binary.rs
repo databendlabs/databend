@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -49,19 +50,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<BinaryType, NumberType<u64>, _, _>(
         "length",
         |_, _| FunctionDomain::Full,
-        |val, _| match val {
-            ValueRef::Scalar(s) => Value::Scalar(s.len() as u64),
-            ValueRef::Column(c) => {
-                let diffs = c
-                    .offsets()
-                    .iter()
-                    .zip(c.offsets().iter().skip(1))
-                    .map(|(a, b)| b - a)
-                    .collect::<Vec<_>>();
-
-                Value::Column(diffs.into())
-            }
-        },
+        vectorize_1_arg::<BinaryType, NumberType<u64>>(|val, _| val.len() as u64),
     );
 
     registry.register_passthrough_nullable_1_arg::<BinaryType, StringType, _, _>(
@@ -101,12 +90,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_binary_to_string(
-            |col| col.data().len() * 2,
+            |col| col.current_buffer_len() * 2,
             |val, output, _| {
-                let old_len = output.data.len();
+                let old_len = output.as_inner_mut().data.len();
                 let extra_len = val.len() * 2;
-                output.data.resize(old_len + extra_len, 0);
-                hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
+                output.as_inner_mut().data.resize(old_len + extra_len, 0);
+                hex::encode_to_slice(val, &mut output.as_inner_mut().data[old_len..]).unwrap();
                 output.commit_row();
             },
         ),
@@ -128,10 +117,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_base64",
         |_, _| FunctionDomain::Full,
         vectorize_binary_to_string(
-            |col| col.data().len() * 4 / 3 + col.len() * 4,
+            |col| col.current_buffer_len() * 4 / 3 + col.len() * 4,
             |val, output, _| {
                 base64::write::EncoderWriter::new(
-                    &mut output.data,
+                    &mut output.as_inner_mut().data,
                     &base64::engine::general_purpose::STANDARD,
                 )
                 .write_all(val)
@@ -203,7 +192,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Value<StringType> {
     vectorize_binary_to_string(
-        |col| col.data().len(),
+        |col| col.current_buffer_len(),
         |val, output, ctx| {
             if let Ok(val) = simdutf8::basic::from_utf8(val) {
                 output.put_str(val);
@@ -217,7 +206,7 @@ fn eval_binary_to_string(val: ValueRef<BinaryType>, ctx: &mut EvalContext) -> Va
 
 fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
     vectorize_string_to_binary(
-        |col| col.data().len() / 2,
+        |col| col.current_buffer_len() / 2,
         |val, output, ctx| {
             let old_len = output.data.len();
             let extra_len = val.len() / 2;
@@ -232,7 +221,7 @@ fn eval_unhex(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryT
 
 fn eval_from_base64(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
     vectorize_string_to_binary(
-        |col| col.data().len() * 4 / 3 + col.len() * 4,
+        |col| col.current_buffer_len() * 4 / 3 + col.len() * 4,
         |val, output, ctx| {
             if let Err(err) = base64::Engine::decode_vec(
                 &base64::engine::general_purpose::STANDARD,
@@ -304,34 +293,18 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     });
     let input_rows = len.unwrap_or(1);
 
-    let mut values: Vec<u8> = vec![0; input_rows * args.len()];
-    let values_ptr = values.as_mut_ptr();
+    let mut builder = BinaryColumnBuilder::with_capacity(input_rows, 0);
 
-    for (i, arg) in args.iter().enumerate() {
-        match arg {
-            ValueRef::Scalar(v) => {
-                for j in 0..input_rows {
-                    unsafe {
-                        *values_ptr.add(args.len() * j + i) = *v;
-                    }
-                }
-            }
-            ValueRef::Column(c) => {
-                for (j, ch) in UInt8Type::iter_column(c).enumerate() {
-                    unsafe {
-                        *values_ptr.add(args.len() * j + i) = ch;
-                    }
-                }
-            }
+    for _ in 0..input_rows {
+        for arg in &args {
+            let val = arg.index(0).unwrap();
+            builder.put_u8(val);
         }
+        builder.commit_row();
     }
-    let offsets = (0..(input_rows + 1) as u64 * args.len() as u64)
-        .step_by(args.len())
-        .collect::<Vec<_>>();
-    let result = BinaryColumn::new(values.into(), offsets.into());
 
     match len {
-        Some(_) => Value::Column(Column::Binary(result)),
-        _ => Value::Scalar(Scalar::Binary(result.index(0).unwrap().to_vec())),
+        Some(_) => Value::Column(Column::Binary(builder.build())),
+        _ => Value::Scalar(Scalar::Binary(builder.build_scalar())),
     }
 }

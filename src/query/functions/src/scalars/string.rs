@@ -26,6 +26,7 @@ use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::unify_string;
+use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
@@ -103,7 +104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "upper",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len(),
+            |col| col.current_buffer_len(),
             |val, output, _| {
                 for ch in val.chars() {
                     if ch.is_ascii() {
@@ -123,7 +124,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "lower",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len(),
+            |col| col.current_buffer_len(),
             |val, output, _| {
                 for ch in val.chars() {
                     if ch.is_ascii() {
@@ -148,19 +149,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(
         "octet_length",
         |_, _| FunctionDomain::Full,
-        |val, _| match val {
-            ValueRef::Scalar(s) => Value::Scalar(s.len() as u64),
-            ValueRef::Column(c) => {
-                let diffs = c
-                    .offsets()
-                    .iter()
-                    .zip(c.offsets().iter().skip(1))
-                    .map(|(a, b)| b - a)
-                    .collect::<Vec<_>>();
-
-                Value::Column(diffs.into())
-            }
-        },
+        vectorize_1_arg::<StringType, NumberType<u64>>(|val, _| val.len() as u64),
     );
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
@@ -383,7 +372,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "quote",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len() * 2,
+            |col| col.current_buffer_len() * 2,
             |val, output, _| {
                 for ch in val.chars() {
                     match ch {
@@ -407,7 +396,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "reverse",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len(),
+            |col| col.current_buffer_len(),
             |val, output, _| {
                 for char in val.chars().rev() {
                     output.put_char(char);
@@ -437,7 +426,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ltrim",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len(),
+            |col| col.current_buffer_len(),
             |val, output, _| {
                 output.put_str(val.trim_start());
                 output.commit_row();
@@ -449,7 +438,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "rtrim",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len(),
+            |col| col.current_buffer_len(),
             |val, output, _| {
                 output.put_str(val.trim_end());
                 output.commit_row();
@@ -461,7 +450,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len(),
+            |col| col.current_buffer_len(),
             |val, output, _| {
                 output.put_str(val.trim());
                 output.commit_row();
@@ -473,7 +462,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_leading",
         |_, _, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
-            |col, _| col.data().len(),
+            |col, _| col.current_buffer_len(),
             |val, trim_str, _, output| {
                 if trim_str.is_empty() {
                     output.put_str(val);
@@ -491,7 +480,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_trailing",
         |_, _, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
-            |col, _| col.data().len(),
+            |col, _| col.current_buffer_len(),
             |val, trim_str, _, output| {
                 if trim_str.is_empty() {
                     output.put_str(val);
@@ -509,7 +498,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim_both",
         |_, _, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
-            |col, _| col.data().len(),
+            |col, _| col.current_buffer_len(),
             |val, trim_str, _, output| {
                 if trim_str.is_empty() {
                     output.put_str(val);
@@ -536,12 +525,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| col.data().len() * 2,
+            |col| col.current_buffer_len() * 2,
             |val, output, _| {
-                let old_len = output.data.len();
+                let old_len = output.as_inner_mut().data.len();
                 let extra_len = val.len() * 2;
-                output.data.resize(old_len + extra_len, 0);
-                hex::encode_to_slice(val, &mut output.data[old_len..]).unwrap();
+                output.as_inner_mut().data.resize(old_len + extra_len, 0);
+                hex::encode_to_slice(val, &mut output.as_inner_mut().data[old_len..]).unwrap();
                 output.commit_row();
             },
         ),
@@ -553,7 +542,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bin",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            write!(output.data, "{val:b}").unwrap();
+            write!(output.as_inner_mut().data, "{val:b}").unwrap();
             output.commit_row();
         }),
     );
@@ -561,7 +550,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "oct",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            write!(output.data, "{val:o}").unwrap();
+            write!(output.as_inner_mut().data, "{val:o}").unwrap();
             output.commit_row();
         }),
     );
@@ -569,7 +558,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_hex",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            write!(output.data, "{val:x}").unwrap();
+            write!(output.as_inner_mut().data, "{val:x}").unwrap();
             output.commit_row();
         }),
     );
@@ -625,7 +614,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "soundex",
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string(
-            |col| usize::max(col.data().len(), 4 * col.len()),
+            |col| usize::max(col.current_buffer_len(), 4 * col.len()),
             soundex::soundex,
         ),
     );
@@ -634,46 +623,19 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
         "space",
         |_, _| FunctionDomain::MayThrow,
-        |times, ctx| match times {
-            ValueRef::Scalar(times) => {
-                if times > MAX_SPACE_LENGTH {
-                    ctx.set_error(
-                        0,
-                        format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
-                    );
-                    Value::Scalar("".to_string())
-                } else {
-                    Value::Scalar(" ".repeat(times as usize))
+        vectorize_with_builder_1_arg::<NumberType<u64>, StringType>(|times, output, ctx| {
+            if times > MAX_SPACE_LENGTH {
+                ctx.set_error(
+                    output.len(),
+                    format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
+                );
+            } else {
+                for _ in 0..times {
+                    output.put_char(' ');
                 }
             }
-            ValueRef::Column(col) => {
-                let mut total_space: u64 = 0;
-                let mut offsets: Vec<u64> = Vec::with_capacity(col.len() + 1);
-                offsets.push(0);
-                for (i, times) in col.iter().enumerate() {
-                    if times > &MAX_SPACE_LENGTH {
-                        ctx.set_error(
-                            i,
-                            format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
-                        );
-                        break;
-                    }
-                    total_space += times;
-                    offsets.push(total_space);
-                }
-                if ctx.errors.is_some() {
-                    offsets.truncate(1);
-                    total_space = 0;
-                }
-                let col = StringColumnBuilder {
-                    data: " ".repeat(total_space as usize).into_bytes(),
-                    offsets,
-                    need_estimated: false,
-                }
-                .build();
-                Value::Column(col)
-            }
-        },
+            output.commit_row();
+        }),
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(

@@ -17,6 +17,9 @@ use std::iter::once;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use databend_common_arrow::arrow::array::Array;
+use databend_common_arrow::arrow::array::BinaryViewArray;
+use databend_common_arrow::arrow::array::MutableBinaryViewArray;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
 use databend_common_exception::ErrorCode;
@@ -167,7 +170,7 @@ impl ValueType for BinaryType {
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        col.data().len() + col.offsets().len() * 8
+        col.memory_size()
     }
 
     #[inline(always)]
@@ -190,45 +193,32 @@ impl ArgType for BinaryType {
 
 #[derive(Clone, PartialEq)]
 pub struct BinaryColumn {
-    pub(crate) data: Buffer<u8>,
-    pub(crate) offsets: Buffer<u64>,
+    pub(crate) data: BinaryViewArray,
 }
 
 impl BinaryColumn {
-    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
-        debug_assert!({ offsets.windows(2).all(|w| w[0] <= w[1]) });
-
-        BinaryColumn { data, offsets }
+    pub fn new(data: BinaryViewArray) -> Self {
+        BinaryColumn { data }
     }
 
     pub fn len(&self) -> usize {
-        self.offsets.len() - 1
+        self.data.len()
     }
 
     pub fn current_buffer_len(&self) -> usize {
-        (*self.offsets().last().unwrap() - *self.offsets().first().unwrap()) as _
-    }
-
-    pub fn data(&self) -> &Buffer<u8> {
-        &self.data
-    }
-
-    pub fn offsets(&self) -> &Buffer<u64> {
-        &self.offsets
+        self.data.total_bytes_len()
     }
 
     pub fn memory_size(&self) -> usize {
-        let offsets = self.offsets.as_slice();
-        let len = offsets.len();
-        len * 8 + (offsets[len - 1] - offsets[0]) as usize
+        self.data.total_buffer_len()
     }
 
     pub fn index(&self, index: usize) -> Option<&[u8]> {
-        if index + 1 < self.offsets.len() {
-            Some(&self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)])
-        } else {
-            None
+        if index >= self.len() {
+            return None;
         }
+
+        Some(unsafe { self.index_unchecked(index) })
     }
 
     /// # Safety
@@ -236,93 +226,53 @@ impl BinaryColumn {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
-        let start = *self.offsets.get_unchecked(index) as usize;
-        let end = *self.offsets.get_unchecked(index + 1) as usize;
-        self.data.get_unchecked(start..end)
+        debug_assert!(index < self.data.len());
+        self.data.value_unchecked(index)
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
-        let offsets = self
-            .offsets
+        let data = self
+            .data
             .clone()
-            .sliced(range.start, range.end - range.start + 1);
-        BinaryColumn {
-            data: self.data.clone(),
-            offsets,
-        }
+            .sliced(range.start, range.end - range.start);
+        BinaryColumn { data }
     }
 
     pub fn iter(&self) -> BinaryIterator {
         BinaryIterator {
-            data: &self.data,
-            offsets: self.offsets.windows(2),
-            _t: PhantomData,
+            col: &self.data,
+            index: 0,
         }
     }
 
-    pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {
-        (self.data, self.offsets)
-    }
-
-    pub fn check_valid(&self) -> Result<()> {
-        let offsets = self.offsets.as_slice();
-        let len = offsets.len();
-        if len < 1 {
-            return Err(ErrorCode::Internal(format!(
-                "BinaryColumn offsets length must be equal or greater than 1, but got {}",
-                len
-            )));
-        }
-
-        for i in 1..len {
-            if offsets[i] < offsets[i - 1] {
-                return Err(ErrorCode::Internal(format!(
-                    "BinaryColumn offsets value must be equal or greater than previous value, but got {}",
-                    offsets[i]
-                )));
-            }
-        }
-        Ok(())
+    pub fn into_inner(self) -> BinaryViewArray {
+        self.data
     }
 }
 
-pub type BinaryIterator<'a> = BinaryLikeIterator<'a, &'a [u8]>;
-
-pub trait BinaryLike<'a> {
-    fn from(value: &'a [u8]) -> Self;
+pub struct BinaryIterator<'a> {
+    pub(crate) col: &'a BinaryViewArray,
+    pub(crate) index: usize,
 }
 
-impl<'a> BinaryLike<'a> for &'a [u8] {
-    fn from(value: &'a [u8]) -> Self {
-        value
-    }
-}
-
-pub struct BinaryLikeIterator<'a, T>
-where T: BinaryLike<'a>
-{
-    pub(crate) data: &'a [u8],
-    pub(crate) offsets: std::slice::Windows<'a, u64>,
-    pub(crate) _t: PhantomData<T>,
-}
-
-impl<'a, T: BinaryLike<'a>> Iterator for BinaryLikeIterator<'a, T> {
-    type Item = T;
+impl<'a> Iterator for BinaryIterator<'a> {
+    type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.offsets
-            .next()
-            .map(|range| T::from(&self.data[(range[0] as usize)..(range[1] as usize)]))
+        let value = self.col.value(self.index);
+        self.index += 1;
+        Some(value)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.offsets.size_hint()
+        let remaining = self.col.len() - self.index;
+        (remaining, Some(remaining))
     }
 }
 
-unsafe impl<'a, T: BinaryLike<'a>> TrustedLen for BinaryLikeIterator<'a, T> {}
+unsafe impl<'a> TrustedLen for BinaryIterator<'a> {}
 
-unsafe impl<'a, T: BinaryLike<'a>> std::iter::TrustedLen for BinaryLikeIterator<'a, T> {}
+unsafe impl<'a> std::iter::TrustedLen for BinaryIterator<'a> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinaryColumnBuilder {
@@ -344,11 +294,12 @@ impl BinaryColumnBuilder {
     }
 
     pub fn from_column(col: BinaryColumn) -> Self {
-        BinaryColumnBuilder {
-            need_estimated: col.data.is_empty(),
-            data: buffer_into_mut(col.data),
-            offsets: col.offsets.to_vec(),
+        let mut builder = BinaryColumnBuilder::with_capacity(col.len(), col.current_buffer_len());
+        for item in col.iter() {
+            builder.put_slice(item);
+            builder.commit_row();
         }
+        builder
     }
 
     pub fn from_data(data: Vec<u8>, offsets: Vec<u64>) -> Self {
@@ -443,23 +394,25 @@ impl BinaryColumnBuilder {
     }
 
     pub fn append_column(&mut self, other: &BinaryColumn) {
-        // the first offset of other column may not be zero
-        let other_start = *other.offsets.first().unwrap();
-        let other_last = *other.offsets.last().unwrap();
-        let start = self.offsets.last().cloned().unwrap();
-        self.data
-            .extend_from_slice(&other.data[(other_start as usize)..(other_last as usize)]);
-        self.offsets.extend(
-            other
-                .offsets
-                .iter()
-                .skip(1)
-                .map(|offset| start + offset - other_start),
-        );
+        self.data.reserve(other.current_buffer_len());
+        for item in other.iter() {
+            self.put_slice(item);
+            self.commit_row();
+        }
     }
 
     pub fn build(self) -> BinaryColumn {
-        BinaryColumn::new(self.data.into(), self.offsets.into())
+        let mut bulider = MutableBinaryViewArray::with_capacity(self.len());
+        for (start, end) in self
+            .offsets
+            .windows(2)
+            .map(|w| (w[0] as usize, w[1] as usize))
+        {
+            bulider.push_value(&self.data[start..end]);
+        }
+        BinaryColumn {
+            data: bulider.into(),
+        }
     }
 
     pub fn build_scalar(self) -> Vec<u8> {

@@ -28,6 +28,7 @@ use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
@@ -387,37 +388,11 @@ impl Column {
         cols: impl Iterator<Item = BinaryColumn> + Clone,
         num_rows: usize,
     ) -> BinaryColumn {
-        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut data_size = 0;
-
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        offsets.push(0);
-        for col in cols.clone() {
-            let mut start = col.offsets()[0];
-            for end in col.offsets()[1..].iter() {
-                data_size += end - start;
-                start = *end;
-                offsets.push(data_size);
-            }
+        let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
+        for col in cols {
+            builder.append_column(&col);
         }
-
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-
-        unsafe {
-            for col in cols {
-                let offsets = col.offsets();
-                let col_data = &(col.data().as_slice())
-                    [offsets[0] as usize..offsets[offsets.len() - 1] as usize];
-                copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
-            }
-            set_vec_len_by_ptr(&mut data, data_ptr);
-        }
-
-        BinaryColumn::new(data.into(), offsets.into())
+        builder.build()
     }
 
     pub fn concat_string_types(
