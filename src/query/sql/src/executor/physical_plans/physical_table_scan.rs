@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::SampleLevel;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
@@ -241,23 +240,18 @@ impl PhysicalPlanBuilder {
         if let Some(sample) = scan.sample
             && !table.use_own_sample_block()
         {
-            match sample.sample_level {
-                SampleLevel::ROW => {}
-                SampleLevel::BLOCK => {
-                    let probability = sample.sample_probability(None);
-                    if let Some(probability) = probability {
-                        let original_parts = source.parts.partitions.len();
-                        let mut sample_parts = Vec::with_capacity(original_parts);
-                        let mut rng = thread_rng();
-                        let bernoulli = Bernoulli::new(probability).unwrap();
-                        for part in source.parts.partitions.iter() {
-                            if bernoulli.sample(&mut rng) {
-                                sample_parts.push(part.clone());
-                            }
-                        }
-                        source.parts.partitions = sample_parts;
+            if let Some(block_level) = sample.block_level {
+                let probability = block_level % 100.0;
+                let original_parts = source.parts.partitions.len();
+                let mut sample_parts = Vec::with_capacity(original_parts);
+                let mut rng = thread_rng();
+                let bernoulli = Bernoulli::new(probability).unwrap();
+                for part in source.parts.partitions.iter() {
+                    if bernoulli.sample(&mut rng) {
+                        sample_parts.push(part.clone());
                     }
                 }
+                source.parts.partitions = sample_parts;
             }
         }
         source.table_index = scan.table_index;

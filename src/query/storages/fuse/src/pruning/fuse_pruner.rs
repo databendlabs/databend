@@ -534,12 +534,14 @@ impl FusePruner {
 }
 
 fn table_sample(push_down_info: &Option<PushDownInfo>) -> Option<f64> {
+    let mut sample_probability = None;
     if let Some(sample) = push_down_info
         .as_ref()
         .and_then(|info| info.sample.as_ref())
     {
-        sample.sample_probability(None)
-    } else {
-        None
+        if let Some(block_sample) = sample.block_level {
+            sample_probability = Some(block_sample / 100.0)
+        }
     }
+    sample_probability
 }

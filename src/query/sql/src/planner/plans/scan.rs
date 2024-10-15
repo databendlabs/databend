@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Sample;
+use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
@@ -106,7 +106,7 @@ pub struct Scan {
     pub inverted_index: Option<InvertedIndexInfo>,
     // Lazy row fetch.
     pub is_lazy_table: bool,
-    pub sample: Option<Sample>,
+    pub sample: Option<SampleConfig>,
 
     pub statistics: Arc<Statistics>,
 }

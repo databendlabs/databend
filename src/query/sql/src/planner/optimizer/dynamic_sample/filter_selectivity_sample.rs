@@ -15,9 +15,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::SampleLevel;
+use databend_common_ast::ast::SampleRowLevel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -63,9 +62,9 @@ pub async fn filter_selectivity_sample(
         let mut new_s_expr = s_expr.clone();
         // If the table is too small, we don't need to sample.
         if sample_size >= 10.0 {
-            scan.sample = Some(Sample {
-                sample_level: SampleLevel::ROW,
-                sample_conf: SampleConfig::RowsNum(sample_size),
+            scan.sample = Some(SampleConfig {
+                row_level: Some(SampleRowLevel::RowsNum(sample_size)),
+                block_level: None,
             });
             let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
             new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
