@@ -309,6 +309,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("spilling_use_parquet", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Set whether to use Parquet or Arrow IPC for spilling.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("spilling_to_disk_vacuum_unknown_temp_dirs_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(u64::MAX),
                     desc: "Set the maximum number of directories to clean up. If there are some temporary dirs when another query is unexpectedly interrupted, which needs to be cleaned up after this query.",

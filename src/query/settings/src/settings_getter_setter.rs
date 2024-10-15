@@ -290,6 +290,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
     }
 
+    pub fn get_spilling_use_parquet(&self) -> Result<bool> {
+        Ok(self.try_get_u64("spilling_use_parquet")? != 0)
+    }
+
     pub fn get_spilling_to_disk_vacuum_unknown_temp_dirs_limit(&self) -> Result<usize> {
         Ok(self.try_get_u64("spilling_to_disk_vacuum_unknown_temp_dirs_limit")? as usize)
     }

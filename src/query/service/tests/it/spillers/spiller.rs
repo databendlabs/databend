@@ -39,9 +39,10 @@ async fn test_spill_with_partition() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
     let spiller_config = SpillerConfig {
+        spiller_type: SpillerType::HashJoinBuild,
         location_prefix: query_spill_prefix(tenant.tenant_name(), &ctx.get_id()),
         disk_spill: None,
-        spiller_type: SpillerType::HashJoinBuild,
+        use_parquet: ctx.get_settings().get_spilling_use_parquet(),
     };
     let operator = DataOperator::instance().operator();
 
@@ -53,7 +54,7 @@ async fn test_spill_with_partition() -> Result<()> {
         Int32Type::from_data((1..101).collect::<Vec<_>>()),
     ]);
 
-    let res = spiller.spill_with_partition(0, data).await;
+    let res = spiller.spill_with_partition(0, vec![data]).await;
 
     assert!(res.is_ok());
     let location = &spiller.partition_location.get(&0).unwrap()[0];
