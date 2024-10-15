@@ -24,9 +24,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
+use super::dictionary_id_ident::DictionaryId;
 use super::dictionary_name_ident::DictionaryNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+use crate::KeyWithTenant;
 
 /// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -171,4 +173,169 @@ pub struct UpdateDictionaryReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReply {
     pub dictionary_id: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenameDictionaryReq {
+    pub if_exists: bool,
+    pub name_ident: DictionaryNameIdent,
+    pub new_db_name: String,
+    pub new_dictionary_name: String,
+}
+
+impl RenameDictionaryReq {
+    pub fn tenant(&self) -> &Tenant {
+        &self.name_ident.tenant()
+    }
+    pub fn db_id(&self) -> &str {
+        &self.name_ident.db_id()
+
+    }
+    pub fn dictionary_name(&self) -> &str {
+        &self.name_ident.dict_name()
+    }
+}
+
+impl Display for RenameDictionaryReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        // How to get db_name by db_id
+        write!(
+            f,
+            "rename_dictionary:{}/{}-{}=>{}-{}",
+            self.tenant().tenant_name(),
+            self.db_id(),
+            self.dictionary_name(),
+            self.new_db_name,
+            self.new_dictionary_name,
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenameDictionaryReply {
+    pub dictionary_id: u64,
+}
+
+/// Save table name id list history.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DictionaryIdList {
+    pub id_list: Vec<u64>,
+}
+
+impl DictionaryIdList {
+    pub fn new() -> DictionaryIdList {
+        DictionaryIdList::default()
+    }
+
+    pub fn new_with_ids(ids: impl IntoIterator<Item = u64>) -> DictionaryIdList {
+        DictionaryIdList {
+            id_list: ids.into_iter().collect(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.id_list.len()
+    }
+
+    pub fn id_list(&self) -> &Vec<u64> {
+        &self.id_list
+    }
+
+    pub fn append(&mut self, dict_id: u64) {
+        self.id_list.push(dict_id)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.id_list.is_empty()
+    }
+
+    pub fn pop(&mut self) -> Option<u64> {
+        self.id_list.pop()
+    }
+
+    pub fn last(&self) -> Option<&u64> {
+        self.id_list.last()
+    }
+}
+
+impl Display for DictionaryIdList {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "DB.Dictionary id list: {:?}", self.id_list)
+    }
+}
+
+/// The meta-service key for storing dictionary id history ever used by a dictionary name
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct DictionaryIdHistoryIdent {
+    pub database_id: u64,
+    pub dictionary_name: String,
+}
+
+impl Display for DictionaryIdHistoryIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}'.'{}'", self.database_id, self.dictionary_name)
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DictionaryIdToName {
+    pub dict_id: u64,
+}
+
+impl Display for DictionaryIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DictionaryIdToName{{{}}}", self.dict_id)
+    }
+}
+
+mod kvapi_key_impl {
+    use anyhow::Ok;
+    use databend_common_meta_kvapi::kvapi;
+
+    use crate::schema::{dictionary_id_ident::DictionaryId, dictionary_name_ident::DictionaryNameIdent, DatabaseId};
+
+    use super::{DictionaryIdHistoryIdent, DictionaryIdList, DictionaryIdToName};
+
+    /// "_fd_dictionary_id_list/<db_id>/<dict_name> -> id_list"
+    impl kvapi::Key for DictionaryIdHistoryIdent {
+        const PREFIX: &'static str = "__fd_dictionary_id_list";
+
+        type ValueType = DictionaryIdList;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.database_id).to_string_key())
+        }
+    }
+
+    impl kvapi::Value for DictionaryIdList {
+        type KeyType = DictionaryIdHistoryIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            self.id_list
+                .iter()
+                .map(|id| id.to_string())
+        }
+    }
+
+    impl kvapi::KeyCodec for DictionaryIdToName {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.dict_id)
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let dict_id = parser.next_u64()?;
+            Ok(Self { dict_id })
+        }
+    }
+
+    /// "__fd_dict_id_to_name/<dict_id> -> DictionaryNameIdent"
+    impl kvapi::Key for DictionaryIdToName {
+        const PREFIX: &'static str = "__fd_dictionary_id_to_name";
+
+        type ValueType = DictionaryNameIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.dict_id.to_string())
+        }
+    }
 }

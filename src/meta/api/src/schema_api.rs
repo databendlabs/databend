@@ -372,6 +372,11 @@ pub trait SchemaApi: Send + Sync {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
 
+    async fn rename_dictionary(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, KVAppError>;
+
     /// Generic get() implementation for any kvapi::Key.
     ///
     /// This method just return an `Option` of the value without seq number.

@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::CreateOption;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::{DataSchema, DataSchemaRef};
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::tenant::Tenant;
 
@@ -47,5 +49,22 @@ pub struct ShowCreateDictionaryPlan {
 impl ShowCreateDictionaryPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+}
+
+/// Rename.
+#[derive(Clone, Debug)]
+pub struct RenameDictionaryPlan {
+    pub tenant: Tenant,
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: u64,
+    pub dictionary: String,
+    pub new_database: String,
+    pub new_dictionary: String,
+}
+impl RenameDictionaryPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
     }
 }
