@@ -52,6 +52,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::F32;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -74,10 +75,13 @@ use tantivy::directory::TerminatingWrite;
 use tantivy::directory::WatchCallback;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::WritePtr;
+use tantivy::fieldnorm::FieldNormReader;
 use tantivy::positions::PositionReader;
 use tantivy::postings::BlockSegmentPostings;
 use tantivy::postings::TermInfo;
 use tantivy::query::AllQuery;
+use tantivy::query::Bm25StatisticsProvider;
+use tantivy::query::Bm25Weight;
 use tantivy::query::BooleanQuery;
 use tantivy::query::BoostQuery;
 use tantivy::query::ConstScoreQuery;
@@ -243,18 +247,21 @@ impl Automaton for DfaWrapper {
     }
 }
 
-// Collect matched `doc_ids` for a Query.
+// Read term related infos.
 #[derive(Clone)]
-pub struct DocIdsCollector {
+pub struct TermReader {
     row_count: u64,
     need_position: bool,
+    has_score: bool,
     // key is `term`, value is `term_id`,
     // These terms are in `fst`, means that those terms exist in the block,
     // we need to use related term infos to determine the matched `doc_ids`.
     // Use `term_id` as key to get related information and avoid copy `term`.
     term_map: HashMap<Term, u64>,
-    // key is `term_id`, value is `field_id` and `term_info`.
-    term_infos: HashMap<u64, (u32, TermInfo)>,
+    // key is `term_id`, value is `field_id`.
+    term_field_id_map: HashMap<u64, u32>,
+    // key is `term_id`, value is `term_info`.
+    term_infos: HashMap<u64, TermInfo>,
     // key is `term_id`, value is related `BlockSegmentPostings`,
     // used to read `doc_ids` and `term_freqs`.
     block_postings_map: HashMap<u64, BlockSegmentPostings>,
@@ -267,18 +274,29 @@ pub struct DocIdsCollector {
     // key is `term_id`, value is related `term_freqs`.
     // `term_freqs` is lazy loaded when used.
     term_freqs: HashMap<u64, Vec<u32>>,
+    // key is `field_id`, value is the `FieldNormReader`, used to read fieldnorm.
+    fieldnorm_reader_map: HashMap<u32, FieldNormReader>,
+    // key is `field_id`, value is the number of tokens.
+    field_num_tokens_map: HashMap<u32, u64>,
 }
 
-impl DocIdsCollector {
+impl TermReader {
     pub fn create(
         row_count: u64,
         need_position: bool,
+        has_score: bool,
         terms: HashMap<Term, (u32, u64)>,
-        term_infos: HashMap<u64, (u32, TermInfo)>,
+        term_infos: HashMap<u64, TermInfo>,
         block_postings_map: HashMap<u64, BlockSegmentPostings>,
         position_reader_map: HashMap<u64, PositionReader>,
+        fieldnorm_reader_map: HashMap<u32, FieldNormReader>,
+        field_num_tokens_map: HashMap<u32, u64>,
     ) -> Self {
         let term_len = terms.len();
+        let term_field_id_map = terms
+            .iter()
+            .map(|(_, (field_id, term_id))| (*term_id, *field_id))
+            .collect::<HashMap<u64, u32>>();
         let term_map = terms
             .into_iter()
             .map(|(term, (_, term_id))| (term, term_id))
@@ -287,12 +305,205 @@ impl DocIdsCollector {
         Self {
             row_count,
             need_position,
+            has_score,
             term_map,
+            term_field_id_map,
             term_infos,
             block_postings_map,
             position_reader_map,
             doc_ids: HashMap::with_capacity(term_len),
             term_freqs: HashMap::with_capacity(term_len),
+            fieldnorm_reader_map,
+            field_num_tokens_map,
+        }
+    }
+
+    // get `doc_ids` of a `term_id`,
+    fn get_doc_ids(&mut self, term_id: u64) -> Result<&RoaringTreemap> {
+        if let std::collections::hash_map::Entry::Vacant(doc_ids_entry) =
+            self.doc_ids.entry(term_id)
+        {
+            // `doc_ids` are lazy loaded when used.
+            let block_postings = self.block_postings_map.get_mut(&term_id).ok_or_else(|| {
+                ErrorCode::TantivyError(format!(
+                    "inverted index block postings `{}` does not exist",
+                    term_id
+                ))
+            })?;
+
+            let term_freqs_len = if self.need_position || self.has_score {
+                let term_info = self.term_infos.get(&term_id).ok_or_else(|| {
+                    ErrorCode::TantivyError(format!(
+                        "inverted index term info `{}` does not exist",
+                        term_id
+                    ))
+                })?;
+                term_info.doc_freq as usize
+            } else {
+                0
+            };
+            let mut doc_ids = RoaringTreemap::new();
+            let mut term_freqs = Vec::with_capacity(term_freqs_len);
+            // `doc_ids` are stored in multiple blocks and need to be decode sequentially.
+            // TODO: We can skip some blocks by checking related `doc_ids`.
+            loop {
+                let block_doc_ids = block_postings.docs();
+                if block_doc_ids.is_empty() {
+                    break;
+                }
+                doc_ids
+                    .append(block_doc_ids.iter().map(|id| *id as u64))
+                    .unwrap();
+
+                // `term_freqs` is only used if the query need position or score.
+                if self.need_position || self.has_score {
+                    let block_term_freqs = block_postings.freqs();
+                    term_freqs.extend_from_slice(block_term_freqs);
+                }
+                block_postings.advance();
+            }
+            doc_ids_entry.insert(doc_ids);
+            self.term_freqs.insert(term_id, term_freqs);
+        }
+
+        let doc_ids = self.doc_ids.get(&term_id).unwrap();
+        Ok(doc_ids)
+    }
+
+    // get the position `offsets` and `term_freqs` of a `term_id` in each `docs`,
+    // which is used to read `positions`.
+    fn get_position_offsets(
+        &mut self,
+        term_id: u64,
+        all_doc_ids: &RoaringTreemap,
+    ) -> Result<HashMap<u64, (u64, u32)>> {
+        let doc_ids = self.doc_ids.get(&term_id).unwrap();
+        let term_freqs = self.term_freqs.get(&term_id).unwrap();
+
+        let mut doc_offset = 0;
+        let mut offset_and_term_freqs = HashMap::with_capacity(all_doc_ids.len() as usize);
+        for (doc_id, term_freq) in doc_ids.iter().zip(term_freqs.iter()) {
+            if all_doc_ids.len() as usize == offset_and_term_freqs.len() {
+                break;
+            }
+            if !all_doc_ids.contains(doc_id) {
+                doc_offset += *term_freq as u64;
+                continue;
+            }
+
+            offset_and_term_freqs.insert(doc_id, (doc_offset, *term_freq));
+            doc_offset += *term_freq as u64;
+        }
+
+        Ok(offset_and_term_freqs)
+    }
+
+    // get `positions` of a `term_id` in a `doc`.
+    fn get_positions(
+        &mut self,
+        term_id: u64,
+        doc_offset: u64,
+        term_freq: u32,
+    ) -> Result<RoaringTreemap> {
+        let position_reader = self.position_reader_map.get_mut(&term_id).ok_or_else(|| {
+            ErrorCode::TantivyError(format!(
+                "inverted index position reader `{}` does not exist",
+                term_id
+            ))
+        })?;
+
+        let mut positions = vec![0; term_freq as usize];
+        position_reader.read(doc_offset, &mut positions[..]);
+        for i in 1..positions.len() {
+            positions[i] += positions[i - 1];
+        }
+        let term_poses =
+            RoaringTreemap::from_sorted_iter(positions.into_iter().map(|i| i as u64)).unwrap();
+        Ok(term_poses)
+    }
+
+    fn term_id(&self, term: &Term) -> Option<&u64> {
+        self.term_map.get(term)
+    }
+
+    fn field_id(&self, term_id: &u64) -> Option<&u32> {
+        self.term_field_id_map.get(term_id)
+    }
+
+    fn fieldnorm_id(&self, field_id: u32, doc_id: u64) -> u8 {
+        if let Some(fieldnorm_reader) = self.fieldnorm_reader_map.get(&field_id) {
+            fieldnorm_reader.fieldnorm_id(doc_id as u32)
+        } else {
+            1
+        }
+    }
+
+    fn term_freq(&self, term_id: u64, doc_id: u64) -> Option<&u32> {
+        if let (Some(doc_ids), Some(term_freqs)) =
+            (self.doc_ids.get(&term_id), self.term_freqs.get(&term_id))
+        {
+            if doc_ids.contains(doc_id) {
+                // if not store `term_freq`, return 1 as default value.
+                if term_freqs.is_empty() {
+                    return Some(&1);
+                }
+                let rank = doc_ids.rank(doc_id) as usize;
+                if rank > 0 {
+                    let idx = rank - 1;
+                    return term_freqs.get(idx);
+                }
+            }
+        }
+        None
+    }
+}
+
+// impl `Bm25StatisticsProvider` for `TermReader` to compute BM25 scores.
+// Note: The numbers are within a block, not global numbers,
+// so the result score is not exact.
+impl Bm25StatisticsProvider for TermReader {
+    // The total number of tokens in a given field across all documents in the block.
+    fn total_num_tokens(&self, field: Field) -> tantivy::Result<u64> {
+        let field_id = field.field_id();
+        if let Some(total_num_tokens) = self.field_num_tokens_map.get(&field_id) {
+            Ok(*total_num_tokens)
+        } else {
+            Ok(1)
+        }
+    }
+
+    // The total number of documents in the block.
+    fn total_num_docs(&self) -> tantivy::Result<u64> {
+        Ok(self.row_count)
+    }
+
+    // The number of documents containing the given term in the block.
+    fn doc_freq(&self, term: &Term) -> tantivy::Result<u64> {
+        if let Some(term_id) = self.term_map.get(term) {
+            if let Some(term_info) = self.term_infos.get(term_id) {
+                return Ok(term_info.doc_freq as u64);
+            }
+        }
+        Ok(1)
+    }
+}
+
+// Collect matched `doc_ids` for a Query.
+#[derive(Clone)]
+pub struct DocIdsCollector {
+    term_reader: TermReader,
+    // key is phrase query, value is `doc_id` and phrase count
+    query_phrase_counts_map: HashMap<String, HashMap<u64, u64>>,
+    // key is fuzzy query, value is `doc_ids`
+    query_fuzzy_map: HashMap<String, RoaringTreemap>,
+}
+
+impl DocIdsCollector {
+    pub fn create(term_reader: TermReader) -> Self {
+        Self {
+            term_reader,
+            query_phrase_counts_map: HashMap::new(),
+            query_fuzzy_map: HashMap::new(),
         }
     }
 
@@ -483,110 +694,6 @@ impl DocIdsCollector {
         }
     }
 
-    // get `doc_ids` of a `term_id`,
-    fn get_doc_ids(&mut self, term_id: u64) -> Result<&RoaringTreemap> {
-        if let std::collections::hash_map::Entry::Vacant(doc_ids_entry) =
-            self.doc_ids.entry(term_id)
-        {
-            // `doc_ids` are lazy loaded when used.
-            let block_postings = self.block_postings_map.get_mut(&term_id).ok_or_else(|| {
-                ErrorCode::TantivyError(format!(
-                    "inverted index block postings `{}` does not exist",
-                    term_id
-                ))
-            })?;
-
-            let term_freqs_len = if self.need_position {
-                let (_, term_info) = self.term_infos.get(&term_id).ok_or_else(|| {
-                    ErrorCode::TantivyError(format!(
-                        "inverted index term info `{}` does not exist",
-                        term_id
-                    ))
-                })?;
-                term_info.doc_freq as usize
-            } else {
-                0
-            };
-            let mut doc_ids = RoaringTreemap::new();
-            let mut term_freqs = Vec::with_capacity(term_freqs_len);
-            // `doc_ids` are stored in multiple blocks and need to be decode sequentially.
-            // TODO: We can skip some blocks by checking related `doc_ids`.
-            loop {
-                let block_doc_ids = block_postings.docs();
-                if block_doc_ids.is_empty() {
-                    break;
-                }
-                doc_ids
-                    .append(block_doc_ids.iter().map(|id| *id as u64))
-                    .unwrap();
-
-                // `term_freqs` is only used if the query need position.
-                if self.need_position {
-                    let block_term_freqs = block_postings.freqs();
-                    term_freqs.extend_from_slice(block_term_freqs);
-                }
-                block_postings.advance();
-            }
-            doc_ids_entry.insert(doc_ids);
-            self.term_freqs.insert(term_id, term_freqs);
-        }
-
-        let doc_ids = self.doc_ids.get(&term_id).unwrap();
-        Ok(doc_ids)
-    }
-
-    // get the position `offsets` and `term_freqs` of a `term_id` in each `docs`,
-    // which is used to read `positions`.
-    fn get_position_offsets(
-        &mut self,
-        term_id: u64,
-        all_doc_ids: &RoaringTreemap,
-    ) -> Result<HashMap<u64, (u64, u32)>> {
-        let doc_ids = self.doc_ids.get(&term_id).unwrap();
-        let term_freqs = self.term_freqs.get(&term_id).unwrap();
-
-        let mut doc_offset = 0;
-        let mut offset_and_term_freqs = HashMap::with_capacity(all_doc_ids.len() as usize);
-        for (doc_id, term_freq) in doc_ids.iter().zip(term_freqs.iter()) {
-            if all_doc_ids.len() as usize == offset_and_term_freqs.len() {
-                break;
-            }
-            if !all_doc_ids.contains(doc_id) {
-                doc_offset += *term_freq as u64;
-                continue;
-            }
-
-            offset_and_term_freqs.insert(doc_id, (doc_offset, *term_freq));
-            doc_offset += *term_freq as u64;
-        }
-
-        Ok(offset_and_term_freqs)
-    }
-
-    // get `positions` of a `term_id` in a `doc`.
-    fn get_positions(
-        &mut self,
-        term_id: u64,
-        doc_offset: u64,
-        term_freq: u32,
-    ) -> Result<RoaringTreemap> {
-        let position_reader = self.position_reader_map.get_mut(&term_id).ok_or_else(|| {
-            ErrorCode::TantivyError(format!(
-                "inverted index position reader `{}` does not exist",
-                term_id
-            ))
-        })?;
-
-        let mut positions = vec![0; term_freq as usize];
-        position_reader.read(doc_offset, &mut positions[..]);
-        for i in 1..positions.len() {
-            positions[i] += positions[i - 1];
-        }
-        let term_poses =
-            RoaringTreemap::from_sorted_iter(positions.into_iter().map(|i| i as u64)).unwrap();
-        Ok(term_poses)
-    }
-
     // The phrase query matches `doc_ids` as follows:
     //
     // 1. Collect the position for each term in the query.
@@ -603,15 +710,16 @@ impl DocIdsCollector {
     //
     // If the query is a prefix phrase query, also check if any prefix terms
     // match the positions.
-    pub fn collect_phrase_matched_rows(
+    pub fn collect_phrase_matched_doc_ids(
         &mut self,
+        query_key: String,
         phrase_terms: Vec<(usize, Term)>,
         prefix_term: Option<(usize, &Vec<u64>)>,
     ) -> Result<Option<RoaringTreemap>> {
         let mut query_term_poses = Vec::with_capacity(phrase_terms.len());
         for (term_pos, term) in &phrase_terms {
             // term not exist means this phrase in not matched.
-            let Some(term_id) = self.term_map.get(term) else {
+            let Some(term_id) = self.term_reader.term_id(term) else {
                 return Ok(None);
             };
             query_term_poses.push((*term_pos, *term_id));
@@ -626,7 +734,7 @@ impl DocIdsCollector {
         let mut term_ids = HashSet::with_capacity(phrase_terms.len() + 1);
         term_ids.insert(*first_term_id);
 
-        let first_doc_ids = self.get_doc_ids(*first_term_id)?;
+        let first_doc_ids = self.term_reader.get_doc_ids(*first_term_id)?;
         let mut candidate_doc_ids = RoaringTreemap::new();
         candidate_doc_ids.bitor_assign(first_doc_ids);
 
@@ -635,7 +743,7 @@ impl DocIdsCollector {
         let mut query_term_offsets = Vec::with_capacity(query_term_poses.len() - 1);
         for (term_pos, term_id) in query_term_poses.iter().skip(1) {
             if !term_ids.contains(term_id) {
-                let doc_ids = self.get_doc_ids(*term_id)?;
+                let doc_ids = self.term_reader.get_doc_ids(*term_id)?;
 
                 candidate_doc_ids.bitand_assign(doc_ids);
                 if candidate_doc_ids.is_empty() {
@@ -656,7 +764,7 @@ impl DocIdsCollector {
         if let Some((_, prefix_term_ids)) = prefix_term {
             let mut all_prefix_doc_ids = RoaringTreemap::new();
             for prefix_term_id in prefix_term_ids {
-                let prefix_doc_ids = self.get_doc_ids(*prefix_term_id)?;
+                let prefix_doc_ids = self.term_reader.get_doc_ids(*prefix_term_id)?;
                 // If the `doc_ids` does not intersect at all, this prefix can be ignored.
                 if candidate_doc_ids.is_disjoint(prefix_doc_ids) {
                     continue;
@@ -678,7 +786,9 @@ impl DocIdsCollector {
         // which can be used to read positions.
         let mut offset_and_term_freqs_map = HashMap::new();
         for term_id in term_ids.into_iter() {
-            let offset_and_term_freqs = self.get_position_offsets(term_id, &candidate_doc_ids)?;
+            let offset_and_term_freqs = self
+                .term_reader
+                .get_position_offsets(term_id, &candidate_doc_ids)?;
             offset_and_term_freqs_map.insert(term_id, offset_and_term_freqs);
         }
 
@@ -687,10 +797,14 @@ impl DocIdsCollector {
         // Check every candidate `doc_ids` if the position of each terms match the query.
         let mut all_doc_ids = RoaringTreemap::new();
         let mut offset_poses = RoaringTreemap::new();
+        let mut phrase_counts_map = HashMap::new();
         let mut term_poses_map = HashMap::new();
         for (doc_id, (first_doc_offset, first_term_freq)) in first_offset_and_term_freqs.iter() {
-            let mut first_term_poses =
-                self.get_positions(*first_term_id, *first_doc_offset, *first_term_freq)?;
+            let mut first_term_poses = self.term_reader.get_positions(
+                *first_term_id,
+                *first_doc_offset,
+                *first_term_freq,
+            )?;
 
             term_poses_map.clear();
             term_poses_map.insert(first_term_id, first_term_poses.clone());
@@ -700,7 +814,9 @@ impl DocIdsCollector {
                     let offset_and_term_freqs = offset_and_term_freqs_map.get(term_id).unwrap();
                     let (doc_offset, term_freq) = offset_and_term_freqs.get(doc_id).unwrap();
 
-                    let term_poses = self.get_positions(*term_id, *doc_offset, *term_freq)?;
+                    let term_poses =
+                        self.term_reader
+                            .get_positions(*term_id, *doc_offset, *term_freq)?;
                     term_poses_map.insert(term_id, term_poses);
                 }
                 let term_poses = term_poses_map.get(term_id).unwrap();
@@ -737,7 +853,7 @@ impl DocIdsCollector {
                                 if let Some((doc_offset, term_freq)) =
                                     offset_and_term_freqs.get(doc_id)
                                 {
-                                    let term_poses = self.get_positions(
+                                    let term_poses = self.term_reader.get_positions(
                                         *prefix_term_id,
                                         *doc_offset,
                                         *term_freq,
@@ -767,16 +883,28 @@ impl DocIdsCollector {
                     }
                     if prefix_matched {
                         all_doc_ids.insert(*doc_id);
+                        if self.term_reader.has_score {
+                            phrase_counts_map.insert(*doc_id, first_term_poses.len());
+                        }
                     }
                 }
             } else {
                 let matched = !first_term_poses.is_empty();
                 if matched {
                     all_doc_ids.insert(*doc_id);
+                    if self.term_reader.has_score {
+                        // Using the number of the first term as the phrase count,
+                        // it's not very exact, but in order to simplify the calculation,
+                        // we can ignore the difference.
+                        phrase_counts_map.insert(*doc_id, first_term_poses.len());
+                    }
                 }
             }
         }
-
+        if self.term_reader.has_score {
+            self.query_phrase_counts_map
+                .insert(query_key, phrase_counts_map);
+        }
         if !all_doc_ids.is_empty() {
             Ok(Some(all_doc_ids))
         } else {
@@ -784,8 +912,8 @@ impl DocIdsCollector {
         }
     }
 
-    // collect matched rows by term value
-    pub fn collect_matched_rows(
+    // collect matched doc ids by the query.
+    pub fn collect_matched_doc_ids(
         &mut self,
         query: Box<dyn Query>,
         prefix_terms: &HashMap<Term, Vec<u64>>,
@@ -793,8 +921,8 @@ impl DocIdsCollector {
     ) -> Result<Option<RoaringTreemap>> {
         if let Some(term_query) = query.downcast_ref::<TermQuery>() {
             let term = term_query.term();
-            if let Some(term_id) = self.term_map.get(term) {
-                let doc_ids = self.get_doc_ids(*term_id)?;
+            if let Some(term_id) = self.term_reader.term_id(term) {
+                let doc_ids = self.term_reader.get_doc_ids(*term_id)?;
                 Ok(Some(doc_ids.clone()))
             } else {
                 Ok(None)
@@ -804,7 +932,7 @@ impl DocIdsCollector {
             let mut must_doc_ids: Option<RoaringTreemap> = None;
             let mut must_not_doc_ids: Option<RoaringTreemap> = None;
             for (occur, sub_query) in bool_query.clauses() {
-                let doc_ids = self.collect_matched_rows(
+                let doc_ids = self.collect_matched_doc_ids(
                     sub_query.box_clone(),
                     prefix_terms,
                     fuzziness_terms,
@@ -858,17 +986,13 @@ impl DocIdsCollector {
                 // only should
                 (Some(should_doc_ids), None, None) => should_doc_ids,
                 // only must
-                (None, Some(must_doc_ids), None) => must_doc_ids,
+                // should and must
+                (_, Some(must_doc_ids), None) => must_doc_ids,
                 // only must not
                 (None, None, Some(must_not_doc_ids)) => {
-                    let mut all_doc_ids = RoaringTreemap::from_iter(0..self.row_count);
+                    let mut all_doc_ids = RoaringTreemap::from_iter(0..self.term_reader.row_count);
                     all_doc_ids.sub_assign(must_not_doc_ids);
                     all_doc_ids
-                }
-                // should and must
-                (Some(mut should_doc_ids), Some(must_doc_ids), None) => {
-                    should_doc_ids.bitor_assign(must_doc_ids);
-                    should_doc_ids
                 }
                 // should and must not
                 (Some(mut should_doc_ids), None, Some(must_not_doc_ids)) => {
@@ -876,15 +1000,10 @@ impl DocIdsCollector {
                     should_doc_ids
                 }
                 // must and must not
-                (None, Some(mut must_doc_ids), Some(must_not_doc_ids)) => {
+                // should, must and must not
+                (_, Some(mut must_doc_ids), Some(must_not_doc_ids)) => {
                     must_doc_ids.sub_assign(must_not_doc_ids);
                     must_doc_ids
-                }
-                // should, must and must not
-                (Some(mut should_doc_ids), Some(must_doc_ids), Some(must_not_doc_ids)) => {
-                    should_doc_ids.bitor_assign(must_doc_ids);
-                    should_doc_ids.sub_assign(must_not_doc_ids);
-                    should_doc_ids
                 }
                 (None, None, None) => {
                     return Ok(None);
@@ -897,9 +1016,11 @@ impl DocIdsCollector {
                 Ok(None)
             }
         } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
+            let query_key = format!("{:?}", phrase_query);
             let phrase_terms = phrase_query.phrase_terms_with_offsets();
-            self.collect_phrase_matched_rows(phrase_terms, None)
+            self.collect_phrase_matched_doc_ids(query_key, phrase_terms, None)
         } else if let Some(phrase_prefix_query) = query.downcast_ref::<PhrasePrefixQuery>() {
+            let query_key = format!("{:?}", phrase_prefix_query);
             let phrase_terms = phrase_prefix_query.phrase_terms_with_offsets();
             let (prefix_term_pos, prefix_term) = phrase_prefix_query.prefix_term_with_offset();
 
@@ -908,7 +1029,7 @@ impl DocIdsCollector {
             };
             let prefix_term = Some((prefix_term_pos, prefix_term_ids));
 
-            self.collect_phrase_matched_rows(phrase_terms, prefix_term)
+            self.collect_phrase_matched_doc_ids(query_key, phrase_terms, prefix_term)
         } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
             let mut all_doc_ids = RoaringTreemap::new();
             let term = fuzzy_term_query.term();
@@ -918,28 +1039,151 @@ impl DocIdsCollector {
             };
             // collect related terms of the original term.
             for term_id in fuzz_term_ids {
-                let doc_ids = self.get_doc_ids(*term_id)?;
+                let doc_ids = self.term_reader.get_doc_ids(*term_id)?;
                 all_doc_ids.bitor_assign(doc_ids);
             }
             if !all_doc_ids.is_empty() {
+                if self.term_reader.has_score {
+                    let query_key = format!("{:?}", fuzzy_term_query);
+                    self.query_fuzzy_map.insert(query_key, all_doc_ids.clone());
+                }
                 Ok(Some(all_doc_ids))
             } else {
                 Ok(None)
             }
         } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
-            self.collect_matched_rows(boost_query.query(), prefix_terms, fuzziness_terms)
+            self.collect_matched_doc_ids(boost_query.query(), prefix_terms, fuzziness_terms)
         } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
-            self.collect_matched_rows(const_query.query(), prefix_terms, fuzziness_terms)
+            self.collect_matched_doc_ids(const_query.query(), prefix_terms, fuzziness_terms)
         } else if let Some(_empty_query) = query.downcast_ref::<EmptyQuery>() {
             Ok(None)
         } else if let Some(_all_query) = query.downcast_ref::<AllQuery>() {
-            let all_doc_ids = RoaringTreemap::from_iter(0..self.row_count);
+            let all_doc_ids = RoaringTreemap::from_iter(0..self.term_reader.row_count);
             Ok(Some(all_doc_ids))
         } else {
             Err(ErrorCode::TantivyError(format!(
                 "inverted index unsupported query `{:?}`",
                 query
             )))
+        }
+    }
+
+    fn calculate_phrase_scores(
+        &mut self,
+        query_key: String,
+        phrase_terms: Vec<Term>,
+        doc_ids: &RoaringTreemap,
+        boost: Option<f32>,
+    ) -> Result<Vec<F32>> {
+        let mut phrase_counts_map = self
+            .query_phrase_counts_map
+            .remove(&query_key)
+            .unwrap_or_default();
+        if let Some(term_id) = self.term_reader.term_id(&phrase_terms[0]) {
+            if let Some(field_id) = self.term_reader.field_id(term_id) {
+                let mut bm25_weight = Bm25Weight::for_terms(&self.term_reader, &phrase_terms)?;
+                if let Some(boost) = boost {
+                    // increase weigth by multiply a optional boost factor
+                    bm25_weight = bm25_weight.boost_by(boost);
+                }
+                let mut scores = Vec::with_capacity(doc_ids.len() as usize);
+                for doc_id in doc_ids {
+                    let fieldnorm_id = self.term_reader.fieldnorm_id(*field_id, doc_id);
+                    let phrase_count = phrase_counts_map.remove(&doc_id).unwrap_or_default();
+
+                    let score = bm25_weight.score(fieldnorm_id, phrase_count as u32);
+                    scores.push(score.into());
+                }
+                return Ok(scores);
+            }
+        }
+        let scores = vec![F32::from(0_f32); doc_ids.len() as usize];
+        Ok(scores)
+    }
+
+    // calculate the score of matched doc ids.
+    pub fn calculate_scores(
+        &mut self,
+        query: Box<dyn Query>,
+        doc_ids: &RoaringTreemap,
+        boost: Option<f32>,
+    ) -> Result<Vec<F32>> {
+        if let Some(term_query) = query.downcast_ref::<TermQuery>() {
+            let term = term_query.term();
+            if let Some(term_id) = self.term_reader.term_id(term) {
+                if let Some(field_id) = self.term_reader.field_id(term_id) {
+                    let mut bm25_weight =
+                        Bm25Weight::for_terms(&self.term_reader, &[term.clone()])?;
+                    if let Some(boost) = boost {
+                        // increase weigth by multiply a optional boost factor
+                        bm25_weight = bm25_weight.boost_by(boost);
+                    }
+                    let mut scores = Vec::with_capacity(doc_ids.len() as usize);
+                    for doc_id in doc_ids {
+                        let fieldnorm_id = self.term_reader.fieldnorm_id(*field_id, doc_id);
+                        let term_freq = self.term_reader.term_freq(*term_id, doc_id).unwrap_or(&0);
+
+                        let score = bm25_weight.score(fieldnorm_id, *term_freq);
+                        scores.push(score.into());
+                    }
+                    return Ok(scores);
+                }
+            }
+            let scores = vec![F32::from(0_f32); doc_ids.len() as usize];
+            Ok(scores)
+        } else if let Some(bool_query) = query.downcast_ref::<BooleanQuery>() {
+            let mut combine_scores = vec![F32::from(0_f32); doc_ids.len() as usize];
+            for (occur, sub_query) in bool_query.clauses() {
+                // ignore `MustNot` sub queries
+                if occur == &Occur::MustNot {
+                    continue;
+                }
+                let scores = self.calculate_scores(sub_query.box_clone(), doc_ids, boost)?;
+                for i in 0..combine_scores.len() {
+                    // To simplify the calculation, add the score of the sub query together as the combine score.
+                    unsafe {
+                        let combine_score = combine_scores.get_unchecked_mut(i);
+                        if let Some(score) = scores.get(i) {
+                            *combine_score += score;
+                        }
+                    }
+                }
+            }
+            Ok(combine_scores)
+        } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
+            let query_key = format!("{:?}", phrase_query);
+            let phrase_terms = phrase_query.phrase_terms();
+            self.calculate_phrase_scores(query_key, phrase_terms, doc_ids, boost)
+        } else if let Some(phrase_prefix_query) = query.downcast_ref::<PhrasePrefixQuery>() {
+            let query_key = format!("{:?}", phrase_prefix_query);
+            let phrase_terms = phrase_prefix_query.phrase_terms();
+            self.calculate_phrase_scores(query_key, phrase_terms, doc_ids, boost)
+        } else if let Some(fuzzy_term_query) = query.downcast_ref::<FuzzyTermQuery>() {
+            let query_key = format!("{:?}", fuzzy_term_query);
+            let fuzzy_doc_ids = self.query_fuzzy_map.remove(&query_key).unwrap_or_default();
+
+            let mut scores = Vec::with_capacity(doc_ids.len() as usize);
+            for doc_id in doc_ids {
+                if fuzzy_doc_ids.contains(doc_id) {
+                    scores.push(F32::from(1_f32));
+                } else {
+                    scores.push(F32::from(0_f32));
+                }
+            }
+            Ok(scores)
+        } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
+            let boost = boost_query.boost();
+            self.calculate_scores(boost_query.query(), doc_ids, Some(boost))
+        } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
+            let score = const_query.score();
+            let scores = vec![F32::from(score); doc_ids.len() as usize];
+            Ok(scores)
+        } else if let Some(_all_query) = query.downcast_ref::<AllQuery>() {
+            let scores = vec![F32::from(1_f32); doc_ids.len() as usize];
+            Ok(scores)
+        } else {
+            let scores = vec![F32::from(0_f32); doc_ids.len() as usize];
+            Ok(scores)
         }
     }
 }

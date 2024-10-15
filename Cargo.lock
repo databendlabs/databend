@@ -4375,6 +4375,7 @@ dependencies = [
  "siphasher",
  "sys-info",
  "tantivy",
+ "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
  "thrift",
