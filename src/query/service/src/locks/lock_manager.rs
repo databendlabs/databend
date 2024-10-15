@@ -28,7 +28,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
@@ -123,11 +122,9 @@ impl LockManager {
         let acquire_lock_timeout = ctx.get_settings().get_acquire_lock_timeout()?;
         let duration = Duration::from_secs(acquire_lock_timeout);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-
         let list_table_lock_req = ListLockRevReq::new(lock_key.clone());
 
-        let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
-
+        let mut is_locked = false;
         loop {
             // List all revisions and check if the current is the minimum.
             let mut rev_list = catalog
@@ -166,13 +163,8 @@ impl LockManager {
             let elapsed = start.elapsed();
             // if no need retry, return error directly.
             if !should_retry || elapsed >= duration {
-                catalog
-                    .delete_lock_revision(delete_table_lock_req.clone())
-                    .await?;
-                return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "table is locked by other session, please retry later(elapsed: {:?})",
-                    elapsed
-                )));
+                is_locked = true;
+                break;
             }
 
             let watch_delete_ident = TableLockIdent::new(tenant, table_id, rev_list[position - 1]);
@@ -195,7 +187,7 @@ impl LockManager {
             }
 
             // Add a timeout period for watch.
-            match timeout(duration.abs_diff(elapsed), async move {
+            if let Err(_cause) = timeout(duration.abs_diff(elapsed), async move {
                 while let Some(Ok(resp)) = watch_stream.next().await {
                     if let Some(event) = resp.event {
                         if event.current.is_none() {
@@ -206,20 +198,21 @@ impl LockManager {
             })
             .await
             {
-                Ok(_) => Ok(()),
-                Err(_) => {
-                    catalog
-                        .delete_lock_revision(delete_table_lock_req.clone())
-                        .await?;
-                    Err(ErrorCode::TableAlreadyLocked(format!(
-                        "table is locked by other session, please retry later(elapsed: {:?})",
-                        start.elapsed()
-                    )))
-                }
-            }?;
+                is_locked = true;
+                break;
+            }
         }
 
-        Ok(Some(Arc::new(guard)))
+        if is_locked {
+            drop(guard);
+            Err(ErrorCode::TableAlreadyLocked(format!(
+                "table is locked by other session, please retry later(revision: {}, elapsed: {:?})",
+                revision,
+                start.elapsed()
+            )))
+        } else {
+            Ok(Some(Arc::new(guard)))
+        }
     }
 
     fn insert_lock(&self, revision: u64, lock_holder: Arc<LockHolder>) {
