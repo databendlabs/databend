@@ -22,8 +22,6 @@ use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
@@ -112,7 +110,6 @@ impl DataBlock {
         build_columns_data_type: &[DataType],
         indices: &[RowPtr],
         result_size: usize,
-        binary_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Self {
         let num_columns = build_columns.len();
         let result_columns = (0..num_columns)
@@ -123,7 +120,6 @@ impl DataBlock {
                     data_type.clone(),
                     indices,
                     result_size,
-                    binary_items_buf,
                 );
                 BlockEntry::new(data_type.clone(), Value::Column(column))
             })
@@ -632,7 +628,6 @@ impl Column {
         data_type: DataType,
         indices: &[RowPtr],
         result_size: usize,
-        binary_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Column {
         match &columns {
             ColumnVec::Null { .. } => Column::Null { len: result_size },
@@ -656,12 +651,12 @@ impl Column {
             ColumnVec::Boolean(columns) => {
                 Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
             }
-            ColumnVec::Binary(columns) => BinaryType::upcast_column(
-                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
-            ),
-            ColumnVec::String(columns) => StringType::upcast_column(
-                Self::take_block_vec_string_types(columns, indices, binary_items_buf.as_mut()),
-            ),
+            ColumnVec::Binary(columns) => {
+                BinaryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+            }
+            ColumnVec::String(columns) => {
+                StringType::upcast_column(Self::take_block_vec_string_types(columns, indices))
+            }
             ColumnVec::Timestamp(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
                 let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
@@ -714,9 +709,9 @@ impl Column {
                     columns, builder, indices,
                 )
             }
-            ColumnVec::Bitmap(columns) => BitmapType::upcast_column(
-                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
-            ),
+            ColumnVec::Bitmap(columns) => {
+                BitmapType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+            }
             ColumnVec::Nullable(columns) => {
                 let inner_data_type = data_type.as_nullable().unwrap();
                 let inner_column = Self::take_column_vec_indices(
@@ -724,7 +719,6 @@ impl Column {
                     *inner_data_type.clone(),
                     indices,
                     result_size,
-                    binary_items_buf,
                 );
 
                 let inner_bitmap = Self::take_column_vec_indices(
@@ -732,7 +726,6 @@ impl Column {
                     DataType::Boolean,
                     indices,
                     result_size,
-                    binary_items_buf,
                 );
 
                 NullableColumn::new_column(
@@ -751,25 +744,22 @@ impl Column {
                             ty.clone(),
                             indices,
                             result_size,
-                            binary_items_buf,
                         )
                     })
                     .collect();
 
                 Column::Tuple(fields)
             }
-            ColumnVec::Variant(columns) => VariantType::upcast_column(
-                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
-            ),
-            ColumnVec::Geometry(columns) => GeometryType::upcast_column(
-                Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
-            ),
+            ColumnVec::Variant(columns) => {
+                VariantType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+            }
+            ColumnVec::Geometry(columns) => {
+                GeometryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+            }
             ColumnVec::Geography(columns) => {
                 let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
                 GeographyType::upcast_column(GeographyColumn(Self::take_block_vec_binary_types(
-                    &columns,
-                    indices,
-                    binary_items_buf.as_mut(),
+                    &columns, indices,
                 )))
             }
         }
@@ -785,11 +775,7 @@ impl Column {
         builder
     }
 
-    pub fn take_block_vec_binary_types(
-        col: &[BinaryColumn],
-        indices: &[RowPtr],
-        binary_items_buf: Option<&mut Vec<(u64, usize)>>,
-    ) -> BinaryColumn {
+    pub fn take_block_vec_binary_types(col: &[BinaryColumn], indices: &[RowPtr]) -> BinaryColumn {
         let mut builder = BinaryColumnBuilder::with_capacity(indices.len(), 0);
         for row_ptr in indices {
             unsafe {
@@ -802,11 +788,7 @@ impl Column {
         builder.build()
     }
 
-    pub fn take_block_vec_string_types(
-        cols: &[StringColumn],
-        indices: &[RowPtr],
-        binary_items_buf: Option<&mut Vec<(u64, usize)>>,
-    ) -> StringColumn {
+    pub fn take_block_vec_string_types(cols: &[StringColumn], indices: &[RowPtr]) -> StringColumn {
         let binary_cols = cols
             .iter()
             .map(|col| col.clone().into())
@@ -815,7 +797,6 @@ impl Column {
             StringColumn::from_binary_unchecked(Self::take_block_vec_binary_types(
                 &binary_cols,
                 indices,
-                binary_items_buf,
             ))
         }
     }

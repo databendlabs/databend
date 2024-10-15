@@ -31,7 +31,6 @@ use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
-use crate::types::binary;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -365,7 +364,7 @@ impl Column {
                         );
                     Column::Binary(binary_array_to_binary_column(arrow_col))
                 }
-                (DataType::Binary, ArrowDataType::FixedSizeBinary(size)) => {
+                (DataType::Binary, ArrowDataType::FixedSizeBinary(_)) => {
                     let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<databend_common_arrow::arrow::array::FixedSizeBinaryArray>()

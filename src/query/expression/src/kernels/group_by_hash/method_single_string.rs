@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::array::BinaryViewArray;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 

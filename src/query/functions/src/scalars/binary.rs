@@ -30,7 +30,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;

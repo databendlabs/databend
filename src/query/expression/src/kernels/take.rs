@@ -19,8 +19,6 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -34,19 +32,13 @@ use crate::Value;
 pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
 impl DataBlock {
-    pub fn take<I>(
-        &self,
-        indices: &[I],
-        string_items_buf: &mut Option<Vec<(u64, usize)>>,
-    ) -> Result<Self>
-    where
-        I: databend_common_arrow::arrow::types::Index,
-    {
+    pub fn take<I>(&self, indices: &[I]) -> Result<Self>
+    where I: databend_common_arrow::arrow::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
 
-        let mut taker = TakeVisitor::new(indices, string_items_buf);
+        let mut taker = TakeVisitor::new(indices);
 
         let after_columns = self
             .columns()
@@ -73,17 +65,15 @@ struct TakeVisitor<'a, I>
 where I: databend_common_arrow::arrow::types::Index
 {
     indices: &'a [I],
-    string_items_buf: &'a mut Option<Vec<(u64, usize)>>,
     result: Option<Value<AnyType>>,
 }
 
 impl<'a, I> TakeVisitor<'a, I>
 where I: databend_common_arrow::arrow::types::Index
 {
-    fn new(indices: &'a [I], string_items_buf: &'a mut Option<Vec<(u64, usize)>>) -> Self {
+    fn new(indices: &'a [I]) -> Self {
         Self {
             indices,
-            string_items_buf,
             result: None,
         }
     }

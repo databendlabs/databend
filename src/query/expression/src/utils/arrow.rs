@@ -19,8 +19,6 @@ use std::io::Write;
 
 use databend_common_arrow::arrow;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::array::BinaryArray;
-use databend_common_arrow::arrow::array::BinaryViewArray;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -29,13 +27,10 @@ use databend_common_arrow::arrow::io::ipc::read::read_file_metadata;
 use databend_common_arrow::arrow::io::ipc::read::FileReader;
 use databend_common_arrow::arrow::io::ipc::write::Compression;
 use databend_common_arrow::arrow::io::ipc::write::FileWriter;
-use databend_common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
-use databend_common_arrow::arrow::types::Offset;
+use databend_common_arrow::arrow::io::ipc::write::WriteOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::BinaryColumn;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;

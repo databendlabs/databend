@@ -23,7 +23,6 @@ use itertools::Itertools;
 
 use crate::copy_continuous_bits;
 use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;

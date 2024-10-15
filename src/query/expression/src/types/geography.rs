@@ -15,13 +15,11 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
-use databend_common_arrow::parquet::encoding::plain_byte_array::BinaryIter;
 use databend_common_exception::Result;
 use databend_common_io::geography::*;
 use databend_common_io::wkb::make_point;

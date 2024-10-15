@@ -242,9 +242,9 @@ impl<'a> Selector<'a> {
                             for idx in 0u32..count as u32 {
                                 let ret = if NOT {
                                     validity.get_bit_unchecked(idx as usize)
-                                        && !searcher
+                                        && searcher
                                             .search(column.index_unchecked_bytes(idx as usize))
-                                            .is_some()
+                                            .is_none()
                                 } else {
                                     validity.get_bit_unchecked(idx as usize)
                                         && searcher
@@ -273,9 +273,9 @@ impl<'a> Selector<'a> {
                         if let LikePattern::SurroundByPercent(searcher) = like_pattern {
                             for idx in 0u32..count as u32 {
                                 let ret = if NOT {
-                                    !searcher
+                                    searcher
                                         .search(column.index_unchecked_bytes(idx as usize))
-                                        .is_some()
+                                        .is_none()
                                 } else {
                                     searcher
                                         .search(column.index_unchecked_bytes(idx as usize))
