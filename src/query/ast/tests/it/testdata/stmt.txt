@@ -9869,11 +9869,13 @@ Query(
                         pivot: None,
                         unpivot: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: Probability(
-                                    99.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    Probability(
+                                        99.0,
+                                    ),
                                 ),
+                                block_level: None,
                             },
                         ),
                     },
@@ -9896,7 +9898,7 @@ Query(
 ---------- Input ----------
 select * from t sample block (99);
 ---------- Output ---------
-SELECT * FROM t SAMPLE BLOCK (99)
+SELECT * FROM t SAMPLE BLOCK (99) 
 ---------- AST ------------
 Query(
     Query {
@@ -9945,9 +9947,9 @@ Query(
                         pivot: None,
                         unpivot: None,
                         sample: Some(
-                            Sample {
-                                sample_level: BLOCK,
-                                sample_conf: Probability(
+                            SampleConfig {
+                                row_level: None,
+                                block_level: Some(
                                     99.0,
                                 ),
                             },
@@ -10021,87 +10023,13 @@ Query(
                         pivot: None,
                         unpivot: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: RowsNum(
-                                    10.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    RowsNum(
+                                        10.0,
+                                    ),
                                 ),
-                            },
-                        ),
-                    },
-                ],
-                selection: None,
-                group_by: None,
-                having: None,
-                window_list: None,
-                qualify: None,
-            },
-        ),
-        order_by: [],
-        limit: [],
-        offset: None,
-        ignore_result: false,
-    },
-)
-
-
----------- Input ----------
-select * from t sample block (10 rows);
----------- Output ---------
-SELECT * FROM t SAMPLE BLOCK (10 ROWS)
----------- AST ------------
-Query(
-    Query {
-        span: Some(
-            0..38,
-        ),
-        with: None,
-        body: Select(
-            SelectStmt {
-                span: Some(
-                    0..38,
-                ),
-                hints: None,
-                distinct: false,
-                top_n: None,
-                select_list: [
-                    StarColumns {
-                        qualified: [
-                            Star(
-                                Some(
-                                    7..8,
-                                ),
-                            ),
-                        ],
-                        column_filter: None,
-                    },
-                ],
-                from: [
-                    Table {
-                        span: Some(
-                            14..38,
-                        ),
-                        catalog: None,
-                        database: None,
-                        table: Identifier {
-                            span: Some(
-                                14..15,
-                            ),
-                            name: "t",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        alias: None,
-                        temporal: None,
-                        with_options: None,
-                        pivot: None,
-                        unpivot: None,
-                        sample: Some(
-                            Sample {
-                                sample_level: BLOCK,
-                                sample_conf: RowsNum(
-                                    10.0,
-                                ),
+                                block_level: None,
                             },
                         ),
                     },
@@ -10179,11 +10107,13 @@ Query(
                         named_params: [],
                         alias: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: Probability(
-                                    99.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    Probability(
+                                        99.0,
+                                    ),
                                 ),
+                                block_level: None,
                             },
                         ),
                     },
@@ -10206,7 +10136,7 @@ Query(
 ---------- Input ----------
 select * from numbers(1000) sample block (99);
 ---------- Output ---------
-SELECT * FROM numbers(1000) SAMPLE BLOCK (99)
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99) 
 ---------- AST ------------
 Query(
     Query {
@@ -10261,9 +10191,9 @@ Query(
                         named_params: [],
                         alias: None,
                         sample: Some(
-                            Sample {
-                                sample_level: BLOCK,
-                                sample_conf: Probability(
+                            SampleConfig {
+                                row_level: None,
+                                block_level: Some(
                                     99.0,
                                 ),
                             },
@@ -10343,10 +10273,184 @@ Query(
                         named_params: [],
                         alias: None,
                         sample: Some(
-                            Sample {
-                                sample_level: ROW,
-                                sample_conf: RowsNum(
-                                    10.0,
+                            SampleConfig {
+                                row_level: Some(
+                                    RowsNum(
+                                        10.0,
+                                    ),
+                                ),
+                                block_level: None,
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample block (99) row (10 rows);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10 ROWS)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..59,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..59,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..59,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            SampleConfig {
+                                row_level: Some(
+                                    RowsNum(
+                                        10.0,
+                                    ),
+                                ),
+                                block_level: Some(
+                                    99.0,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from numbers(1000) sample block (99) row (10);
+---------- Output ---------
+SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..54,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..54,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            14..54,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                14..21,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    22..26,
+                                ),
+                                value: UInt64(
+                                    1000,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: Some(
+                            SampleConfig {
+                                row_level: Some(
+                                    Probability(
+                                        10.0,
+                                    ),
+                                ),
+                                block_level: Some(
+                                    99.0,
                                 ),
                             },
                         ),
