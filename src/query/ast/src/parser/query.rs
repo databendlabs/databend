@@ -876,16 +876,12 @@ fn get_table_sample(
 ) -> Option<SampleConfig> {
     let mut default_sample_conf = SampleConfig::default();
     if sample.is_some() {
-        if let Some((_, _, sample_value, _)) = block_level_sample {
-            if let Expr::Literal { value, .. } = sample_value {
-                default_sample_conf.set_block_level_sample(value.as_double().unwrap_or_default());
-            }
+        if let Some((_, _, Expr::Literal { value, .. }, _)) = block_level_sample {
+            default_sample_conf.set_block_level_sample(value.as_double().unwrap_or_default());
         }
-        if let Some((_, _, sample_value, rows, _)) = row_level_sample {
-            if let Expr::Literal { value, .. } = sample_value {
-                default_sample_conf
-                    .set_row_level_sample(value.as_double().unwrap_or_default(), rows.is_some());
-            }
+        if let Some((_, _, Expr::Literal { value, .. }, rows, _)) = row_level_sample {
+            default_sample_conf
+                .set_row_level_sample(value.as_double().unwrap_or_default(), rows.is_some());
         }
         return Some(default_sample_conf);
     }

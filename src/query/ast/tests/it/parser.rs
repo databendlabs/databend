@@ -228,6 +228,8 @@ fn test_statement() {
         r#"select * from numbers(1000) sample row (99);"#,
         r#"select * from numbers(1000) sample block (99);"#,
         r#"select * from numbers(1000) sample row (10 rows);"#,
+        r#"select * from numbers(1000) sample block (99) row (10 rows);"#,
+        r#"select * from numbers(1000) sample block (99) row (10);"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
