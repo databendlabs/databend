@@ -150,6 +150,7 @@ pub struct CopyIntoLocationOptions {
     pub detailed_output: bool,
     pub use_raw_path: bool,
     pub include_query_id: bool,
+    pub overwrite: bool,
 }
 
 impl Default for CopyIntoLocationOptions {
@@ -160,6 +161,7 @@ impl Default for CopyIntoLocationOptions {
             detailed_output: false,
             use_raw_path: false,
             include_query_id: true,
+            overwrite: false,
         }
     }
 }
@@ -195,6 +197,7 @@ impl Display for CopyIntoLocationStmt {
         write!(f, " DETAILED_OUTPUT = {}", self.options.detailed_output)?;
         write!(f, " INCLUDE_QUERY_ID = {}", self.options.include_query_id)?;
         write!(f, " USE_RAW_PATH = {}", self.options.use_raw_path)?;
+        write!(f, " overwrite= {}", self.options.overwrite)?;
 
         Ok(())
     }
@@ -209,6 +212,7 @@ impl CopyIntoLocationStmt {
             CopyIntoLocationOption::DetailedOutput(v) => self.options.detailed_output = v,
             CopyIntoLocationOption::IncludeQueryID(v) => self.options.include_query_id = v,
             CopyIntoLocationOption::UseRawPath(v) => self.options.use_raw_path = v,
+            CopyIntoLocationOption::OverWrite(v) => self.options.overwrite = v,
         }
     }
 }
@@ -508,6 +512,7 @@ pub enum CopyIntoLocationOption {
     IncludeQueryID(bool),
     UseRawPath(bool),
     DetailedOutput(bool),
+    OverWrite(bool),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Drive, DriveMut)]

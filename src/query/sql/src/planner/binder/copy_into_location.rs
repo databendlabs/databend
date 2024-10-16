@@ -19,6 +19,8 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storage::init_stage_operator;
+use opendal::ErrorKind;
 
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::Binder;
@@ -38,6 +40,17 @@ impl<'a> Binder {
                 "use_raw_path=true can only be set when single=true",
             ));
         }
+        if stmt.options.overwrite && (!stmt.options.single || !stmt.options.use_raw_path) {
+            return Err(ErrorCode::InvalidArgument(
+                "overwrite=true can only be set when single=true and use_raw_path=true for now",
+            ));
+        }
+        if !stmt.options.include_query_id && !stmt.options.use_raw_path {
+            return Err(ErrorCode::InvalidArgument(
+                "include_query_id=false can only be set when use_raw_path=true",
+            ));
+        }
+
         let query = match &stmt.src {
             CopyIntoLocationSource::Table(table) => {
                 let (catalog_name, database_name, table_name) = self
@@ -76,6 +89,25 @@ impl<'a> Binder {
         }?;
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
+
+        if stmt.options.use_raw_path {
+            if path.ends_with("/") {
+                return Err(ErrorCode::BadArguments(
+                    "when use_raw_path is set to true, url path can not end with '/'",
+                ));
+            }
+            let op = init_stage_operator(&stage_info)?;
+            if !stmt.options.overwrite {
+                match op.stat(&path).await {
+                    Ok(_) => return Err(ErrorCode::BadArguments("file already exists")),
+                    Err(e) => {
+                        if e.kind() != ErrorKind::NotFound {
+                            return Err(e.into());
+                        }
+                    }
+                }
+            }
+        }
 
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;

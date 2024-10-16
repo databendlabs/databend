@@ -216,6 +216,10 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
             rule! {  INCLUDE_QUERY_ID ~ "=" ~ #literal_bool },
             |(_, _, include_query_id)| CopyIntoLocationOption::IncludeQueryID(include_query_id),
         ),
+        map(
+            rule! {  OVERWRITE ~ "=" ~ #literal_bool },
+            |(_, _, include_query_id)| CopyIntoLocationOption::OverWrite(include_query_id),
+        ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)
         }),
