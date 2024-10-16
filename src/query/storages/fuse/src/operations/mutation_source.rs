@@ -270,8 +270,9 @@ impl FuseTable {
 
         if !block_metas.is_empty() {
             if let Some(range_index) = pruner.get_inverse_range_index() {
-                for (block_meta_idx, block_meta) in &block_metas {
-                    if !range_index.should_keep(&block_meta.as_ref().col_stats, None) {
+                for (block_meta_idx, block_meta, col_stats) in &block_metas {
+                    let col_stats = col_stats.as_ref().unwrap_or(&block_meta.col_stats);
+                    if !range_index.should_keep(col_stats, None) {
                         // this block should be deleted completely
                         whole_block_deletions
                             .insert((block_meta_idx.segment_idx, block_meta_idx.block_idx));
@@ -283,7 +284,9 @@ impl FuseTable {
         let range_block_metas = block_metas
             .clone()
             .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .map(|(block_meta_index, block_meta, col_stats)| {
+                (Some(block_meta_index), block_meta, col_stats)
+            })
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
@@ -300,7 +303,7 @@ impl FuseTable {
             block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|((index, block_meta), inner_part)| {
+                .map(|((index, block_meta, _col_stats), inner_part)| {
                     let cluster_stats = if with_origin {
                         block_meta.cluster_stats.clone()
                     } else {

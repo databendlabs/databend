@@ -72,6 +72,11 @@ async fn apply_block_pruning(
     FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, None)?
         .read_pruning(segment_locs)
         .await
+        .map(|v| {
+            v.into_iter()
+                .map(|(block_meta_index, block_meta, _)| (block_meta_index, block_meta))
+                .collect()
+        })
 }
 
 #[tokio::test(flavor = "multi_thread")]

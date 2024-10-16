@@ -30,4 +30,5 @@ pub use page_pruner::PagePruner;
 pub use page_pruner::PagePrunerCreator;
 pub use range_pruner::RangePruner;
 pub use range_pruner::RangePrunerCreator;
+pub use topn_pruner::PruneResult;
 pub use topn_pruner::TopNPrunner;

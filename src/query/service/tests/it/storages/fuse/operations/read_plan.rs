@@ -105,7 +105,7 @@ fn test_to_partitions() -> Result<()> {
     ));
 
     let blocks_metas = (0..num_of_block)
-        .map(|_| (None, block_meta.clone()))
+        .map(|_| (None, block_meta.clone(), None))
         .collect::<Vec<_>>();
 
     let column_nodes = (0..num_of_col).map(col_nodes_gen).collect::<Vec<_>>();

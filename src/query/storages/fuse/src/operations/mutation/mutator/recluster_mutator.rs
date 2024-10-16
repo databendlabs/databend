@@ -451,8 +451,13 @@ impl ReclusterMutator {
             );
         }
 
+        let block_metas = block_metas
+            .iter()
+            .map(|v| (v.0.clone(), v.1.clone(), None))
+            .collect::<Vec<_>>();
+
         let (stats, parts) =
-            FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
+            FuseTable::to_partitions(Some(&self.schema), &block_metas, column_nodes, None, None);
         ReclusterTask {
             parts,
             stats,

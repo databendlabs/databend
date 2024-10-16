@@ -32,12 +32,12 @@ use databend_storages_common_cache::BlockMetaCache;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::RangeIndex;
-use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
 use databend_storages_common_pruner::PagePruner;
 use databend_storages_common_pruner::PagePrunerCreator;
+use databend_storages_common_pruner::PruneResult;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPrunner;
@@ -276,7 +276,7 @@ impl FusePruner {
     pub async fn read_pruning(
         &mut self,
         segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    ) -> Result<PruneResult> {
         self.pruning(segment_locs, false).await
     }
 
@@ -284,7 +284,7 @@ impl FusePruner {
     pub async fn delete_pruning(
         &mut self,
         segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    ) -> Result<PruneResult> {
         self.pruning(segment_locs, true).await
     }
 
@@ -295,7 +295,7 @@ impl FusePruner {
         &mut self,
         mut segment_locs: Vec<SegmentLocation>,
         delete_pruning: bool,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    ) -> Result<PruneResult> {
         // Segment pruner.
         let segment_pruner =
             SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
@@ -409,7 +409,7 @@ impl FusePruner {
 
         let workers = futures::future::try_join_all(works).await?;
 
-        let mut metas = vec![];
+        let mut metas: PruneResult = vec![];
         for worker in workers {
             let mut res = worker?;
             metas.extend(res.0);
@@ -460,7 +460,7 @@ impl FusePruner {
     pub async fn stream_pruning(
         &mut self,
         mut block_metas: Vec<Arc<BlockMeta>>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    ) -> Result<PruneResult> {
         let mut remain = block_metas.len() % self.max_concurrency;
         let batch_size = block_metas.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
@@ -511,10 +511,7 @@ impl FusePruner {
 
     // topn pruner:
     // if there are ordering + limit clause and no filters, use topn pruner
-    fn topn_pruning(
-        &self,
-        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    fn topn_pruning(&self, metas: PruneResult) -> Result<PruneResult> {
         let push_down = self.push_down.clone();
         if push_down
             .as_ref()

@@ -309,7 +309,9 @@ impl FuseTable {
 
         let block_metas = block_metas
             .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .map(|(block_meta_index, block_meta, col_stats)| {
+                (Some(block_meta_index), block_meta, col_stats)
+            })
             .collect::<Vec<_>>();
 
         let (stats, parts) = self.read_partitions_with_metas(
