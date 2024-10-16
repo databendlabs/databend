@@ -10,9 +10,9 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_storages_common_pruner::InternalColumnPruner;
 
+use crate::pruning_pipeline::meta_info::SegmentLocationMeta;
 use crate::FuseLazyPartInfo;
 use crate::SegmentLocation;
-use crate::pruning_pipeline::meta_info::SegmentLocationMeta;
 
 /// ReadSegmentSource Workflow:
 /// 1. Retrieve the FuseLazyPartInfo

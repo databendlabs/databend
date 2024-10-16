@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::block_id_in_segment;
-use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::DataBlock;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;

@@ -31,12 +31,12 @@ use databend_common_pipeline_sources::SyncSourcer;
 use log::debug;
 
 use super::native_data_source::NativeDataSource;
-use crate::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
+use crate::FuseBlockPartInfo;
 
 pub struct ReadNativeDataSourceWithChannel<const BLOCKING_IO: bool> {
     meta_receiver: Receiver<Partitions>,
