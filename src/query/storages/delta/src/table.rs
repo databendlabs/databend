@@ -296,6 +296,8 @@ impl DeltaTable {
                 .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
+        let total_files = adds.len();
+
         if !partition_fields.is_empty() {
             if let Some(expr) = filter_expression {
                 let partition_pruner = PartitionPruner::try_create(
@@ -308,8 +310,6 @@ impl DeltaTable {
                 adds = partition_pruner.prune::<Add, DeletaToScalar>(adds)?;
             }
         }
-
-        let total_files = adds.len();
 
         #[derive(serde::Deserialize)]
         struct Stats {
@@ -357,7 +357,7 @@ pub struct DeletaToScalar;
 
 impl FetchPartitionScalars<Add> for DeletaToScalar {
     fn eval(add: &Add, partition_fields: &[TableField]) -> Result<Vec<Scalar>> {
-        get_partition_values(add, &partition_fields[..])
+        get_partition_values(add, partition_fields)
     }
 }
 

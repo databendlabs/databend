@@ -33,6 +33,17 @@
 34
 44
 <<<<
+>>>> explain select p0 from test_delta where p0 = 10 and p2 = 12;
+TableScan
+├── table: default.default.test_delta
+├── output columns: [p0 (#0)]
+├── read rows: 2
+├── read size: 1.74 KiB
+├── partitions total: 4
+├── partitions scanned: 2
+├── push downs: [filters: [and_filters(test_delta.p0 (#0) = 10, test_delta.p2 (#2) = 12)], limit: NONE]
+└── estimated rows: 0.00
+<<<<
 >>>> select c5, p4 from test_delta where c1 - p0 = 11 order by c5;
 25	24
 <<<<

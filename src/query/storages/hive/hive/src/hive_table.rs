@@ -354,9 +354,9 @@ impl HiveTable {
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
         trace!("{} query locations: {:?}", dirs.len(), dirs);
 
+        let dir_len = dirs.len();
         let filler = HivePartitionFiller::create(self.partition_fields());
         let mut partitions = self.list_files_from_dirs(dirs).await?;
-
         for partition in partitions.iter_mut() {
             partition.partitions = filler.extract_scalars(&partition.filename)?;
         }
@@ -369,13 +369,26 @@ impl HiveTable {
             start.elapsed()
         );
 
+        let estimated_read_rows: f64 = partitions
+            .iter()
+            .map(|s| s.filesize as f64 / (self.schema().num_fields() * 8) as f64)
+            .sum();
+
+        let read_bytes = partitions.iter().map(|s| s.filesize as usize).sum();
+        let stats = PartStatistics::new_estimated(
+            None,
+            estimated_read_rows as _,
+            read_bytes,
+            partitions.len(),
+            dir_len,
+        );
         let partitions = partitions
             .into_iter()
             .map(HivePartInfo::into_part_ptr)
             .collect();
 
         Ok((
-            Default::default(),
+            stats,
             Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }

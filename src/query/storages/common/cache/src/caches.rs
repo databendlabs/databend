@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::parquet::metadata::FileMetaData;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -50,9 +49,6 @@ pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
 pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
-
-/// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = InMemoryLruCache<FileMetaData>;
 
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
@@ -123,13 +119,6 @@ impl CachedObject<Xor8Filter> for Xor8Filter {
     type Cache = BloomIndexFilterCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_filter_cache()
-    }
-}
-
-impl CachedObject<FileMetaData> for FileMetaData {
-    type Cache = FileMetaDataCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_file_meta_data_cache()
     }
 }
 
@@ -241,15 +230,6 @@ impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
         CacheValue {
             mem_bytes: std::mem::size_of::<InvertedIndexFile>() + value.data.len(),
             inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<FileMetaData> for CacheValue<FileMetaData> {
-    fn from(value: FileMetaData) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
         }
     }
 }

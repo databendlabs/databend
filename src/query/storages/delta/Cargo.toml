@@ -19,6 +19,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 deltalake = { workspace = true }
 fastrace = { workspace = true }
@@ -28,7 +29,6 @@ parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-databend-storages-common-pruner = { workspace = true }
 typetag = "0.2"
 url = "2.4.1"
 

@@ -20,7 +20,6 @@ databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
-databend-storages-common-pruner = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
@@ -30,14 +29,15 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
 faststr = "0.2"
-parquet = {workspace = true}
 futures = { workspace = true }
 hive_metastore = "0.1.0"
 log = { workspace = true }
 opendal = { workspace = true }
+parquet = { workspace = true }
 recursive = "0.1.1"
 serde = { workspace = true }
 typetag = { workspace = true }

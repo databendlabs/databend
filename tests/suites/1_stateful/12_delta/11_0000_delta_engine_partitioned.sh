@@ -20,6 +20,7 @@ query "select p4 from test_delta where p2 = 12 order by p4;"
 
 query "select c1 from test_delta where p4 > 20 order by c1;"
 query "select p4 from test_delta where c1 > 20 order by p4;"
+query "explain select p0 from test_delta where p0 = 10 and p2 = 12;"
 
 query "select c5, p4 from test_delta where c1 - p0 = 11 order by c5;"
 
