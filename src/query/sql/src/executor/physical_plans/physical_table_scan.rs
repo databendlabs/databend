@@ -240,8 +240,14 @@ impl PhysicalPlanBuilder {
         if let Some(sample) = scan.sample
             && !table.use_own_sample_block()
         {
-            if let Some(block_level) = sample.block_level {
-                let probability = block_level % 100.0;
+            if let Some(block_sample_value) = sample.block_level {
+                if block_sample_value > 100.0 {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Sample value should be less than or equal to 100, but got {}",
+                        block_sample_value
+                    )));
+                }
+                let probability = block_sample_value / 100.0;
                 let original_parts = source.parts.partitions.len();
                 let mut sample_parts = Vec::with_capacity(original_parts);
                 let mut rng = thread_rng();

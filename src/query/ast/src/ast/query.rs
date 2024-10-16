@@ -29,6 +29,8 @@ use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
+use crate::ParseError;
+use crate::Result;
 use crate::Span;
 
 /// Root node of a query tree
@@ -630,7 +632,7 @@ pub enum SampleRowLevel {
 }
 
 impl SampleRowLevel {
-    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Option<f64> {
+    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Result<Option<f64>> {
         let rand = match &self {
             SampleRowLevel::Probability(probability) => probability / 100.0,
             SampleRowLevel::RowsNum(rows) => {
@@ -638,20 +640,31 @@ impl SampleRowLevel {
                     if row_num > 0 {
                         rows / row_num as f64
                     } else {
-                        return None;
+                        return Ok(None);
                     }
                 } else {
-                    return None;
+                    return Ok(None);
                 }
             }
         };
-        Some(rand)
+        if rand > 1.0 {
+            return Err(ParseError(
+                None,
+                format!(
+                    "Sample value should be less than or equal to 100, but got {}",
+                    rand * 100.0
+                ),
+            ));
+        }
+        Ok(Some(rand))
     }
 }
 
 impl Eq for SampleRowLevel {}
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Default,
+)]
 pub struct SampleConfig {
     pub row_level: Option<SampleRowLevel>,
     pub block_level: Option<f64>,
@@ -668,15 +681,6 @@ impl SampleConfig {
 
     pub fn set_block_level_sample(&mut self, probability: f64) {
         self.block_level = Some(probability);
-    }
-}
-
-impl Default for SampleConfig {
-    fn default() -> Self {
-        SampleConfig {
-            row_level: None,
-            block_level: None,
-        }
     }
 }
 

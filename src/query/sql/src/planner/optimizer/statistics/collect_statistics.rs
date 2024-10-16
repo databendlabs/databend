@@ -108,7 +108,8 @@ impl CollectStatisticsOptimizer {
                     // Only process row-level sampling in optimizer phase.
                     if let Some(row_level) = &sample.row_level {
                         if let Some(stats) = &table_stats
-                            && let Some(probability) = row_level.sample_probability(stats.num_rows)
+                            && let Some(probability) =
+                                row_level.sample_probability(stats.num_rows)?
                         {
                             let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
                                 span: None,

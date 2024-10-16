@@ -224,7 +224,6 @@ fn test_statement() {
         r#"select * from t sample row (99);"#,
         r#"select * from t sample block (99);"#,
         r#"select * from t sample row (10 rows);"#,
-        r#"select * from t sample block (10 rows);"#,
         r#"select * from numbers(1000) sample row (99);"#,
         r#"select * from numbers(1000) sample block (99);"#,
         r#"select * from numbers(1000) sample row (10 rows);"#,

@@ -19,6 +19,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
@@ -360,7 +361,7 @@ impl FusePruner {
                             );
                         }
                     } else {
-                        let sample_probability = table_sample(&push_down);
+                        let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
                             let mut block_metas =
                                 Self::extract_block_metas(&location.location.0, &info, true)?;
@@ -533,15 +534,21 @@ impl FusePruner {
     }
 }
 
-fn table_sample(push_down_info: &Option<PushDownInfo>) -> Option<f64> {
+fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>> {
     let mut sample_probability = None;
     if let Some(sample) = push_down_info
         .as_ref()
         .and_then(|info| info.sample.as_ref())
     {
-        if let Some(block_sample) = sample.block_level {
-            sample_probability = Some(block_sample / 100.0)
+        if let Some(block_sample_value) = sample.block_level {
+            if block_sample_value > 100.0 {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Sample value should be less than or equal to 100, but got {}",
+                    block_sample_value
+                )));
+            }
+            sample_probability = Some(block_sample_value / 100.0)
         }
     }
-    sample_probability
+    Ok(sample_probability)
 }
