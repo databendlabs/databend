@@ -91,9 +91,8 @@ impl LockHolder {
             let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
                 ErrorCode::TableLockExpired(format!(
-                    "the acquired table lock with revision '{}' is not in {:?}, maybe expired(elapsed: {:?})",
+                    "The acquired table lock with revision '{}' maybe expired(elapsed: {:?})",
                     revision,
-                    rev_list,
                     start.elapsed(),
                 )))?;
 
@@ -108,17 +107,19 @@ impl LockHolder {
                 break;
             }
 
+            let prev_revision = rev_list[position - 1];
             let elapsed = start.elapsed();
             // if no need retry, return error directly.
             if !should_retry || elapsed >= acquire_timeout {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "table is locked by other session, please retry later(revision: {}, elapsed: {:?})",
+                    "Table is locked by other session(rev: {}, prev: {}, elapsed: {:?})",
                     revision,
+                    prev_revision,
                     start.elapsed()
                 )));
             }
 
-            let watch_delete_ident = TableLockIdent::new(tenant, table_id, rev_list[position - 1]);
+            let watch_delete_ident = TableLockIdent::new(tenant, table_id, prev_revision);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
@@ -132,7 +133,7 @@ impl LockHolder {
             if lock_meta.is_none() {
                 log::warn!(
                     "Lock revision '{}' already does not exist, skipping",
-                    rev_list[position - 1]
+                    prev_revision
                 );
                 continue;
             }
@@ -150,8 +151,9 @@ impl LockHolder {
             .await
             {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "table is locked by other session, please retry later(revision: {}, elapsed: {:?})",
+                    "Table is locked by other session(rev: {}, prev: {}, elapsed: {:?})",
                     revision,
+                    prev_revision,
                     start.elapsed()
                 )));
             }
