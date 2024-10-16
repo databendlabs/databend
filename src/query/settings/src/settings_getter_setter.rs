@@ -265,6 +265,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
+    pub fn get_enable_dio(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_dio")? != 0)
+    }
+
     /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)

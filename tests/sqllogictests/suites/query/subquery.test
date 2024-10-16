@@ -838,3 +838,29 @@ drop table push_log;
 
 statement ok
 drop table merge_log;
+
+# The test indicates that we need to eliminate the duplicated rows in outer table when flattening the subquery.
+# Or there'll result in a wrong result due to more datas generated.
+statement ok
+create or replace table test_group (
+  input_date date,
+  value decimal(10,2)
+);
+
+statement ok
+insert into test_group values ('2024-01-01', 100),('2024-01-01', 200),('2024-01-02', 400),('2024-01-02', 800);
+
+query TI
+select input_date, sum(value), 
+(select sum(value)
+	    from test_group b
+	    where b.input_date >= DATE_TRUNC(YEAR, input_date)
+	      and b.input_date <= a.input_date) as total
+from test_group a
+group by input_date order by input_date;
+----
+2024-01-01 300.00 300.00
+2024-01-02 1200.00 1500.00
+
+statement ok
+drop table test_group;
