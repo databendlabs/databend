@@ -39,6 +39,7 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
 use crate::plans::Mutation;
+use crate::plans::OptimizeClusterBy;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Recluster;
@@ -119,6 +120,7 @@ pub enum RelOp {
     RecursiveCteScan,
     MergeInto,
     Recluster,
+    OptimizeClusterBy,
     CompactBlock,
     MutationSource,
 
@@ -150,9 +152,10 @@ pub enum RelOperator {
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
     Mutation(Mutation),
-    Recluster(Recluster),
-    CompactBlock(OptimizeCompactBlock),
     MutationSource(MutationSource),
+    Recluster(Recluster),
+    OptimizeClusterBy(OptimizeClusterBy),
+    CompactBlock(OptimizeCompactBlock),
 }
 
 impl Operator for RelOperator {
@@ -180,6 +183,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
             RelOperator::Mutation(rel_op) => rel_op.rel_op(),
             RelOperator::Recluster(rel_op) => rel_op.rel_op(),
+            RelOperator::OptimizeClusterBy(rel_op) => rel_op.rel_op(),
             RelOperator::CompactBlock(rel_op) => rel_op.rel_op(),
             RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
         }
@@ -209,6 +213,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
             RelOperator::Mutation(rel_op) => rel_op.arity(),
             RelOperator::Recluster(rel_op) => rel_op.arity(),
+            RelOperator::OptimizeClusterBy(rel_op) => rel_op.arity(),
             RelOperator::CompactBlock(rel_op) => rel_op.arity(),
             RelOperator::MutationSource(rel_op) => rel_op.arity(),
         }
@@ -238,6 +243,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Mutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::OptimizeClusterBy(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
@@ -267,6 +273,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Mutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::OptimizeClusterBy(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
@@ -296,6 +303,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Mutation(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::OptimizeClusterBy(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
         }
@@ -373,6 +381,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Recluster(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::OptimizeClusterBy(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::CompactBlock(rel_op) => {
@@ -455,6 +466,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Recluster(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::OptimizeClusterBy(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::CompactBlock(rel_op) => {
@@ -868,6 +882,26 @@ impl TryFrom<RelOperator> for Recluster {
         } else {
             Err(ErrorCode::Internal(format!(
                 "Cannot downcast {:?} to Recluster",
+                value.rel_op()
+            )))
+        }
+    }
+}
+
+impl From<OptimizeClusterBy> for RelOperator {
+    fn from(v: OptimizeClusterBy) -> Self {
+        Self::OptimizeClusterBy(v)
+    }
+}
+
+impl TryFrom<RelOperator> for OptimizeClusterBy {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::OptimizeClusterBy(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to OptimizeClusterBy",
                 value.rel_op()
             )))
         }

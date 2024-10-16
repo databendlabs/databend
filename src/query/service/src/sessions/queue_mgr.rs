@@ -408,6 +408,7 @@ impl QueryEntry {
             Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. }
+            | Plan::OptimizeClusterBy { .. }
             | Plan::VacuumTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)

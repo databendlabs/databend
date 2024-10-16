@@ -32,6 +32,7 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
@@ -122,6 +123,7 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
+use crate::plans::OptimizeClusterBy;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
@@ -1214,9 +1216,109 @@ impl Binder {
                     }))
                 }
             },
+            AstOptimizeTableAction::ClusterBy { exprs } => {
+                self.bind_optimize_cluster_by(bind_context, exprs, catalog, database, table, limit)
+                    .await?
+            }
         };
 
         Ok(plan)
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_optimize_cluster_by(
+        &mut self,
+        bind_context: &mut BindContext,
+        exprs: &[Expr],
+        catalog_name: String,
+        database_name: String,
+        table_name: String,
+        limit: Option<usize>,
+    ) -> Result<Plan> {
+        let schema = self
+            .ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?
+            .schema();
+        let cluster_key_strs = self
+            .analyze_cluster_keys(
+                &ClusterOption {
+                    cluster_type: ClusterType::Hilbert,
+                    cluster_exprs: exprs.to_vec(),
+                },
+                schema,
+            )
+            .await?;
+
+        let keys_bounds_str = cluster_key_strs
+            .iter()
+            .map(|s| format!("range_bound(1000)({}) AS {}_bound", s, s))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let hilbert_keys_str = cluster_key_strs
+            .iter()
+            .map(|s| {
+                format!(
+                    "hilbert_key(to_uint16(range_partition_id({table_name}.{s}, _keys_bound.{s}_bound)))"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let query = format!(
+            "WITH _keys_bound AS MATERIALIZED ( \
+                SELECT \
+                    {keys_bounds_str} \
+                FROM {database_name}.{table_name} \
+            ), \
+            _index_bound AS MATERIALIZED ( \
+                SELECT \
+                    range_bound(1000)(index) AS bound \
+                FROM ( \
+                    SELECT \
+                        hilbert_index([{hilbert_keys_str}], 2) AS index \
+                    FROM {database_name}.{table_name}, _keys_bound \
+                ) AS tmp \
+            ), \
+            _source_data AS ( \
+                SELECT \
+                    {table_name}.*, \
+                    hilbert_index([{hilbert_keys_str}], 2) AS _hilbert_index \
+                FROM {database_name}.{table_name}, _keys_bound \
+            ) \
+            SELECT \
+                _source_data.* EXCLUDE(_hilbert_index) \
+            FROM \
+                _source_data, \
+                _index_bound \
+            ORDER BY \
+                range_partition_id(_source_data._hilbert_index, _index_bound.bound) \
+            "
+        );
+
+        let tokens = tokenize_sql(query.as_str())?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let Statement::Query(query) = &stmt else {
+            unreachable!()
+        };
+        let mut new_bind_context = BindContext::new();
+        let (s_expr, new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
+        // Wrap `LogicalMaterializedCte` to `s_expr`
+        let s_expr = new_bind_context.cte_context.wrap_m_cte(s_expr);
+        bind_context.parent = Some(Box::new(new_bind_context));
+        let cluster_by = OptimizeClusterBy {
+            catalog_name,
+            database_name,
+            table_name,
+            num_segment_limit: limit,
+        };
+        let s_expr = SExpr::create_unary(
+            Arc::new(RelOperator::OptimizeClusterBy(cluster_by)),
+            Arc::new(s_expr),
+        );
+
+        Ok(Plan::OptimizeClusterBy {
+            s_expr: Box::new(s_expr),
+        })
     }
 
     #[async_backtrace::framed]
@@ -1656,7 +1758,7 @@ impl Binder {
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
 
-        let mut cluster_keys = Vec::with_capacity(expr_len);
+        let mut cluster_key_strs = Vec::with_capacity(expr_len);
         for cluster_expr in cluster_exprs.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
@@ -1687,10 +1789,10 @@ impl Binder {
                 ctx: &self.name_resolution_ctx,
             };
             cluster_expr.drive_mut(&mut normalizer);
-            cluster_keys.push(format!("{:#}", &cluster_expr));
+            cluster_key_strs.push(format!("{:#}", &cluster_expr));
         }
 
-        Ok(cluster_keys)
+        Ok(cluster_key_strs)
     }
 
     fn valid_cluster_key_type(data_type: &DataType) -> bool {
