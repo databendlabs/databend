@@ -17,7 +17,7 @@ use databend_common_compress::CompressAlgorithm;
 
 pub fn unload_path(
     stage_table_info: &StageTableInfo,
-    uuid: &str,
+    query_id: &str,
     group_id: usize,
     batch_id: usize,
     compression: Option<CompressAlgorithm>,
@@ -33,23 +33,31 @@ pub fn unload_path(
         .unwrap_or_default();
 
     let path = &stage_table_info.files_info.path;
-
-    if path.ends_with("data_") {
-        format!(
-            "{}{}_{:0>4}_{:0>8}.{}{}",
-            path, uuid, group_id, batch_id, format_name, suffix
-        )
+    if stage_table_info.copy_into_location_options.use_raw_path {
+        path.to_string()
     } else {
-        let (path, sep) = if path == "/" {
-            ("", "")
-        } else if path.ends_with('/') {
-            (path.as_str(), "")
+        let query_id = if stage_table_info.copy_into_location_options.include_query_id {
+            format!("{query_id}_")
         } else {
-            (path.as_str(), "/")
+            "".to_string()
         };
-        format!(
-            "{}{}data_{}_{:0>4}_{:0>8}.{}{}",
-            path, sep, uuid, group_id, batch_id, format_name, suffix
-        )
+        if path.ends_with("data_") {
+            format!(
+                "{}{}{:0>4}_{:0>8}.{}{}",
+                path, query_id, group_id, batch_id, format_name, suffix
+            )
+        } else {
+            let (path, sep) = if path == "/" {
+                ("", "")
+            } else if path.ends_with('/') {
+                (path.as_str(), "")
+            } else {
+                (path.as_str(), "/")
+            };
+            format!(
+                "{}{}data_{}{:0>4}_{:0>8}.{}{}",
+                path, sep, query_id, group_id, batch_id, format_name, suffix
+            )
+        }
     }
 }
