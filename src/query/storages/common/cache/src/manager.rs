@@ -31,6 +31,7 @@ use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
+use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
@@ -51,6 +52,7 @@ pub struct CacheManager {
     inverted_index_file_cache: Option<InvertedIndexFileCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
     parquet_file_meta_data_cache: Option<FileMetaDataCache>,
+    parquet_meta_data_cache: Option<ParquetMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
     in_memory_table_data_cache: Option<ColumnArrayCache>,
     block_meta_cache: Option<BlockMetaCache>,
@@ -123,6 +125,7 @@ impl CacheManager {
                 inverted_index_file_cache: None,
                 prune_partitions_cache: None,
                 parquet_file_meta_data_cache: None,
+                parquet_meta_data_cache: None,
                 table_statistic_cache: None,
                 table_data_cache,
                 in_memory_table_data_cache,
@@ -176,6 +179,11 @@ impl CacheManager {
                 MEMORY_CACHE_PARQUET_FILE_META,
             );
 
+            let parquet_meta_data_cache = Self::new_named_items_cache(
+                DEFAULT_FILE_META_DATA_CACHE_ITEMS,
+                MEMORY_CACHE_PARQUET_RS_FILE_META,
+            );
+
             let block_meta_cache = Self::new_named_items_cache(
                 config.block_meta_count as usize,
                 MEMORY_CACHE_BLOCK_META,
@@ -194,6 +202,7 @@ impl CacheManager {
                 table_data_cache,
                 in_memory_table_data_cache,
                 block_meta_cache,
+                parquet_meta_data_cache,
             }));
         }
 
@@ -242,6 +251,10 @@ impl CacheManager {
 
     pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
         self.parquet_file_meta_data_cache.clone()
+    }
+
+    pub fn get_parquet_meta_data_cache(&self) -> Option<ParquetMetaDataCache> {
+        self.parquet_meta_data_cache.clone()
     }
 
     pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
@@ -299,6 +312,7 @@ impl CacheManager {
 
 const MEMORY_CACHE_TABLE_DATA: &str = "memory_cache_table_data";
 const MEMORY_CACHE_PARQUET_FILE_META: &str = "memory_cache_parquet_file_meta";
+const MEMORY_CACHE_PARQUET_RS_FILE_META: &str = "memory_cache_parquet_rs_file_meta";
 const MEMORY_CACHE_PRUNE_PARTITIONS: &str = "memory_cache_prune_partitions";
 const MEMORY_CACHE_INVERTED_INDEX_FILE: &str = "memory_cache_inverted_index_file";
 const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =

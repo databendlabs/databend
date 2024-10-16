@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::manager::CacheManager;
 use crate::CacheAccessor;
@@ -52,6 +53,9 @@ pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = InMemoryLruCache<FileMetaData>;
+
+/// In memory object cache of parquet FileMetaData of external parquet rs files
+pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
@@ -126,6 +130,13 @@ impl CachedObject<FileMetaData> for FileMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_file_meta_data_cache()
+    }
+}
+
+impl CachedObject<ParquetMetaData> for ParquetMetaData {
+    type Cache = ParquetMetaDataCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_parquet_meta_data_cache()
     }
 }
 
@@ -236,6 +247,15 @@ impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
 
 impl From<FileMetaData> for CacheValue<FileMetaData> {
     fn from(value: FileMetaData) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<ParquetMetaData> for CacheValue<ParquetMetaData> {
+    fn from(value: ParquetMetaData) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

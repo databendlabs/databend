@@ -14,6 +14,7 @@ databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-storage = { workspace = true }
@@ -27,11 +28,9 @@ parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
 typetag = "0.2"
 url = "2.4.1"
-
-[dev-dependencies]
-maplit = "1.0.2"
 
 [lints]
 workspace = true
