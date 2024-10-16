@@ -50,28 +50,38 @@ use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_
 #[derive(Clone)]
 pub struct InvertedIndexReader {
     dal: Operator,
+    need_position: bool,
+    has_score: bool,
+    tokenizer_manager: TokenizerManager,
+    row_count: u64,
 }
 
 impl InvertedIndexReader {
-    pub fn create(dal: Operator) -> Self {
-        Self { dal }
+    pub fn create(
+        dal: Operator,
+        need_position: bool,
+        has_score: bool,
+        tokenizer_manager: TokenizerManager,
+        row_count: u64,
+    ) -> Self {
+        Self {
+            dal,
+            need_position,
+            has_score,
+            tokenizer_manager,
+            row_count,
+        }
     }
 
     // Filter the rows and scores in the block that can match the query text,
     // if there is no row that can match, this block can be pruned.
-    #[allow(clippy::type_complexity)]
-    #[allow(clippy::too_many_arguments)]
     pub async fn do_filter(
         self,
         settings: &ReadSettings,
-        need_position: bool,
-        has_score: bool,
         query: Box<dyn Query>,
         field_ids: &HashSet<u32>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
-        tokenizer_manager: TokenizerManager,
-        row_count: u64,
         index_loc: &str,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let start = Instant::now();
@@ -82,12 +92,8 @@ impl InvertedIndexReader {
                 index_loc,
                 query,
                 field_ids,
-                need_position,
-                has_score,
                 index_record,
                 fuzziness,
-                tokenizer_manager,
-                row_count,
             )
             .await?;
 
@@ -105,9 +111,6 @@ impl InvertedIndexReader {
         settings: &ReadSettings,
         index_path: &'a str,
         query: Box<dyn Query>,
-        has_score: bool,
-        tokenizer_manager: TokenizerManager,
-        row_count: u64,
         inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let directory =
@@ -115,12 +118,12 @@ impl InvertedIndexReader {
                 .await?;
 
         let mut index = Index::open(directory)?;
-        index.set_tokenizers(tokenizer_manager);
+        index.set_tokenizers(self.tokenizer_manager.clone());
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let matched_rows = if has_score {
-            let collector = TopDocs::with_limit(row_count as usize);
+        let matched_rows = if self.has_score {
+            let collector = TopDocs::with_limit(self.row_count as usize);
             let docs = searcher.search(&query, &collector)?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
@@ -177,19 +180,14 @@ impl InvertedIndexReader {
     // If the term matches, the `term_dict` and `postings`, `positions`
     // data of the related terms need to be read instead of all
     // the `postings` and `positions` data.
-    #[allow(clippy::too_many_arguments)]
     async fn search<'a>(
         &self,
         settings: &ReadSettings,
         index_path: &'a str,
         query: Box<dyn Query>,
         field_ids: &HashSet<u32>,
-        need_position: bool,
-        has_score: bool,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
-        tokenizer_manager: TokenizerManager,
-        row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         // 1. read index meta.
         let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
@@ -205,15 +203,7 @@ impl InvertedIndexReader {
         // use compatible search function to read.
         if inverted_index_meta_map.contains_key("meta.json") {
             return self
-                .legacy_search(
-                    settings,
-                    index_path,
-                    query,
-                    has_score,
-                    tokenizer_manager,
-                    row_count,
-                    inverted_index_meta_map,
-                )
+                .legacy_search(settings, index_path, query, inverted_index_meta_map)
                 .await;
         }
 
@@ -303,12 +293,12 @@ impl InvertedIndexReader {
         }
 
         // 5. read postings and optional positions.
-        let mut term_slice_len = if need_position {
+        let mut term_slice_len = if self.need_position {
             term_infos.len() * 2
         } else {
             term_infos.len()
         };
-        if has_score {
+        if self.has_score {
             term_slice_len += 2 * field_ids.len();
         }
 
@@ -316,7 +306,7 @@ impl InvertedIndexReader {
         let mut slice_name_map = HashMap::with_capacity(term_slice_len);
         for (field_id, term_ids) in field_term_ids.iter() {
             // if has score, need read fieldnorm to calculate the score.
-            if has_score {
+            if self.has_score {
                 let fieldnorm_slice_name = format!("fieldnorm-{}", field_id);
                 if let Some(fieldnorm_col_meta) =
                     inverted_index_meta_map.remove(&fieldnorm_slice_name)
@@ -334,7 +324,7 @@ impl InvertedIndexReader {
                     idx_col_name
                 ))
             })?;
-            if has_score {
+            if self.has_score {
                 // if has score, need read `total_num_tokens`.
                 let tokens_slice_name = format!("tokens-{}", field_id);
                 let offset = idx_meta.offset;
@@ -356,7 +346,7 @@ impl InvertedIndexReader {
                 slice_name_map.insert(idx_slice_name, *term_id);
             }
 
-            if need_position {
+            if self.need_position {
                 let pos_col_name = format!("pos-{}", field_id);
                 let pos_meta = inverted_index_meta_map.get(&pos_col_name).ok_or_else(|| {
                     ErrorCode::TantivyError(format!(
@@ -419,11 +409,12 @@ impl InvertedIndexReader {
                 field_num_tokens_map.insert(field_id, total_num_tokens);
             }
         }
-        if has_score {
+        if self.has_score {
             for field_id in field_ids {
                 // if fieldnorm not exist, add a constant fieldnorm reader.
                 if !fieldnorm_reader_map.contains_key(field_id) {
-                    let constant_fieldnorm_reader = FieldNormReader::constant(row_count as u32, 1);
+                    let constant_fieldnorm_reader =
+                        FieldNormReader::constant(self.row_count as u32, 1);
                     fieldnorm_reader_map.insert(*field_id, constant_fieldnorm_reader);
                 }
             }
@@ -431,9 +422,9 @@ impl InvertedIndexReader {
 
         // 6. collect matched doc ids.
         let term_reader = TermReader::create(
-            row_count,
-            need_position,
-            has_score,
+            self.row_count,
+            self.need_position,
+            self.has_score,
             matched_terms,
             term_infos,
             block_postings_map,
@@ -452,7 +443,7 @@ impl InvertedIndexReader {
         if let Some(matched_doc_ids) = matched_doc_ids {
             if !matched_doc_ids.is_empty() {
                 let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
-                if has_score {
+                if self.has_score {
                     let scores =
                         collector.calculate_scores(query.box_clone(), &matched_doc_ids, None)?;
                     for (doc_id, score) in matched_doc_ids.into_iter().zip(scores.into_iter()) {

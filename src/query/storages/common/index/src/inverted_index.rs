@@ -139,8 +139,6 @@ pub fn extract_fsts(
 ) -> Result<()> {
     let (file_addrs, offsets) = extract_footer(data.clone())?;
 
-    let mut term_dict_fields = Vec::with_capacity(file_addrs.len());
-    let mut term_dict_values = Vec::with_capacity(file_addrs.len());
     for (i, file_addr) in file_addrs.iter().enumerate() {
         let field_id = file_addr.field.field_id();
         let start_offset = offsets[i];
@@ -164,14 +162,11 @@ pub fn extract_fsts(
 
         let term_dict_field_name = format!("term-{}", field_id);
         let term_dict_field = TableField::new(&term_dict_field_name, TableDataType::Binary);
-        term_dict_fields.push(term_dict_field);
+        fields.push(term_dict_field);
 
         let term_dict_bytes = term_dict_file_slice.read_bytes()?;
-        term_dict_values.push(Scalar::Binary(term_dict_bytes.as_slice().to_vec()));
+        values.push(Scalar::Binary(term_dict_bytes.as_slice().to_vec()));
     }
-
-    fields.append(&mut term_dict_fields);
-    values.append(&mut term_dict_values);
 
     Ok(())
 }
