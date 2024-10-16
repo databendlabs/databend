@@ -38,6 +38,10 @@ use crate::ast::Query;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Statement {
     Query(Box<Query>),
+    QueryWithSetting {
+        settings: Option<Settings>,
+        query: Box<Statement>,
+    },
     Explain {
         kind: ExplainKind,
         options: Vec<ExplainOption>,
@@ -89,7 +93,6 @@ pub enum Statement {
     SetStmt {
         settings: Settings,
     },
-
     UnSetStmt {
         settings: Settings,
     },
@@ -412,6 +415,12 @@ impl Display for Statement {
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::QueryWithSetting { settings, query } => {
+                if let Some(setting) = settings {
+                    write!(f, "SETTINGS ({setting}) ")?;
+                }
+                write!(f, "{query}")?;
             }
             Statement::ExplainAnalyze {
                 partial,

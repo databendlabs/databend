@@ -84,6 +84,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
+    let query_setting = map_res(
+        rule! {
+            SETTINGS ~ #query_statement_setting? ~ #statement_body
+        },
+        |(_, opt_settings, statement)| {
+            Ok(Statement::QueryWithSetting {
+                settings: opt_settings,
+                query: Box::new(statement),
+            })
+        },
+    );
     let explain_analyze = map(
         rule! {
             EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement
@@ -2374,6 +2386,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
             | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
+            | #query_setting : "SETTINGS ( {<name> = <value> | (<name>, ...) = (<value>, ...)} )  Statement"
         ),
         // catalog
         rule!(
@@ -2781,6 +2794,38 @@ pub fn hint(i: Input) -> IResult<Hint> {
     rule!(#hint|#invalid_hint)(i)
 }
 
+pub fn query_statement_setting(i: Input) -> IResult<Settings> {
+    let single_set = map(
+        rule! {
+            ^"(" ~ #ident ~ "=" ~ #subexpr(0) ~ ^")"
+        },
+        |(_, var, _, value, _)| Settings {
+            set_type: SetType::SettingsQuery,
+            identifiers: vec![var],
+            values: SetValues::Expr(vec![Box::new(value)]),
+        },
+    );
+    let more_set = map_res(
+        rule! {
+            ^"(" ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
+            ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")" ~ ^")"
+        },
+        |(_, _, ids, _, _, _, values, _, _)| {
+            if ids.len() == values.len() {
+                Ok(Settings {
+                    set_type: SetType::SettingsQuery,
+                    identifiers: ids,
+                    values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                })
+            } else {
+                Err(nom::Err::Failure(ErrorKind::Other(
+                    "inconsistent number of variables and values",
+                )))
+            }
+        },
+    );
+    rule!(#single_set|#more_set)(i)
+}
 pub fn top_n(i: Input) -> IResult<u64> {
     map(
         rule! {
