@@ -29,9 +29,7 @@ databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
-databend-storages-common-cache = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
-databend-storages-common-index = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
 faststr = "0.2"
