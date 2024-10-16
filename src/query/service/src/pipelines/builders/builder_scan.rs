@@ -29,13 +29,13 @@ use databend_common_sql::executor::physical_plans::ExpressionScan;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::plans::CacheSource;
 
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
 use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::processors::transforms::TransformCacheScan;
 use crate::pipelines::processors::transforms::TransformExpressionScan;
+use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {

@@ -15,8 +15,8 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 
-use crate::FuseTable;
 use crate::pruning_pipeline::meta_info::BlockPruningResult;
+use crate::FuseTable;
 
 pub struct SendPartitionSink {
     ctx: Arc<dyn TableContext>,

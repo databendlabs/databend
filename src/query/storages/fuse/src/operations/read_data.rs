@@ -31,9 +31,6 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_storages_common_index::BloomIndex;
 
-use crate::FuseLazyPartInfo;
-use crate::FuseStorageFormat;
-use crate::FuseTable;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::BloomIndexBuilder;
@@ -47,6 +44,9 @@ use crate::pruning_pipeline::CompactReadTransform;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::ReadSegmentSource;
 use crate::pruning_pipeline::SendPartitionSink;
+use crate::FuseLazyPartInfo;
+use crate::FuseStorageFormat;
+use crate::FuseTable;
 
 impl FuseTable {
     pub fn create_block_reader(
