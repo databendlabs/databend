@@ -197,7 +197,7 @@ impl Display for CopyIntoLocationStmt {
         write!(f, " DETAILED_OUTPUT = {}", self.options.detailed_output)?;
         write!(f, " INCLUDE_QUERY_ID = {}", self.options.include_query_id)?;
         write!(f, " USE_RAW_PATH = {}", self.options.use_raw_path)?;
-        write!(f, " overwrite= {}", self.options.overwrite)?;
+        write!(f, " OVERWRITE = {}", self.options.overwrite)?;
 
         Ok(())
     }
