@@ -31,6 +31,7 @@ use super::aggregate_covariance::aggregate_covariance_sample_desc;
 use super::aggregate_min_max_any::aggregate_any_function_desc;
 use super::aggregate_min_max_any::aggregate_max_function_desc;
 use super::aggregate_min_max_any::aggregate_min_function_desc;
+use super::aggregate_mode::aggregate_mode_function_desc;
 use super::aggregate_stddev::aggregate_stddev_pop_function_desc;
 use super::aggregate_stddev::aggregate_stddev_samp_function_desc;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
@@ -141,6 +142,8 @@ impl Aggregators {
         );
 
         factory.register("histogram", aggregate_histogram_function_desc());
+
+        factory.register("mode", aggregate_mode_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

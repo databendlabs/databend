@@ -72,6 +72,7 @@ fn test_agg() {
     test_agg_histogram(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
+    test_agg_mode(file, eval_aggr);
 }
 
 #[test]
@@ -111,6 +112,7 @@ fn test_agg_group_by() {
     test_agg_group_array_moving_sum(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
+    test_agg_mode(file, eval_aggr);
 }
 
 fn gen_bitmap_data() -> Column {
@@ -881,4 +883,13 @@ fn test_agg_json_object_agg(file: &mut impl Write, simulator: impl AggregationSi
         get_example().as_slice(),
         simulator,
     );
+}
+
+fn test_agg_mode(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "mode(1)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(NULL)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(a)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(b)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(all_null)", get_example().as_slice(), simulator);
 }
