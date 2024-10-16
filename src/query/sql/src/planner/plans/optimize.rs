@@ -48,3 +48,17 @@ impl Operator for OptimizeCompactBlock {
         RelOp::CompactBlock
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OptimizeClusterBy {
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    pub num_segment_limit: Option<usize>,
+}
+
+impl Operator for OptimizeClusterBy {
+    fn rel_op(&self) -> RelOp {
+        RelOp::OptimizeClusterBy
+    }
+}

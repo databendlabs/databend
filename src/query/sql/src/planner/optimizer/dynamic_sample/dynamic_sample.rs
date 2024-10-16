@@ -92,6 +92,7 @@ pub async fn dynamic_sample(
         | RelOperator::RecursiveCteScan(_)
         | RelOperator::Mutation(_)
         | RelOperator::Recluster(_)
+        | RelOperator::OptimizeClusterBy(_)
         | RelOperator::CompactBlock(_)
         | RelOperator::MutationSource(_) => {
             s_expr.plan().derive_stats(&RelExpr::with_s_expr(s_expr))

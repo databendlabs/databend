@@ -87,7 +87,8 @@ impl Binder {
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::CompactBlock(_) => {
+            | RelOperator::CompactBlock(_)
+            | RelOperator::OptimizeClusterBy(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
                     expr.plan().rel_op()

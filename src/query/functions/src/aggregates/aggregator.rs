@@ -32,6 +32,7 @@ use super::aggregate_min_max_any::aggregate_any_function_desc;
 use super::aggregate_min_max_any::aggregate_max_function_desc;
 use super::aggregate_min_max_any::aggregate_min_function_desc;
 use super::aggregate_mode::aggregate_mode_function_desc;
+use super::aggregate_range_bound_function_desc;
 use super::aggregate_stddev::aggregate_stddev_pop_function_desc;
 use super::aggregate_stddev::aggregate_stddev_samp_function_desc;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
@@ -118,6 +119,8 @@ impl Aggregators {
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());
+
+        factory.register("range_bound", aggregate_range_bound_function_desc());
 
         factory.register(
             "bitmap_and_count",

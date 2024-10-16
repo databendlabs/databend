@@ -36,6 +36,7 @@ use databend_common_sql::binder::MutationType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
+use databend_common_sql::plans::OptimizeClusterBy;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::Recluster;
@@ -982,6 +983,10 @@ impl AccessChecker for PrivilegeAccess {
                 let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             },
+            Plan::OptimizeClusterBy{ s_expr } => {
+                let plan: OptimizeClusterBy = s_expr.plan().clone().try_into()?;
+                self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, UserPrivilegeType::Super, false, false).await?
+            }
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }

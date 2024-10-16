@@ -276,6 +276,9 @@ impl InterpreterFactory {
                     *need_purge,
                 )?))
             }
+            Plan::OptimizeClusterBy { s_expr } => Ok(Arc::new(
+                OptimizeClusterByInterpreter::try_create(ctx, *s_expr.clone())?,
+            )),
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
