@@ -39,7 +39,7 @@ where
     T: ValueType,
     T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
-    pub freqency_map: HashMap<T::Scalar, u64>,
+    pub frequency_map: HashMap<T::Scalar, u64>,
 }
 
 impl<T> Default for ModeState<T>
@@ -49,7 +49,7 @@ where
 {
     fn default() -> Self {
         ModeState::<T> {
-            freqency_map: HashMap::new(),
+            frequency_map: HashMap::new(),
         }
     }
 }
@@ -65,7 +65,7 @@ where
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let other = T::to_owned_scalar(other);
-        match self.freqency_map.entry(other) {
+        match self.frequency_map.entry(other) {
             Entry::Occupied(o) => *o.into_mut() += 1,
             Entry::Vacant(v) => {
                 v.insert(1);
@@ -76,11 +76,11 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        for (key, value) in rhs.freqency_map.iter() {
-            match self.freqency_map.get_mut(key) {
+        for (key, value) in rhs.frequency_map.iter() {
+            match self.frequency_map.get_mut(key) {
                 Some(entry) => entry.add_assign(value),
                 None => {
-                    self.freqency_map.insert(key.clone(), *value);
+                    self.frequency_map.insert(key.clone(), *value);
                 }
             }
         }
@@ -93,11 +93,11 @@ where
         builder: &mut T::ColumnBuilder,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        if self.freqency_map.is_empty() {
+        if self.frequency_map.is_empty() {
             T::push_default(builder);
         } else {
             let (key, _) = self
-                .freqency_map
+                .frequency_map
                 .iter()
                 .max_by_key(|&(_, value)| value)
                 .unwrap();
