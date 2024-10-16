@@ -32,4 +32,6 @@ pub enum SetType {
 pub enum SetValues {
     Expr(Vec<Box<Expr>>),
     Query(Box<Query>),
+    // None means Unset Stmt
+    None,
 }
