@@ -182,7 +182,8 @@ struct DmaFile {
 }
 
 impl DmaFile {
-    async fn open_raw(path: impl AsRef<Path>, dio: bool) -> io::Result<File> {
+    async fn open_raw(path: impl AsRef<Path>, #[allow(unused)] dio: bool) -> io::Result<File> {
+        #[allow(unused_mut)]
         let mut flags = 0;
         #[cfg(target_os = "linux")]
         if dio {
@@ -196,7 +197,8 @@ impl DmaFile {
             .await
     }
 
-    async fn create_raw(path: impl AsRef<Path>, dio: bool) -> io::Result<File> {
+    async fn create_raw(path: impl AsRef<Path>, #[allow(unused)] dio: bool) -> io::Result<File> {
+        #[allow(unused_mut)]
         let mut flags = OFlags::EXCL;
         #[cfg(target_os = "linux")]
         if dio {
