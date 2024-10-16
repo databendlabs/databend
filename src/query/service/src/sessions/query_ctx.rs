@@ -794,7 +794,7 @@ impl TableContext for QueryContext {
         if !self.query_settings.is_changed() {
             unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(self.shared.get_settings().changes());
+                    .unchecked_apply_changes(self.get_shared_settings().changes());
             }
         }
 
@@ -802,7 +802,12 @@ impl TableContext for QueryContext {
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
-        self.shared.get_settings()
+        if self.query_settings.query_level_change() {
+            self.query_settings.clone()
+        } else {
+            // get settings from session
+            self.shared.get_settings()
+        }
     }
 
     fn get_cluster(&self) -> Arc<Cluster> {

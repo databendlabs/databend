@@ -71,6 +71,7 @@ impl Binder {
                 );
             }
         }
+
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;
             self.bind_dummy_table(bind_context, select_list)?

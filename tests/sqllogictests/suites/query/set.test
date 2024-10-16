@@ -64,3 +64,67 @@ select * from identifier($t);
 
 statement ok
 DROP TABLE monthly_sales
+
+
+statement ok
+unset global (timezone, default_order_by_null);
+
+statement ok
+create or replace table t(id int, c datetime);
+
+statement ok
+settings (timezone='Asia/Shanghai') insert into t values(1,'2022-02-02 00:00:00');
+
+query TTTT
+SELECT
+    e1.id AS e1_name,
+    e2.id AS e2_name,
+    e1.c AS e1_value,
+    e2.c AS e2_value
+FROM
+    t e1
+LEFT JOIN
+    t e2 ON e1.id = e2.id where e1.id=1;
+----
+1 1 2022-02-01 16:00:00.000000 2022-02-01 16:00:00.000000
+
+query TTTT
+settings (timezone='America/Toronto') SELECT
+    e1.id AS e1_name,
+    e2.id AS e2_name,
+    e1.c AS e1_value,
+    e2.c AS e2_value
+FROM
+    t e1
+LEFT JOIN
+    t e2 ON e1.id = e2.id where e1.id=1;
+----
+1 1 2022-02-01 11:00:00.000000 2022-02-01 11:00:00.000000
+
+statement ok
+create or replace table t1(id int null, c datetime null);
+
+statement ok
+insert into t1 values(1,'2022-02-02 00:00:00'), (null, '2022-02-02 00:00:00');
+
+query TTTT
+select id, c from t union all select id, c from t1 order by id, c;
+----
+1 2022-02-01 16:00:00.000000
+1 2022-02-02 00:00:00.000000
+NULL 2022-02-02 00:00:00.000000
+
+query TTTT
+settings ((timezone, default_order_by_null)=('Asia/Shanghai', 'nulls_first')) select id, c from t union all select id, c from t1 order by id, c;
+----
+NULL 2022-02-02 08:00:00.000000
+1 2022-02-02 00:00:00.000000
+1 2022-02-02 08:00:00.000000
+
+
+query T
+show settings where name in ('timezone', 'default_order_by_null')
+----
+default_order_by_null nulls_last nulls_last ["nulls_first", "nulls_last", "nulls_first_on_asc_last_on_desc",... DEFAULT Set numeric default_order_by_null mode String
+timezone UTC UTC ["Africa/Abidjan", "Africa/Accra", "Africa/Addis_Ababa", "Africa... DEFAULT Sets the timezone. String
+
