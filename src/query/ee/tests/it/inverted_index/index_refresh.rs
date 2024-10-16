@@ -154,14 +154,6 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     field_ids.insert(1);
     let index_record = IndexRecordOption::WithFreqsAndPositions;
 
-    let index_reader = InvertedIndexReader::create(
-        dal.clone(),
-        need_position,
-        has_score,
-        tokenizer_manager,
-        block_meta.row_count,
-    );
-
     let queries = vec![
         ("rust".to_string(), vec![0, 1]),
         ("java".to_string(), vec![2]),
@@ -183,8 +175,15 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         let (query, fuzziness, tokenizer_manager) =
             create_inverted_index_query(&inverted_index_info)?;
 
+        let index_reader = InvertedIndexReader::create(
+            dal.clone(),
+            need_position,
+            has_score,
+            tokenizer_manager,
+            block_meta.row_count,
+        );
+
         let matched_rows = index_reader
-            .clone()
             .do_filter(
                 &settings,
                 query.box_clone(),
