@@ -702,7 +702,7 @@ impl Catalog for SessionCatalog {
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.inner.list_dictionaries(req).await
     }
-    
+
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<RenameDictionaryReply> {
         self.inner.rename_dictionary(req).await
     }

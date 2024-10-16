@@ -3042,21 +3042,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<RenameDictionaryReply, KVAppError> {
+    async fn rename_dictionary(
+        &self,
+        req: RenameDictionaryReq,
+    ) -> Result<RenameDictionaryReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        
+
         let dict_ident = &req.name_ident;
         let get_db_req = GetDatabaseReq::new(req.tenant(), req.new_db_name.clone());
         let new_db_id = self.get_database(req).await?.database_id.db_id;
         let new_dict_ident = DictionaryNameIdent::new(
             req.name_ident.tenant(),
-            DictionaryIdentity::new(new_db_id, req.new_dictionary_name.clone()));
-        
+            DictionaryIdentity::new(new_db_id, req.new_dictionary_name.clone()),
+        );
+
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-            let (seq_db_id, db_meta) = get_db_or_err(self, &get_db_req.inner, "rename_dictionary").await?;
-            
+            let (seq_db_id, db_meta) =
+                get_db_or_err(self, &get_db_req.inner, "rename_dictionary").await?;
+
             let (dict_id_seq, dict_id) = get_u64_value(self, dict_ident).await?;
             if req.if_exists {
                 if dict_id_seq == 0 {
@@ -3075,13 +3080,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 dictionary_name: req.name_ident.dict_name().clone(),
             };
 
-            let seq_dict_history: Option<SeqV<<DictionaryIdHistoryIdent as Key>::ValueType>> = self.get_pb(&dbid_dictname_idlist).await?;
+            let seq_dict_history: Option<SeqV<<DictionaryIdHistoryIdent as Key>::ValueType>> =
+                self.get_pb(&dbid_dictname_idlist).await?;
             let dict_id_list_seq = seq_dict_history.seq();
 
             let mut dict_id_list = seq_dict_history
                 .into_value()
                 .unwrap_or_else(|| DictionaryIdList::new_with_ids([dict_id]));
-            
+
             {
                 let last = dict_id_list.last().copied();
                 if Some(dict_id) != last {
@@ -3098,8 +3104,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
 
             // Get the renaming target db to ensure presence.
-            let tenant_new_dbname = DatabaseNameIdent::new( req.tenant().clone(), &req.new_db_name);
-            let (new_seq_db_id, new_db_meta) = get_db_or_err(self, &tenant_new_dbname, "rename_dictionary: new db").await?;
+            let tenant_new_dbname = DatabaseNameIdent::new(req.tenant().clone(), &req.new_db_name);
+            let (new_seq_db_id, new_db_meta) =
+                get_db_or_err(self, &tenant_new_dbname, "rename_dictionary: new db").await?;
 
             // Get the renaming target dictionary to ensure absence
 
@@ -3120,15 +3127,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             // get dictionary id name
-            let dict_id_to_name_key = DictionaryIdToName {dict_id};
+            let dict_id_to_name_key = DictionaryIdToName { dict_id };
             let dict_id_to_name_seq = self.get_seq(&dict_id_to_name_key).await?;
             let db_id_dict_name = DictionaryNameIdent::new(
                 req.tenant(),
-                DictionaryIdentity::new(
-                    *new_seq_db_id.data,
-                    req.new_dictionary_name.clone()
-                ));
-            
+                DictionaryIdentity::new(*new_seq_db_id.data, req.new_dictionary_name.clone()),
+            );
+
             {
                 // move dictionary id from old dictionary id list to new dictionary id list
                 dict_id_list.pop();
@@ -3136,28 +3141,30 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 let mut txn = TxnRequest {
                     condition: vec![
-                        // db has not to change, i.e., no new table is created.
+                        // db has not to change, i.e., no new dictionary is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
                         txn_cond_seq(&seq_db_id.data, Eq, db_meta.seq),
                         txn_cond_seq(&new_seq_db_id.data, Eq, new_db_meta.seq),
-                        // table_name->table_id does not change.
-                        // Updating the table meta is ok.
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
-                        txn_cond_seq(&newdbid_newtbname, Eq, 0),
-                        // no other table id with the same name is append.
-                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
-                        txn_cond_seq(&new_dbid_tbname_idlist, Eq, new_tb_id_list_seq),
-                        txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
+                        // dictionary_name->dictionary_id does not change.
+                        // Updating the dictionary meta is ok.
+                        txn_cond_seq(&dict_ident, Eq, dict_id_seq),
+                        txn_cond_seq(&new_dict_ident, Eq, 0),
+                        // no other dictionary id with the same name is append.
+                        txn_cond_seq(&dbid_dictname_idlist, Eq, dict_id_list_seq),
+                        txn_cond_seq(&new_dbid_dictname_idlist, Eq, new_dict_id_list_seq),
+                        // dictionary_id
+                        txn_cond_seq(&dict_id_to_name_key, Eq, dict_id_to_name_seq),
                     ],
                     if_then: vec![
-                        txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
-                        txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?), /* (db_id, new_tb_name) -> tb_id */
-                        // Changing a table in a db has to update the seq of db_meta,
-                        // to block the batch-delete-tables when deleting a db.
+                        txn_op_del(&dict_ident),
+                        txn_op_put(&new_dict_ident, serialize_u64(dict_id)?),
                         txn_op_put(&seq_db_id.data, serialize_struct(&*db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
-                        txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?), /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
-                        txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+                        txn_op_put(&dbid_dictname_idlist, serialize_struct(&dict_id_list)?), /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
+                        txn_op_put(
+                            &new_dbid_dictname_idlist,
+                            serialize_struct(&new_dict_id_list)?,
+                        ), /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
+                        txn_op_put(&dict_id_to_name_key, serialize_struct(&db_id_dict_name)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ],
                     else_then: vec![],
                 };
@@ -3174,21 +3181,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn).await?;
 
                 debug!(
-                    name :? =(tenant_dbname_tbname),
-                    to :? =(&newdbid_newtbname),
-                    table_id :? =(&table_id),
+                    name :? =(dict_ident),
+                    to :? =(&new_dict_ident),
+                    dict_id :? =(&dict_id),
                     succ = succ;
-                    "rename_table"
+                    "rename_dictionary"
                 );
 
                 if succ {
-                    return Ok(RenameTableReply { table_id });
+                    return Ok(RenameDictionaryReply { dictionary_id });
                 }
-
             }
         }
     }
-    
+
     async fn get_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
@@ -3626,7 +3632,10 @@ fn dict_has_to_not_exist(
         debug!(seq = seq, name_ident :? =(name_ident); "exist");
 
         Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
-            DictionaryAlreadyExists::new(&name_ident.dict_name(), format!("{}: {}", ctx, name_ident)),
+            DictionaryAlreadyExists::new(
+                &name_ident.dict_name(),
+                format!("{}: {}", ctx, name_ident),
+            ),
         )))
     }
 }

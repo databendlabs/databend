@@ -189,7 +189,6 @@ impl RenameDictionaryReq {
     }
     pub fn db_id(&self) -> &str {
         &self.name_ident.db_id()
-
     }
     pub fn dictionary_name(&self) -> &str {
         &self.name_ident.dict_name()
@@ -292,9 +291,12 @@ mod kvapi_key_impl {
     use anyhow::Ok;
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::{dictionary_id_ident::DictionaryId, dictionary_name_ident::DictionaryNameIdent, DatabaseId};
-
-    use super::{DictionaryIdHistoryIdent, DictionaryIdList, DictionaryIdToName};
+    use super::DictionaryIdHistoryIdent;
+    use super::DictionaryIdList;
+    use super::DictionaryIdToName;
+    use crate::schema::dictionary_id_ident::DictionaryId;
+    use crate::schema::dictionary_name_ident::DictionaryNameIdent;
+    use crate::schema::DatabaseId;
 
     /// "_fd_dictionary_id_list/<db_id>/<dict_name> -> id_list"
     impl kvapi::Key for DictionaryIdHistoryIdent {
@@ -310,9 +312,7 @@ mod kvapi_key_impl {
     impl kvapi::Value for DictionaryIdList {
         type KeyType = DictionaryIdHistoryIdent;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            self.id_list
-                .iter()
-                .map(|id| id.to_string())
+            self.id_list.iter().map(|id| id.to_string())
         }
     }
 
@@ -322,7 +322,7 @@ mod kvapi_key_impl {
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
+        where Self: Sized {
             let dict_id = parser.next_u64()?;
             Ok(Self { dict_id })
         }

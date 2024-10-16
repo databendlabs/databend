@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::{dictionary_name_ident::DictionaryNameIdent, DictionaryIdentity, RenameDictionaryReq};
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_sql::plans::RenameDictionaryPlan;
 
 use crate::interpreters::Interpreter;
@@ -50,7 +52,10 @@ impl Interpreter for RenameDictionaryInterpreter {
         let _resp = catalog
             .rename_dictionary(RenameDictionaryReq {
                 if_exists: self.plan.if_exists,
-                name_ident: DictionaryNameIdent::new(self.plan.tenant.clone(), DictionaryIdentity::new(self.plan.database, self.plan.dictionary)),
+                name_ident: DictionaryNameIdent::new(
+                    self.plan.tenant.clone(),
+                    DictionaryIdentity::new(self.plan.database, self.plan.dictionary),
+                ),
                 new_db_name: self.plan.new_database.clone(),
                 new_dictionary_name: self.plan.new_dictionary.clone(),
             })

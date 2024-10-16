@@ -768,7 +768,7 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<RenameDatabaseReply> {
-        let res = self.ctx.meta.rename_dictionary(req).await
+        let res = self.ctx.meta.rename_dictionary(req).await?;
         Ok(res)
     }
 }

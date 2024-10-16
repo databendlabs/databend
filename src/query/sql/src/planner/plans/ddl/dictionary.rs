@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::CreateOption;
-use databend_common_expression::{DataSchema, DataSchemaRef};
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::tenant::Tenant;
 
