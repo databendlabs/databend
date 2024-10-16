@@ -71,6 +71,7 @@ impl Binder {
                 let p = self.clone().bind(&Statement::Query(query.clone())).await?;
                 SetScalarsOrQuery::Query(Box::new(p))
             }
+            SetValues::None => return Err(ErrorCode::SemanticError("set value can not be None")),
         };
 
         Ok(Plan::Set(Box::new(SetPlan {

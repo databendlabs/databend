@@ -19,9 +19,9 @@ use std::time::Duration;
 use std::time::Instant;
 
 use backoff::backoff::Backoff;
-use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::timeout;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::Catalog;
@@ -51,7 +51,7 @@ use crate::sessions::SessionManager;
 #[derive(Default)]
 pub struct LockHolder {
     shutdown_flag: AtomicBool,
-    shutdown_notify: Notify,
+    shutdown_notify: WatchNotify,
 }
 
 impl LockHolder {

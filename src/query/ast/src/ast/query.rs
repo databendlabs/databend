@@ -29,6 +29,8 @@ use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
+use crate::ParseError;
+use crate::Result;
 use crate::Span;
 
 /// Root node of a query tree
@@ -623,56 +625,82 @@ impl Display for TemporalClause {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum SampleLevel {
-    ROW,
-    BLOCK,
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum SampleConfig {
-    Probability(f64),
+pub enum SampleRowLevel {
     RowsNum(f64),
+    Probability(f64),
 }
 
-impl Eq for SampleConfig {}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub struct Sample {
-    pub sample_level: SampleLevel,
-    pub sample_conf: SampleConfig,
-}
-
-impl Sample {
-    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Option<f64> {
-        let rand = match &self.sample_conf {
-            SampleConfig::Probability(probability) => probability / 100.0,
-            SampleConfig::RowsNum(rows) => {
+impl SampleRowLevel {
+    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Result<Option<f64>> {
+        let rand = match &self {
+            SampleRowLevel::Probability(probability) => probability / 100.0,
+            SampleRowLevel::RowsNum(rows) => {
                 if let Some(row_num) = stats_rows {
                     if row_num > 0 {
                         rows / row_num as f64
                     } else {
-                        return None;
+                        return Ok(None);
                     }
                 } else {
-                    return None;
+                    return Ok(None);
                 }
             }
         };
-        Some(rand)
+        if rand > 1.0 {
+            return Err(ParseError(
+                None,
+                format!(
+                    "Sample value should be less than or equal to 100, but got {}",
+                    rand * 100.0
+                ),
+            ));
+        }
+        Ok(Some(rand))
     }
 }
 
-impl Display for Sample {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SAMPLE ")?;
-        match self.sample_level {
-            SampleLevel::ROW => write!(f, "ROW ")?,
-            SampleLevel::BLOCK => write!(f, "BLOCK ")?,
+impl Eq for SampleRowLevel {}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Default,
+)]
+pub struct SampleConfig {
+    pub row_level: Option<SampleRowLevel>,
+    pub block_level: Option<f64>,
+}
+
+impl SampleConfig {
+    pub fn set_row_level_sample(&mut self, value: f64, rows: bool) {
+        if rows {
+            self.row_level = Some(SampleRowLevel::RowsNum(value));
+        } else {
+            self.row_level = Some(SampleRowLevel::Probability(value));
         }
-        match &self.sample_conf {
-            SampleConfig::Probability(prob) => write!(f, "({})", prob)?,
-            SampleConfig::RowsNum(rows) => write!(f, "({} ROWS)", rows)?,
+    }
+
+    pub fn set_block_level_sample(&mut self, probability: f64) {
+        self.block_level = Some(probability);
+    }
+}
+
+impl Eq for SampleConfig {}
+
+impl Display for SampleConfig {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SAMPLE ")?;
+        if let Some(block_level) = self.block_level {
+            write!(f, "BLOCK ({}) ", block_level)?;
+        }
+        if let Some(row_level) = &self.row_level {
+            match row_level {
+                SampleRowLevel::RowsNum(rows) => {
+                    write!(f, "ROW ({} ROWS)", rows)?;
+                }
+                SampleRowLevel::Probability(probability) => {
+                    write!(f, "ROW ({})", probability)?;
+                }
+            }
         }
         Ok(())
     }
@@ -692,7 +720,7 @@ pub enum TableReference {
         with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
-        sample: Option<Sample>,
+        sample: Option<SampleConfig>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -703,7 +731,7 @@ pub enum TableReference {
         params: Vec<Expr>,
         named_params: Vec<(Identifier, Expr)>,
         alias: Option<TableAlias>,
-        sample: Option<Sample>,
+        sample: Option<SampleConfig>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
