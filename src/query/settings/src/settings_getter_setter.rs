@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,6 +31,41 @@ use crate::SettingMode;
 pub enum FlightCompression {
     Lz4,
     Zstd,
+}
+
+#[derive(Clone, Copy)]
+pub enum SpillFileFormat {
+    Arrow,
+    Parquet,
+}
+
+impl SpillFileFormat {
+    pub fn range() -> Vec<String> {
+        ["arrow", "parquet"]
+            .iter()
+            .copied()
+            .map(String::from)
+            .collect()
+    }
+
+    pub fn is_parquet(&self) -> bool {
+        matches!(self, SpillFileFormat::Parquet)
+    }
+}
+
+impl FromStr for SpillFileFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "arrow" => Ok(SpillFileFormat::Arrow),
+            "parquet" => Ok(Self::Parquet),
+            _ => Err(ErrorCode::InvalidConfig(format!(
+                "invalid SpillFileFormat: {:?}",
+                s
+            ))),
+        }
+    }
 }
 
 impl Settings {
@@ -290,8 +327,8 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
     }
 
-    pub fn get_spilling_use_parquet(&self) -> Result<bool> {
-        Ok(self.try_get_u64("spilling_use_parquet")? != 0)
+    pub fn get_spilling_file_format(&self) -> Result<SpillFileFormat> {
+        self.try_get_string("spilling_file_format")?.parse()
     }
 
     pub fn get_spilling_to_disk_vacuum_unknown_temp_dirs_limit(&self) -> Result<usize> {

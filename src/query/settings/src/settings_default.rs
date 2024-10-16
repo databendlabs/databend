@@ -23,6 +23,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
 use once_cell::sync::OnceCell;
 
+use super::settings_getter_setter::SpillFileFormat;
+
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
 
 // Default value of cost factor settings
@@ -309,11 +311,11 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("spilling_use_parquet", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Set whether to use Parquet or Arrow IPC for spilling.",
+                ("spilling_file_format", DefaultSettingValue {
+                    value: UserSettingValue::String("parquet".to_string()),
+                    desc: "Set the storage file format for spilling.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: Some(SettingRange::String(SpillFileFormat::range())),
                 }),
                 ("spilling_to_disk_vacuum_unknown_temp_dirs_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(u64::MAX),

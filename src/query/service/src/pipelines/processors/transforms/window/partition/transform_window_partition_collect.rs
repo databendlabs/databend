@@ -119,7 +119,7 @@ impl TransformWindowPartitionCollect {
             spiller_type: SpillerType::Window,
             location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
             disk_spill,
-            use_parquet: settings.get_spilling_use_parquet()?,
+            use_parquet: settings.get_spilling_file_format()?.is_parquet(),
         };
 
         // Create an inner `Spiller` to spill data.

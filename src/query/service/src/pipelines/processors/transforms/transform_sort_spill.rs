@@ -491,7 +491,7 @@ mod tests {
             spiller_type: SpillerType::OrderBy,
             location_prefix: "_spill_test".to_string(),
             disk_spill: None,
-            use_parquet: ctx.get_settings().get_spilling_use_parquet()?,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
         };
 
         let spiller = Spiller::create(ctx.clone(), op, spill_config)?;

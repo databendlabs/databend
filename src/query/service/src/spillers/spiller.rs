@@ -236,7 +236,7 @@ impl Spiller {
                     .map(|x| x[0]..x[1])
                     .zip(columns_layout.into_iter()),
             )
-            .map(|(id, (range, layout))| (id, range, layout))
+            .map(|(id, (range, layout))| (id, Chunk { range, layout }))
             .collect();
 
         // Spill data to storage.
@@ -322,7 +322,7 @@ impl Spiller {
                 let file_size = path.size();
                 debug_assert_eq!(
                     file_size,
-                    if let Some((_, range, _)) = partitions.last() {
+                    if let Some((_, Chunk { range, .. })) = partitions.last() {
                         range.end
                     } else {
                         0
@@ -346,8 +346,8 @@ impl Spiller {
         // Deserialize partitioned data block.
         let partitioned_data = partitions
             .iter()
-            .map(|(partition_id, range, columns_layout)| {
-                let block = deserialize_block(columns_layout, data.slice(range.clone()));
+            .map(|(partition_id, Chunk { range, layout })| {
+                let block = deserialize_block(layout, data.slice(range.clone()));
                 (*partition_id, block)
             })
             .collect();
@@ -355,15 +355,11 @@ impl Spiller {
         Ok(partitioned_data)
     }
 
-    pub async fn read_range(
-        &self,
-        location: &Location,
-        data_range: Range<usize>,
-        columns_layout: &Layout,
-    ) -> Result<DataBlock> {
+    pub async fn read_chunk(&self, location: &Location, chunk: &Chunk) -> Result<DataBlock> {
         // Read spilled data from storage.
         let instant = Instant::now();
-        let data_range = data_range.start as u64..data_range.end as u64;
+        let Chunk { range, layout } = chunk;
+        let data_range = range.start as u64..range.end as u64;
 
         let data = match location {
             Location::Local(path) => match &self.local_operator {
@@ -383,7 +379,7 @@ impl Spiller {
 
         record_read_profile(location, &instant, data.len());
 
-        Ok(deserialize_block(columns_layout, data))
+        Ok(deserialize_block(layout, data))
     }
 
     async fn write_encodes(&mut self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
@@ -438,14 +434,14 @@ impl Spiller {
     }
 }
 
-pub enum SpilledData {
-    Partition(Location),
-    MergedPartition(MergedPartition),
-}
-
 pub struct MergedPartition {
     pub location: Location,
-    pub partitions: Vec<(usize, Range<usize>, Layout)>,
+    pub partitions: Vec<(usize, Chunk)>,
+}
+
+pub struct Chunk {
+    pub range: Range<usize>,
+    pub layout: Layout,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

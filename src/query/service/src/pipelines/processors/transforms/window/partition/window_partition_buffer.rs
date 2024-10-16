@@ -146,7 +146,7 @@ impl WindowPartitionBuffer {
             .spill_with_merged_partitions(partitions_to_spill)
             .await?;
         let index = self.spilled_merged_partitions.len();
-        for (id, _, _) in &spilled.partitions {
+        for (id, _) in &spilled.partitions {
             self.spilled_small_partitions[*id].push(index);
         }
         self.spilled_merged_partitions.push((spilled, false, false));
@@ -176,12 +176,10 @@ impl WindowPartitionBuffer {
                     partitions,
                 } = merged_partitions;
                 if out_of_memory_limit || *partial_restored {
-                    if let Some(pos) = partitions.iter().position(|p| p.0 == partition_id) {
-                        let data_range = &partitions[pos].1;
-                        let columns_layout = &partitions[pos].2;
+                    if let Some(pos) = partitions.iter().position(|(id, _)| *id == partition_id) {
                         let data_block = self
                             .spiller
-                            .read_range(location, data_range.clone(), columns_layout)
+                            .read_chunk(location, &partitions[pos].1)
                             .await?;
                         self.restored_partition_buffer
                             .add_data_block(partition_id, data_block);

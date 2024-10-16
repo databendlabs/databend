@@ -289,7 +289,7 @@ impl SortPipelineBuilder {
                     &self.ctx.get_id(),
                 ),
                 disk_spill: None,
-                use_parquet: settings.get_spilling_use_parquet()?,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();

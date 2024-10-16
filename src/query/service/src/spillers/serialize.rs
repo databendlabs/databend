@@ -67,7 +67,7 @@ impl BlocksEncoder {
             // Currently we splice multiple complete parquet files into one,
             // so that the file contains duplicate headers/footers and metadata,
             // which can lead to file bloat. A better approach would be for the entire file to be ONE parquet,
-            // with each group of blocks (i.e., a unit of the upstream read range) corresponding to one or more row groupsx
+            // with each group of blocks (i.e. Chunk) corresponding to one or more row groupsx
             bare_blocks_to_parquet(blocks, &mut self.buf).unwrap();
             Layout::Parquet
         } else {

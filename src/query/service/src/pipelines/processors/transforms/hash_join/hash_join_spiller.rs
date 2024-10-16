@@ -71,7 +71,7 @@ impl HashJoinSpiller {
             spiller_type,
             location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
             disk_spill: None,
-            use_parquet: ctx.get_settings().get_spilling_use_parquet()?,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
         };
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;
