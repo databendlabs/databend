@@ -150,7 +150,9 @@ impl DataBlock {
 
     #[inline]
     pub fn new_from_columns(columns: Vec<Column>) -> Self {
-        assert!(!columns.is_empty());
+        if columns.is_empty() {
+            return DataBlock::empty();
+        }
         let num_rows = columns[0].len();
         debug_assert!(columns.iter().all(|c| c.len() == num_rows));
 
