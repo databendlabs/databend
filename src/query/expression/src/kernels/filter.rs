@@ -212,7 +212,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();
         match self.strategy {
             IterationStrategy::IndexIterator => {
-                let iter = TrueIdxIter::new(self.original_rows, Some(&self.filter));
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 iter.for_each(|index| {
                     T::push_item(&mut builder, unsafe {
                         T::index_column_unchecked(&column, index)
@@ -220,7 +220,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                 });
             }
             _ => {
-                let iter = SlicesIterator::new(&self.filter);
+                let iter = SlicesIterator::new(self.filter);
                 iter.for_each(|(start, len)| {
                     T::append_column(&mut builder, &T::slice_column(&column, start..start + len))
                 });
@@ -276,7 +276,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
 
         let bitmap = match self.strategy {
             IterationStrategy::IndexIterator => {
-                let iter = TrueIdxIter::new(self.original_rows, Some(&self.filter));
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 MutableBitmap::from_trusted_len_iter(iter.map(|index| bitmap.get_bit(index))).into()
             }
             _ => {
@@ -284,7 +284,7 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
                 let offset = bitmap.offset();
 
                 let mut builder = MutableBitmap::with_capacity(self.filter_rows);
-                let iter = SlicesIterator::new(&self.filter);
+                let iter = SlicesIterator::new(self.filter);
                 iter.for_each(|(start, len)| {
                     builder.append_packed_range(start + offset..start + len + offset, src)
                 });
@@ -323,12 +323,12 @@ impl<'a> FilterVisitor<'a> {
     fn filter_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         match self.strategy {
             IterationStrategy::IndexIterator => {
-                let iter = TrueIdxIter::new(self.original_rows, Some(&self.filter));
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 Vec::from_iter(iter.map(|index| buffer[index])).into()
             }
             _ => {
                 let mut builder = Vec::with_capacity(self.filter_rows);
-                let iter = SlicesIterator::new(&self.filter);
+                let iter = SlicesIterator::new(self.filter);
                 iter.for_each(|(start, len)| {
                     builder.extend_from_slice(&buffer[start..start + len]);
                 });
