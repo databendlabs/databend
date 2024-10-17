@@ -40,6 +40,7 @@ impl AsyncMetaReceiverSource {
 #[async_trait::async_trait]
 impl AsyncSource for AsyncMetaReceiverSource {
     const NAME: &'static str = "AsyncMetaReceiverSource";
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> databend_common_exception::Result<Option<DataBlock>> {
