@@ -106,7 +106,7 @@ impl HiveTableSource {
 #[async_trait::async_trait]
 impl Processor for HiveTableSource {
     fn name(&self) -> String {
-        "DeltaSource".to_string()
+        "HiveEngineSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

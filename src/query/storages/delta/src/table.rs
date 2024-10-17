@@ -307,7 +307,7 @@ impl DeltaTable {
                     self.schema(),
                 )?;
 
-                adds = partition_pruner.prune::<Add, DeletaToScalar>(adds)?;
+                adds = partition_pruner.prune::<Add, DeltaToScalar>(adds)?;
             }
         }
 
@@ -353,9 +353,9 @@ impl DeltaTable {
     }
 }
 
-pub struct DeletaToScalar;
+pub struct DeltaToScalar;
 
-impl FetchPartitionScalars<Add> for DeletaToScalar {
+impl FetchPartitionScalars<Add> for DeltaToScalar {
     fn eval(add: &Add, partition_fields: &[TableField]) -> Result<Vec<Scalar>> {
         get_partition_values(add, partition_fields)
     }
