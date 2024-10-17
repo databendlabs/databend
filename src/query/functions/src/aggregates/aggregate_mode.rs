@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -150,54 +149,16 @@ pub fn try_create_aggregate_mode_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::String => {
-            let func = AggregateUnaryFunction::<
-                ModeState<StringType>,
-                StringType,
-                StringType,
-            >::try_create(
-                display_name, data_type.clone(), params, data_type.clone()
+        _ => {
+            let func = AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::try_create(
+                display_name,
+                data_type.clone(),
+                params,
+                data_type.clone(),
             )
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Timestamp => {
-            let func = AggregateUnaryFunction::<
-                ModeState<TimestampType>,
-                TimestampType,
-                TimestampType,
-            >::try_create(
-                display_name, data_type.clone(), params, data_type.clone()
-            )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        DataType::Date => {
-            let func =
-                AggregateUnaryFunction::<ModeState<DateType>, DateType, DateType>::try_create(
-                    display_name,
-                    data_type.clone(),
-                    params,
-                    data_type.clone(),
-                )
-                .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        DataType::Boolean => {
-            let func =
-                AggregateUnaryFunction::<ModeState<BooleanType>, BooleanType, BooleanType>::try_create(
-                    display_name,
-                    data_type.clone(),
-                    params,
-                    data_type.clone(),
-                )
-                .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        _ => Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
-            display_name, data_type
-        ))),
     })
 }
 

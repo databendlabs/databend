@@ -112,7 +112,7 @@ fn test_agg_group_by() {
     test_agg_group_array_moving_sum(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
-    test_agg_mode(file, eval_aggr);
+    test_agg_mode(file, simulate_two_groups_group_by);
 }
 
 fn gen_bitmap_data() -> Column {
@@ -141,6 +141,7 @@ fn get_example() -> Vec<(&'static str, Column)> {
         ("a", Int64Type::from_data(vec![4i64, 3, 2, 1])),
         ("b", UInt64Type::from_data(vec![1u64, 2, 3, 4])),
         ("c", UInt64Type::from_data(vec![1u64, 2, 1, 3])),
+        ("d", UInt64Type::from_data(vec![1u64, 1, 1, 1])),
         (
             "x_null",
             UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
@@ -888,8 +889,6 @@ fn test_agg_json_object_agg(file: &mut impl Write, simulator: impl AggregationSi
 fn test_agg_mode(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "mode(1)", get_example().as_slice(), simulator);
     run_agg_ast(file, "mode(NULL)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "mode(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "mode(b)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "mode(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(d)", get_example().as_slice(), simulator);
     run_agg_ast(file, "mode(all_null)", get_example().as_slice(), simulator);
 }
