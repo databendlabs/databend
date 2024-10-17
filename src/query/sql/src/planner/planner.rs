@@ -42,8 +42,6 @@ use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::QuerySampleExecutor;
-use crate::plans::Insert;
-use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
@@ -239,7 +237,7 @@ impl Planner {
                 planner_cache_key.as_ref().unwrap(),
                 stmt,
             );
-            if let Some(mut plan) = plan {
+            if let Some(plan) = plan {
                 info!("logical plan from cache, time used: {:?}", start.elapsed());
                 // update for clickhouse handler
                 self.ctx
