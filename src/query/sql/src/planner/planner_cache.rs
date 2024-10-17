@@ -39,13 +39,11 @@ use sha2::Sha256;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::NameResolutionContext;
-use crate::PlanExtras;
 use crate::Planner;
 
 #[derive(Clone)]
 pub struct PlanCacheItem {
     pub(crate) plan: Plan,
-    pub(crate) extras: PlanExtras,
     pub(crate) setting_changes: Vec<(String, ChangeValue)>,
     pub(crate) variables: HashMap<String, Scalar>,
 }
@@ -125,7 +123,7 @@ impl Planner {
         }
     }
 
-    pub fn set_cache(&self, key: String, plan: Plan, extras: PlanExtras) {
+    pub fn set_cache(&self, key: String, plan: Plan) {
         let setting_changes = self
             .ctx
             .get_settings()
@@ -139,7 +137,6 @@ impl Planner {
 
         let plan_item = PlanCacheItem {
             plan,
-            extras,
             setting_changes,
             variables,
         };
