@@ -14,12 +14,15 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+extern crate core;
+
 mod context;
 pub mod exception;
 mod exception_backtrace;
 mod exception_code;
 mod exception_flight;
 mod exception_into;
+mod exception_backtrace_elf;
 
 pub use context::display_error_stack;
 pub use context::ErrorFrame;

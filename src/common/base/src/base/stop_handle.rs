@@ -143,5 +143,3 @@ impl<E: Error + Send + 'static> Drop for StopHandle<E> {
         })
     }
 }
-
-

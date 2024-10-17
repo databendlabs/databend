@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::slice;
+use std::fmt::Write;
+use std::path::PathBuf;
 // use std::backtrace::Backtrace;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use object::read::elf::{FileHeader, SectionHeader, Sym};
+use tantivy::HasLen;
 
 use crate::exception::ErrorCodeBacktrace;
 
@@ -89,8 +94,16 @@ pub fn capture() -> Option<ErrorCodeBacktrace> {
     }
 }
 
+pub struct ResolvedStackFrame {
+    pub virtual_address: usize,
+    pub physical_address: usize,
+    pub library: String,
+    pub symbol: String,
+}
+
 pub enum StackFrame {
-    UnSymbol,
+    Unresolved(usize),
+    Resolved(usize),
 }
 
 //
@@ -109,16 +122,9 @@ impl StackTrace {
         // Safety:
         unsafe {
             backtrace::trace_unsynchronized(|frame| {
-                frames.push(StackFrame::UnSymbol);
+                frames.push(StackFrame::Unresolved(frame.ip() as usize));
                 frames.len() != frames.capacity()
             });
         }
-    }
-}
-
-struct SymbolIndex {}
-
-impl SymbolIndex {
-    pub fn find_() {
     }
 }

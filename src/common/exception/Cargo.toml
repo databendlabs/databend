@@ -33,6 +33,9 @@ tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 libc = { workspace = true}
+gimli = "0.31.0"
+object = "0.36.5"
+rustc-demangle = "0.1"
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]
