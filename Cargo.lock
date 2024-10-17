@@ -4658,7 +4658,6 @@ dependencies = [
  "serde",
  "serde_json",
  "typetag",
- "uuid",
 ]
 
 [[package]]

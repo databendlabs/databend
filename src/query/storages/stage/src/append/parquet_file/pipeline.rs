@@ -27,13 +27,13 @@ pub(crate) fn append_data_to_parquet_files(
     pipeline: &mut Pipeline,
     table_info: StageTableInfo,
     op: Operator,
-    uuid: String,
+    query_id: String,
     group_id: &std::sync::atomic::AtomicUsize,
     mem_limit: usize,
     max_threads: usize,
 ) -> Result<()> {
-    let is_single = table_info.stage_info.copy_options.single;
-    let max_file_size = table_info.stage_info.copy_options.max_file_size;
+    let is_single = table_info.copy_into_location_options.single;
+    let max_file_size = table_info.copy_into_location_options.max_file_size;
     // when serializing block to parquet, the memory may be doubled
     let mem_limit = mem_limit / 2;
     pipeline.try_resize(1)?;
@@ -60,7 +60,7 @@ pub(crate) fn append_data_to_parquet_files(
             output,
             table_info.clone(),
             op.clone(),
-            uuid.clone(),
+            query_id.clone(),
             gid,
             max_file_size,
         )

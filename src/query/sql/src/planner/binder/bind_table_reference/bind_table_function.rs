@@ -19,7 +19,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::Sample;
+use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
@@ -62,7 +62,7 @@ impl Binder {
         params: &[Expr],
         named_params: &[(Identifier, Expr)],
         alias: &Option<TableAlias>,
-        sample: &Option<Sample>,
+        sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 

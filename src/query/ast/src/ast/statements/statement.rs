@@ -27,8 +27,8 @@ use super::*;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
+use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
-use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -86,14 +86,11 @@ pub enum Statement {
     },
 
     SetStmt {
-        set_type: SetType,
-        identifiers: Vec<Identifier>,
-        values: SetValues,
+        settings: Settings,
     },
 
     UnSetStmt {
-        unset_type: SetType,
-        identifiers: Vec<Identifier>,
+        settings: Settings,
     },
 
     ShowVariables {
@@ -496,71 +493,8 @@ impl Display for Statement {
                 }
                 write!(f, " '{object_id}'")?;
             }
-            Statement::SetStmt {
-                set_type,
-                identifiers,
-                values,
-            } => {
-                write!(f, "SET ")?;
-                match *set_type {
-                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
-                    SetType::SettingsSession => {}
-                    SetType::Variable => write!(f, "VARIABLE ")?,
-                }
-
-                if identifiers.len() > 1 {
-                    write!(f, "(")?;
-                }
-                for (idx, variable) in identifiers.iter().enumerate() {
-                    if idx > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{variable}")?;
-                }
-                if identifiers.len() > 1 {
-                    write!(f, ")")?;
-                }
-
-                match values {
-                    SetValues::Expr(exprs) => {
-                        write!(f, " = ")?;
-                        if exprs.len() > 1 {
-                            write!(f, "(")?;
-                        }
-
-                        for (idx, value) in exprs.iter().enumerate() {
-                            if idx > 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{value}")?;
-                        }
-                        if exprs.len() > 1 {
-                            write!(f, ")")?;
-                        }
-                    }
-                    SetValues::Query(query) => {
-                        write!(f, " = {query}")?;
-                    }
-                }
-            }
-            Statement::UnSetStmt {
-                unset_type,
-                identifiers,
-            } => {
-                write!(f, "UNSET ")?;
-                match *unset_type {
-                    SetType::SettingsSession => write!(f, "SESSION ")?,
-                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
-                    SetType::Variable => write!(f, "VARIABLE ")?,
-                }
-                if identifiers.len() == 1 {
-                    write!(f, "{}", identifiers[0])?;
-                } else {
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, identifiers)?;
-                    write!(f, ")")?;
-                }
-            }
+            Statement::SetStmt { settings } => write!(f, "SET {}", settings)?,
+            Statement::UnSetStmt { settings } => write!(f, "UNSET {}", settings)?,
             Statement::SetRole {
                 is_default,
                 role_name,
