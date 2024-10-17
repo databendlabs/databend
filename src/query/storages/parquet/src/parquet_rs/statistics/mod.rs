@@ -19,3 +19,4 @@ mod utils;
 
 pub use page::convert_index_to_column_statistics;
 pub use row_group::collect_row_group_stats;
+pub use row_group::collect_single_row_group_stats;
