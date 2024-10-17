@@ -97,10 +97,8 @@ impl Transform for ReadNativeDataTransform<true> {
         if let Some(info_ptr) = data.get_meta() {
             if let Some(partition_meta) = PartitionsMeta::downcast_from(info_ptr.clone()) {
                 let partitions = partition_meta.partitions.partitions;
-                let mut native_data_source =
-                    Vec::with_capacity(partitions.len());
-                let mut native_part_infos =
-                    Vec::with_capacity(partitions.len());
+                let mut native_data_source = Vec::with_capacity(partitions.len());
+                let mut native_part_infos = Vec::with_capacity(partitions.len());
                 for info_ptr in partitions {
                     native_part_infos.push(info_ptr.clone());
                     let fuse_part = FuseBlockPartInfo::from_part(&info_ptr)?;

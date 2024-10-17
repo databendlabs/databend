@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use async_channel::Receiver;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::{OutputPort, ProcessorPtr};
-use databend_common_pipeline_sources::{AsyncSource, AsyncSourcer};
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
 
 use crate::pruning_pipeline::meta_info::PartitionsMeta;
 
@@ -30,10 +33,9 @@ impl AsyncMetaReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         receiver: Receiver<Partitions>,
-        output_port: Arc<OutputPort>) -> databend_common_exception::Result<ProcessorPtr> {
-        AsyncSourcer::create(
-            ctx, output_port, Self { receiver, }
-        )
+        output_port: Arc<OutputPort>,
+    ) -> databend_common_exception::Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx, output_port, Self { receiver })
     }
 }
 
