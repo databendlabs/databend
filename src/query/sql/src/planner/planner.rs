@@ -37,6 +37,7 @@ use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
+use crate::binder::SubqueryExecutor;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::QuerySampleExecutor;
@@ -55,6 +56,7 @@ const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    pub(crate) subquery_executor: Option<Arc<dyn SubqueryExecutor>>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,16 +70,19 @@ impl Planner {
         Planner {
             ctx,
             sample_executor: None,
+            subquery_executor: None,
         }
     }
 
-    pub fn new_with_sample_executor(
+    pub fn new_with_sample_and_subquery_executors(
         ctx: Arc<dyn TableContext>,
         sample_executor: Arc<dyn QuerySampleExecutor>,
+        subquery_executor: Arc<dyn SubqueryExecutor>,
     ) -> Self {
         Planner {
             ctx,
             sample_executor: Some(sample_executor),
+            subquery_executor: Some(subquery_executor),
         }
     }
 
@@ -197,7 +202,8 @@ impl Planner {
                     CatalogManager::instance(),
                     name_resolution_ctx,
                     metadata.clone(),
-                );
+                )
+                .with_subquery_executor(self.subquery_executor.clone());
 
                 // Indicate binder there is no need to collect column statistics for the binding table.
                 self.ctx

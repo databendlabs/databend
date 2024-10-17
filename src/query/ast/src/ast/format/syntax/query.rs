@@ -369,6 +369,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             lateral,
             subquery,
             alias,
+            pivot,
+            unpivot,
         } => (if lateral {
             RcDoc::text("LATERAL")
         } else {
@@ -377,6 +379,16 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         .append(parenthesized(pretty_query(*subquery)))
         .append(if let Some(alias) = alias {
             RcDoc::text(format!(" AS {alias}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(pivot) = pivot {
+            RcDoc::text(format!(" {pivot}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(unpivot) = unpivot {
+            RcDoc::text(format!(" {unpivot}"))
         } else {
             RcDoc::nil()
         }),

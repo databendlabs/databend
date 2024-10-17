@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bind;
-mod bind_limit;
-mod bind_select;
-mod bind_set_expr;
-mod bind_value;
-mod subquery_executor;
+use async_trait::async_trait;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
-pub use bind_select::MaxColumnPosition;
-pub use bind_value::bind_values;
-pub use bind_value::ExpressionScanContext;
-pub use subquery_executor::SubqueryExecutor;
+#[async_trait]
+pub trait SubqueryExecutor: Send + Sync {
+    async fn execute_query(&self, query_sql: &str) -> Result<Vec<DataBlock>>;
+}
