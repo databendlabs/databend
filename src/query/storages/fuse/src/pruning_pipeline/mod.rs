@@ -15,4 +15,5 @@
 mod meta_info;
 mod processor;
 
+pub use meta_info::PartitionsMeta;
 pub use processor::*;

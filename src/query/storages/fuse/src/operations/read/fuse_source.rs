@@ -34,11 +34,12 @@ use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
-use crate::operations::read::native_data_source_reader_with_channel::ReadNativeDataSourceWithChannel;
+use crate::operations::read::native_data_transform_reader::ReadNativeDataTransform;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
 use crate::operations::read::ReadNativeDataSource;
 use crate::operations::read::ReadParquetDataSource;
+use crate::pruning_pipeline::AsyncMetaReceiverSource;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -70,16 +71,26 @@ pub fn build_fuse_native_source_pipeline(
                     let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
-                        ReadNativeDataSourceWithChannel::<false>::create(
+                        AsyncMetaReceiverSource::create(
                             ctx.clone(),
+                            receiver.clone(),
+                            output,
+                        )?,
+                    );
+                }
+                pipeline.add_pipe(source_builder.finalize());
+                pipeline.add_transform(
+                    |input, output|{
+                        ReadNativeDataTransform::<true>::create(
+                            ctx.clone(),
+                            input,
                             output,
                             block_reader.clone(),
                             index_reader.clone(),
                             virtual_reader.clone(),
-                            receiver.clone(),
-                        )?,
-                    );
-                }
+                        )
+                    }
+                )?
             } else {
                 let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
                 let mut partitions = StealablePartitions::new(partitions, ctx.clone());
@@ -105,9 +116,10 @@ pub fn build_fuse_native_source_pipeline(
                         )?,
                     );
                 }
+
+                pipeline.add_pipe(source_builder.finalize());
             }
 
-            pipeline.add_pipe(source_builder.finalize());
         }
         false => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
@@ -117,21 +129,35 @@ pub fn build_fuse_native_source_pipeline(
                 partitions.disable_steal();
             }
 
-            for i in 0..max_io_requests {
-                let output = OutputPort::create();
-                if let Some(receiver) = meta_receiver.clone() {
+            if let Some(receiver) = meta_receiver.clone() {
+                for _i in 0..max_threads {
+                    let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
-                        ReadNativeDataSourceWithChannel::<false>::create(
-                            ctx.clone(),
-                            output,
-                            block_reader.clone(),
-                            index_reader.clone(),
-                            virtual_reader.clone(),
-                            receiver,
-                        )?,
+                        AsyncMetaReceiverSource::create(
+                                ctx.clone(),
+                                receiver.clone(),
+                                output,
+                            )?,
                     );
-                } else {
+                }
+                pipeline.add_pipe(source_builder.finalize());
+                pipeline.add_transform(
+                        |input, output|{
+                            ReadNativeDataTransform::<false>::create(
+                                ctx.clone(),
+                                input,
+                                output,
+                                block_reader.clone(),
+                                index_reader.clone(),
+                                virtual_reader.clone(),
+                            )
+                        }
+                )?;
+
+            } else {
+                for i in 0..max_threads {
+                    let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
                         ReadNativeDataSource::<false>::create(
@@ -147,8 +173,10 @@ pub fn build_fuse_native_source_pipeline(
                         )?,
                     );
                 }
+
+                pipeline.add_pipe(source_builder.finalize());
             }
-            pipeline.add_pipe(source_builder.finalize());
+
             pipeline.try_resize(max_threads)?;
         }
     };
