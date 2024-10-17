@@ -27,6 +27,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
@@ -39,6 +40,7 @@ use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
@@ -48,6 +50,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 use parquet::format::FileMetaData;
+use rand::Rng;
 use sysinfo::get_current_pid;
 use sysinfo::System;
 use uuid::Uuid;
@@ -160,7 +163,46 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, _) = build_test_segment_info(num_block_per_seg)?;
+
+    let sys = System::new_all();
+    let pid = get_current_pid().unwrap();
+    let process = sys.process(pid).unwrap();
+    let base_memory_usage = process.memory();
+    let scenario = format!(
+        "{} SegmentInfo, {} block per seg ",
+        cache_number, num_block_per_seg
+    );
+
+    eprintln!(
+        "scenario {}, pid {}, base memory {}",
+        scenario, pid, base_memory_usage
+    );
+
+    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
+    for _ in 0..cache_number {
+        let uuid = Uuid::new_v4();
+        let block_metas = segment_info
+            .blocks
+            .iter()
+            .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
+            .collect::<Vec<_>>();
+        let statistics = segment_info.summary.clone();
+        let segment_info = SegmentInfo::new(block_metas, statistics);
+        cache.insert(format!("{}", uuid.simple()), segment_info);
+    }
+    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn test_columnar_segment_info_size() -> databend_common_exception::Result<()> {
+    let cache_number = 3000;
+    let num_block_per_seg = 1000;
+
+    let (segment_info, table_schema) = build_test_segment_info(num_block_per_seg)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -180,20 +222,16 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
     {
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
-            let block_metas = segment_info
-                .blocks
-                .iter()
-                .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
-                .collect::<Vec<_>>();
-            let statistics = segment_info.summary.clone();
-            let segment_info = SegmentInfo::new(block_metas, statistics);
             cache.insert(
                 format!("{}", uuid.simple()),
-                CompactSegmentInfo::try_from(segment_info)?,
+                ColumnarSegmentInfo::try_from_segment_info_and_schema(
+                    segment_info.clone(),
+                    &table_schema,
+                )?,
             );
         }
     }
-    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
+    show_memory_usage("ColumnarSegmentInfoCache", base_memory_usage, cache_number);
 
     Ok(())
 }
@@ -205,7 +243,7 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, _) = build_test_segment_info(num_block_per_seg)?;
     let segment_info_bytes = CompactSegmentInfo::try_from(segment_info)?;
 
     let sys = System::new_all();
@@ -245,7 +283,7 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
-    let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let (segment_info, _) = build_test_segment_info(num_block_per_seg)?;
     let segment_raw = CompactSegmentInfo::try_from(&segment_info)?;
 
     let sys = System::new_all();
@@ -280,80 +318,95 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
 
 fn build_test_segment_info(
     num_blocks_per_seg: usize,
-) -> databend_common_exception::Result<SegmentInfo> {
-    let col_meta = ColumnMeta::Parquet(SingleColumnMeta {
-        offset: 0,
-        len: 0,
-        num_values: 0,
-    });
-
-    let col_stat = ColumnStatistics::new(
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
-        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?),
-        0,
-        0,
-        None,
-    );
-
-    let number_col_stat = ColumnStatistics::new(
-        Scalar::Number(NumberScalar::Int32(0)),
-        Scalar::Number(NumberScalar::Int32(0)),
-        0,
-        0,
-        None,
-    );
-
-    // 20 string columns, 5 number columns
+) -> databend_common_exception::Result<(SegmentInfo, TableSchema)> {
+    let mut rng = rand::thread_rng();
     let num_string_columns = 20;
     let num_number_columns = 5;
-    let col_metas = (0..num_string_columns + num_number_columns)
-        .map(|id| (id as ColumnId, col_meta.clone()))
-        .collect::<HashMap<_, _>>();
-
-    assert_eq!(num_number_columns + num_string_columns, col_metas.len());
-
-    let mut col_stats = (0..num_string_columns)
-        .map(|id| (id as ColumnId, col_stat.clone()))
-        .collect::<HashMap<_, _>>();
-    for idx in num_string_columns..num_string_columns + num_number_columns {
-        col_stats.insert(idx as ColumnId, number_col_stat.clone());
-    }
-    assert_eq!(num_number_columns + num_string_columns, col_stats.len());
-
     let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
+    let mut block_metas = Vec::with_capacity(num_blocks_per_seg);
+    for _ in 0..num_blocks_per_seg {
+        let (block_location, block_uuid) = location_gen.gen_block_location();
+        let mut col_stats = HashMap::new();
+        let mut col_metas = HashMap::new();
+        for id in 0..num_string_columns + num_number_columns {
+            col_metas.insert(
+                id as ColumnId,
+                ColumnMeta::Parquet(SingleColumnMeta {
+                    offset: rng.gen_range(0..150 * 1024 * 1024),
+                    len: rng.gen_range(10 * 1024..10 * 1024 * 1024),
+                    num_values: rng.gen_range(100_000..1_000_000),
+                }),
+            );
+        }
+        for id in 0..num_string_columns {
+            col_stats.insert(
+                id as ColumnId,
+                ColumnStatistics::new(
+                    Scalar::String(
+                        (0..STATS_STRING_PREFIX_LEN)
+                            .map(|_| rng.gen_range(b'a'..=b'z') as char)
+                            .collect(),
+                    ),
+                    Scalar::String(
+                        (0..STATS_STRING_PREFIX_LEN)
+                            .map(|_| rng.gen_range(b'a'..=b'z') as char)
+                            .collect(),
+                    ),
+                    rng.gen_range(100_000..1_000_000),
+                    rng.gen_range(100_000..1_000_000),
+                    Some(rng.gen_range(10_000..100_000)),
+                ),
+            );
+        }
+        for id in num_string_columns..num_string_columns + num_number_columns {
+            col_stats.insert(
+                id as ColumnId,
+                ColumnStatistics::new(
+                    Scalar::Number(NumberScalar::Int32(rng.gen_range(-100_000..100_000))),
+                    Scalar::Number(NumberScalar::Int32(rng.gen_range(-100_000..100_000))),
+                    rng.gen_range(100_000..1_000_000),
+                    rng.gen_range(100_000..1_000_000),
+                    Some(rng.gen_range(10_000..100_000)),
+                ),
+            );
+        }
+        assert_eq!(col_metas.len(), num_string_columns + num_number_columns);
+        assert_eq!(col_stats.len(), num_string_columns + num_number_columns);
+        let block_meta = BlockMeta {
+            row_count: rng.gen_range(100_000..1_000_000),
+            block_size: rng.gen_range(50 * 1024 * 1024..150 * 1024 * 1024),
+            file_size: rng.gen_range(10 * 1024 * 1024..50 * 1024 * 1024),
+            col_stats,
+            col_metas,
+            cluster_stats: None,
+            location: block_location,
+            bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
+            bloom_filter_index_size: rng.gen_range(1024 * 1024..5 * 1024 * 1024),
+            inverted_index_size: None,
+            compression: Compression::Lz4,
+            create_on: Some(Utc::now()),
+        };
+        block_metas.push(Arc::new(block_meta));
+    }
 
-    let (block_location, block_uuid) = location_gen.gen_block_location();
-    let block_meta = BlockMeta {
-        row_count: 0,
-        block_size: 0,
-        file_size: 0,
-        col_stats: col_stats.clone(),
-        col_metas,
-        cluster_stats: None,
-        location: block_location,
-        bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
-        bloom_filter_index_size: 0,
-        inverted_index_size: None,
-        compression: Compression::Lz4,
-        create_on: Some(Utc::now()),
-    };
+    let mut fields = vec![];
+    for id in 0..num_string_columns {
+        fields.push(TableField::new(
+            &format!("col_{}", id),
+            TableDataType::String,
+        ));
+    }
+    for id in num_string_columns..num_string_columns + num_number_columns {
+        fields.push(TableField::new(
+            &format!("col_{}", id),
+            TableDataType::Number(NumberDataType::Int32),
+        ));
+    }
+    let table_schema = TableSchema::new(fields);
 
-    let block_metas = (0..num_blocks_per_seg)
-        .map(|_| Arc::new(block_meta.clone()))
-        .collect::<Vec<_>>();
+    let statistics = Statistics::default();
 
-    let statistics = Statistics {
-        row_count: 0,
-        block_count: 0,
-        perfect_block_count: 0,
-        uncompressed_byte_size: 0,
-        compressed_byte_size: 0,
-        index_size: 0,
-        col_stats: col_stats.clone(),
-        cluster_stats: None,
-    };
-
-    Ok(SegmentInfo::new(block_metas, statistics))
+    Ok((SegmentInfo::new(block_metas, statistics), table_schema))
 }
 
 #[allow(dead_code)]

@@ -25,17 +25,41 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
+use crate::pruning::SegmentInfoVariant;
 
 /// Compact segment part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactLazyPartInfo {
     pub segment_indices: Vec<SegmentIndex>,
-    pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
+    pub compact_segments: Vec<SegmentInfoWithoutColumnarBlockMeta>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub enum SegmentInfoWithoutColumnarBlockMeta {
+    Compact(Arc<CompactSegmentInfo>),
+    Columnar(Arc<SegmentInfo>),
+}
+
+impl SegmentInfoWithoutColumnarBlockMeta {
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        match self {
+            SegmentInfoWithoutColumnarBlockMeta::Compact(segment) => segment.block_metas(),
+            SegmentInfoWithoutColumnarBlockMeta::Columnar(segment) => Ok(segment.blocks.clone()),
+        }
+    }
+
+    pub fn summary(&self) -> Statistics {
+        match self {
+            SegmentInfoWithoutColumnarBlockMeta::Compact(segment) => segment.summary.clone(),
+            SegmentInfoWithoutColumnarBlockMeta::Columnar(segment) => segment.summary.clone(),
+        }
+    }
 }
 
 #[typetag::serde(name = "compact_lazy")]
@@ -64,11 +88,26 @@ impl PartInfo for CompactLazyPartInfo {
 impl CompactLazyPartInfo {
     pub fn create(
         segment_indices: Vec<SegmentIndex>,
-        compact_segments: Vec<Arc<CompactSegmentInfo>>,
+        compact_segments: Vec<SegmentInfoVariant>,
     ) -> PartInfoPtr {
+        let segments = compact_segments
+            .into_iter()
+            .map(|segment| match segment {
+                SegmentInfoVariant::Compact(segment) => {
+                    SegmentInfoWithoutColumnarBlockMeta::Compact(segment)
+                }
+                SegmentInfoVariant::Columnar(segment) => {
+                    // columnar_block_metas is not needed for compact task since pruning has done
+                    // so it is dropped here.
+                    SegmentInfoWithoutColumnarBlockMeta::Columnar(Arc::new(
+                        segment.to_lite_segment_info(),
+                    ))
+                }
+            })
+            .collect();
         Arc::new(Box::new(CompactLazyPartInfo {
             segment_indices,
-            compact_segments,
+            compact_segments: segments,
         }))
     }
 }

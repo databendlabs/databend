@@ -27,6 +27,7 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
@@ -50,6 +51,12 @@ use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
+
+type BlockMetas<'a> = &'a [(
+    Option<BlockMetaIndex>,
+    Arc<BlockMeta>,
+    Option<HashMap<ColumnId, ColumnStatistics>>,
+)];
 
 impl FuseTable {
     #[fastrace::trace]
@@ -211,7 +218,7 @@ impl FuseTable {
             )?
         };
         let block_metas = pruner.read_pruning(segments_location).await?;
-        let pruning_stats = pruner.pruning_stats();
+        let pruning_stats: PruningStatistics = pruner.pruning_stats();
 
         info!(
             "prune snapshot block end, final block numbers:{}, cost:{:?}",
@@ -221,7 +228,9 @@ impl FuseTable {
 
         let block_metas = block_metas
             .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .map(|(block_meta_index, block_meta, col_stats)| {
+                (Some(block_meta_index), block_meta, col_stats)
+            })
             .collect::<Vec<_>>();
 
         let schema = self.schema_with_stream();
@@ -247,7 +256,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
-        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        block_metas: BlockMetas,
         partitions_total: usize,
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
@@ -282,7 +291,7 @@ impl FuseTable {
 
     pub fn to_partitions(
         schema: Option<&TableSchemaRef>,
-        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        block_metas: BlockMetas,
         column_nodes: &ColumnNodes,
         top_k: Option<(TopK, Scalar)>,
         push_downs: Option<PushDownInfo>,
@@ -305,26 +314,26 @@ impl FuseTable {
             };
             if top_k.asc {
                 block_metas.sort_by(|a, b| {
-                    let a =
-                        a.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    let b =
-                        b.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
+                    let a_col_stats = a.2.as_ref().unwrap_or(&a.1.col_stats);
+                    let b_col_stats = b.2.as_ref().unwrap_or(&b.1.col_stats);
+                    let a = a_col_stats
+                        .get(&top_k.field.column_id)
+                        .unwrap_or(&default_stats);
+                    let b = b_col_stats
+                        .get(&top_k.field.column_id)
+                        .unwrap_or(&default_stats);
                     (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
                 });
             } else {
                 block_metas.sort_by(|a, b| {
-                    let a =
-                        a.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    let b =
-                        b.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
+                    let a_col_stats = a.2.as_ref().unwrap_or(&a.1.col_stats);
+                    let b_col_stats = b.2.as_ref().unwrap_or(&b.1.col_stats);
+                    let a = a_col_stats
+                        .get(&top_k.field.column_id)
+                        .unwrap_or(&default_stats);
+                    let b = b_col_stats
+                        .get(&top_k.field.column_id)
+                        .unwrap_or(&default_stats);
                     (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
                 });
             }
@@ -360,7 +369,7 @@ impl FuseTable {
 
     fn all_columns_partitions(
         schema: Option<&TableSchemaRef>,
-        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        block_metas: BlockMetas,
         top_k: Option<(TopK, Scalar)>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
@@ -372,13 +381,14 @@ impl FuseTable {
         }
 
         let mut remaining = limit;
-        for (block_meta_index, block_meta) in block_metas.iter() {
+        for (block_meta_index, block_meta, col_stats) in block_metas.iter() {
             let rows = block_meta.row_count as usize;
             partitions.partitions.push(Self::all_columns_part(
                 schema,
                 block_meta_index,
                 &top_k,
                 block_meta,
+                col_stats,
             ));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
@@ -398,7 +408,7 @@ impl FuseTable {
     }
 
     fn projection_partitions(
-        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        block_metas: BlockMetas,
         column_nodes: &ColumnNodes,
         projection: &Projection,
         top_k: Option<(TopK, Scalar)>,
@@ -414,9 +424,10 @@ impl FuseTable {
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         let mut remaining = limit;
 
-        for (block_meta_index, block_meta) in block_metas.iter() {
+        for (block_meta_index, block_meta, col_stats) in block_metas.iter() {
             partitions.partitions.push(Self::projection_part(
                 block_meta,
+                col_stats,
                 block_meta_index,
                 column_nodes,
                 top_k.clone(),
@@ -454,9 +465,11 @@ impl FuseTable {
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<(TopK, Scalar)>,
         meta: &BlockMeta,
+        col_stats: &Option<HashMap<ColumnId, ColumnStatistics>>,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
+        let col_stats = col_stats.as_ref().unwrap_or(&meta.col_stats);
 
         for column_id in meta.col_metas.keys() {
             // ignore all deleted field
@@ -471,7 +484,7 @@ impl FuseTable {
                 columns_meta.insert(*column_id, meta.clone());
             }
 
-            if let Some(stat) = meta.col_stats.get(column_id) {
+            if let Some(stat) = col_stats.get(column_id) {
                 columns_stats.insert(*column_id, stat.clone());
             }
         }
@@ -481,7 +494,7 @@ impl FuseTable {
         let create_on = meta.create_on;
 
         let sort_min_max = top_k.as_ref().map(|(top_k, default)| {
-            meta.col_stats
+            col_stats
                 .get(&top_k.field.column_id)
                 .map(|stat| (stat.min().clone(), stat.max().clone()))
                 .unwrap_or((default.clone(), default.clone()))
@@ -501,6 +514,7 @@ impl FuseTable {
 
     pub(crate) fn projection_part(
         meta: &BlockMeta,
+        col_stats: &Option<HashMap<ColumnId, ColumnStatistics>>,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,
         top_k: Option<(TopK, Scalar)>,
@@ -508,6 +522,7 @@ impl FuseTable {
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
         let mut columns_stat = HashMap::with_capacity(projection.len());
+        let col_stats = col_stats.as_ref().unwrap_or(&meta.col_stats);
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
@@ -516,7 +531,7 @@ impl FuseTable {
                 if let Some(column_meta) = meta.col_metas.get(column_id) {
                     columns_meta.insert(*column_id, column_meta.clone());
                 }
-                if let Some(column_stat) = meta.col_stats.get(column_id) {
+                if let Some(column_stat) = col_stats.get(column_id) {
                     columns_stat.insert(*column_id, column_stat.clone());
                 }
             }

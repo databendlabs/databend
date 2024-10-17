@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod columnar_segment;
 mod segment;
 mod snapshot;
 
+pub use columnar_segment::ColumnarBlockMeta;
+pub use columnar_segment::ColumnarSegmentInfo;
 pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;

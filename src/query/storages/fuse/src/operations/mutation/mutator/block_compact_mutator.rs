@@ -46,6 +46,8 @@ use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::CompactOptions;
+use crate::operations::SegmentInfoWithoutColumnarBlockMeta;
+use crate::pruning::SegmentInfoVariant;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
 use crate::TableContext;
@@ -146,7 +148,8 @@ impl BlockCompactMutator {
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold)
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
-                let segments_vec = checker.add(segment_idx, compact_segment);
+                let segment_info = SegmentInfoVariant::Compact(compact_segment);
+                let segments_vec = checker.add(segment_idx, segment_info);
                 for segments in segments_vec {
                     checker.generate_part(segments, &mut parts);
                 }
@@ -294,7 +297,7 @@ impl BlockCompactMutator {
 }
 
 pub struct SegmentCompactChecker {
-    segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
+    segments: Vec<(SegmentIndex, SegmentInfoVariant)>,
     total_block_count: u64,
     block_threshold: u64,
     cluster_key_id: Option<u32>,
@@ -315,13 +318,13 @@ impl SegmentCompactChecker {
         }
     }
 
-    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<CompactSegmentInfo>)]) -> bool {
+    fn check_for_compact(&mut self, segments: &[(SegmentIndex, SegmentInfoVariant)]) -> bool {
         if segments.is_empty() {
             return false;
         }
 
         if segments.len() == 1 {
-            let summary = &segments[0].1.summary;
+            let summary = &segments[0].1.summary();
             if (summary.block_count == 1 || summary.perfect_block_count == summary.block_count)
                 && (self.cluster_key_id.is_none()
                     || self.cluster_key_id
@@ -334,16 +337,16 @@ impl SegmentCompactChecker {
         self.compacted_segment_cnt += segments.len();
         self.compacted_block_cnt += segments
             .iter()
-            .fold(0, |acc, x| acc + x.1.summary.block_count);
+            .fold(0, |acc, x| acc + x.1.summary().block_count);
         true
     }
 
     pub fn add(
         &mut self,
         idx: SegmentIndex,
-        segment: Arc<CompactSegmentInfo>,
-    ) -> Vec<Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>> {
-        self.total_block_count += segment.summary.block_count;
+        segment: SegmentInfoVariant,
+    ) -> Vec<Vec<(SegmentIndex, SegmentInfoVariant)>> {
+        self.total_block_count += segment.summary().block_count;
         if self.total_block_count < self.block_threshold {
             self.segments.push((idx, segment));
             return vec![];
@@ -366,7 +369,7 @@ impl SegmentCompactChecker {
 
     pub fn generate_part(
         &mut self,
-        segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
+        segments: Vec<(SegmentIndex, SegmentInfoVariant)>,
         parts: &mut Vec<PartInfoPtr>,
     ) {
         if !segments.is_empty() && self.check_for_compact(&segments) {
@@ -392,7 +395,7 @@ impl SegmentCompactChecker {
         let residual_block_cnt = self
             .segments
             .iter()
-            .fold(0, |acc, e| acc + e.1.summary.block_count);
+            .fold(0, |acc, e| acc + e.1.summary().block_count);
         self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
             || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
     }
@@ -508,7 +511,7 @@ impl CompactTaskBuilder {
     async fn build_tasks(
         &mut self,
         segment_indices: Vec<usize>,
-        compact_segments: Vec<Arc<CompactSegmentInfo>>,
+        compact_segments: Vec<SegmentInfoWithoutColumnarBlockMeta>,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PartInfoPtr>> {
         let mut block_idx = 0;
@@ -524,7 +527,7 @@ impl CompactTaskBuilder {
             let handler = runtime.spawn(async move {
                 let blocks = segment.block_metas()?;
                 drop(permit);
-                Ok::<_, ErrorCode>((blocks, segment.summary.clone()))
+                Ok::<_, ErrorCode>((blocks, segment.summary().clone()))
             });
             handlers.push(handler);
         }

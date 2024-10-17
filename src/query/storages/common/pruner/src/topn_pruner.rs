@@ -12,16 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::BlockMetaIndex;
+
+pub type PruneResult = Vec<(
+    BlockMetaIndex,
+    Arc<BlockMeta>,
+    Option<HashMap<ColumnId, ColumnStatistics>>,
+)>;
 
 /// TopN pruner.
 /// Pruning for order by x limit N.
@@ -46,10 +55,7 @@ impl TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub fn prune(
-        &self,
-        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+    pub fn prune(&self, metas: PruneResult) -> Result<PruneResult> {
         if self.sort.len() != 1 {
             return Ok(metas);
         }
@@ -82,15 +88,21 @@ impl TopNPrunner {
         }
 
         let mut id_stats = metas
-            .iter()
-            .map(|(id, meta)| {
-                let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
-                    ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {}",
-                        sort_column_id
-                    ))
-                })?;
-                Ok((id.clone(), stat.clone(), meta.clone()))
+            .into_iter()
+            .map(|(id, meta, col_stats)| {
+                let stat = col_stats
+                    .as_ref()
+                    .and_then(|col_stats| col_stats.get(&sort_column_id));
+                let stat = match stat {
+                    Some(stat) => stat,
+                    None => meta.col_stats.get(&sort_column_id).ok_or_else(|| {
+                        ErrorCode::UnknownException(format!(
+                            "Unable to get the colStats by ColumnId: {}",
+                            sort_column_id
+                        ))
+                    })?,
+                };
+                Ok((id, stat.clone(), meta, col_stats))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -106,8 +118,8 @@ impl TopNPrunner {
             }
         });
         Ok(id_stats
-            .iter()
-            .map(|s| (s.0.clone(), s.2.clone()))
+            .into_iter()
+            .map(|s| (s.0.clone(), s.2.clone(), s.3))
             .take(self.limit)
             .collect())
     }

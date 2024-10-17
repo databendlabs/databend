@@ -218,6 +218,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             let part_info = FuseTable::projection_part(
                 block_meta,
                 &None,
+                &None,
                 &column_nodes,
                 None,
                 &self.projection,

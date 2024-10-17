@@ -17,8 +17,15 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Statistics;
+use opendal::Operator;
 
+use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
@@ -43,7 +50,7 @@ impl SegmentPruner {
     pub async fn pruning(
         &self,
         segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+    ) -> Result<Vec<(SegmentLocation, SegmentInfoVariant)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
         }
@@ -54,15 +61,18 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = SegmentsIO::read_compact_segment(
+            let info = SegmentInfoVariant::read(
                 self.pruning_ctx.dal.clone(),
                 segment_location.location.clone(),
                 self.table_schema.clone(),
                 true,
+                self.pruning_ctx
+                    .ctx
+                    .get_settings()
+                    .get_enable_columnar_segment_info()?,
             )
             .await?;
-
-            let total_bytes = info.summary.uncompressed_byte_size;
+            let total_bytes = info.summary().uncompressed_byte_size;
             // Perf.
             {
                 metrics_inc_segments_range_pruning_before(1);
@@ -71,7 +81,7 @@ impl SegmentPruner {
                 pruning_stats.set_segments_range_pruning_before(1);
             }
 
-            if range_pruner.should_keep(&info.summary.col_stats, None) {
+            if range_pruner.should_keep(&info.summary().col_stats, None) {
                 // Perf.
                 {
                     metrics_inc_segments_range_pruning_after(1);
@@ -84,5 +94,53 @@ impl SegmentPruner {
             }
         }
         Ok(res)
+    }
+}
+
+#[derive(Clone)]
+pub enum SegmentInfoVariant {
+    Compact(Arc<CompactSegmentInfo>),
+    Columnar(Arc<ColumnarSegmentInfo>),
+}
+
+impl SegmentInfoVariant {
+    pub async fn read(
+        op: Operator,
+        location: Location,
+        table_schema: TableSchemaRef,
+        enable_columnar_segment_info: bool,
+        put_cache: bool,
+    ) -> Result<Self> {
+        if enable_columnar_segment_info {
+            let (path, ver) = location;
+            let reader = MetaReaders::columnar_segment_info_reader(op, table_schema);
+
+            let load_params = LoadParams {
+                location: path,
+                len_hint: None,
+                ver,
+                put_cache,
+            };
+
+            let info = reader.read(&load_params).await?;
+            Ok(SegmentInfoVariant::Columnar(info))
+        } else {
+            let info = SegmentsIO::read_compact_segment(op, location, table_schema, true).await?;
+            Ok(SegmentInfoVariant::Compact(info))
+        }
+    }
+
+    pub fn summary(&self) -> &Statistics {
+        match self {
+            SegmentInfoVariant::Compact(info) => &info.summary,
+            SegmentInfoVariant::Columnar(info) => &info.summary,
+        }
+    }
+
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        match self {
+            SegmentInfoVariant::Compact(info) => info.block_metas(),
+            SegmentInfoVariant::Columnar(info) => Ok(info.block_metas.clone()),
+        }
     }
 }

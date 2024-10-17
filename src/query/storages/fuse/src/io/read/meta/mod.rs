@@ -14,6 +14,7 @@
 
 mod meta_readers;
 
+pub use meta_readers::ColumnarSegmentInfoReader;
 pub use meta_readers::CompactSegmentInfoReader;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::TableSnapshotReader;
