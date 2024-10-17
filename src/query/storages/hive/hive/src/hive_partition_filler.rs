@@ -51,29 +51,4 @@ impl HivePartitionFiller {
         }
         Ok(partition_values)
     }
-
-    // pub fn fill_data(
-    //     &self,
-    //     data_block: DataBlock,
-    //     part: &HivePartInfo,
-    //     origin_num_rows: usize,
-    // ) -> Result<DataBlock> {
-    //     let data_values = self.extract_partition_values(part)?;
-
-    //     // create column, create datafield
-    //     let mut num_rows = data_block.num_rows();
-    //     if num_rows == 0 {
-    //         num_rows = origin_num_rows;
-    //     }
-
-    //     let mut columns = data_block.columns().to_vec();
-
-    //     for (i, field) in self.partition_fields.iter().enumerate() {
-    //         let value = &data_values[i];
-    //         let column = self.generate_value(num_rows, value.clone(), field)?;
-    //         columns.push(BlockEntry::new(field.data_type().into(), column));
-    //     }
-
-    //     Ok(DataBlock::new(columns, num_rows))
-    // }
 }
