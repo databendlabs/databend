@@ -19,9 +19,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::EmptySink;
+use databend_common_sql::binder::SubqueryExecutor;
 use databend_common_sql::optimizer::QuerySampleExecutor;
+use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 
+use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -142,5 +145,17 @@ impl QuerySampleExecutor for ServiceQueryExecutor {
         PullingExecutorStream::create(pulling_executor)?
             .try_collect::<Vec<DataBlock>>()
             .await
+    }
+}
+
+#[async_trait]
+impl SubqueryExecutor for ServiceQueryExecutor {
+    async fn execute_query(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _) = planner.plan_sql(query_sql).await?;
+        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
+        let stream = interpreter.execute(self.ctx.clone()).await?;
+        let blocks = stream.try_collect::<Vec<_>>().await?;
+        Ok(blocks)
     }
 }

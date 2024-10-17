@@ -534,16 +534,29 @@ impl Display for TimeTravelPoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum PivotValues {
+    ColumnValues(Vec<Expr>),
+    Subquery(Box<Query>),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Pivot {
     pub aggregate: Expr,
     pub value_column: Identifier,
-    pub values: Vec<Expr>,
+    pub values: PivotValues,
 }
 
 impl Display for Pivot {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
-        write_comma_separated_list(f, &self.values)?;
+        match &self.values {
+            PivotValues::ColumnValues(column_values) => {
+                write_comma_separated_list(f, column_values)?;
+            }
+            PivotValues::Subquery(subquery) => {
+                write!(f, "{}", subquery)?;
+            }
+        }
         write!(f, "))")?;
         Ok(())
     }
@@ -740,6 +753,8 @@ pub enum TableReference {
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     Join {
         span: Span,
@@ -757,6 +772,7 @@ impl TableReference {
     pub fn pivot(&self) -> Option<&Pivot> {
         match self {
             TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
+            TableReference::Subquery { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
@@ -764,6 +780,7 @@ impl TableReference {
     pub fn unpivot(&self) -> Option<&Unpivot> {
         match self {
             TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
+            TableReference::Subquery { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
@@ -862,6 +879,8 @@ impl Display for TableReference {
                 lateral,
                 subquery,
                 alias,
+                pivot,
+                unpivot,
             } => {
                 if *lateral {
                     write!(f, "LATERAL ")?;
@@ -869,6 +888,14 @@ impl Display for TableReference {
                 write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+
+                if let Some(pivot) = pivot {
+                    write!(f, " {pivot}")?;
+                }
+
+                if let Some(unpivot) = unpivot {
+                    write!(f, " {unpivot}")?;
                 }
             }
             TableReference::Join { span: _, join } => {
