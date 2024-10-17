@@ -78,7 +78,7 @@ use crate::types::number::F64;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
-use crate::types::timestamp::check_timestamp;
+use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::types::variant::JSONB_NULL;
@@ -2055,8 +2055,8 @@ impl ColumnBuilder {
                 string::CheckUTF8::check_utf8(&(&builder.data[last..last + offset])).unwrap();
             }
             ColumnBuilder::Timestamp(builder) => {
-                let value: i64 = reader.read_scalar()?;
-                check_timestamp(value)?;
+                let mut value: i64 = reader.read_scalar()?;
+                clamp_timestamp(&mut value);
                 builder.push(value);
             }
             ColumnBuilder::Date(builder) => {
@@ -2157,8 +2157,8 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
-                    let value: i64 = reader.read_scalar()?;
-                    check_timestamp(value)?;
+                    let mut value: i64 = reader.read_scalar()?;
+                    clamp_timestamp(&mut value);
                     builder.push(value);
                 }
             }

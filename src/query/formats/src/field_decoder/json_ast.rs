@@ -23,14 +23,14 @@ use databend_common_expression::serialize::read_decimal_from_json;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
@@ -266,14 +266,12 @@ impl FieldJsonAstDecoder {
                 let mut reader = Cursor::new(v.as_bytes());
                 let date = reader.read_date_text(&self.timezone, self.enable_dst_hour_fix)?;
                 let days = uniform_date(date);
-                check_date(days as i64)?;
-                column.push(days);
+                column.push(clamp_date(days as i64));
                 Ok(())
             }
             Value::Number(number) => match number.as_i64() {
                 Some(n) => {
-                    let n = check_date(n)?;
-                    column.push(n);
+                    column.push(clamp_date(n));
                     Ok(())
                 }
                 None => Err(ErrorCode::BadArguments("Incorrect date value")),
@@ -292,8 +290,8 @@ impl FieldJsonAstDecoder {
 
                 match ts {
                     DateTimeResType::Datetime(ts) => {
-                        let micros = ts.timestamp_micros();
-                        check_timestamp(micros)?;
+                        let mut micros = ts.timestamp_micros();
+                        clamp_timestamp(&mut micros);
                         column.push(micros.as_());
                     }
                     _ => unreachable!(),
@@ -301,8 +299,8 @@ impl FieldJsonAstDecoder {
                 Ok(())
             }
             Value::Number(number) => match number.as_i64() {
-                Some(n) => {
-                    check_timestamp(n)?;
+                Some(mut n) => {
+                    clamp_timestamp(&mut n);
                     column.push(n);
                     Ok(())
                 }

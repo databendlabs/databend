@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use log::error;
 
 use super::number::SimpleDomain;
 use crate::property::Domain;
@@ -53,12 +54,12 @@ pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
 
 /// Check if the timestamp value is valid.
+/// If timestamp is invalid convert to TIMESTAMP_MIN.
 #[inline]
-pub fn check_timestamp(micros: i64) -> Result<i64, String> {
-    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
-        Ok(micros)
-    } else {
-        Err("timestamp is out of range".to_string())
+pub fn clamp_timestamp(micros: &mut i64) {
+    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
+        error!("{}", format!("timestamp {} is out of range", micros));
+        *micros = TIMESTAMP_MIN;
     }
 }
 
