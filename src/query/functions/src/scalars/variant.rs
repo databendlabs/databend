@@ -1656,17 +1656,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
         if args_type.len() == 4 {
-            if (args_type[3].remove_nullable() != DataType::Boolean && args_type[3] != DataType::Null) {
+            if args_type[3].remove_nullable() != DataType::Boolean && args_type[3] != DataType::Null
+            {
                 return None;
             }
         }
-        let is_nullable = args_type[0].is_nullable_or_null() {
-        let return_type = is_nullable {
+        let is_nullable = args_type[0].is_nullable_or_null();
+        let return_type = if is_nullable {
             DataType::Nullable(Box::new(DataType::Variant))
         } else {
             DataType::Variant
         };
-
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "json_object_insert".to_string(),
@@ -1675,7 +1675,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| json_object_insert_fn(args, ctx, is_nullable)),
+                eval: Box::new(move |args, ctx| json_object_insert_fn(args, ctx, is_nullable)),
             },
         }))
     });
@@ -2065,22 +2065,35 @@ fn json_object_insert_fn(
     let mut validity = MutableBitmap::with_capacity(len);
     let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
     for idx in 0..len {
-        let value = unsafe { columns[0].index_unchecked(idx) };
+        let value = match &args[0] {
+            ValueRef::Scalar(scalar) => scalar.clone(),
+            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+        };
         if value == ScalarRef::Null {
             builder.commit_row();
             validity.push(false);
             continue;
         }
-        let new_key = unsafe { columns[1].index_unchecked(idx) };
-        let new_val = unsafe { columns[2].index_unchecked(idx) };
+        let value = value.as_variant().unwrap();
+        let new_key = match &args[1] {
+            ValueRef::Scalar(scalar) => scalar.clone(),
+            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+        };
+        let new_val = match &args[2] {
+            ValueRef::Scalar(scalar) => scalar.clone(),
+            ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+        };
         if new_key == ScalarRef::Null || new_val == ScalarRef::Null {
-            builder.push(value)
+            builder.put(value);
             builder.commit_row();
             validity.push(true);
             continue;
         }
         let update_flag = if args.len() == 4 {
-            let v = unsafe { columns[3].index_unchecked(idx) };
+            let v = match &args[3] {
+                ValueRef::Scalar(scalar) => scalar.clone(),
+                ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+            };
             match v {
                 ScalarRef::Boolean(v) => v,
                 _ => false,
@@ -2088,7 +2101,6 @@ fn json_object_insert_fn(
         } else {
             false
         };
-        let value = value.as_variant().unwrap();
         let new_key = new_key.as_string().unwrap();
         match new_val {
             ScalarRef::Variant(new_val) => {
@@ -2101,9 +2113,13 @@ fn json_object_insert_fn(
             _ => {
                 let mut new_val_buf = vec![];
                 cast_scalar_to_variant(new_val, ctx.func_ctx.tz, &mut new_val_buf);
-                if let Err(err) =
-                    jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
-                {
+                if let Err(err) = jsonb::object_insert(
+                    value,
+                    new_key,
+                    &new_val_buf,
+                    update_flag,
+                    &mut builder.data,
+                ) {
                     ctx.set_error(builder.len(), err.to_string());
                 }
             }
@@ -2114,7 +2130,9 @@ fn json_object_insert_fn(
     if is_nullable {
         let validity: Bitmap = validity.into();
         match len_opt {
-            Some(_) => Value::Column(Column::Variant(builder.build())).wrap_nullable(Some(validity)),
+            Some(_) => {
+                Value::Column(Column::Variant(builder.build())).wrap_nullable(Some(validity))
+            }
             None => {
                 if !validity.get_bit(0) {
                     Value::Scalar(Scalar::Null)
@@ -2130,7 +2148,6 @@ fn json_object_insert_fn(
         }
     }
 }
-
 
 // Extract string for string type, other types convert to JSON string.
 fn cast_to_string(v: &[u8]) -> String {
