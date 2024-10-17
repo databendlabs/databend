@@ -848,7 +848,11 @@ impl TestFixture {
             data_schema,
         )?;
 
-        table.append_data(ctx.clone(), &mut build_res.main_pipeline)?;
+        table.append_data(
+            ctx.clone(),
+            &mut build_res.main_pipeline,
+            Default::default(),
+        )?;
         if commit {
             table.commit_insertion(
                 ctx.clone(),
@@ -858,6 +862,7 @@ impl TestFixture {
                 overwrite,
                 None,
                 None,
+                Default::default(),
             )?;
         } else {
             build_res
