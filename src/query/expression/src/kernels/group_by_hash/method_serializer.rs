@@ -62,8 +62,8 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Column(Column::Binary(col)) => {
-                let (data, offsets) = col.into_buffer();
-                Ok(Box::new(BinaryKeyAccessor::new(data, offsets)))
+                let data = col.into_inner();
+                Ok(Box::new(BinaryKeyAccessor::new(data)))
             }
             _ => unreachable!(),
         }

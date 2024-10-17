@@ -1171,12 +1171,6 @@ impl Column {
 
     pub fn check_valid(&self) -> Result<()> {
         match self {
-            Column::Binary(x) => x.check_valid(),
-            Column::String(x) => x.check_valid(),
-            Column::Variant(x) => x.check_valid(),
-            Column::Geometry(x) => x.check_valid(),
-            Column::Geography(x) => x.check_valid(),
-            Column::Bitmap(x) => x.check_valid(),
             Column::Map(x) => {
                 for y in x.iter() {
                     y.check_valid()?;
@@ -1665,8 +1659,8 @@ impl ColumnBuilder {
                 builder.len() * 32
             }
             ColumnBuilder::Boolean(c) => c.as_slice().len(),
-            ColumnBuilder::Binary(col) => col.data.len() + col.offsets.len() * 8,
-            ColumnBuilder::String(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Binary(col) => col.memory_size(),
+            ColumnBuilder::String(col) => col.memory_size(),
             ColumnBuilder::Timestamp(col) => col.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
@@ -2045,6 +2039,7 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::String(builder) => {
+                let builder = builder.as_inner_mut();
                 let offset = reader.read_scalar::<u64>()? as usize;
                 builder.data.resize(offset + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;

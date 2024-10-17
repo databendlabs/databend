@@ -127,7 +127,7 @@ pub fn run_scatter(file: &mut impl Write, block: &DataBlock, indices: &[u32], sc
 }
 
 pub fn run_take(file: &mut impl Write, indices: &[u32], block: &DataBlock) {
-    let result = DataBlock::take(block, indices, &mut None);
+    let result = DataBlock::take(block, indices);
 
     match result {
         Ok(result_block) => {

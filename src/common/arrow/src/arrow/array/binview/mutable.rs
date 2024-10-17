@@ -41,9 +41,9 @@ pub struct MutableBinaryViewArray<T: ViewType + ?Sized> {
     pub(super) validity: Option<MutableBitmap>,
     pub(super) phantom: std::marker::PhantomData<T>,
     /// Total bytes length if we would concatenate them all.
-    pub(super) total_bytes_len: usize,
+    pub total_bytes_len: usize,
     /// Total bytes in the buffer (excluding remaining capacity)
-    pub(super) total_buffer_len: usize,
+    pub total_buffer_len: usize,
 }
 
 impl<T: ViewType + ?Sized> Clone for MutableBinaryViewArray<T> {

@@ -242,11 +242,7 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if probe_state.is_probe_projected {
-            let probe_block = DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.string_items_buf,
-            )?;
+            let probe_block = DataBlock::take(input, &probe_indexes[0..matched_idx])?;
 
             // The join type is right join, we need to wrap nullable for probe side.
             let nullable_columns = probe_block
@@ -264,7 +260,6 @@ impl HashJoinProbeState {
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,
                 &build_state.build_num_rows,
-                &mut probe_state.string_items_buf,
             )?)
         } else {
             None

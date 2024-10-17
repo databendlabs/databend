@@ -33,24 +33,9 @@ impl DataBlock {
 
         let scatter_indices = Self::divide_indices_by_scatter_size(indices, scatter_size);
 
-        let has_string_column = self
-            .columns()
-            .iter()
-            .any(|col| col.data_type.is_string_column());
-        let mut string_items_buf = if has_string_column {
-            let max_num_rows = scatter_indices
-                .iter()
-                .map(|indices| indices.len())
-                .max()
-                .unwrap();
-            Some(vec![(0, 0); max_num_rows])
-        } else {
-            None
-        };
-
         let mut results = Vec::with_capacity(scatter_size);
         for indices in scatter_indices.iter().take(scatter_size) {
-            let block = self.take(indices, &mut string_items_buf)?;
+            let block = self.take(indices)?;
             results.push(block);
         }
 

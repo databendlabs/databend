@@ -22,6 +22,7 @@ use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::error_to_null;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float32Type;
@@ -232,16 +233,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         "gen_random_uuid",
         |_| FunctionDomain::Full,
         |ctx| {
-            let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
-            let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
-            offsets.push(0);
+            let mut builder = BinaryColumnBuilder::with_capacity(ctx.num_rows, 0);
 
             for _ in 0..ctx.num_rows {
                 let value = Uuid::new_v4();
-                offsets.push(offsets.last().unwrap() + 36u64);
-                write!(&mut values, "{:x}", value).unwrap();
+                write!(&mut builder.data, "{}", value).unwrap();
             }
-            let col = StringColumn::new(values.into(), offsets.into());
+
+            let col = StringColumn::try_from(builder.build()).unwrap();
             Value::Column(col)
         },
     );
