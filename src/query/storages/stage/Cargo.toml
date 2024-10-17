@@ -44,8 +44,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
 
-uuid = { workspace = true }
-
 [build-dependencies]
 databend-common-building = { workspace = true }
 
