@@ -38,14 +38,14 @@ impl StageTable {
         let max_threads = settings.get_max_threads()? as usize;
 
         let op = StageTable::get_op(&self.table_info.stage_info)?;
-        let uuid = uuid::Uuid::new_v4().to_string();
+        let query_id = ctx.get_id();
         let group_id = AtomicUsize::new(0);
         match fmt {
             FileFormatParams::Parquet(_) => append_data_to_parquet_files(
                 pipeline,
                 self.table_info.clone(),
                 op,
-                uuid,
+                query_id,
                 &group_id,
                 mem_limit,
                 max_threads,
@@ -55,13 +55,13 @@ impl StageTable {
                 ctx.clone(),
                 self.table_info.clone(),
                 op,
-                uuid,
+                query_id,
                 &group_id,
                 mem_limit,
                 max_threads,
             )?,
         };
-        if !self.table_info.stage_info.copy_options.detailed_output {
+        if !self.table_info.copy_into_location_options.detailed_output {
             pipeline.try_resize(1)?;
             pipeline.add_accumulating_transformer(SumSummaryTransform::default);
         }

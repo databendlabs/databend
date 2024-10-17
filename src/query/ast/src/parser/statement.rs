@@ -366,11 +366,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let unset_stmt = map(
         rule! {
-            UNSET ~ #unset_type ~ #unset_source
+            UNSET ~ #set_type ~ #unset_source
         },
         |(_, unset_type, identifiers)| Statement::UnSetStmt {
-            unset_type,
-            identifiers,
+            settings: Settings {
+                set_type: unset_type,
+                identifiers,
+                values: SetValues::None,
+            },
         },
     );
 
@@ -404,9 +407,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 SET ~ #set_type ~ #ident ~ "=" ~ #subexpr(0)
             },
             |(_, set_type, var, _, value)| Statement::SetStmt {
-                set_type,
-                identifiers: vec![var],
-                values: SetValues::Expr(vec![Box::new(value)]),
+                settings: Settings {
+                    set_type,
+                    identifiers: vec![var],
+                    values: SetValues::Expr(vec![Box::new(value)]),
+                },
             },
         ),
         map_res(
@@ -417,9 +422,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             |(_, set_type, _, ids, _, _, _, values, _)| {
                 if ids.len() == values.len() {
                     Ok(Statement::SetStmt {
-                        set_type,
-                        identifiers: ids,
-                        values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                        settings: Settings {
+                            set_type,
+                            identifiers: ids,
+                            values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                        },
                     })
                 } else {
                     Err(nom::Err::Failure(ErrorKind::Other(
@@ -433,9 +440,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 SET ~ #set_type ~ #ident ~ "=" ~ #query
             },
             |(_, set_type, var, _, query)| Statement::SetStmt {
-                set_type,
-                identifiers: vec![var],
-                values: SetValues::Query(Box::new(query)),
+                settings: Settings {
+                    set_type,
+                    identifiers: vec![var],
+                    values: SetValues::Query(Box::new(query)),
+                },
             },
         ),
         map(
@@ -443,9 +452,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
             },
             |(_, set_type, _, vars, _, _, query)| Statement::SetStmt {
-                set_type,
-                identifiers: vars,
-                values: SetValues::Query(Box::new(query)),
+                settings: Settings {
+                    set_type,
+                    identifiers: vars,
+                    values: SetValues::Query(Box::new(query)),
+                },
             },
         ),
     ));

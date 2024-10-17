@@ -243,13 +243,17 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             graphical,
             plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
-        Plan::CopyIntoLocation(CopyIntoLocationPlan { stage, path, from }) => {
-            Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
-                stage,
-                path,
-                from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
-            }))
-        }
+        Plan::CopyIntoLocation(CopyIntoLocationPlan {
+            stage,
+            path,
+            from,
+            options,
+        }) => Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
+            stage,
+            path,
+            from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
+            options,
+        })),
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
             plan.enable_distributed = opt_ctx.enable_distributed_optimization
                 && opt_ctx

@@ -34,7 +34,12 @@ statement ok
 create or replace table t as select number as a from numbers(10000000);
 
 query I
-select count(distinct a) < 10000000 from t sample block(50);
+select count(a) < 10000000 from t sample block(50);
+----
+1
+
+query I
+select count(a) < 10000000 from t sample block(50) row(10);
 ----
 1
 

@@ -693,6 +693,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
+    INCLUDE_QUERY_ID,
     #[token("INCREMENTAL", ignore(ascii_case))]
     INCREMENTAL,
     #[token("INDEX", ignore(ascii_case))]
@@ -1074,6 +1076,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("USE_RAW_PATH", ignore(ascii_case))]
+    USE_RAW_PATH,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
