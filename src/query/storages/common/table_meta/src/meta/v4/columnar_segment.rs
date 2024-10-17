@@ -69,7 +69,7 @@ impl ColumnarSegmentInfo {
         schema: &TableSchema,
     ) -> std::result::Result<Self, ErrorCode> {
         let block_metas = Self::build_lite_block_metas(&value.blocks)?;
-        let columnar_block_metas = Self::block_metas_to_columnar(&block_metas, schema)?;
+        let columnar_block_metas = Self::block_metas_to_columnar(&value.blocks, schema)?;
         Ok(Self {
             format_version: value.format_version,
             summary: value.summary,
