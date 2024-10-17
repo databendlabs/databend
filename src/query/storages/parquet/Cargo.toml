@@ -29,6 +29,7 @@ databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }

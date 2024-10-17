@@ -85,8 +85,6 @@ impl ParquetRSPruner {
                                 partition_columns
                                     .iter()
                                     .position(|c| c.eq_ignore_ascii_case(&name))
-                                    .unwrap();
-                                None
                             })
                     })
                     .collect::<Vec<_>>();

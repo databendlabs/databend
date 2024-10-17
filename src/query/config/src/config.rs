@@ -2940,11 +2940,7 @@ pub struct DiskCacheConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
-    #[clap(
-        long,
-        value_name = "VALUE",
-        default_value = "./.databend/temp/_query_spill"
-    )]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub spill_local_disk_path: OsString,
 
     #[clap(long, value_name = "VALUE", default_value = "30")]
