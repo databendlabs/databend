@@ -91,6 +91,7 @@ impl ReadNativeDataTransform<false> {
 }
 impl Transform for ReadNativeDataTransform<true> {
     const NAME: &'static str = "SyncReadNativeDataTransform";
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         if let Some(info_ptr) = data.get_meta() {
