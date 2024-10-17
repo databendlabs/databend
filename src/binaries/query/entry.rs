@@ -128,7 +128,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     // Cluster register.
     {
         ClusterDiscovery::instance()
-            .register_to_metastore(conf)
+            .register_to_metastore()
             .await
             .with_context(make_error)?;
         info!(
