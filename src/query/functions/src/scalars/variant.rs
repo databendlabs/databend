@@ -1644,6 +1644,41 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
+
+    registry.register_function_factory("json_object_insert", |_, args_type| {
+        if args_type.len() != 3 && args_type.len() != 4 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        if args_type.len() == 4 {
+            if (args_type[3].remove_nullable() != DataType::Boolean && args_type[3] != DataType::Null) {
+                return None;
+            }
+        }
+        let is_nullable = args_type[0].is_nullable_or_null() {
+        let return_type = is_nullable {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_object_insert".to_string(),
+                args_type: args_type.to_vec(),
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(|args, ctx| json_object_insert_fn(args, ctx, is_nullable)),
+            },
+        }))
+    });
 }
 
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -2016,6 +2051,86 @@ where
         }
     }
 }
+
+fn json_object_insert_fn(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    is_nullable: bool,
+) -> Value<AnyType> {
+    let len_opt = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let len = len_opt.unwrap_or(1);
+    let mut validity = MutableBitmap::with_capacity(len);
+    let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
+    for idx in 0..len {
+        let value = unsafe { columns[0].index_unchecked(idx) };
+        if value == ScalarRef::Null {
+            builder.commit_row();
+            validity.push(false);
+            continue;
+        }
+        let new_key = unsafe { columns[1].index_unchecked(idx) };
+        let new_val = unsafe { columns[2].index_unchecked(idx) };
+        if new_key == ScalarRef::Null || new_val == ScalarRef::Null {
+            builder.push(value)
+            builder.commit_row();
+            validity.push(true);
+            continue;
+        }
+        let update_flag = if args.len() == 4 {
+            let v = unsafe { columns[3].index_unchecked(idx) };
+            match v {
+                ScalarRef::Boolean(v) => v,
+                _ => false,
+            }
+        } else {
+            false
+        };
+        let value = value.as_variant().unwrap();
+        let new_key = new_key.as_string().unwrap();
+        match new_val {
+            ScalarRef::Variant(new_val) => {
+                if let Err(err) =
+                    jsonb::object_insert(value, new_key, new_val, update_flag, &mut builder.data)
+                {
+                    ctx.set_error(builder.len(), err.to_string());
+                }
+            }
+            _ => {
+                let mut new_val_buf = vec![];
+                cast_scalar_to_variant(new_val, ctx.func_ctx.tz, &mut new_val_buf);
+                if let Err(err) =
+                    jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
+                {
+                    ctx.set_error(builder.len(), err.to_string());
+                }
+            }
+        }
+        builder.commit_row();
+        validity.push(true);
+    }
+    if is_nullable {
+        let validity: Bitmap = validity.into();
+        match len_opt {
+            Some(_) => Value::Column(Column::Variant(builder.build())).wrap_nullable(Some(validity)),
+            None => {
+                if !validity.get_bit(0) {
+                    Value::Scalar(Scalar::Null)
+                } else {
+                    Value::Scalar(Scalar::Variant(builder.build_scalar()))
+                }
+            }
+        }
+    } else {
+        match len_opt {
+            Some(_) => Value::Column(Column::Variant(builder.build())),
+            None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
+        }
+    }
+}
+
 
 // Extract string for string type, other types convert to JSON string.
 fn cast_to_string(v: &[u8]) -> String {
