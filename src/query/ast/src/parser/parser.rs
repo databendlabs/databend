@@ -145,6 +145,7 @@ pub fn run_parser<O>(
 }
 
 /// Check that the statement can be displayed and reparsed without loss
+#[allow(dead_code)]
 fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     let stmt = reset_ast(stmt);
     let new_sql = stmt.to_string();
@@ -162,6 +163,7 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql);
 }
 
+#[allow(dead_code)]
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
     #[derive(VisitorMut)]
     #[visitor(Range(enter), Literal(enter), ExplainKind(enter), SelectTarget(enter))]
