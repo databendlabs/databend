@@ -30,7 +30,6 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
 use futures_util::TryStreamExt;
 use log::info;
-use uuid::Uuid;
 
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
@@ -62,26 +61,24 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
             .recursive(true)
             .await?;
         let client_session_mgr = UserApiProvider::instance().client_session_api(&ctx.get_tenant());
-        let mut session_ids = HashSet::new();
+        let mut user_session_ids = HashSet::new();
         while let Some(entry) = lister.try_next().await? {
             let path = entry.path();
-            if let Some(session_id) = path.split('/').nth(1) {
-                if session_id.is_empty() {
-                    continue;
-                }
-                // check if session_id is a valid uuid
-                let _ = Uuid::parse_str(session_id)
-                    .map_err(|e| ErrorCode::Internal(format!("Invalid session_id: {}", e)))?;
-                session_ids.insert(session_id.to_string());
-            }
+            let parts: Vec<_> = path.split('/').collect();
+            if parts.len() < 3 {
+                return Err(ErrorCode::Internal(format!(
+                    "invalid path for temp table: {path}"
+                )));
+            };
+            user_session_ids.insert((parts[1].to_string(), parts[2].to_string()));
         }
-        for session_id in session_ids {
+        for (user_name, session_id) in user_session_ids {
             if client_session_mgr
-                .get_client_session(&session_id)
+                .get_client_session(&user_name, &session_id)
                 .await?
                 .is_none()
             {
-                let path = format!("{}/{}", TEMP_TABLE_STORAGE_PREFIX, session_id);
+                let path = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name, session_id);
                 info!("Removing temporary table: {}", path);
                 op.remove_all(&path).await?;
             }

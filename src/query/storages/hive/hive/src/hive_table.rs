@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
 use async_recursion::async_recursion;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::catalog_kind::CATALOG_HIVE;
+use databend_common_catalog::partition_columns::get_pushdown_without_partition_columns;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -35,10 +35,10 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -46,14 +46,14 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
-use databend_storages_common_index::RangeIndex;
+use databend_common_storages_parquet::ParquetRSPruner;
+use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::meta::SnapshotId;
-use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use log::info;
@@ -63,13 +63,11 @@ use opendal::Metakey;
 use opendal::Operator;
 
 use super::hive_catalog::HiveCatalog;
-use super::hive_partition_pruner::HivePartitionPruner;
 use super::hive_table_options::HiveTableOptions;
-use crate::filter_hive_partition_from_partition_keys;
-use crate::hive_parquet_block_reader::HiveBlockReader;
 use crate::hive_table_source::HiveTableSource;
-use crate::HiveBlockFilter;
-use crate::HiveFileSplitter;
+use crate::utils::HiveFetchPartitionScalars;
+use crate::HivePartInfo;
+use crate::HivePartitionFiller;
 
 pub const HIVE_TABLE_ENGINE: &str = "hive";
 pub const HIVE_DEFAULT_PARTITION: &str = "__HIVE_DEFAULT_PARTITION__";
@@ -96,283 +94,121 @@ impl HiveTable {
         })
     }
 
-    fn get_block_filter(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: &Option<PushDownInfo>,
-    ) -> Result<Arc<HiveBlockFilter>> {
-        let enable_hive_parquet_predict_pushdown = ctx
-            .get_settings()
-            .get_enable_hive_parquet_predict_pushdown()?;
-
-        if enable_hive_parquet_predict_pushdown == 0 {
-            return Ok(Arc::new(HiveBlockFilter::create(
-                None,
-                vec![],
-                self.table_info.schema(),
-            )));
-        }
-
-        let filter_expression = push_downs.as_ref().and_then(|extra| {
-            extra
-                .filters
-                .as_ref()
-                .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
-        });
-
-        let range_filter = match filter_expression {
-            Some(expr) => Some(RangeIndex::try_create(
-                ctx.get_function_context()?,
-                &expr,
-                self.table_info.schema(),
-                StatisticsOfColumns::default(),
-            )?),
-            _ => None,
-        };
-
-        let projection = self.get_projections(push_downs)?;
-        let mut projection_fields = vec![];
-        let schema = self.table_info.schema();
-        for i in projection.into_iter() {
-            let field = schema.field(i);
-            projection_fields.push(field.clone());
-        }
-
-        Ok(Arc::new(HiveBlockFilter::create(
-            range_filter,
-            projection_fields,
-            self.table_info.schema(),
-        )))
+    fn partition_fields(&self) -> Vec<TableField> {
+        self.schema()
+            .fields()
+            .iter()
+            .filter(|field| {
+                self.table_options
+                    .partition_keys
+                    .as_ref()
+                    .map(|ks| ks.contains(&field.name))
+                    .unwrap_or_default()
+            })
+            .cloned()
+            .collect()
     }
 
-    fn is_prewhere_column_partition_keys(
-        &self,
-        schema: TableSchemaRef,
-        push_downs: &Option<PushDownInfo>,
-    ) -> Result<bool> {
-        match push_downs {
-            None => Ok(false),
-            Some(p) => match &p.prewhere {
-                None => Ok(false),
-                Some(prewhere_info) => match &prewhere_info.prewhere_columns {
-                    Projection::Columns(projections) => {
-                        let partition_keys = &self.table_options.partition_keys;
-                        let (not_partitions, _) = filter_hive_partition_from_partition_keys(
-                            schema,
-                            projections.clone(),
-                            partition_keys,
-                        );
-                        Ok(not_partitions.is_empty())
-                    }
-                    Projection::InnerColumns(_) => {
-                        Err(ErrorCode::Unimplemented("not support intercolumns"))
-                    }
-                },
-            },
-        }
+    fn no_partition_schema(&self) -> Arc<TableSchema> {
+        let non_partition_fields = self
+            .schema()
+            .fields()
+            .iter()
+            .filter(|field| {
+                !self
+                    .table_options
+                    .partition_keys
+                    .as_ref()
+                    .map(|ks| ks.contains(&field.name))
+                    .unwrap_or_default()
+            })
+            .cloned()
+            .collect();
+        Arc::new(TableSchema::new(non_partition_fields))
     }
 
-    #[inline]
-    pub fn do_read2(
+    pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let push_downs = &plan.push_downs;
-        let chunk_size = ctx.get_settings().get_hive_parquet_chunk_size()? as usize;
-
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(parts_len, max_threads);
+        let table_schema = self.no_partition_schema();
 
-        let mut source_builder = SourcePipeBuilder::create();
-        let delay_timer = if self.is_simple_select_query(plan) {
-            // 0, 0, 200, 200, 400,400
-            |x: usize| (x / 2).min(10) * 200
-        } else {
-            |_| 0
-        };
+        let arrow_schema = table_schema.as_ref().into();
+        let leaf_fields = Arc::new(table_schema.leaf_fields());
 
-        let output_schema = Arc::new(DataSchema::from(plan.schema()));
+        let mut read_options = ParquetReadOptions::default();
 
-        let prewhere_all_partitions =
-            self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
-        // create prewhere&remaindata block reader
-        let prewhere_reader =
-            self.build_prewhere_reader(plan, chunk_size, prewhere_all_partitions)?;
-        let remain_reader = self.build_remain_reader(plan, chunk_size, prewhere_all_partitions)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_executor(plan, prewhere_reader.get_output_schema())?;
-
-        let hive_block_filter = self.get_block_filter(ctx.clone(), push_downs)?;
-
-        let mut src_fields = prewhere_reader.get_output_schema().fields().clone();
-        if let Some(reader) = remain_reader.as_ref() {
-            let remain_field = reader.get_output_schema().fields().clone();
-            src_fields.extend_from_slice(&remain_field);
-        }
-        let src_schema = DataSchemaRefExt::create(src_fields);
-
-        for index in 0..std::cmp::max(1, max_threads) {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
-                HiveTableSource::create(
-                    ctx.clone(),
-                    self.dal.clone(),
-                    output,
-                    prewhere_reader.clone(),
-                    remain_reader.clone(),
-                    prewhere_filter.clone(),
-                    delay_timer(index),
-                    hive_block_filter.clone(),
-                    src_schema.clone(),
-                    output_schema.clone(),
-                )?,
-            );
+        if !ctx.get_settings().get_enable_parquet_page_index()? {
+            read_options = read_options.with_prune_pages(false);
         }
 
-        pipeline.add_pipe(source_builder.finalize());
-        Ok(())
-    }
-
-    // simple select query is the sql likes `select * from xx limit 10` or
-    // `select * from xx where p_date = '20220201' limit 10` where p_date is a partition column;
-    // we just need to read a few data from table
-    fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
-        // couldn't get groupby order by info
-        if let Some(PushDownInfo {
-            filters,
-            limit: Some(lm),
-            ..
-        }) = &plan.push_downs
-        {
-            if *lm > 100000 {
-                return false;
-            }
-
-            // filter out the partition column related expressions
-            let partition_keys = self.get_partition_key_sets();
-            let columns = filters
-                .as_ref()
-                .map(|f| {
-                    let expr = f.filter.as_expr(&BUILTIN_FUNCTIONS);
-                    expr.column_refs().keys().cloned().collect::<HashSet<_>>()
-                })
-                .unwrap_or_default();
-
-            if columns.difference(&partition_keys).count() == 0 {
-                return true;
-            }
+        if !ctx.get_settings().get_enable_parquet_rowgroup_pruning()? {
+            read_options = read_options.with_prune_row_groups(false);
         }
-        false
-    }
 
-    fn get_partition_key_sets(&self) -> HashSet<String> {
-        self.table_options
+        if !ctx.get_settings().get_enable_parquet_prewhere()? {
+            read_options = read_options.with_do_prewhere(false);
+        }
+
+        let pruner = ParquetRSPruner::try_create(
+            ctx.get_function_context()?,
+            table_schema.clone(),
+            leaf_fields,
+            &plan.push_downs,
+            read_options,
+            self.table_options
+                .partition_keys
+                .clone()
+                .unwrap_or_default(),
+        )?;
+
+        let op = self.dal.clone();
+
+        let partition_keys = self
+            .table_options
             .partition_keys
             .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .collect()
-    }
+            .unwrap_or_default();
 
-    fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
-        if let Some(PushDownInfo {
-            projection: Some(prj),
-            ..
-        }) = push_downs
-        {
-            match prj {
-                Projection::Columns(indices) => Ok(indices.clone()),
-                Projection::InnerColumns(_) => Err(ErrorCode::Unimplemented(
-                    "does not support projection inner columns",
-                )),
-            }
+        let partition_field_indexes: Result<Vec<FieldIndex>> = partition_keys
+            .iter()
+            .map(|name| self.schema().index_of(name))
+            .collect();
+        let partition_field_indexes = partition_field_indexes?;
+        let push_downs = if let Some(ref p) = plan.push_downs {
+            Some(get_pushdown_without_partition_columns(
+                p.clone(),
+                &partition_field_indexes[..],
+            )?)
         } else {
-            let col_ids = (0..self.table_info.schema().fields().len()).collect::<Vec<usize>>();
-            Ok(col_ids)
-        }
-    }
+            None
+        };
+        let mut builder =
+            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, arrow_schema)?
+                .with_options(read_options)
+                .with_push_downs(push_downs.as_ref())
+                .with_pruner(Some(pruner))
+                .with_partition_columns(partition_keys);
 
-    // Build the prewhere reader.
-    fn build_prewhere_reader(
-        &self,
-        plan: &DataSourcePlan,
-        chunk_size: usize,
-        prewhere_all_partitions: bool,
-    ) -> Result<Arc<HiveBlockReader>> {
-        match (
-            prewhere_all_partitions,
-            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()),
-        ) {
-            (true, _) | (_, None) => {
-                let projection = PushDownInfo::projection_of_push_downs(
-                    &plan.schema(),
-                    plan.push_downs.as_ref(),
-                );
-                HiveBlockReader::create(
-                    self.dal.clone(),
-                    self.table_info.schema(),
-                    projection,
-                    &self.table_options.partition_keys,
-                    chunk_size,
+        let parquet_reader = Arc::new(builder.build_full_reader()?);
+
+        let output_schema = Arc::new(DataSchema::from(plan.schema()));
+        pipeline.add_source(
+            |output| {
+                HiveTableSource::create(
+                    ctx.clone(),
+                    output,
+                    output_schema.clone(),
+                    parquet_reader.clone(),
+                    self.partition_fields(),
                 )
-            }
-            (false, Some(v)) => HiveBlockReader::create(
-                self.dal.clone(),
-                self.table_info.schema(),
-                v.prewhere_columns,
-                &self.table_options.partition_keys,
-                chunk_size,
-            ),
-        }
-    }
-
-    // Build the prewhere filter executor.
-    fn build_prewhere_filter_executor(
-        &self,
-        plan: &DataSourcePlan,
-        schema: DataSchemaRef,
-    ) -> Result<Arc<Option<Expr>>> {
-        Ok(Arc::new(
-            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
-                v.filter
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .project_column_ref(|name| schema.index_of(name).unwrap())
-            }),
-        ))
-    }
-
-    // Build the remain reader.
-    fn build_remain_reader(
-        &self,
-        plan: &DataSourcePlan,
-        chunk_size: usize,
-        prewhere_all_partitions: bool,
-    ) -> Result<Arc<Option<HiveBlockReader>>> {
-        Ok(
-            match (
-                prewhere_all_partitions,
-                PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()),
-            ) {
-                (true, _) | (_, None) => Arc::new(None),
-                (false, Some(v)) => {
-                    if v.remain_columns.is_empty() {
-                        Arc::new(None)
-                    } else {
-                        let reader = HiveBlockReader::create(
-                            self.dal.clone(),
-                            self.table_info.schema(),
-                            v.remain_columns,
-                            &self.table_options.partition_keys,
-                            chunk_size,
-                        )?;
-                        Arc::new(Some((*reader).clone()))
-                    }
-                }
             },
+            max_threads.max(1),
         )
     }
 
@@ -415,9 +251,14 @@ impl HiveTable {
 
         if let Some(expr) = filter_expression {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner =
-                HivePartitionPruner::create(ctx, expr, partition_schemas, self.table_info.schema());
-            partition_names = partition_pruner.prune(partition_names)?;
+            let partition_pruner = PartitionPruner::try_create(
+                ctx.get_function_context()?,
+                expr,
+                partition_schemas,
+                self.table_info.schema(),
+            )?;
+            partition_names =
+                partition_pruner.prune::<String, HiveFetchPartitionScalars>(partition_names)?;
         }
 
         trace!(
@@ -479,7 +320,7 @@ impl HiveTable {
     async fn list_files_from_dirs(
         &self,
         dirs: Vec<(String, Option<String>)>,
-    ) -> Result<Vec<HiveFileInfo>> {
+    ) -> Result<Vec<HivePartInfo>> {
         let sem = Arc::new(Semaphore::new(60));
 
         let mut tasks = Vec::with_capacity(dirs.len());
@@ -494,12 +335,9 @@ impl HiveTable {
         }
 
         let mut all_files = vec![];
-        for (task, partition) in tasks {
+        for (task, _) in tasks {
             let files = task.await.unwrap()?;
-            for mut file in files {
-                file.add_partition(partition.clone());
-                all_files.push(file);
-            }
+            all_files.extend_from_slice(&files);
         }
 
         Ok(all_files)
@@ -516,11 +354,14 @@ impl HiveTable {
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
         trace!("{} query locations: {:?}", dirs.len(), dirs);
 
-        let all_files = self.list_files_from_dirs(dirs).await?;
-        trace!("{} hive files: {:?}", all_files.len(), all_files);
+        let dir_len = dirs.len();
+        let filler = HivePartitionFiller::create(self.partition_fields());
+        let mut partitions = self.list_files_from_dirs(dirs).await?;
+        for partition in partitions.iter_mut() {
+            partition.partitions = filler.extract_scalars(&partition.filename)?;
+        }
 
-        let splitter = HiveFileSplitter::create(128 * 1024 * 1024_u64);
-        let partitions = splitter.get_splits(all_files);
+        trace!("{} hive files: {:?}", partitions.len(), partitions);
 
         info!(
             "read partition, partition num:{}, elapsed:{:?}",
@@ -528,8 +369,26 @@ impl HiveTable {
             start.elapsed()
         );
 
+        let estimated_read_rows: f64 = partitions
+            .iter()
+            .map(|s| s.filesize as f64 / (self.schema().num_fields() * 8) as f64)
+            .sum();
+
+        let read_bytes = partitions.iter().map(|s| s.filesize as usize).sum();
+        let stats = PartStatistics::new_estimated(
+            None,
+            estimated_read_rows as _,
+            read_bytes,
+            partitions.len(),
+            dir_len,
+        );
+        let partitions = partitions
+            .into_iter()
+            .map(HivePartInfo::into_part_ptr)
+            .collect();
+
         Ok((
-            Default::default(),
+            stats,
             Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
@@ -578,7 +437,7 @@ impl Table for HiveTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
-        self.do_read2(ctx, plan, pipeline)
+        self.do_read_data(ctx, plan, pipeline)
     }
 
     fn commit_insertion(
@@ -665,27 +524,6 @@ impl SyncSource for HiveSource {
     }
 }
 
-#[derive(Debug)]
-pub struct HiveFileInfo {
-    pub filename: String,
-    pub length: u64,
-    pub partition: Option<String>,
-}
-
-impl HiveFileInfo {
-    pub fn create(filename: String, length: u64) -> Self {
-        HiveFileInfo {
-            filename,
-            length,
-            partition: None,
-        }
-    }
-
-    pub fn add_partition(&mut self, partition: Option<String>) {
-        self.partition = partition;
-    }
-}
-
 // convert hdfs path format to opendal path formatted
 //
 // there are two rules:
@@ -731,7 +569,7 @@ async fn list_files_from_dir(
     operator: Operator,
     location: String,
     sem: Arc<Semaphore>,
-) -> Result<Vec<HiveFileInfo>> {
+) -> Result<Vec<HivePartInfo>> {
     let (files, dirs) = do_list_files_from_dir(operator.clone(), location, sem.clone()).await?;
     let mut all_files = files;
     let mut tasks = Vec::with_capacity(dirs.len());
@@ -759,7 +597,7 @@ async fn do_list_files_from_dir(
     operator: Operator,
     location: String,
     sem: Arc<Semaphore>,
-) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
+) -> Result<(Vec<HivePartInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
     let mut m = operator
         .lister_with(&location)
@@ -779,9 +617,9 @@ async fn do_list_files_from_dir(
 
         match meta.mode() {
             EntryMode::FILE => {
-                let filename = path.to_string();
+                let location = path.to_string();
                 let length = meta.content_length();
-                all_files.push(HiveFileInfo::create(filename, length));
+                all_files.push(HivePartInfo::create(location, vec![], length));
             }
             EntryMode::DIR => {
                 all_dirs.push(path.to_string());

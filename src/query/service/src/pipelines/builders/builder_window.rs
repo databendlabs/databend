@@ -26,6 +26,8 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
+use opendal::services::Fs;
+use opendal::Operator;
 
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
@@ -34,6 +36,7 @@ use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
+use crate::spillers::SpillerDiskConfig;
 
 impl PipelineBuilder {
     pub(crate) fn build_window(&mut self, window: &Window) -> Result<()> {
@@ -173,7 +176,23 @@ impl PipelineBuilder {
 
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let temp_dir_manager = TempDirManager::instance();
-        let disk_spill = temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id());
+
+        let enable_dio = settings.get_enable_dio()?;
+        let disk_spill =
+            match temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id()) {
+                Some(temp_dir) if !enable_dio => {
+                    let builder = Fs::default().root(temp_dir.path().to_str().unwrap());
+                    Some(SpillerDiskConfig {
+                        temp_dir,
+                        local_operator: Some(Operator::new(builder)?.finish()),
+                    })
+                }
+                Some(temp_dir) => Some(SpillerDiskConfig {
+                    temp_dir,
+                    local_operator: None,
+                }),
+                None => None,
+            };
 
         let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);

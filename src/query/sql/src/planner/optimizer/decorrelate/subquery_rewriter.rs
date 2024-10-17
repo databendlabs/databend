@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -69,16 +68,14 @@ pub struct FlattenInfo {
 
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
-    pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
     pub(crate) binder: Option<Binder>,
 }
 
 impl SubqueryRewriter {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, binder: Option<Binder>) -> Self {
+    pub fn new(metadata: MetadataRef, binder: Option<Binder>) -> Self {
         Self {
-            ctx,
             metadata,
             derived_columns: Default::default(),
             binder,
