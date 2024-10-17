@@ -18,9 +18,10 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::partition_columns::get_pushdown_without_partition_columns;
+use databend_common_catalog::partition_columns::str_to_scalar;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
-use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -32,8 +33,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
@@ -42,6 +45,8 @@ use databend_common_storages_parquet::ParquetFilesPart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
+use databend_storages_common_pruner::partition_prunner::FetchPartitionScalars;
+use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
 use deltalake::DeltaTableBuilder;
@@ -52,8 +57,6 @@ use tokio::sync::OnceCell;
 use url::Url;
 
 use crate::partition::DeltaPartInfo;
-use crate::partition_columns::get_partition_values;
-use crate::partition_columns::get_pushdown_without_partition_columns;
 use crate::table_source::DeltaTableSource;
 
 pub const DELTA_ENGINE: &str = "DELTA";
@@ -120,12 +123,11 @@ impl DeltaTable {
         })
     }
 
-    #[allow(dead_code)]
-    fn get_partition_fields(&self) -> Result<Vec<&TableField>> {
+    fn get_partition_fields(&self) -> Result<Vec<TableField>> {
         self.meta
             .partition_columns
             .iter()
-            .map(|name| self.info.meta.schema.field_with_name(name))
+            .map(|name| self.info.meta.schema.field_with_name(name).cloned())
             .collect()
     }
 
@@ -261,7 +263,7 @@ impl DeltaTable {
                     output,
                     output_schema.clone(),
                     parquet_reader.clone(),
-                    self.get_partition_fields()?.into_iter().cloned().collect(),
+                    self.get_partition_fields()?,
                 )
             },
             max_threads.max(1),
@@ -272,8 +274,8 @@ impl DeltaTable {
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
@@ -281,13 +283,33 @@ impl DeltaTable {
         let mut read_bytes = 0;
 
         let partition_fields = self.get_partition_fields()?;
-        let adds = table
+        let mut adds = table
             .snapshot()
             .and_then(|f| f.file_actions())
             .map_err(|e| {
                 ErrorCode::ReadTableDataError(format!("Cannot read file_actions: {e:?}"))
             })?;
+
+        let filter_expression = push_downs.as_ref().and_then(|p| {
+            p.filters
+                .as_ref()
+                .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
+
         let total_files = adds.len();
+
+        if !partition_fields.is_empty() {
+            if let Some(expr) = filter_expression {
+                let partition_pruner = PartitionPruner::try_create(
+                    ctx.get_function_context()?,
+                    expr,
+                    Arc::new(TableSchema::new(partition_fields.clone())),
+                    self.schema(),
+                )?;
+
+                adds = partition_pruner.prune::<Add, DeltaToScalar>(adds)?;
+            }
+        }
 
         #[derive(serde::Deserialize)]
         struct Stats {
@@ -311,9 +333,8 @@ impl DeltaTable {
                     ).unwrap_or(1);
                 read_rows += num_records as usize;
                 read_bytes += add.size as usize;
-                let partition_values = get_partition_values(add, &partition_fields[..])?;
-                Ok(Arc::new(
-                    Box::new(DeltaPartInfo {
+                let partition_values = get_partition_values(add, &partition_fields)?;
+                Ok(Arc::new(Box::new(DeltaPartInfo {
                         partition_values,
                         data: ParquetPart::ParquetFiles(
                             ParquetFilesPart {
@@ -321,8 +342,7 @@ impl DeltaTable {
                                 estimated_uncompressed_size: add.size as u64, // This field is not used here.
                             },
                         ),
-                    }) as Box<dyn PartInfo>
-                ))
+                    }) as _))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -330,6 +350,14 @@ impl DeltaTable {
             PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
+    }
+}
+
+pub struct DeltaToScalar;
+
+impl FetchPartitionScalars<Add> for DeltaToScalar {
+    fn eval(add: &Add, partition_fields: &[TableField]) -> Result<Vec<Scalar>> {
+        get_partition_values(add, partition_fields)
     }
 }
 
@@ -383,4 +411,21 @@ impl Table for DeltaTable {
     fn support_prewhere(&self) -> bool {
         true
     }
+}
+
+pub fn get_partition_values(add: &Add, fields: &[TableField]) -> Result<Vec<Scalar>> {
+    let mut values = Vec::with_capacity(fields.len());
+    for f in fields {
+        match add.partition_values.get(&f.name) {
+            Some(Some(v)) => values.push(str_to_scalar(v, &f.data_type().into())?),
+            Some(None) => values.push(Scalar::Null),
+            None => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "partition value for column {} not found",
+                    &f.name
+                )));
+            }
+        }
+    }
+    Ok(values)
 }

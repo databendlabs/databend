@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use super::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
@@ -121,5 +122,24 @@ impl Display for ShowCreateDictionaryStmt {
                 .chain(&self.database)
                 .chain(Some(&self.dictionary_name)),
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowDictionariesStmt {
+    pub database: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowDictionariesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW DICTIONARIES")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+        Ok(())
     }
 }

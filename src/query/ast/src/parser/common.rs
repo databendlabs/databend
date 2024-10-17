@@ -244,26 +244,9 @@ pub fn set_type(i: Input) -> IResult<SetType> {
         },
         |res| match res {
             Some(token) => match token.kind {
-                TokenKind::GLOBAL => SetType::SettingsGlobal,
-                TokenKind::SESSION => SetType::SettingsSession,
-                TokenKind::VARIABLE => SetType::Variable,
-                _ => unreachable!(),
-            },
-            None => SetType::SettingsSession,
-        },
-    )(i)
-}
-
-pub fn unset_type(i: Input) -> IResult<SetType> {
-    map(
-        rule! {
-           (GLOBAL | SESSION | VARIABLE)?
-        },
-        |res| match res {
-            Some(token) => match token.kind {
-                TokenKind::GLOBAL => SetType::SettingsGlobal,
-                TokenKind::SESSION => SetType::SettingsSession,
-                TokenKind::VARIABLE => SetType::Variable,
+                GLOBAL => SetType::SettingsGlobal,
+                SESSION => SetType::SettingsSession,
+                VARIABLE => SetType::Variable,
                 _ => unreachable!(),
             },
             None => SetType::SettingsSession,
