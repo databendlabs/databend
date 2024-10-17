@@ -71,26 +71,20 @@ pub fn build_fuse_native_source_pipeline(
                     let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
-                        AsyncMetaReceiverSource::create(
-                            ctx.clone(),
-                            receiver.clone(),
-                            output,
-                        )?,
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver.clone(), output)?,
                     );
                 }
                 pipeline.add_pipe(source_builder.finalize());
-                pipeline.add_transform(
-                    |input, output|{
-                        ReadNativeDataTransform::<true>::create(
-                            ctx.clone(),
-                            input,
-                            output,
-                            block_reader.clone(),
-                            index_reader.clone(),
-                            virtual_reader.clone(),
-                        )
-                    }
-                )?
+                pipeline.add_transform(|input, output| {
+                    ReadNativeDataTransform::<true>::create(
+                        ctx.clone(),
+                        input,
+                        output,
+                        block_reader.clone(),
+                        index_reader.clone(),
+                        virtual_reader.clone(),
+                    )
+                })?
             } else {
                 let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
                 let mut partitions = StealablePartitions::new(partitions, ctx.clone());
@@ -119,7 +113,6 @@ pub fn build_fuse_native_source_pipeline(
 
                 pipeline.add_pipe(source_builder.finalize());
             }
-
         }
         false => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
@@ -134,27 +127,20 @@ pub fn build_fuse_native_source_pipeline(
                     let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
-                        AsyncMetaReceiverSource::create(
-                                ctx.clone(),
-                                receiver.clone(),
-                                output,
-                            )?,
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver.clone(), output)?,
                     );
                 }
                 pipeline.add_pipe(source_builder.finalize());
-                pipeline.add_transform(
-                        |input, output|{
-                            ReadNativeDataTransform::<false>::create(
-                                ctx.clone(),
-                                input,
-                                output,
-                                block_reader.clone(),
-                                index_reader.clone(),
-                                virtual_reader.clone(),
-                            )
-                        }
-                )?;
-
+                pipeline.add_transform(|input, output| {
+                    ReadNativeDataTransform::<false>::create(
+                        ctx.clone(),
+                        input,
+                        output,
+                        block_reader.clone(),
+                        index_reader.clone(),
+                        virtual_reader.clone(),
+                    )
+                })?;
             } else {
                 for i in 0..max_threads {
                     let output = OutputPort::create();
