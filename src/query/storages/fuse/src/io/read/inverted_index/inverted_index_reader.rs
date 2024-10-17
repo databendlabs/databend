@@ -28,6 +28,7 @@ use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
 use tantivy::directory::FileSlice;
 use tantivy::directory::OwnedBytes;
+use tantivy::fieldnorm::FieldNormReader;
 use tantivy::positions::PositionReader;
 use tantivy::postings::BlockSegmentPostings;
 use tantivy::query::Query;
@@ -36,9 +37,11 @@ use tantivy::schema::IndexRecordOption;
 use tantivy::termdict::TermInfoStore;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy::Index;
+use tantivy_common::BinarySerializable;
 use tantivy_fst::raw::Fst;
 
 use crate::index::DocIdsCollector;
+use crate::index::TermReader;
 use crate::io::read::inverted_index::inverted_index_loader::cache_key_of_index_columns;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_files;
@@ -47,28 +50,38 @@ use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_
 #[derive(Clone)]
 pub struct InvertedIndexReader {
     dal: Operator,
+    need_position: bool,
+    has_score: bool,
+    tokenizer_manager: TokenizerManager,
+    row_count: u64,
 }
 
 impl InvertedIndexReader {
-    pub fn create(dal: Operator) -> Self {
-        Self { dal }
+    pub fn create(
+        dal: Operator,
+        need_position: bool,
+        has_score: bool,
+        tokenizer_manager: TokenizerManager,
+        row_count: u64,
+    ) -> Self {
+        Self {
+            dal,
+            need_position,
+            has_score,
+            tokenizer_manager,
+            row_count,
+        }
     }
 
     // Filter the rows and scores in the block that can match the query text,
     // if there is no row that can match, this block can be pruned.
-    #[allow(clippy::type_complexity)]
-    #[allow(clippy::too_many_arguments)]
     pub async fn do_filter(
         self,
         settings: &ReadSettings,
-        need_position: bool,
-        has_score: bool,
         query: Box<dyn Query>,
         field_ids: &HashSet<u32>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
-        tokenizer_manager: TokenizerManager,
-        row_count: u64,
         index_loc: &str,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let start = Instant::now();
@@ -79,12 +92,8 @@ impl InvertedIndexReader {
                 index_loc,
                 query,
                 field_ids,
-                need_position,
-                has_score,
                 index_record,
                 fuzziness,
-                tokenizer_manager,
-                row_count,
             )
             .await?;
 
@@ -102,9 +111,6 @@ impl InvertedIndexReader {
         settings: &ReadSettings,
         index_path: &'a str,
         query: Box<dyn Query>,
-        has_score: bool,
-        tokenizer_manager: TokenizerManager,
-        row_count: u64,
         inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let directory =
@@ -112,12 +118,12 @@ impl InvertedIndexReader {
                 .await?;
 
         let mut index = Index::open(directory)?;
-        index.set_tokenizers(tokenizer_manager);
+        index.set_tokenizers(self.tokenizer_manager.clone());
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let matched_rows = if has_score {
-            let collector = TopDocs::with_limit(row_count as usize);
+        let matched_rows = if self.has_score {
+            let collector = TopDocs::with_limit(self.row_count as usize);
             let docs = searcher.search(&query, &collector)?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
@@ -174,19 +180,14 @@ impl InvertedIndexReader {
     // If the term matches, the `term_dict` and `postings`, `positions`
     // data of the related terms need to be read instead of all
     // the `postings` and `positions` data.
-    #[allow(clippy::too_many_arguments)]
     async fn search<'a>(
         &self,
         settings: &ReadSettings,
         index_path: &'a str,
         query: Box<dyn Query>,
         field_ids: &HashSet<u32>,
-        need_position: bool,
-        has_score: bool,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
-        tokenizer_manager: TokenizerManager,
-        row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         // 1. read index meta.
         let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
@@ -202,15 +203,7 @@ impl InvertedIndexReader {
         // use compatible search function to read.
         if inverted_index_meta_map.contains_key("meta.json") {
             return self
-                .legacy_search(
-                    settings,
-                    index_path,
-                    query,
-                    has_score,
-                    tokenizer_manager,
-                    row_count,
-                    inverted_index_meta_map,
-                )
+                .legacy_search(settings, index_path, query, inverted_index_meta_map)
                 .await;
         }
 
@@ -279,7 +272,9 @@ impl InvertedIndexReader {
 
         // 4. collect term infos for each terms.
         let mut term_infos = HashMap::with_capacity(matched_terms.len());
+        let mut field_term_ids = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
+            field_term_ids.insert(*field_id, HashSet::new());
             let term_col_name = format!("term-{}", field_id);
             if let Some(term_dict_data) = column_files_map.remove(&term_col_name) {
                 let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
@@ -288,52 +283,89 @@ impl InvertedIndexReader {
                 for (_, (term_field_id, term_id)) in matched_terms.iter() {
                     if field_id == term_field_id {
                         let term_info = term_info_store.get(*term_id);
-                        term_infos.insert(*term_id, (*field_id, term_info));
+                        term_infos.insert(*term_id, term_info);
+                        if let Some(term_ids) = field_term_ids.get_mut(field_id) {
+                            term_ids.insert(*term_id);
+                        }
                     }
                 }
             }
         }
 
         // 5. read postings and optional positions.
-        let term_slice_len = if need_position {
+        let mut term_slice_len = if self.need_position {
             term_infos.len() * 2
         } else {
             term_infos.len()
         };
+        if self.has_score {
+            term_slice_len += 2 * field_ids.len();
+        }
+
         let mut slice_columns = Vec::with_capacity(term_slice_len);
         let mut slice_name_map = HashMap::with_capacity(term_slice_len);
-        for (term_id, (field_id, term_info)) in term_infos.iter() {
-            let idx_name = format!("idx-{}", field_id);
-            let idx_meta = inverted_index_meta_map.get(&idx_name).ok_or_else(|| {
+        for (field_id, term_ids) in field_term_ids.iter() {
+            // if has score, need read fieldnorm to calculate the score.
+            if self.has_score {
+                let fieldnorm_slice_name = format!("fieldnorm-{}", field_id);
+                if let Some(fieldnorm_col_meta) =
+                    inverted_index_meta_map.remove(&fieldnorm_slice_name)
+                {
+                    let fieldnorm_range = fieldnorm_col_meta.offset
+                        ..(fieldnorm_col_meta.offset + fieldnorm_col_meta.len);
+                    slice_columns.push((fieldnorm_slice_name.clone(), fieldnorm_range));
+                }
+                slice_name_map.insert(fieldnorm_slice_name, *field_id as u64);
+            }
+            let idx_col_name = format!("idx-{}", field_id);
+            let idx_meta = inverted_index_meta_map.get(&idx_col_name).ok_or_else(|| {
                 ErrorCode::TantivyError(format!(
                     "inverted index column `{}` does not exist",
-                    idx_name
+                    idx_col_name
                 ))
             })?;
-            // ignore 8 bytes total_num_tokens_slice
-            let offset = idx_meta.offset + 8 + (term_info.postings_range.start as u64);
-            let len = term_info.postings_range.len() as u64;
-            let idx_slice_range = offset..(offset + len);
+            if self.has_score {
+                // if has score, need read `total_num_tokens`.
+                let tokens_slice_name = format!("tokens-{}", field_id);
+                let offset = idx_meta.offset;
+                let len = 8;
+                let tokens_slice_range = offset..(offset + len);
+                slice_columns.push((tokens_slice_name.clone(), tokens_slice_range));
+                slice_name_map.insert(tokens_slice_name, *field_id as u64);
+            }
 
-            let idx_slice_name = format!("{}-{}", idx_name, term_info.postings_range.start);
-            slice_name_map.insert(idx_slice_name.clone(), *term_id);
-            slice_columns.push((idx_slice_name, idx_slice_range));
+            for term_id in term_ids {
+                let term_info = term_infos.get(term_id).unwrap();
+                // ignore 8 bytes `total_num_tokens_slice`.
+                let offset = idx_meta.offset + 8 + (term_info.postings_range.start as u64);
+                let len = term_info.postings_range.len() as u64;
+                let idx_slice_range = offset..(offset + len);
 
-            if need_position {
-                let pos_name = format!("pos-{}", field_id);
-                let pos_meta = inverted_index_meta_map.get(&pos_name).ok_or_else(|| {
+                let idx_slice_name = format!("{}-{}", idx_col_name, term_info.postings_range.start);
+                slice_columns.push((idx_slice_name.clone(), idx_slice_range));
+                slice_name_map.insert(idx_slice_name, *term_id);
+            }
+
+            if self.need_position {
+                let pos_col_name = format!("pos-{}", field_id);
+                let pos_meta = inverted_index_meta_map.get(&pos_col_name).ok_or_else(|| {
                     ErrorCode::TantivyError(format!(
                         "inverted index column `{}` does not exist",
-                        pos_name
+                        pos_col_name
                     ))
                 })?;
-                let offset = pos_meta.offset + (term_info.positions_range.start as u64);
-                let len = term_info.positions_range.len() as u64;
-                let pos_slice_range = offset..(offset + len);
+                for term_id in term_ids {
+                    let term_info = term_infos.get(term_id).unwrap();
 
-                let pos_slice_name = format!("{}-{}", pos_name, term_info.positions_range.start);
-                slice_name_map.insert(pos_slice_name.clone(), *term_id);
-                slice_columns.push((pos_slice_name, pos_slice_range));
+                    let offset = pos_meta.offset + (term_info.positions_range.start as u64);
+                    let len = term_info.positions_range.len() as u64;
+                    let pos_slice_range = offset..(offset + len);
+
+                    let pos_slice_name =
+                        format!("{}-{}", pos_col_name, term_info.positions_range.start);
+                    slice_columns.push((pos_slice_name.clone(), pos_slice_range));
+                    slice_name_map.insert(pos_slice_name, *term_id);
+                }
             }
         }
 
@@ -344,13 +376,15 @@ impl InvertedIndexReader {
             .map(|f| (f.name.clone(), f.data.clone()))
             .collect::<HashMap<_, _>>();
 
+        let mut fieldnorm_reader_map = HashMap::with_capacity(field_ids.len());
+        let mut field_num_tokens_map = HashMap::with_capacity(field_ids.len());
         let mut block_postings_map = HashMap::with_capacity(term_infos.len());
         let mut position_reader_map = HashMap::with_capacity(term_infos.len());
-        for (slice_name, slice_data) in slice_column_files_map.into_iter() {
-            let term_id = slice_name_map.remove(&slice_name).unwrap();
-            let (_, term_info) = term_infos.get(&term_id).unwrap();
-
+        for (slice_name, mut slice_data) in slice_column_files_map.into_iter() {
+            let id = slice_name_map.remove(&slice_name).unwrap();
             if slice_name.starts_with("idx") {
+                let term_id = id;
+                let term_info = term_infos.get(&term_id).unwrap();
                 let posting_file = FileSlice::new(Arc::new(slice_data));
                 let block_postings = BlockSegmentPostings::open(
                     term_info.doc_freq,
@@ -361,34 +395,62 @@ impl InvertedIndexReader {
 
                 block_postings_map.insert(term_id, block_postings);
             } else if slice_name.starts_with("pos") {
+                let term_id = id;
                 let position_reader = PositionReader::open(slice_data)?;
                 position_reader_map.insert(term_id, position_reader);
+            } else if slice_name.starts_with("fieldnorm") {
+                let field_id = id as u32;
+                let slice_file = FileSlice::new(Arc::new(slice_data));
+                let fieldnorm_reader = FieldNormReader::open(slice_file)?;
+                fieldnorm_reader_map.insert(field_id, fieldnorm_reader);
+            } else if slice_name.starts_with("tokens") {
+                let field_id = id as u32;
+                let total_num_tokens = u64::deserialize(&mut slice_data)?;
+                field_num_tokens_map.insert(field_id, total_num_tokens);
+            }
+        }
+        if self.has_score {
+            for field_id in field_ids {
+                // if fieldnorm not exist, add a constant fieldnorm reader.
+                if !fieldnorm_reader_map.contains_key(field_id) {
+                    let constant_fieldnorm_reader =
+                        FieldNormReader::constant(self.row_count as u32, 1);
+                    fieldnorm_reader_map.insert(*field_id, constant_fieldnorm_reader);
+                }
             }
         }
 
         // 6. collect matched doc ids.
-        let mut collector = DocIdsCollector::create(
-            row_count,
-            need_position,
+        let term_reader = TermReader::create(
+            self.row_count,
+            self.need_position,
+            self.has_score,
             matched_terms,
             term_infos,
             block_postings_map,
             position_reader_map,
+            fieldnorm_reader_map,
+            field_num_tokens_map,
         );
-        let matched_doc_ids =
-            collector.collect_matched_rows(query.box_clone(), &prefix_terms, &fuzziness_terms)?;
+        let mut collector = DocIdsCollector::create(term_reader);
+
+        let matched_doc_ids = collector.collect_matched_doc_ids(
+            query.box_clone(),
+            &prefix_terms,
+            &fuzziness_terms,
+        )?;
 
         if let Some(matched_doc_ids) = matched_doc_ids {
             if !matched_doc_ids.is_empty() {
                 let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
-                let doc_ids_iter = matched_doc_ids.iter();
-                if has_score {
-                    // TODO: add score
-                    for doc_id in doc_ids_iter {
-                        matched_rows.push((doc_id as usize, Some(F32::from(1.0))));
+                if self.has_score {
+                    let scores =
+                        collector.calculate_scores(query.box_clone(), &matched_doc_ids, None)?;
+                    for (doc_id, score) in matched_doc_ids.into_iter().zip(scores.into_iter()) {
+                        matched_rows.push((doc_id as usize, Some(score)));
                     }
                 } else {
-                    for doc_id in doc_ids_iter {
+                    for doc_id in matched_doc_ids.into_iter() {
                         matched_rows.push((doc_id as usize, None));
                     }
                 }
