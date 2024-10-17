@@ -41,6 +41,10 @@ impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
+        if self.ctx.get_settings().get_enable_prune_pipeline()? {
+            let prune_pipeline = table.build_prune_pipeline(self.ctx.clone(), &scan.source)?;
+            self.pipelines.push(prune_pipeline);
+        }
         table.read_data(
             self.ctx.clone(),
             &scan.source,
