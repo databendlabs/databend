@@ -13,17 +13,12 @@
 // limitations under the License.
 
 use core::ops::Range;
-use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
-use crate::copy_continuous_bits;
-use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -159,60 +154,18 @@ impl<'a> ValueVisitor for TakeRangeVisitor<'a> {
     }
 
     fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
-        let capacity = self.num_rows.saturating_add(7) / 8;
-        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_ptr = builder.as_mut_ptr();
-        let mut builder_idx = 0;
-        let mut unset_bits = 0;
-        let mut buf = 0;
+        let mut builder = MutableBitmap::with_capacity(self.num_rows);
 
-        let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
-        unsafe {
-            for range in self.ranges {
-                let mut start = range.start as usize;
-                let end = range.end as usize;
-                if builder_idx % 8 != 0 {
-                    while start < end {
-                        if bitmap.get_bit_unchecked(start) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        builder_idx += 1;
-                        start += 1;
-                        if builder_idx % 8 == 0 {
-                            store_advance_aligned(buf, &mut builder_ptr);
-                            buf = 0;
-                            break;
-                        }
-                    }
-                }
-                let remaining = end - start;
-                if remaining > 0 {
-                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
-                        &mut builder_ptr,
-                        bitmap_slice,
-                        builder_idx,
-                        start + bitmap_offset,
-                        remaining,
-                    );
-                    builder_idx += remaining;
-                    unset_bits += cur_unset_bits;
-                    buf = cur_buf;
-                }
-            }
+        let src = bitmap.values();
+        let offset = bitmap.offset();
+        self.ranges.iter().for_each(|range| {
+            let start = range.start as usize;
+            let end = range.end as usize;
+            builder.append_packed_range(start + offset..end + offset, src)
+        });
 
-            if builder_idx % 8 != 0 {
-                store_advance_aligned(buf, &mut builder_ptr);
-            }
-
-            set_vec_len_by_ptr(&mut builder, builder_ptr);
-            let bitmap = Bitmap::from_inner(Arc::new(builder.into()), 0, self.num_rows, unset_bits)
-                .ok()
-                .unwrap();
-            self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
-            Ok(())
-        }
+        self.result = Some(Value::Column(BooleanType::upcast_column(builder.into())));
+        Ok(())
     }
 
     fn visit_binary(&mut self, col: BinaryColumn) -> Result<()> {
@@ -268,15 +221,10 @@ impl<'a> TakeRangeVisitor<'a> {
 
         // Build [`data`].
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let mut data_ptr = data.as_mut_ptr();
-
-        unsafe {
-            for range in self.ranges {
-                let col_data = &value_data[values_offset[range.start as usize] as usize
-                    ..values_offset[range.end as usize] as usize];
-                copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
-            }
-            set_vec_len_by_ptr(&mut data, data_ptr);
+        for range in self.ranges {
+            let col_data = &value_data[values_offset[range.start as usize] as usize
+                ..values_offset[range.end as usize] as usize];
+            data.extend_from_slice(col_data);
         }
 
         BinaryColumn::new(data.into(), offsets.into())

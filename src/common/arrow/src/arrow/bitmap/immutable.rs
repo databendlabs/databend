@@ -269,8 +269,12 @@ impl Bitmap {
 
     /// Returns a pointer to the start of this [`Bitmap`] (ignores `offsets`)
     /// This pointer is allocated iff `self.len() > 0`.
-    pub(crate) fn offset(&self) -> usize {
+    pub fn offset(&self) -> usize {
         self.offset
+    }
+
+    pub fn values(&self) -> &[u8] {
+        self.bytes.deref()
     }
 
     /// Converts this [`Bitmap`] to [`MutableBitmap`], returning itself if the conversion
