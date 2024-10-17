@@ -1,9 +1,10 @@
-error: 
-  --> SQL:1:1
-  |
-1 | to_timestamp(-30610224000000001)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(-30610224000000001)` in expr `to_timestamp(- 30610224000000001)`
-
+ast            : to_timestamp(-30610224000000001)
+raw expr       : to_timestamp(minus(30610224000000001))
+checked expr   : to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(-315360000000000)
@@ -78,12 +79,13 @@ output domain  : {315360000000000..=315360000000000}
 output         : '1979-12-30 00:00:00.000000'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | to_timestamp(253402300800000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(253402300800000000)` in expr `to_timestamp(to_int64(253402300800000000))`
-
+ast            : to_timestamp(253402300800000000)
+raw expr       : to_timestamp(253402300800000000)
+checked expr   : to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(a)
@@ -112,12 +114,13 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | to_date(-354286)
-  | ^^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(-354286)` in expr `to_date(- 354286)`
-
+ast            : to_date(-354286)
+raw expr       : to_date(minus(354286))
+checked expr   : to_date<Int64>(minus<UInt32>(354286_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : to_date(-354285)
@@ -174,12 +177,13 @@ output domain  : {2932896..=2932896}
 output         : '9999-12-31'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | to_date(2932897)
-  | ^^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(2932897)` in expr `to_date(to_int64(2932897))`
-
+ast            : to_date(2932897)
+raw expr       : to_date(2932897)
+checked expr   : to_date<Int64>(to_int64<UInt32>(2932897_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : to_date(a)
@@ -206,12 +210,13 @@ evaluation (internal):
 +--------+-----------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | add_years(to_date(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
-
+ast            : add_years(to_date(0), 10000)
+raw expr       : add_years(to_date(0), 10000)
+checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : add_years(to_date(0), 100)
@@ -250,12 +255,13 @@ output domain  : {100..=100}
 output         : '1970-04-11'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | add(to_date(0), 10000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `plus('1970-01-01', 10000000)` in expr `to_date(to_int64(0)) + to_int64(10000000)`
-
+ast            : add(to_date(0), 10000000)
+raw expr       : add(to_date(0), 10000000)
+checked expr   : plus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt32>(10000000_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : subtract_years(to_date(0), 100)
@@ -303,12 +309,13 @@ output domain  : {-100..=-100}
 output         : '1969-09-23'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | subtract(to_date(0), 10000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `minus('1970-01-01', 10000000)` in expr `to_date(to_int64(0)) - to_int64(10000000)`
-
+ast            : subtract(to_date(0), 10000000)
+raw expr       : subtract(to_date(0), 10000000)
+checked expr   : minus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt32>(10000000_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : add_years(a, b)
@@ -495,12 +502,13 @@ evaluation (internal):
 +--------+------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | add_years(to_timestamp(0), 10000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
-
+ast            : add_years(to_timestamp(0), 10000)
+raw expr       : add_years(to_timestamp(0), 10000)
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : add_years(to_timestamp(0), 100)
@@ -575,12 +583,13 @@ output domain  : {100000000000000..=100000000000000}
 output         : '1973-03-03 09:46:40.000000'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | add(to_timestamp(0), 1000000000000000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `plus('1970-01-01 00:00:00.000000', 1000000000000000000)` in expr `to_timestamp(to_int64(0)) + to_int64(1000000000000000000)`
-
+ast            : add(to_timestamp(0), 1000000000000000000)
+raw expr       : add(to_timestamp(0), 1000000000000000000)
+checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(1000000000000000000_u64))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : subtract_years(to_timestamp(0), 100)
@@ -655,12 +664,13 @@ output domain  : {-100000000000000..=-100000000000000}
 output         : '1966-10-31 14:13:20.000000'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | subtract(to_timestamp(0), 1000000000000000000)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `minus('1970-01-01 00:00:00.000000', 1000000000000000000)` in expr `to_timestamp(to_int64(0)) - to_int64(1000000000000000000)`
-
+ast            : subtract(to_timestamp(0), 1000000000000000000)
+raw expr       : subtract(to_timestamp(0), 1000000000000000000)
+checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(1000000000000000000_u64))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : add_years(a, b)
@@ -985,12 +995,13 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | date_add(year, 10000, to_date(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
-
+ast            : date_add(year, 10000, to_date(0))
+raw expr       : add_years(to_date(0), 10000)
+checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : date_add(year, 100, to_date(0))
@@ -1249,12 +1260,13 @@ evaluation (internal):
 +--------+------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | date_add(year, 10000, to_timestamp(0))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
-
+ast            : date_add(year, 10000, to_timestamp(0))
+raw expr       : add_years(to_timestamp(0), 10000)
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : date_add(year, 100, to_timestamp(0))
@@ -1705,12 +1717,13 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
-error: 
-  --> SQL:1:12
-  |
-1 | to_date(0) + interval 10000 year
-  |            ^ date is out of range while evaluating function `add_years('1970-01-01', 10000)` in expr `add_years(to_date(to_int64(0)), to_int64(10000))`
-
+ast            : to_date(0) + interval 10000 year
+raw expr       : add_years(to_date(0), 10000)
+checked expr   : add_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : to_date(0) + interval 100 year
@@ -1969,12 +1982,13 @@ evaluation (internal):
 +--------+------------------+
 
 
-error: 
-  --> SQL:1:17
-  |
-1 | to_timestamp(0) + interval 10000 year
-  |                 ^ timestamp is out of range while evaluating function `add_years('1970-01-01 00:00:00.000000', 10000)` in expr `add_years(to_timestamp(to_int64(0)), to_int64(10000))`
-
+ast            : to_timestamp(0) + interval 10000 year
+raw expr       : add_years(to_timestamp(0), 10000)
+checked expr   : add_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt16>(10000_u16))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(0) + interval 100 year
