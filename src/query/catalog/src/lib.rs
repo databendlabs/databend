@@ -20,6 +20,7 @@ pub mod cluster_info;
 pub mod database;
 pub mod lock;
 pub mod merge_into_join;
+pub mod partition_columns;
 pub mod plan;
 pub mod query_kind;
 pub mod runtime_filter_info;
