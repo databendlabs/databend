@@ -316,7 +316,7 @@ pub struct QueryEntry {
 }
 
 impl QueryEntry {
-    fn create_entry(
+    pub fn create_entry(
         ctx: &Arc<QueryContext>,
         plan_extras: &PlanExtras,
         need_acquire_to_queue: bool,
@@ -402,6 +402,7 @@ impl QueryEntry {
             | Plan::VacuumTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
+            | Plan::ReclusterTable { .. }
             | Plan::TruncateTable(_) => {
                 return true;
             }
