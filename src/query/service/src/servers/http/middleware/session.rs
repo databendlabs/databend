@@ -395,11 +395,9 @@ async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Re
     let url = format!("{scheme}://{addr}/v1{}", req.uri());
 
     let client = reqwest::Client::new();
-    let mut request_builder = client.request(req.method().clone(), &url);
-    for (name, value) in req.headers().iter() {
-        request_builder = request_builder.header(name, value);
-    }
-    let reqwest_request = request_builder
+    let reqwest_request = client
+        .request(req.method().clone(), &url)
+        .headers(req.headers().clone())
         .body(req.take_body().into_bytes().await?)
         .build()
         .map_err(|e| {
@@ -425,7 +423,7 @@ async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Re
     let mut poem_resp = Response::builder().status(status).body(body);
     let headers_ref = poem_resp.headers_mut();
     for (key, value) in headers.iter() {
-        headers_ref.insert(key, value.clone());
+        headers_ref.insert(key, value.to_owned());
     }
     Ok(poem_resp)
 }
