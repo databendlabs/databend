@@ -68,9 +68,10 @@ impl HashJoinSpiller {
             SpillerType::HashJoinProbe
         };
         let spill_config = SpillerConfig {
+            spiller_type,
             location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
             disk_spill: None,
-            spiller_type,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
         };
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;
@@ -145,9 +146,8 @@ impl HashJoinSpiller {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &fetch_option)?
                 {
-                    let data_block = DataBlock::concat(&data_blocks)?;
                     self.spiller
-                        .spill_with_partition(partition_id, data_block)
+                        .spill_with_partition(partition_id, data_blocks)
                         .await?;
                 }
             }
