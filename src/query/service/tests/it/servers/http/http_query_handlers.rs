@@ -860,10 +860,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    Ok(Route::new().nest(
-        "/v1/query",
-        query_route(HttpHandlerKind::Query).around(json_response),
-    ))
+    Ok(Route::new().nest("/v1", query_route().around(json_response)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
