@@ -14,11 +14,12 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_catalog::plan::Projection;
-use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
+
+use crate::plan::Projection;
+use crate::plan::PushDownInfo;
 
 pub fn get_pushdown_without_partition_columns(
     mut pushdown: PushDownInfo,
@@ -87,10 +88,9 @@ fn shift_projection(prj: Projection, partition_columns: &[FieldIndex]) -> Result
 
 #[cfg(test)]
 mod tests {
-    use databend_common_catalog::plan::Projection;
-
     use super::shift_projection;
     use super::shift_projection_index;
+    use crate::plan::Projection;
 
     #[test]
     fn test_shift_projection_index() {

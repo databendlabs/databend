@@ -244,26 +244,9 @@ pub fn set_type(i: Input) -> IResult<SetType> {
         },
         |res| match res {
             Some(token) => match token.kind {
-                TokenKind::GLOBAL => SetType::SettingsGlobal,
-                TokenKind::SESSION => SetType::SettingsSession,
-                TokenKind::VARIABLE => SetType::Variable,
-                _ => unreachable!(),
-            },
-            None => SetType::SettingsSession,
-        },
-    )(i)
-}
-
-pub fn unset_type(i: Input) -> IResult<SetType> {
-    map(
-        rule! {
-           (GLOBAL | SESSION | VARIABLE)?
-        },
-        |res| match res {
-            Some(token) => match token.kind {
-                TokenKind::GLOBAL => SetType::SettingsGlobal,
-                TokenKind::SESSION => SetType::SettingsSession,
-                TokenKind::VARIABLE => SetType::Variable,
+                GLOBAL => SetType::SettingsGlobal,
+                SESSION => SetType::SettingsSession,
+                VARIABLE => SetType::Variable,
                 _ => unreachable!(),
             },
             None => SetType::SettingsSession,
@@ -294,7 +277,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {
-    map(rule! { "$" ~ ^#plain_ident }, |(_, name)| name.name)(i)
+    map(rule! { IdentVariable }, |t| t.text()[1..].to_string())(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.

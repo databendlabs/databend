@@ -198,7 +198,7 @@ impl ReclusterMutator {
         // Compute memory threshold and maximum number of blocks allowed for reclustering
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
-        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 35 / 100);
+        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 30 / 100);
         // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
         let max_blocks_num =
             (memory_threshold / self.block_thresholds.max_bytes_per_block).max(2) * self.max_tasks;

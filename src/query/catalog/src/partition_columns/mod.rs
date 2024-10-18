@@ -16,4 +16,4 @@ mod pushdown_transform;
 mod values_serde;
 
 pub use pushdown_transform::get_pushdown_without_partition_columns;
-pub use values_serde::get_partition_values;
+pub use values_serde::str_to_scalar;

@@ -20,6 +20,7 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::client_session_ident::ClientSessionIdent;
+use databend_common_meta_app::principal::client_session_ident::UserSessionId;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token_ident::TokenIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -47,8 +48,12 @@ impl ClientSessionMgr {
     fn token_ident(&self, token_hash: &str) -> TokenIdent {
         TokenIdent::new(self.tenant.clone(), token_hash)
     }
-    fn session_ident(&self, client_session_id: &str) -> ClientSessionIdent {
-        ClientSessionIdent::new(self.tenant.clone(), client_session_id)
+    fn session_ident(&self, user_name: &str, session_id: &str) -> ClientSessionIdent {
+        let id = UserSessionId {
+            user_name: user_name.to_string(),
+            session_id: session_id.to_string(),
+        };
+        ClientSessionIdent::new_generic(self.tenant.clone(), id)
     }
 }
 
@@ -104,13 +109,15 @@ impl ClientSessionMgr {
     #[fastrace::trace]
     pub async fn upsert_client_session_id(
         &self,
+        user_name: &str,
         client_session_id: &str,
-        value: ClientSession,
         ttl: Duration,
     ) -> Result<bool> {
-        let ident = self.session_ident(client_session_id);
+        let ident = self.session_ident(user_name, client_session_id);
         let seq = MatchSeq::GE(0);
-        let upsert = UpsertPB::update(ident, value).with(seq).with_ttl(ttl);
+        let upsert = UpsertPB::update(ident, ClientSession {})
+            .with(seq)
+            .with_ttl(ttl);
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
@@ -121,9 +128,10 @@ impl ClientSessionMgr {
     #[fastrace::trace]
     pub async fn get_client_session(
         &self,
+        user_name: &str,
         client_session_id: &str,
     ) -> Result<Option<ClientSession>> {
-        let ident = self.session_ident(client_session_id);
+        let ident = self.session_ident(user_name, client_session_id);
         let res = self.kv_api.get_pb(&ident).await?;
 
         Ok(res.map(|r| r.data))
@@ -131,8 +139,14 @@ impl ClientSessionMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn drop_client_session_id(&self, client_session_id: &str) -> Result<()> {
-        let key = self.session_ident(client_session_id).to_string_key();
+    pub async fn drop_client_session_id(
+        &self,
+        user_name: &str,
+        client_session_id: &str,
+    ) -> Result<()> {
+        let key = self
+            .session_ident(user_name, client_session_id)
+            .to_string_key();
 
         // simply ignore the result
         self.kv_api
