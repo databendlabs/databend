@@ -809,4 +809,8 @@ impl Settings {
     pub fn set_short_sql_max_length(&self, val: u64) -> Result<()> {
         self.try_set_u64("short_sql_max_length", val)
     }
+
+    pub fn get_enable_prune_pipeline(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
+    }
 }
