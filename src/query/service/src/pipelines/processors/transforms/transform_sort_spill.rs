@@ -270,7 +270,7 @@ where R: Rows + Sync + Send + 'static
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
         debug_assert!(self.num_merge >= 2 && self.batch_rows > 0);
 
-        let location = self.spiller.spill(block).await?;
+        let location = self.spiller.spill(vec![block]).await?;
 
         self.unmerged_blocks.push_back(vec![location].into());
         Ok(())
@@ -347,7 +347,7 @@ where R: Rows + Sync + Send + 'static
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.async_next_block().await? {
-            let location = self.spiller.spill(block).await?;
+            let location = self.spiller.spill(vec![block]).await?;
 
             spilled.push_back(location);
         }
@@ -456,6 +456,7 @@ mod tests {
     use std::sync::Arc;
 
     use databend_common_base::base::tokio;
+    use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
     use databend_common_expression::block_debug::pretty_format_blocks;
     use databend_common_expression::types::DataType;
@@ -487,9 +488,10 @@ mod tests {
     ) -> Result<TransformSortSpill<SimpleRowsAsc<Int32Type>>> {
         let op = DataOperator::instance().operator();
         let spill_config = SpillerConfig {
+            spiller_type: SpillerType::OrderBy,
             location_prefix: "_spill_test".to_string(),
             disk_spill: None,
-            spiller_type: SpillerType::OrderBy,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
         };
 
         let spiller = Spiller::create(ctx.clone(), op, spill_config)?;
