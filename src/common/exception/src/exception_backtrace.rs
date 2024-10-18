@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use core::slice;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::fmt::Write;
 use std::path::PathBuf;
 // use std::backtrace::Backtrace;
@@ -26,6 +28,7 @@ use object::read::elf::Sym;
 use tantivy::HasLen;
 
 use crate::exception::ErrorCodeBacktrace;
+use crate::LibraryManager;
 
 // 0: not specified 1: disable 2: enable
 pub static USER_SET_ENABLE_BACKTRACE: AtomicUsize = AtomicUsize::new(0);
@@ -97,6 +100,7 @@ pub fn capture() -> Option<ErrorCodeBacktrace> {
     }
 }
 
+#[derive(Debug)]
 pub struct ResolvedStackFrame {
     pub virtual_address: usize,
     pub physical_address: usize,
@@ -129,5 +133,18 @@ impl StackTrace {
                 frames.len() != frames.capacity()
             });
         }
+    }
+}
+
+impl Debug for StackTrace {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let library_manager = LibraryManager::instance();
+        let frames = library_manager.resolve_frames(&self.frames);
+
+        for (idx, frame) in frames.into_iter().enumerate() {
+            writeln!(f, "{} {:?}", idx, frame)?;
+        }
+
+        Ok(())
     }
 }

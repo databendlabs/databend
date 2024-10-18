@@ -31,6 +31,7 @@ pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;
 pub use exception_backtrace::set_backtrace;
+pub use exception_backtrace::StackTrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 // #[cfg(target_os = "linux")]
 pub use exception_backtrace_elf::LibraryManager;

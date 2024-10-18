@@ -13,14 +13,24 @@
 // limitations under the License.
 
 use core::slice;
+use std::cell::OnceCell;
+use std::ffi::CStr;
+use std::ffi::OsStr;
+use std::ffi::OsString;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Write;
 use std::fs::File;
 use std::os::fd::AsRawFd;
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::Arc;
 
 use libc::iovec;
 use libc::size_t;
 use object::read::elf::FileHeader;
+use object::read::elf::SectionHeader;
 use object::read::elf::Sym;
 
 use crate::exception_backtrace::ResolvedStackFrame;
@@ -31,16 +41,28 @@ type Elf = object::elf::FileHeader32<object::NativeEndian>;
 #[cfg(target_pointer_width = "64")]
 type Elf = object::elf::FileHeader64<object::NativeEndian>;
 
-#[derive(Debug)]
 struct Symbol {
     name: &'static [u8],
     address_begin: u64,
     address_end: u64,
 }
 
+impl Debug for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Symbol")
+            .field(
+                "name",
+                &rustc_demangle::demangle(std::str::from_utf8(self.name).unwrap()),
+            )
+            .field("address_begin", &self.address_begin)
+            .field("address_end", &self.address_end)
+            .finish()
+    }
+}
+
 #[derive(Debug)]
 struct Library {
-    name: String,
+    name: PathBuf,
     address_begin: usize,
     address_end: usize,
     // library_data: Vec<u8>,
@@ -48,10 +70,21 @@ struct Library {
     // std::shared_ptr<Elf> elf;
 }
 
-#[derive(Debug)]
+static INSTANCE: OnceCell<Arc<LibraryManager>> = OnceCell::new();
+
+// #[derive(Debug)]
 pub struct LibraryManager {
     symbols: Vec<Symbol>,
     libraries: Vec<Library>,
+}
+
+impl Debug for LibraryManager {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LibraryManager")
+            .field("libraries", &self.libraries)
+            .field("symbols", &self.symbols.len())
+            .finish()
+    }
 }
 
 impl LibraryManager {
@@ -83,9 +116,9 @@ impl LibraryManager {
         }
     }
 
-    pub fn resolve_frames(&self, frames: Vec<StackFrame>) -> Vec<ResolvedStackFrame> {
+    pub fn resolve_frames(&self, frames: &[StackFrame]) -> Vec<ResolvedStackFrame> {
         let mut res = Vec::with_capacity(frames.len());
-        for frame in &mut frames {
+        for frame in frames {
             if let StackFrame::Unresolved(addr) = frame {
                 let Some(library) = self.find_library(*addr) else {
                     res.push(ResolvedStackFrame {
@@ -139,17 +172,11 @@ impl LibraryManager {
         }
     }
 
-    // pub fn resolve_frames(frames: &mut Vec<StackFrame>, symbols: &[Symbol]) {
-    //     for stack_frame in frames {
-    //         // if let StackFrame::UnSymbol(addr) = stack_frame {
-    //         // let Some(symbol) = symbols.iter().position(
-    //         //     |symbol| symbol.start_address as usize <= *addr
-    //         // ) else {
-    //         //     // *stack_frame = StackFrame::Unknown()
-    //         // };
-    //         // }
-    //     }
-    // }
+    pub fn instance() -> Arc<LibraryManager> {
+        INSTANCE
+            .get_or_init(|| Arc::new(LibraryManager::create()))
+            .clone()
+    }
 }
 
 struct Data {
@@ -157,7 +184,7 @@ struct Data {
     libraries: Vec<Library>,
 }
 
-pub fn library_debug_path(library_name: &str, build_id: &[u8]) -> std::io::Result<PathBuf> {
+pub fn library_debug_path(library_name: OsString, build_id: &[u8]) -> std::io::Result<PathBuf> {
     let mut binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
 
     let mut binary_debug_path = binary_path.clone();
@@ -200,7 +227,7 @@ pub fn library_debug_path(library_name: &str, build_id: &[u8]) -> std::io::Resul
     Ok(binary_path)
 }
 
-#[cfg(target_os = "linux")]
+// #[cfg(target_os = "linux")]
 unsafe extern "C" fn callback(
     info: *mut libc::dl_phdr_info,
     _size: libc::size_t,
@@ -220,21 +247,23 @@ unsafe extern "C" fn callback(
         }
     };
 
-    let Ok(library_path) = library_debug_path(&library_name) else {
+    let Ok(library_path) = library_debug_path(library_name, &vec![]) else {
         return 0;
     };
 
-    if let Some((ptr, len)) = mmap_library(library_path) {
+    if let Some((ptr, len)) = mmap_library(library_path.clone()) {
         let library = Library {
-            name: "".to_string(),
-            address_begin: info.dlpi_addr,
-            address_end: info.dlpi_addr + len,
+            name: library_path,
+            address_begin: info.dlpi_addr as usize,
+            address_end: info.dlpi_addr as usize + len,
             library_data: (ptr, len),
         };
 
+        let library_data =
+            std::slice::from_raw_parts(library.library_data.0, library.library_data.1);
         symbols_from_elf(
-            library.address_begin,
-            &library.library_data,
+            library.address_begin as u64,
+            library_data,
             &mut data.symbols,
         );
         data.libraries.push(library);
@@ -243,7 +272,7 @@ unsafe extern "C" fn callback(
     0
 }
 
-#[cfg(target_os = "linux")]
+// #[cfg(target_os = "linux")]
 unsafe fn mmap_library(library_path: PathBuf) -> Option<(*const u8, size_t)> {
     let file = std::fs::File::open(library_path).ok()?;
     let len = file.metadata().ok()?.len().try_into().ok()?;
@@ -253,11 +282,12 @@ unsafe fn mmap_library(library_path: PathBuf) -> Option<(*const u8, size_t)> {
         libc::PROT_READ,
         libc::MAP_PRIVATE,
         file.as_raw_fd(),
+        0,
     );
 
     match ptr == libc::MAP_FAILED {
         true => None,
-        false => Some((ptr.cast_const(), len)),
+        false => Some((ptr as *const u8, len)),
     }
 }
 
