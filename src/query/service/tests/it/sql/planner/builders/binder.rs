@@ -21,7 +21,7 @@ async fn test_query_kind() -> Result<()> {
         fixture.default_db_name(),
         fixture.default_table_name()
     );
-    let (_, _) = planner.plan_sql(&sql).await?;
+    let _ = planner.plan_sql(&sql).await?;
     let kind = ctx.get_query_kind();
     assert_eq!(kind, QueryKind::CopyIntoTable);
     Ok(())

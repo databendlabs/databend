@@ -28,6 +28,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Statement;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -41,7 +42,6 @@ use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::PlanExtras;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -316,9 +316,9 @@ pub struct QueryEntry {
 }
 
 impl QueryEntry {
-    fn create_entry(
+    pub fn create_entry(
         ctx: &Arc<QueryContext>,
-        plan_extras: &PlanExtras,
+        stmt: &Statement,
         need_acquire_to_queue: bool,
     ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
@@ -327,7 +327,7 @@ impl QueryEntry {
             need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_created_time(),
-            sql: plan_extras.statement.to_mask_sql(),
+            sql: stmt.to_mask_sql(),
             user_info: ctx.get_current_user()?,
             timeout: match settings.get_statement_queued_timeout()? {
                 0 => Duration::from_secs(60 * 60 * 24 * 365 * 35),
@@ -336,13 +336,9 @@ impl QueryEntry {
         })
     }
 
-    pub fn create(
-        ctx: &Arc<QueryContext>,
-        plan: &Plan,
-        plan_extras: &PlanExtras,
-    ) -> Result<QueryEntry> {
+    pub fn create(ctx: &Arc<QueryContext>, plan: &Plan, stmt: &Statement) -> Result<QueryEntry> {
         let need_add_to_queue = Self::is_heavy_action(plan);
-        QueryEntry::create_entry(ctx, plan_extras, need_add_to_queue)
+        QueryEntry::create_entry(ctx, stmt, need_add_to_queue)
     }
 
     /// Check a plan is heavy action or not.
@@ -402,6 +398,7 @@ impl QueryEntry {
             | Plan::VacuumTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
+            | Plan::ReclusterTable { .. }
             | Plan::TruncateTable(_) => {
                 return true;
             }

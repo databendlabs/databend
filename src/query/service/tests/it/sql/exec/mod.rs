@@ -77,7 +77,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         );
 
         // a. thread 1: read table
-        let (query_plan, _) = planner.plan_sql(&query).await?;
+        let query_plan = planner.plan_sql(&query).await?;
 
         if let Plan::Query {
             s_expr: _s_expr,
@@ -148,7 +148,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
 
     let compact_task = async move {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
-        let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
+        let compact_plan = planner2.plan_sql(&compact_sql).await?;
         if let Plan::OptimizeCompactBlock { s_expr, need_purge } = compact_plan {
             let optimize_interpreter = OptimizeCompactBlockInterpreter::try_create(
                 ctx.clone(),

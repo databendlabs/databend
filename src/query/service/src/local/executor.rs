@@ -135,7 +135,8 @@ impl SessionExecutor {
     ) -> Result<(SendableDataBlockStream, Arc<QueryContext>, Plan, Statement)> {
         let context = session.create_query_context().await?;
         let mut planner = Planner::new(context.clone());
-        let (plan, extras) = planner.plan_sql(sql).await?;
+        let extras = planner.parse_sql(sql)?;
+        let plan = planner.plan_stmt(&extras.statement).await?;
 
         let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
         let ctx = context.clone();

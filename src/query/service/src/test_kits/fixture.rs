@@ -877,7 +877,7 @@ impl TestFixture {
     pub async fn execute_query(&self, query: &str) -> Result<SendableDataBlockStream> {
         let ctx = self.new_query_ctx().await?;
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner.plan_sql(query).await?;
+        let plan = planner.plan_sql(query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         executor.execute(ctx).await
     }

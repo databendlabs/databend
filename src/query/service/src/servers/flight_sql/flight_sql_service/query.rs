@@ -121,7 +121,9 @@ impl FlightSqlServiceImpl {
             .map_err(|e| status!("Could not create_query_context", e))?;
 
         let mut planner = Planner::new(context.clone());
-        planner.plan_sql(query).await
+        let extras = planner.parse_sql(query)?;
+        let plan = planner.plan_stmt(&extras.statement).await?;
+        Ok((plan, extras))
     }
 
     #[async_backtrace::framed]

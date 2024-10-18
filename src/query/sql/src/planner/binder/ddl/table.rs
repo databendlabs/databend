@@ -1577,7 +1577,7 @@ impl Binder {
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         let mut planner = Planner::new(self.ctx.clone());
-                        let (plan, _) = planner.plan_sql(query).await?;
+                        let plan = planner.plan_sql(query).await?;
                         Ok((infer_table_schema(&plan.schema())?, vec![], None))
                     } else {
                         Err(ErrorCode::Internal(

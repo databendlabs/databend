@@ -160,7 +160,7 @@ impl SuggestedBackgroundTasksSource {
         sql: String,
     ) -> Result<Option<RecordBatch>> {
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _) = interpreter_plan_sql(ctx.clone(), sql.as_str()).await?;
+        let (plan, _, _) = interpreter_plan_sql(ctx.clone(), sql.as_str(), false).await?;
 
         let data_schema = plan.schema();
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;

@@ -59,7 +59,7 @@ impl Interpreter for CreateViewInterpreter {
         let table_function = catalog.list_table_functions();
         let mut options = BTreeMap::new();
         let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+        let plan = planner.plan_sql(&self.plan.subquery.clone()).await?;
         match plan.clone() {
             Plan::Query { metadata, .. } => {
                 let metadata = metadata.read().clone();

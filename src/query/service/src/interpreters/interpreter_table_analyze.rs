@@ -61,7 +61,7 @@ impl AnalyzeTableInterpreter {
 
     async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, BindContext)> {
         let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(&sql).await?;
+        let plan = planner.plan_sql(&sql).await?;
         let (select_plan, bind_context) = match &plan {
             Plan::Query {
                 s_expr,

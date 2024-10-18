@@ -1020,7 +1020,7 @@ async fn test_get_same_table_once() -> Result<()> {
     let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
 
     let mut planner = Planner::new(ctx.clone());
-    let (_, _) = planner.plan_sql(query.as_str()).await?;
+    let _ = planner.plan_sql(query.as_str()).await?;
 
     assert_eq!(
         ctx.table_without_cache

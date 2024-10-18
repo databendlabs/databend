@@ -83,14 +83,13 @@ impl Planner {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<Plan> {
         let extras = self.parse_sql(sql)?;
-        let plan = self.plan_stmt(&extras.statement).await?;
-        Ok((plan, extras))
+        self.plan_stmt(&extras.statement).await
     }
 
     #[fastrace::trace]
-    pub fn parse_sql(&mut self, sql: &str) -> Result<PlanExtras> {
+    pub fn parse_sql(&self, sql: &str) -> Result<PlanExtras> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect

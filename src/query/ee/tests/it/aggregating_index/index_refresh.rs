@@ -523,9 +523,7 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
     let mut planner = Planner::new(ctx);
-    let (plan, _) = planner.plan_sql(sql).await?;
-
-    Ok(plan)
+    planner.plan_sql(sql).await
 }
 
 async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBlockStream> {

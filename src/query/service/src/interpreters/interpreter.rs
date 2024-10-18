@@ -16,7 +16,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_ast::ast::AlterTableAction;
+use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::profile::get_statistics_desc;
@@ -54,7 +57,10 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
+use crate::sessions::AcquireQueueGuard;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryEntry;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
@@ -197,22 +203,52 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     }
 }
 
+pub async fn plan_sql(
+    ctx: Arc<QueryContext>,
+    sql: &str,
+    acquire_queue: bool,
+) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
+    let mut planner = Planner::new_with_sample_executor(
+        ctx.clone(),
+        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
+    );
+    let extras = planner.parse_sql(sql)?;
+    if !acquire_queue {
+        let plan = planner.plan_stmt(&extras.statement).await?;
+        return Ok((plan, extras, AcquireQueueGuard::create(None)));
+    }
+
+    let need_acquire_lock = need_acquire_lock(&extras.statement);
+    if need_acquire_lock {
+        let query_entry = QueryEntry::create_entry(&ctx, &extras.statement, true)?;
+        let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
+        let plan = planner.plan_stmt(&extras.statement).await?;
+        Ok((plan, extras, guard))
+    } else {
+        let plan = planner.plan_stmt(&extras.statement).await?;
+        let query_entry = QueryEntry::create(&ctx, &plan, &extras.statement)?;
+        let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
+        Ok((plan, extras, guard))
+    }
+}
+
 /// There are two steps to execute a query:
 /// 1. Plan the SQL
 /// 2. Execute the plan -- interpreter
 ///
 /// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
-pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
-    let mut planner = Planner::new_with_sample_executor(
-        ctx.clone(),
-        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
-    );
-    let result = planner.plan_sql(sql).await;
+pub async fn interpreter_plan_sql(
+    ctx: Arc<QueryContext>,
+    sql: &str,
+    acquire_queue: bool,
+) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
+    let result = plan_sql(ctx.clone(), sql, acquire_queue).await;
+
     let short_sql = short_sql(
         sql.to_string(),
         ctx.get_settings().get_short_sql_max_length()?,
     );
-    let mut stmt = if let Ok((_, extras)) = &result {
+    let mut stmt = if let Ok((_, extras, _)) = &result {
         Some(extras.statement.clone())
     } else {
         // Only log if there's an error
@@ -297,5 +333,26 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
     match &info.res {
         Ok(_) => Ok(()),
         Err(error) => Err(error.clone()),
+    }
+}
+
+fn need_acquire_lock(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::Replace(_)
+        | Statement::MergeInto(_)
+        | Statement::Update(_)
+        | Statement::Delete(_)
+        | Statement::OptimizeTable(_)
+        | Statement::TruncateTable(_) => true,
+
+        Statement::AlterTable(AlterTableStmt { action, .. }) => matches!(
+            action,
+            AlterTableAction::ReclusterTable { .. }
+                | AlterTableAction::ModifyColumn {
+                    action: ModifyColumnAction::SetDataType(_),
+                }
+        ),
+
+        _ => false,
     }
 }
