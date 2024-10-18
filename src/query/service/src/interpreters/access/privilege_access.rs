@@ -1108,13 +1108,13 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CreateView(plan) => {
                 let mut planner = Planner::new(self.ctx.clone());
-                let (plan, _) = planner.plan_sql(&plan.subquery).await?;
+                let plan = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
             }
             Plan::AlterView(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Alter, false).await?;
                 let mut planner = Planner::new(self.ctx.clone());
-                let (plan, _) = planner.plan_sql(&plan.subquery).await?;
+                let plan = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
             }
             Plan::DropView(plan) => {

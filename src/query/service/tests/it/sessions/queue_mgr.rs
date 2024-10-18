@@ -314,19 +314,19 @@ async fn test_heavy_actions() -> Result<()> {
 
         {
             let sql = "create table t1(a int)";
-            let (plan, _extras) = planner.plan_sql(sql).await?;
+            let plan = planner.plan_sql(sql).await?;
             let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
             let _ = interpreter.execute(ctx.clone()).await?;
         }
         {
             let sql = "create table t2(a int)";
-            let (plan, _extras) = planner.plan_sql(sql).await?;
+            let plan = planner.plan_sql(sql).await?;
             let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
             let _ = interpreter.execute(ctx.clone()).await?;
         }
         {
             let sql = "create stage s1";
-            let (plan, _extras) = planner.plan_sql(sql).await?;
+            let plan = planner.plan_sql(sql).await?;
             let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
             let _ = interpreter.execute(ctx.clone()).await?;
         }
@@ -335,9 +335,9 @@ async fn test_heavy_actions() -> Result<()> {
     // Check.
     for query in queries.iter() {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, extras) = planner.plan_sql(query.sql).await?;
-
-        let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
+        let extras = planner.parse_sql(query.sql)?;
+        let plan = planner.plan_stmt(&extras.statement).await?;
+        let query_entry = QueryEntry::create(&ctx, &plan, &extras.statement)?;
         if query.add_to_queue != query_entry.need_acquire_to_queue() {
             error!(
                 "query: {:?}, query-entry: {:?}",

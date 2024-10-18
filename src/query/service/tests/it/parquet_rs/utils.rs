@@ -31,7 +31,7 @@ pub async fn create_parquet_test_fixture() -> TestFixture {
 
 pub async fn get_data_source_plan(ctx: Arc<dyn TableContext>, sql: &str) -> Result<DataSourcePlan> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(sql).await?;
+    let plan = planner.plan_sql(sql).await?;
     let plan = if let Plan::Query {
         s_expr,
         metadata,

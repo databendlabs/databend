@@ -190,6 +190,6 @@ impl PySessionContext {
 
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(sql).await?;
+    let plan = planner.plan_sql(sql).await?;
     Ok(PyDataFrame::new(ctx.clone(), plan, default_box_size()))
 }

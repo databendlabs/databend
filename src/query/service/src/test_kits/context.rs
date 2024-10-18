@@ -31,7 +31,7 @@ use crate::sql::Planner;
 /// If you no need to care the ctx please use TestFixture.execute_query().
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(query).await?;
+    let plan = planner.plan_sql(query).await?;
     let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     executor.execute(ctx.clone()).await
 }

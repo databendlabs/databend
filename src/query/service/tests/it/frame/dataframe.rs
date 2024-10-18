@@ -411,7 +411,7 @@ async fn test_box_display() {
 
     for sql in cases {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner.plan_sql(sql).await.unwrap();
+        let plan = planner.plan_sql(sql).await.unwrap();
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await.unwrap();
         let stream = interpreter.execute(ctx.clone()).await.unwrap();

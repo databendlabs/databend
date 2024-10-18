@@ -357,7 +357,7 @@ impl ModifyTableColumnInterpreter {
 
         // 2. build plan by sql
         let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _extras) = planner.plan_sql(&sql).await?;
+        let plan = planner.plan_sql(&sql).await?;
 
         // 3. build physical plan by plan
         let (select_plan, select_column_bindings) = match plan {

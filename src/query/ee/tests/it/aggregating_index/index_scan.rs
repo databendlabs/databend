@@ -85,9 +85,7 @@ fn test_fuzz_with_spill() -> Result<()> {
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(sql).await?;
-
-    Ok(plan)
+    planner.plan_sql(sql).await
 }
 
 async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBlockStream> {

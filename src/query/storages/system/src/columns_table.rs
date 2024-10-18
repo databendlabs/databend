@@ -157,9 +157,7 @@ impl ColumnsTable {
                         let fields = if let Some(query) = table.options().get(QUERY) {
                             let mut planner = Planner::new(ctx.clone());
                             match planner.plan_sql(query).await {
-                                Ok((plan, _)) => {
-                                    infer_table_schema(&plan.schema())?.fields().clone()
-                                }
+                                Ok(plan) => infer_table_schema(&plan.schema())?.fields().clone(),
                                 Err(e) => {
                                     // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
                                     warn!(
