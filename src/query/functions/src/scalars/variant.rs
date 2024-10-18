@@ -1655,11 +1655,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         {
             return None;
         }
-        if args_type.len() == 4 {
-            if args_type[3].remove_nullable() != DataType::Boolean && args_type[3] != DataType::Null
-            {
-                return None;
-            }
+        if args_type.len() == 4
+            && args_type[3].remove_nullable() != DataType::Boolean
+            && args_type[3] != DataType::Null
+        {
+            return None;
         }
         let is_nullable = args_type[0].is_nullable_or_null();
         let return_type = if is_nullable {

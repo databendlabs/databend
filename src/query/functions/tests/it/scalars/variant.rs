@@ -1936,7 +1936,6 @@ fn test_json_array_overlap(file: &mut impl Write) {
     );
 }
 
-
 fn test_json_object_insert(file: &mut impl Write) {
     run_ast(
         file,
@@ -1963,11 +1962,7 @@ fn test_json_object_insert(file: &mut impl Write) {
         r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'v', null)"#,
         &[],
     );
-    run_ast(
-        file,
-        r#"json_object_insert('{}'::variant, 'v', 'vv')"#,
-        &[],
-    );
+    run_ast(file, r#"json_object_insert('{}'::variant, 'v', 'vv')"#, &[]);
     run_ast(
         file,
         r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'hello', true)"#,
@@ -2006,7 +2001,12 @@ fn test_json_object_insert(file: &mut impl Write) {
             (
                 "v",
                 StringType::from_data_with_validity(
-                    vec![r#"{"k":"v"}"#, r#"{"m":"n"}"#, "", r#"{"a":"b","c":"d","y":"z"}"#],
+                    vec![
+                        r#"{"k":"v"}"#,
+                        r#"{"m":"n"}"#,
+                        "",
+                        r#"{"a":"b","c":"d","y":"z"}"#,
+                    ],
                     vec![true, true, false, true],
                 ),
             ),
@@ -2025,7 +2025,12 @@ fn test_json_object_insert(file: &mut impl Write) {
             (
                 "v",
                 StringType::from_data_with_validity(
-                    vec![r#"{"k":"v"}"#, r#"{"m":"n"}"#, "", r#"{"a":"b","c":"d","y":"z"}"#],
+                    vec![
+                        r#"{"k":"v"}"#,
+                        r#"{"m":"n"}"#,
+                        "",
+                        r#"{"a":"b","c":"d","y":"z"}"#,
+                    ],
                     vec![true, true, false, true],
                 ),
             ),
@@ -2038,4 +2043,3 @@ fn test_json_object_insert(file: &mut impl Write) {
         ],
     );
 }
-
