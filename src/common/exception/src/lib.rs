@@ -19,10 +19,10 @@ extern crate core;
 mod context;
 pub mod exception;
 mod exception_backtrace;
+mod exception_backtrace_elf;
 mod exception_code;
 mod exception_flight;
 mod exception_into;
-mod exception_backtrace_elf;
 
 pub use context::display_error_stack;
 pub use context::ErrorFrame;
@@ -32,4 +32,6 @@ pub use exception::Result;
 pub use exception::ToErrorCode;
 pub use exception_backtrace::set_backtrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
+// #[cfg(target_os = "linux")]
+pub use exception_backtrace_elf::LibraryManager;
 pub use exception_into::SerializedError;

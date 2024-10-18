@@ -19,7 +19,10 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use object::read::elf::{FileHeader, SectionHeader, Sym};
+
+use object::read::elf::FileHeader;
+use object::read::elf::SectionHeader;
+use object::read::elf::Sym;
 use tantivy::HasLen;
 
 use crate::exception::ErrorCodeBacktrace;

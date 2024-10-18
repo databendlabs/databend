@@ -12,55 +12,74 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use core::slice;
+use std::fs::File;
+use std::os::fd::AsRawFd;
 use std::path::PathBuf;
+use std::ptr;
+
 use libc::iovec;
-use object::read::elf::{FileHeader, Sym};
-use crate::exception_backtrace::{ResolvedStackFrame, StackFrame};
+use libc::size_t;
+use object::read::elf::FileHeader;
+use object::read::elf::Sym;
+
+use crate::exception_backtrace::ResolvedStackFrame;
+use crate::exception_backtrace::StackFrame;
 
 #[cfg(target_pointer_width = "32")]
 type Elf = object::elf::FileHeader32<object::NativeEndian>;
 #[cfg(target_pointer_width = "64")]
 type Elf = object::elf::FileHeader64<object::NativeEndian>;
 
+#[derive(Debug)]
 struct Symbol {
     name: &'static [u8],
     address_begin: u64,
     address_end: u64,
 }
 
+#[derive(Debug)]
 struct Library {
     name: String,
     address_begin: usize,
     address_end: usize,
-    library_data: Vec<u8>,
+    // library_data: Vec<u8>,
+    library_data: (*const u8, usize),
     // std::shared_ptr<Elf> elf;
 }
 
-struct LibraryManager {
+#[derive(Debug)]
+pub struct LibraryManager {
     symbols: Vec<Symbol>,
     libraries: Vec<Library>,
 }
 
 impl LibraryManager {
     fn find_library(&self, addr: usize) -> Option<&Library> {
-        match self.libraries.iter().find(|library| library.address_begin <= addr) {
+        match self
+            .libraries
+            .iter()
+            .find(|library| library.address_begin <= addr)
+        {
             None => None,
             Some(v) => match v.address_end >= addr {
                 true => Some(v),
                 false => None,
-            }
+            },
         }
     }
 
     fn find_symbol(&self, addr: usize) -> Option<&Symbol> {
-        match self.symbols.iter().find(|symbol| symbol.address_begin as usize <= addr) {
+        match self
+            .symbols
+            .iter()
+            .find(|symbol| symbol.address_begin as usize <= addr)
+        {
             None => None,
             Some(v) => match v.address_end as usize >= addr {
                 true => Some(v),
                 false => None,
-            }
+            },
         }
     }
 
@@ -84,7 +103,10 @@ impl LibraryManager {
                         virtual_address: *addr,
                         physical_address: *addr - library.address_begin,
                         library: String::new(),
-                        symbol: format!("{}", rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())),
+                        symbol: format!(
+                            "{}",
+                            rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
+                        ),
                     });
                 }
             }
@@ -93,65 +115,28 @@ impl LibraryManager {
         res
     }
 
-    #[cfg(target_os = "linux")]
-    pub fn create(&mut self) -> LibraryManager {
+    // #[cfg(target_os = "linux")]
+    pub fn create() -> LibraryManager {
         unsafe {
-            let mut data = Data { symbols: vec![], libraries: vec![] };
+            let mut data = Data {
+                symbols: vec![],
+                libraries: vec![],
+            };
             libc::dl_iterate_phdr(Some(callback), core::ptr::addr_of_mut!(data).cast());
 
-            data.symbols.sort_by(|a, b| a.address_begin.cmp(&b.address_begin));
-            data.libraries.sort_by(|a, b| a.address_begin.cmp(&b.address_begin));
-            data.symbols.dedup_by(|a, b| a.address_begin == b.address_begin && b.address_end == b.address_end);
+            data.symbols
+                .sort_by(|a, b| a.address_begin.cmp(&b.address_begin));
+            data.libraries
+                .sort_by(|a, b| a.address_begin.cmp(&b.address_begin));
+            data.symbols.dedup_by(|a, b| {
+                a.address_begin == b.address_begin && b.address_end == b.address_end
+            });
 
             LibraryManager {
                 symbols: data.symbols,
                 libraries: data.libraries,
             }
         }
-    }
-
-    pub fn debug_path(library_name: &str, build_id: &[u8]) -> std::io::Result<PathBuf> {
-        let mut binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
-
-        let mut binary_debug_path = binary_path.clone();
-        binary_debug_path.set_extension("debug");
-
-        if std::fs::exists(&binary_debug_path)? {
-            return Ok(binary_debug_path);
-        }
-
-        let relative_path = binary_path.strip_prefix("/").unwrap();
-        let mut system_named_debug_path =
-            std::path::Path::new("/uar/lib/debug").join(relative_path);
-        system_named_debug_path.set_extension("debug");
-
-        if std::fs::exists(&system_named_debug_path)? {
-            return Ok(system_named_debug_path);
-        }
-
-        if build_id.len() >= 2 {
-            let mut system_dir = std::path::Path::new("/uar/lib/debug").to_path_buf();
-
-            fn encode_hex(bytes: &[u8]) -> String {
-                let mut encoded_hex = String::with_capacity(bytes.len() * 2);
-                for &b in bytes {
-                    write!(&mut encoded_hex, "{:02x}", b).unwrap();
-                }
-                encoded_hex
-            }
-
-            let mut system_id_debug_path = system_dir
-                .join(encode_hex(&build_id[..1]))
-                .join(encode_hex(&build_id[1..]));
-
-            system_id_debug_path.set_extension("debug");
-
-            if std::fs::exists(&system_id_debug_path)? {
-                return Ok(system_id_debug_path);
-            }
-        }
-
-        Ok(binary_path)
     }
 
     // pub fn resolve_frames(frames: &mut Vec<StackFrame>, symbols: &[Symbol]) {
@@ -172,37 +157,108 @@ struct Data {
     libraries: Vec<Library>,
 }
 
+pub fn library_debug_path(library_name: &str, build_id: &[u8]) -> std::io::Result<PathBuf> {
+    let mut binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
+
+    let mut binary_debug_path = binary_path.clone();
+    binary_debug_path.set_extension("debug");
+
+    if std::fs::exists(&binary_debug_path)? {
+        return Ok(binary_debug_path);
+    }
+
+    let relative_path = binary_path.strip_prefix("/").unwrap();
+    let mut system_named_debug_path = std::path::Path::new("/uar/lib/debug").join(relative_path);
+    system_named_debug_path.set_extension("debug");
+
+    if std::fs::exists(&system_named_debug_path)? {
+        return Ok(system_named_debug_path);
+    }
+
+    if build_id.len() >= 2 {
+        let mut system_dir = std::path::Path::new("/uar/lib/debug").to_path_buf();
+
+        fn encode_hex(bytes: &[u8]) -> String {
+            let mut encoded_hex = String::with_capacity(bytes.len() * 2);
+            for &b in bytes {
+                write!(&mut encoded_hex, "{:02x}", b).unwrap();
+            }
+            encoded_hex
+        }
+
+        let mut system_id_debug_path = system_dir
+            .join(encode_hex(&build_id[..1]))
+            .join(encode_hex(&build_id[1..]));
+
+        system_id_debug_path.set_extension("debug");
+
+        if std::fs::exists(&system_id_debug_path)? {
+            return Ok(system_id_debug_path);
+        }
+    }
+
+    Ok(binary_path)
+}
+
 #[cfg(target_os = "linux")]
-unsafe extern "C" fn callback(info: *mut libc::dl_phdr_info, _size: libc::size_t, vec: *mut libc::c_void) -> libc::c_int {
+unsafe extern "C" fn callback(
+    info: *mut libc::dl_phdr_info,
+    _size: libc::size_t,
+    vec: *mut libc::c_void,
+) -> libc::c_int {
     let info = &*info;
     let data = &mut *vec.cast::<Data>();
-    let is_main_prog = info.dlpi_name.is_null() || *info.dlpi_name == 0;
-    let name = if is_main_prog {
-        // The man page for dl_iterate_phdr says that the first object visited by
-        // callback is the main program; so the first time we encounter a
-        // nameless entry, we can assume its the main program and try to infer its path.
-        // After that, we cannot continue that assumption, and we use an empty string.
-        // if libs.is_empty() {
-        //     infer_current_exe(info.dlpi_addr as usize)
-        // } else {
-        //     OsString::new()
-        // }
-    } else {
-        // let bytes = CStr::from_ptr(info.dlpi_name).to_bytes();
-        // OsStr::from_bytes(bytes).to_owned()
+
+    let library_name = match info.dlpi_name.is_null() || *info.dlpi_name == 0 {
+        true => match data.libraries.is_empty() {
+            true => OsString::from("/proc/self/exe"),
+            false => OsString::new(),
+        },
+        false => {
+            let bytes = CStr::from_ptr(info.dlpi_name).to_bytes();
+            OsStr::from_bytes(bytes).to_owned()
+        }
     };
 
-    let library = Library {
-        name: "".to_string(),
-        address_begin: info.dlpi_addr,
-        address_end: 0,
-        // address_end: info.dlpi_addr + info,
-        library_data: vec![],
+    let Ok(library_path) = library_debug_path(&library_name) else {
+        return 0;
     };
 
-    symbols_from_elf(library.address_begin, &library.library_data, &mut data.symbols);
-    data.libraries.push(library);
+    if let Some((ptr, len)) = mmap_library(library_path) {
+        let library = Library {
+            name: "".to_string(),
+            address_begin: info.dlpi_addr,
+            address_end: info.dlpi_addr + len,
+            library_data: (ptr, len),
+        };
+
+        symbols_from_elf(
+            library.address_begin,
+            &library.library_data,
+            &mut data.symbols,
+        );
+        data.libraries.push(library);
+    }
+
     0
+}
+
+#[cfg(target_os = "linux")]
+unsafe fn mmap_library(library_path: PathBuf) -> Option<(*const u8, size_t)> {
+    let file = std::fs::File::open(library_path).ok()?;
+    let len = file.metadata().ok()?.len().try_into().ok()?;
+    let ptr = libc::mmap(
+        ptr::null_mut(),
+        len,
+        libc::PROT_READ,
+        libc::MAP_PRIVATE,
+        file.as_raw_fd(),
+    );
+
+    match ptr == libc::MAP_FAILED {
+        true => None,
+        false => Some((ptr.cast_const(), len)),
+    }
 }
 
 pub fn symbols_from_elf(base: u64, data: &[u8], symbols: &mut Vec<Symbol>) -> bool {
@@ -225,7 +281,7 @@ pub fn symbols_from_elf(base: u64, data: &[u8], symbols: &mut Vec<Symbol>) -> bo
             Err(_) => {
                 return false;
             }
-        }
+        },
     };
 
     let string_table = symbol_table.strings();

@@ -21,6 +21,7 @@ use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::InnerConfig;
+use databend_common_exception::LibraryManager;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_tracing::pipe_file;
@@ -37,6 +38,9 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
+    let manager = LibraryManager::create();
+    eprintln!("librarys: {:?}", manager);
+
     let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();
 
     // Crash tracker
