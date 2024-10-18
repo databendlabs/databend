@@ -19,6 +19,7 @@ use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_SESSION_ID;
+use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::runtime::ThreadTracker;
@@ -28,6 +29,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NodeInfo;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -47,6 +49,7 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::Addr;
 use poem::Endpoint;
+use poem::Error;
 use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
@@ -55,6 +58,7 @@ use uuid::Uuid;
 
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
+use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
@@ -81,6 +85,12 @@ impl EndpointKind {
     /// avoid the cost of get user from meta
     pub fn need_user_info(&self) -> bool {
         !matches!(self, EndpointKind::NoAuth | EndpointKind::PollQuery)
+    }
+    pub fn may_need_sticky(&self) -> bool {
+        matches!(
+            self,
+            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout
+        )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
         match self {
@@ -372,14 +382,96 @@ impl<E> HTTPSessionEndpoint<E> {
     }
 }
 
+async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Response> {
+    let addr = node.http_address.clone();
+    let config = GlobalConfig::instance();
+    let scheme = if config.query.http_handler_tls_server_key.is_empty()
+        || config.query.http_handler_tls_server_cert.is_empty()
+    {
+        "http"
+    } else {
+        "https"
+    };
+    let url = format!("{scheme}://{addr}/v1{}", req.uri());
+
+    let client = reqwest::Client::new();
+    let mut request_builder = client.request(req.method().clone(), &url);
+    for (name, value) in req.headers().iter() {
+        request_builder = request_builder.header(name, value);
+    }
+    let reqwest_request = request_builder
+        .body(req.take_body().into_bytes().await?)
+        .build()
+        .map_err(|e| {
+            HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                "fail to build forward request: {e}"
+            )))
+        })?;
+
+    let response = client.execute(reqwest_request).await.map_err(|e| {
+        HttpErrorCode::server_error(ErrorCode::Internal(format!(
+            "fail to send forward request: {e}",
+        )))
+    })?;
+
+    let status = StatusCode::from_u16(response.status().as_u16())
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let headers = response.headers().clone();
+    let body = response.bytes().await.map_err(|e| {
+        HttpErrorCode::server_error(ErrorCode::Internal(format!(
+            "fail to send forward request: {e}",
+        )))
+    })?;
+    let mut poem_resp = Response::builder().status(status).body(body);
+    let headers_ref = poem_resp.headers_mut();
+    for (key, value) in headers.iter() {
+        headers_ref.insert(key, value.clone());
+    }
+    Ok(poem_resp)
+}
+
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
     #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
+        let headers = req.headers().clone();
+
+        if self.endpoint_kind.may_need_sticky()
+            && let Some(sticky_node_id) = headers.get(HEADER_STICKY)
+        {
+            let sticky_node_id = sticky_node_id
+                .to_str()
+                .map_err(|e| {
+                    HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                        "Invalid Header ({HEADER_STICKY}: {sticky_node_id:?}): {e}"
+                    )))
+                })?
+                .to_string();
+            let local_id = GlobalConfig::instance().query.node_id.clone();
+            if local_id != sticky_node_id {
+                let config = GlobalConfig::instance();
+                return if let Some(node) = ClusterDiscovery::instance()
+                    .find_node_by_id(&sticky_node_id, &config)
+                    .await
+                    .map_err(HttpErrorCode::server_error)?
+                {
+                    log::info!(
+                        "forwarding {} from {local_id} to {sticky_node_id}",
+                        req.uri()
+                    );
+                    forward_request(req, node).await
+                } else {
+                    let msg = format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
+                    warn!("{}", msg);
+                    Err(Error::from(HttpErrorCode::bad_request(
+                        ErrorCode::BadArguments(msg),
+                    )))
+                };
+            }
+        }
         let method = req.method().clone();
         let uri = req.uri().clone();
-        let headers = req.headers().clone();
 
         let query_id = req
             .headers()
