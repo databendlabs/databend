@@ -5459,7 +5459,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_insert('123'::variant, 'v', 'vv')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidObject while evaluating function `json_object_insert('123', 'v', 'vv')` in expr `json_object_insert(parse_json('123'), 'v', 'vv')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_insert('123', 'v', 'vv')` in expr `json_object_insert(parse_json('123'), 'v', 'vv')`
 
 
 
@@ -5521,7 +5521,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_insert('123'::variant, 'v', 'vv', true)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidObject while evaluating function `json_object_insert('123', 'v', 'vv', true)` in expr `json_object_insert(parse_json('123'), 'v', 'vv', true)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_insert('123', 'v', 'vv', true)` in expr `json_object_insert(parse_json('123'), 'v', 'vv', true)`
 
 
 

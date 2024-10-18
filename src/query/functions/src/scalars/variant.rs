@@ -2075,6 +2075,12 @@ fn json_object_insert_fn(
             continue;
         }
         let value = value.as_variant().unwrap();
+        if !is_object(value) {
+            ctx.set_error(builder.len(), "Invalid json object");
+            builder.commit_row();
+            validity.push(false);
+            continue;
+        }
         let new_key = match &args[1] {
             ValueRef::Scalar(scalar) => scalar.clone(),
             ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
@@ -2102,30 +2108,24 @@ fn json_object_insert_fn(
             false
         };
         let new_key = new_key.as_string().unwrap();
-        match new_val {
+        let res = match new_val {
             ScalarRef::Variant(new_val) => {
-                if let Err(err) =
-                    jsonb::object_insert(value, new_key, new_val, update_flag, &mut builder.data)
-                {
-                    ctx.set_error(builder.len(), err.to_string());
-                }
+                jsonb::object_insert(value, new_key, new_val, update_flag, &mut builder.data)
             }
             _ => {
+                // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
-                cast_scalar_to_variant(new_val, ctx.func_ctx.tz, &mut new_val_buf);
-                if let Err(err) = jsonb::object_insert(
-                    value,
-                    new_key,
-                    &new_val_buf,
-                    update_flag,
-                    &mut builder.data,
-                ) {
-                    ctx.set_error(builder.len(), err.to_string());
-                }
+                cast_scalar_to_variant(new_val.clone(), ctx.func_ctx.tz, &mut new_val_buf);
+                jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
             }
+        };
+        if let Err(err) = res {
+            validity.push(false);
+            ctx.set_error(builder.len(), err.to_string());
+        } else {
+            validity.push(true);
         }
         builder.commit_row();
-        validity.push(true);
     }
     if is_nullable {
         let validity: Bitmap = validity.into();
