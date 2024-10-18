@@ -33,7 +33,6 @@ use databend_common_ast::ast::PivotValues;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::Range;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -460,7 +459,8 @@ impl<'a> SelectRewriter<'a> {
                     let data_blocks = databend_common_base::runtime::block_on(async move {
                         subquery_executor.execute_query(&query_sql).await
                     })?;
-                    let values = self.extract_column_values_from_data_blocks(&data_blocks)?;
+                    let values =
+                        self.extract_column_values_from_data_blocks(&data_blocks, subquery.span)?;
                     self.process_pivot_column_values(
                         pivot,
                         &values,
@@ -519,36 +519,31 @@ impl<'a> SelectRewriter<'a> {
     fn extract_column_values_from_data_blocks(
         &self,
         data_blocks: &[DataBlock],
+        span: Span,
     ) -> Result<Vec<Expr>> {
         let mut values: Vec<Expr> = vec![];
-        let mut current_span_pos = 0;
         for block in data_blocks {
             let columns = block.columns();
             if columns.len() != 1 {
-                return Err(ErrorCode::Internal(
+                return Err(ErrorCode::SemanticError(
                     "The subquery of `pivot in` must return one column",
-                ));
+                )
+                .set_span(span));
             }
-            let value = columns[0].to_column(block.num_rows());
-            for row in value.iter() {
-                match &row {
-                    ScalarRef::String(_) => {
-                        let row_str = row.to_string().trim_matches('\'').to_string();
-                        let length = row_str.len() as u32;
+            for row in 0..block.num_rows() {
+                match columns[0].value.index(row).unwrap() {
+                    ScalarRef::String(s) => {
                         let literal = Expr::Literal {
-                            span: Some(Range {
-                                start: current_span_pos,
-                                end: current_span_pos + length,
-                            }),
-                            value: Literal::String(row_str),
+                            span,
+                            value: Literal::String(s.to_string()),
                         };
                         values.push(literal);
-                        current_span_pos += length;
                     }
                     _ => {
-                        return Err(ErrorCode::Internal(
+                        return Err(ErrorCode::SemanticError(
                             "The subquery of `pivot in` must return a string type",
-                        ));
+                        )
+                        .set_span(span));
                     }
                 }
             }
