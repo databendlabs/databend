@@ -22852,6 +22852,8 @@ Query(
                                                 ignore_result: false,
                                             },
                                             alias: None,
+                                            pivot: None,
+                                            unpivot: None,
                                         },
                                     ],
                                     selection: None,

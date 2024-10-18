@@ -3807,6 +3807,8 @@ Query {
                             columns: [],
                         },
                     ),
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
@@ -5254,6 +5256,8 @@ Query {
                             columns: [],
                         },
                     ),
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
@@ -5394,6 +5398,8 @@ Query {
                             columns: [],
                         },
                     ),
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
@@ -5566,6 +5572,8 @@ Query {
                             columns: [],
                         },
                     ),
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
@@ -5680,40 +5688,42 @@ Query {
                                 quote: None,
                                 ident_type: None,
                             },
-                            values: [
-                                Literal {
-                                    span: Some(
-                                        60..65,
-                                    ),
-                                    value: String(
-                                        "JAN",
-                                    ),
-                                },
-                                Literal {
-                                    span: Some(
-                                        67..72,
-                                    ),
-                                    value: String(
-                                        "FEB",
-                                    ),
-                                },
-                                Literal {
-                                    span: Some(
-                                        74..79,
-                                    ),
-                                    value: String(
-                                        "MAR",
-                                    ),
-                                },
-                                Literal {
-                                    span: Some(
-                                        81..86,
-                                    ),
-                                    value: String(
-                                        "APR",
-                                    ),
-                                },
-                            ],
+                            values: ColumnValues(
+                                [
+                                    Literal {
+                                        span: Some(
+                                            60..65,
+                                        ),
+                                        value: String(
+                                            "JAN",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            67..72,
+                                        ),
+                                        value: String(
+                                            "FEB",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            74..79,
+                                        ),
+                                        value: String(
+                                            "MAR",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            81..86,
+                                        ),
+                                        value: String(
+                                            "APR",
+                                        ),
+                                    },
+                                ],
+                            ),
                         },
                     ),
                     unpivot: None,
@@ -5740,6 +5750,720 @@ Query {
                         Identifier {
                             span: Some(
                                 98..103,
+                            ),
+                            name: "empid",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from (select * from monthly_sales) pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid
+---------- Output ---------
+SELECT * FROM (SELECT * FROM monthly_sales) PIVOT(sum(amount) FOR month IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..104,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..104,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..104,
+                    ),
+                    lateral: false,
+                    subquery: Query {
+                        span: Some(
+                            15..42,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    15..42,
+                                ),
+                                hints: None,
+                                distinct: false,
+                                top_n: None,
+                                select_list: [
+                                    StarColumns {
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    22..23,
+                                                ),
+                                            ),
+                                        ],
+                                        column_filter: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            29..42,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                29..42,
+                                            ),
+                                            name: "monthly_sales",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        alias: None,
+                                        temporal: None,
+                                        with_options: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                        sample: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                                qualify: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: None,
+                    pivot: Some(
+                        Pivot {
+                            aggregate: FunctionCall {
+                                span: Some(
+                                    50..61,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            50..53,
+                                        ),
+                                        name: "sum",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                54..60,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            54..60,
+                                                        ),
+                                                        name: "amount",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            value_column: Identifier {
+                                span: Some(
+                                    66..71,
+                                ),
+                                name: "month",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            values: ColumnValues(
+                                [
+                                    Literal {
+                                        span: Some(
+                                            76..81,
+                                        ),
+                                        value: String(
+                                            "JAN",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            83..88,
+                                        ),
+                                        value: String(
+                                            "FEB",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            90..95,
+                                        ),
+                                        value: String(
+                                            "MAR",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            97..102,
+                                        ),
+                                        value: String(
+                                            "APR",
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    114..119,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                114..119,
+                            ),
+                            name: "empid",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from monthly_sales pivot(sum(amount) for month in (select distinct month from monthly_sales)) order by empid
+---------- Output ---------
+SELECT * FROM monthly_sales PIVOT(sum(amount) FOR month IN (SELECT DISTINCT month FROM monthly_sales)) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..102,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..102,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..102,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            14..27,
+                        ),
+                        name: "monthly_sales",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    alias: None,
+                    temporal: None,
+                    with_options: None,
+                    pivot: Some(
+                        Pivot {
+                            aggregate: FunctionCall {
+                                span: Some(
+                                    34..45,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            34..37,
+                                        ),
+                                        name: "sum",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                38..44,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            38..44,
+                                                        ),
+                                                        name: "amount",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            value_column: Identifier {
+                                span: Some(
+                                    50..55,
+                                ),
+                                name: "month",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            values: Subquery(
+                                Query {
+                                    span: Some(
+                                        60..100,
+                                    ),
+                                    with: None,
+                                    body: Select(
+                                        SelectStmt {
+                                            span: Some(
+                                                60..100,
+                                            ),
+                                            hints: None,
+                                            distinct: true,
+                                            top_n: None,
+                                            select_list: [
+                                                AliasedExpr {
+                                                    expr: ColumnRef {
+                                                        span: Some(
+                                                            76..81,
+                                                        ),
+                                                        column: ColumnRef {
+                                                            database: None,
+                                                            table: None,
+                                                            column: Name(
+                                                                Identifier {
+                                                                    span: Some(
+                                                                        76..81,
+                                                                    ),
+                                                                    name: "month",
+                                                                    quote: None,
+                                                                    ident_type: None,
+                                                                },
+                                                            ),
+                                                        },
+                                                    },
+                                                    alias: None,
+                                                },
+                                            ],
+                                            from: [
+                                                Table {
+                                                    span: Some(
+                                                        87..100,
+                                                    ),
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            87..100,
+                                                        ),
+                                                        name: "monthly_sales",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    alias: None,
+                                                    temporal: None,
+                                                    with_options: None,
+                                                    pivot: None,
+                                                    unpivot: None,
+                                                    sample: None,
+                                                },
+                                            ],
+                                            selection: None,
+                                            group_by: None,
+                                            having: None,
+                                            window_list: None,
+                                            qualify: None,
+                                        },
+                                    ),
+                                    order_by: [],
+                                    limit: [],
+                                    offset: None,
+                                    ignore_result: false,
+                                },
+                            ),
+                        },
+                    ),
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    112..117,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                112..117,
+                            ),
+                            name: "empid",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from (select * from monthly_sales) pivot(sum(amount) for month in ((select distinct month from monthly_sales))) order by empid
+---------- Output ---------
+SELECT * FROM (SELECT * FROM monthly_sales) PIVOT(sum(amount) FOR month IN ((SELECT DISTINCT month FROM monthly_sales))) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..120,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..120,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..120,
+                    ),
+                    lateral: false,
+                    subquery: Query {
+                        span: Some(
+                            15..42,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    15..42,
+                                ),
+                                hints: None,
+                                distinct: false,
+                                top_n: None,
+                                select_list: [
+                                    StarColumns {
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    22..23,
+                                                ),
+                                            ),
+                                        ],
+                                        column_filter: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            29..42,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                29..42,
+                                            ),
+                                            name: "monthly_sales",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        alias: None,
+                                        temporal: None,
+                                        with_options: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                        sample: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                                qualify: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: None,
+                    pivot: Some(
+                        Pivot {
+                            aggregate: FunctionCall {
+                                span: Some(
+                                    50..61,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            50..53,
+                                        ),
+                                        name: "sum",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                54..60,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            54..60,
+                                                        ),
+                                                        name: "amount",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            value_column: Identifier {
+                                span: Some(
+                                    66..71,
+                                ),
+                                name: "month",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            values: ColumnValues(
+                                [
+                                    Subquery {
+                                        span: Some(
+                                            76..118,
+                                        ),
+                                        modifier: None,
+                                        subquery: Query {
+                                            span: Some(
+                                                77..117,
+                                            ),
+                                            with: None,
+                                            body: Select(
+                                                SelectStmt {
+                                                    span: Some(
+                                                        77..117,
+                                                    ),
+                                                    hints: None,
+                                                    distinct: true,
+                                                    top_n: None,
+                                                    select_list: [
+                                                        AliasedExpr {
+                                                            expr: ColumnRef {
+                                                                span: Some(
+                                                                    93..98,
+                                                                ),
+                                                                column: ColumnRef {
+                                                                    database: None,
+                                                                    table: None,
+                                                                    column: Name(
+                                                                        Identifier {
+                                                                            span: Some(
+                                                                                93..98,
+                                                                            ),
+                                                                            name: "month",
+                                                                            quote: None,
+                                                                            ident_type: None,
+                                                                        },
+                                                                    ),
+                                                                },
+                                                            },
+                                                            alias: None,
+                                                        },
+                                                    ],
+                                                    from: [
+                                                        Table {
+                                                            span: Some(
+                                                                104..117,
+                                                            ),
+                                                            catalog: None,
+                                                            database: None,
+                                                            table: Identifier {
+                                                                span: Some(
+                                                                    104..117,
+                                                                ),
+                                                                name: "monthly_sales",
+                                                                quote: None,
+                                                                ident_type: None,
+                                                            },
+                                                            alias: None,
+                                                            temporal: None,
+                                                            with_options: None,
+                                                            pivot: None,
+                                                            unpivot: None,
+                                                            sample: None,
+                                                        },
+                                                    ],
+                                                    selection: None,
+                                                    group_by: None,
+                                                    having: None,
+                                                    window_list: None,
+                                                    qualify: None,
+                                                },
+                                            ),
+                                            order_by: [],
+                                            limit: [],
+                                            offset: None,
+                                            ignore_result: false,
+                                        },
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    130..135,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                130..135,
                             ),
                             name: "empid",
                             quote: None,
@@ -5884,6 +6608,198 @@ Query {
                         Identifier {
                             span: Some(
                                 90..95,
+                            ),
+                            name: "empid",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from (select * from monthly_sales_1) unpivot(sales for month in (jan, feb, mar, april)) order by empid
+---------- Output ---------
+SELECT * FROM (SELECT * FROM monthly_sales_1) UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..96,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..96,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..96,
+                    ),
+                    lateral: false,
+                    subquery: Query {
+                        span: Some(
+                            15..44,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    15..44,
+                                ),
+                                hints: None,
+                                distinct: false,
+                                top_n: None,
+                                select_list: [
+                                    StarColumns {
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    22..23,
+                                                ),
+                                            ),
+                                        ],
+                                        column_filter: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            29..44,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                29..44,
+                                            ),
+                                            name: "monthly_sales_1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        alias: None,
+                                        temporal: None,
+                                        with_options: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                        sample: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                                qualify: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: None,
+                    pivot: None,
+                    unpivot: Some(
+                        Unpivot {
+                            value_column: Identifier {
+                                span: Some(
+                                    54..59,
+                                ),
+                                name: "sales",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            column_name: Identifier {
+                                span: Some(
+                                    64..69,
+                                ),
+                                name: "month",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            names: [
+                                Identifier {
+                                    span: Some(
+                                        74..77,
+                                    ),
+                                    name: "jan",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                Identifier {
+                                    span: Some(
+                                        79..82,
+                                    ),
+                                    name: "feb",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                Identifier {
+                                    span: Some(
+                                        84..87,
+                                    ),
+                                    name: "mar",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                Identifier {
+                                    span: Some(
+                                        89..94,
+                                    ),
+                                    name: "april",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    106..111,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                106..111,
                             ),
                             name: "empid",
                             quote: None,
@@ -6717,6 +7633,8 @@ Query {
                             columns: [],
                         },
                     ),
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
@@ -6866,6 +7784,8 @@ Query {
                             ],
                         },
                     ),
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
@@ -7104,6 +8024,8 @@ Query {
                                 ignore_result: false,
                             },
                             alias: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
@@ -7152,6 +8074,8 @@ Query {
                         ignore_result: false,
                     },
                     alias: None,
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,

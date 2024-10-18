@@ -70,6 +70,8 @@ impl Binder {
                 lateral,
                 subquery,
                 alias,
+                pivot: _,
+                unpivot: _,
             } => self.bind_subquery(bind_context, *lateral, subquery, alias),
             TableReference::Location {
                 span: _,

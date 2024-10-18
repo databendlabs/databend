@@ -45,6 +45,26 @@ SELECT empid,dept,month,sales FROM (
 3	cars	mar	100
 3	cars	april	50
 
+query IIII
+SELECT empid,dept,month,sales FROM (
+    SELECT * FROM (SELECT * FROM monthly_sales_1)
+        UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+        ORDER BY empid
+);
+----
+1	electronics	jan	100
+1	electronics	feb	200
+1	electronics	mar	300
+1	electronics	april	100
+2	clothes	jan	100
+2	clothes	feb	300
+2	clothes	mar	150
+2	clothes	april	200
+3	cars	jan	200
+3	cars	feb	400
+3	cars	mar	100
+3	cars	april	50
+
 statement ok
 drop table monthly_sales_1;
 
