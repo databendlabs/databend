@@ -187,11 +187,11 @@ impl RenameDictionaryReq {
     pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant()
     }
-    pub fn db_id(&self) -> &str {
-        &self.name_ident.db_id()
+    pub fn db_id(&self) -> u64 {
+        self.name_ident.db_id()
     }
-    pub fn dictionary_name(&self) -> &str {
-        &self.name_ident.dict_name()
+    pub fn dictionary_name(&self) -> String {
+        self.name_ident.dict_name().clone()
     }
 }
 
@@ -288,7 +288,6 @@ impl Display for DictionaryIdToName {
 }
 
 mod kvapi_key_impl {
-    use anyhow::Ok;
     use databend_common_meta_kvapi::kvapi;
 
     use super::DictionaryIdHistoryIdent;
@@ -306,6 +305,22 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             Some(DatabaseId::new(self.database_id).to_string_key())
+        }
+    }
+
+    impl kvapi::KeyCodec for DictionaryIdHistoryIdent {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.database_id).push_str(&self.dictionary_name)
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+        where Self: Sized {
+            let db_id = parser.next_u64()?;
+            let dictionary_name = parser.next_str()?;
+            Ok(Self {
+                database_id: db_id,
+                dictionary_name,
+            })
         }
     }
 

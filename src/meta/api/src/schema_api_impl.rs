@@ -64,6 +64,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
@@ -3050,7 +3051,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let dict_ident = &req.name_ident;
         let get_db_req = GetDatabaseReq::new(req.tenant(), req.new_db_name.clone());
-        let new_db_id = self.get_database(req).await?.database_id.db_id;
+        let new_db_id = self.get_database(get_db_req).await?.database_id.db_id;
         let new_dict_ident = DictionaryNameIdent::new(
             req.name_ident.tenant(),
             DictionaryIdentity::new(new_db_id, req.new_dictionary_name.clone()),
@@ -3098,7 +3099,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     error!("{}", err_message);
 
                     return Err(KVAppError::AppError(AppError::UnknownDictionary(
-                        UnknownDictionary::new(&req.name_ident.dict_name(), err_message),
+                        UnknownError::new(
+                            DictionaryNameRsc(),
+                            DictionaryIdentity::new(
+                                dict_ident.db_id(),
+                                dict_ident.dict_name().clone(),
+                            ),
+                        ),
                     )));
                 }
             }
@@ -3189,7 +3196,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(RenameDictionaryReply { dictionary_id });
+                    return Ok(RenameDictionaryReply {
+                        dictionary_id: dict_id,
+                    });
                 }
             }
         }
