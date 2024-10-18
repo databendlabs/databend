@@ -115,7 +115,7 @@ impl DataBlock {
         }
 
         let permutations = sort_compare.take_permutation();
-        DataBlock::take(block, &permutations, &mut None)
+        DataBlock::take(block, &permutations)
     }
 }
 

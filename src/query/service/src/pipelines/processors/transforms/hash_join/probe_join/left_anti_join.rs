@@ -79,11 +79,7 @@ impl HashJoinProbeState {
             ));
         }
 
-        let result_block = DataBlock::take(
-            &process_state.input,
-            &probe_indexes[0..count],
-            &mut probe_state.generation_state.string_items_buf,
-        )?;
+        let result_block = DataBlock::take(&process_state.input, &probe_indexes[0..count])?;
 
         probe_state.process_state = None;
 
@@ -237,7 +233,6 @@ impl HashJoinProbeState {
             result_blocks.push(DataBlock::take(
                 &process_state.input,
                 &probe_indexes[0..unmatched_idx],
-                &mut probe_state.generation_state.string_items_buf,
             )?);
         }
 
@@ -266,11 +261,7 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if probe_state.is_probe_projected {
-            Some(DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.string_items_buf,
-            )?)
+            Some(DataBlock::take(input, &probe_indexes[0..matched_idx])?)
         } else {
             None
         };
@@ -280,7 +271,6 @@ impl HashJoinProbeState {
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,
                 &build_state.build_num_rows,
-                &mut probe_state.string_items_buf,
             )?)
         } else {
             None

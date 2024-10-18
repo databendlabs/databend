@@ -372,11 +372,7 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if probe_state.is_probe_projected {
-            let mut probe_block = DataBlock::take(
-                input,
-                &probe_indexes[0..unmatched_idx],
-                &mut probe_state.string_items_buf,
-            )?;
+            let mut probe_block = DataBlock::take(input, &probe_indexes[0..unmatched_idx])?;
             // For full join, wrap nullable for probe block
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                 let nullable_probe_columns = probe_block
@@ -435,11 +431,7 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if probe_state.is_probe_projected {
-            let mut probe_block = DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.string_items_buf,
-            )?;
+            let mut probe_block = DataBlock::take(input, &probe_indexes[0..matched_idx])?;
             // For full join, wrap nullable for probe block
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                 let nullable_probe_columns = probe_block
@@ -459,7 +451,6 @@ impl HashJoinProbeState {
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,
                 &build_state.build_num_rows,
-                &mut probe_state.string_items_buf,
             )?;
             // For left or full join, wrap nullable for build block.
             let nullable_columns = if build_state.build_num_rows == 0 {

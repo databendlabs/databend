@@ -310,15 +310,9 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         .collect_vec();
 
     let concated_blocks = DataBlock::concat(&blocks)?;
-    let block_1 = concated_blocks.take(&take_indices, &mut None)?;
+    let block_1 = concated_blocks.take(&take_indices)?;
     let block_2 = concated_blocks.take_compacted_indices(&take_compact_indices, count)?;
-    let block_3 = DataBlock::take_column_vec(
-        &column_vec,
-        &data_types,
-        &take_chunks_indices,
-        count,
-        &mut None,
-    );
+    let block_3 = DataBlock::take_column_vec(&column_vec, &data_types, &take_chunks_indices, count);
     let block_4 = DataBlock::concat(&filtered_blocks)?;
     let block_5 = concated_blocks.take_ranges(
         &build_range_selection(&take_indices, take_indices.len()),
@@ -417,7 +411,7 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
             take_indices.extend(std::iter::repeat(batch_index as u32).take(batch_size));
             take_compact_indices.push((batch_index as u32, batch_size as u32));
         }
-        let block_1 = block.take(&take_indices, &mut None)?;
+        let block_1 = block.take(&take_indices)?;
         let block_2 = block.take_compacted_indices(&take_compact_indices, count)?;
 
         assert_eq!(block_1.num_columns(), block_2.num_columns());
@@ -485,8 +479,8 @@ pub fn test_filters() -> databend_common_exception::Result<()> {
                 .map(|(i, _)| i as u32)
                 .collect::<Vec<_>>();
 
-            let t_b = bb.take(&indices, &mut None)?;
-            let t_c = cc.take(&indices, &mut None)?;
+            let t_b = bb.take(&indices)?;
+            let t_c = cc.take(&indices)?;
 
             let f_b = bb.filter_with_bitmap(&f)?;
             let f_c = cc.filter_with_bitmap(&f)?;
@@ -574,7 +568,7 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
             }
         }
 
-        let block_1 = random_block.take(&take_indices, &mut None)?;
+        let block_1 = random_block.take(&take_indices)?;
         let block_2 = DataBlock::concat(&scattered_blocks)?;
 
         assert_eq!(block_1.num_columns(), block_2.num_columns());

@@ -150,8 +150,8 @@ pub(crate) fn update_bitmap_with_bloom_filter(
                     }
                     idx += 1;
                 }),
-                KeysState::Column(Column::String(col)) => col.iter_binary().for_each(|key| {
-                    let hash = key.fast_hash();
+                KeysState::Column(Column::String(col)) => col.iter().for_each(|key| {
+                    let hash = key.as_bytes().fast_hash();
                     if filter.contains(&hash) {
                         bitmap.set(idx, true);
                     }
