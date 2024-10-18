@@ -37,13 +37,13 @@ pub(crate) fn append_data_to_row_based_files(
     ctx: Arc<dyn TableContext>,
     table_info: StageTableInfo,
     op: Operator,
-    uuid: String,
+    query_id: String,
     group_id: &std::sync::atomic::AtomicUsize,
     mem_limit: usize,
     max_threads: usize,
 ) -> Result<()> {
-    let is_single = table_info.stage_info.copy_options.single;
-    let max_file_size = table_info.stage_info.copy_options.max_file_size;
+    let is_single = table_info.copy_into_location_options.single;
+    let max_file_size = table_info.copy_into_location_options.max_file_size;
     let compression = table_info.stage_info.file_format_params.compression();
     // when serializing block to parquet, the memory may be doubled
     let mem_limit = mem_limit / 2;
@@ -101,7 +101,7 @@ pub(crate) fn append_data_to_row_based_files(
             table_info.clone(),
             op.clone(),
             prefix.clone(),
-            uuid.clone(),
+            query_id.clone(),
             gid,
             compression,
         )

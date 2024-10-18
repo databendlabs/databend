@@ -30,6 +30,7 @@ crossbeam-channel = "0.5.6"
 hex = "0.4.3"
 log = { workspace = true }
 parking_lot = { workspace = true }
+parquet = { workspace = true }
 rayon = "1.9.0"
 rustix = "0.38.37"
 siphasher = "0.3.10"

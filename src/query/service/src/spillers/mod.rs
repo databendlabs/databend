@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod partition_buffer;
+mod serialize;
 mod spiller;
 
 pub use partition_buffer::PartitionBuffer;

@@ -336,6 +336,10 @@ impl ClusterDiscovery {
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
+        let mut http_address = format!(
+            "{}:{}",
+            cfg.query.http_handler_host, cfg.query.http_handler_port
+        );
         let mut discovery_address = match cfg.query.discovery_address.is_empty() {
             true => format!(
                 "{}:{}",
@@ -347,6 +351,7 @@ impl ClusterDiscovery {
         for (lookup_ip, typ) in [
             (&mut address, "flight-api-address"),
             (&mut discovery_address, "discovery-address"),
+            (&mut http_address, "http-address"),
         ] {
             if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
@@ -371,6 +376,7 @@ impl ClusterDiscovery {
             self.local_id.clone(),
             self.local_secret.clone(),
             cpus,
+            http_address,
             address,
             discovery_address,
             DATABEND_COMMIT_VERSION.to_string(),
