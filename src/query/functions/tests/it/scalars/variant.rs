@@ -1963,6 +1963,8 @@ fn test_json_object_insert(file: &mut impl Write) {
         &[],
     );
     run_ast(file, r#"json_object_insert('{}'::variant, 'v', 'vv')"#, &[]);
+    run_ast(file, r#"json_object_insert('123'::variant, 'v', 'vv')"#, &[
+    ]);
     run_ast(
         file,
         r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'hello', true)"#,
@@ -1991,6 +1993,11 @@ fn test_json_object_insert(file: &mut impl Write) {
     run_ast(
         file,
         r#"json_object_insert('{}'::variant, 'v', 'vv', true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('123'::variant, 'v', 'vv', true)"#,
         &[],
     );
 
