@@ -29,6 +29,7 @@ use std::ptr;
 use std::sync::Arc;
 
 use addr2line::fallible_iterator::FallibleIterator;
+use addr2line::Frame;
 use addr2line::FrameIter;
 use addr2line::Location;
 use addr2line::LookupContinuation;
@@ -79,7 +80,7 @@ impl Debug for Symbol {
     }
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 struct Library {
     name: String,
     address_begin: usize,
@@ -91,6 +92,16 @@ struct Library {
 unsafe impl Send for Library {}
 
 unsafe impl Sync for Library {}
+
+impl Debug for Library {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Library")
+            .field("name", &self.name)
+            .field("address_begin", &self.address_begin)
+            .field("address_end", &self.address_end)
+            .finish()
+    }
+}
 
 static INSTANCE: OnceCell<Arc<LibraryManager>> = OnceCell::new();
 
@@ -118,25 +129,23 @@ impl<'a> Dwarf<'a> {
         let dwarf = gimli::read::Dwarf::load(|index| {
             let section_data = match elf.section_by_name(index.name()) {
                 // Unsupported --compress-debug-sections
-                Some(section) => match section
-                    .compressed_file_range()
-                    .map(|x| x.format == CompressionFormat::None)
-                {
-                    Ok(false) | Err(_) => &[],
-                    Ok(true) => match section.data() {
-                        Ok(debug_sections_data) => debug_sections_data,
-                        Err(_) => &[],
-                    },
-                },
+                Some(section) => {
+                    let compressed_file_range = section.compressed_file_range()?;
+
+                    match compressed_file_range.format {
+                        CompressionFormat::None => section.data()?,
+                        _ => &[],
+                    }
+                }
                 None => &[],
             };
 
-            Ok(section_data)
+            Ok::<_, object::read::Error>(EndianSlice::new(section_data, NativeEndian {}))
         });
 
         match dwarf {
-            None => None,
-            Some(dwarf) => match addr2line::Context::from_dwarf(dwarf) {
+            Err(_) => None,
+            Ok(dwarf) => match addr2line::Context::from_dwarf(dwarf) {
                 Err(_) => None,
                 Ok(ctx) => Some(Dwarf { dwarf: ctx }),
             },
@@ -147,20 +156,21 @@ impl<'a> Dwarf<'a> {
         self.dwarf.find_location(probe).ok().flatten()
     }
 
-    pub fn find_inlined_frames(&self, probe: u64) -> Vec<u64> {
-        let frames = match self.dwarf.find_frames(probe) {
+    pub fn find_frames(&self, probe: u64) -> Vec<(Frame<'_, EndianSlice<NativeEndian>>)> {
+        let mut frames = match self.dwarf.find_frames(probe) {
+            // TODO(winter):Unsupported split DWARF
             LookupResult::Load { .. } => None,
             LookupResult::Output(res) => res.ok(),
         };
 
-        if let Some(frames) = frames {
+        let mut res_frames = Vec::with_capacity(8);
+        if let Some(mut frames) = frames {
             while let Ok(Some(frame)) = frames.next() {
-                eprintln!("inlined frame {:?}", frame.function.map(|x| x.demangle()));
-                eprintln!("inlined frame {:?}", &frame.location);
+                res_frames.push(frame);
             }
         }
 
-        vec![]
+        res_frames
     }
 }
 
@@ -177,19 +187,23 @@ impl LibraryManager {
         })
     }
 
-    pub fn resolve_frames(&self, frames: &[StackFrame]) -> Vec<ResolvedStackFrame> {
+    pub fn resolve_frames<E, F: FnMut(ResolvedStackFrame) -> std::result::Result<(), E>>(
+        &self,
+        frames: &[StackFrame],
+        mut f: F,
+    ) -> std::result::Result<(), E> {
         let mut dwarf_cache = HashMap::with_capacity(self.libraries.len());
 
-        let mut res = Vec::with_capacity(frames.len());
         for frame in frames {
             if let StackFrame::Unresolved(addr) = frame {
                 let Some(library) = self.find_library(*addr) else {
-                    res.push(ResolvedStackFrame {
+                    f(ResolvedStackFrame {
                         virtual_address: *addr,
                         physical_address: *addr,
-                        library: String::new(),
                         symbol: String::from("<unknown>"),
-                    });
+                        inlined: false,
+                        location: None,
+                    })?;
 
                     continue;
                 };
@@ -199,35 +213,91 @@ impl LibraryManager {
                     Some(elf) => match dwarf_cache.get(&library.name) {
                         Some(v) => v,
                         None => {
-                            dwarf_cache.insert(library.name, Dwarf::create(elf));
+                            dwarf_cache.insert(library.name.clone(), Dwarf::create(elf));
                             dwarf_cache.get(&library.name).unwrap()
                         }
                     },
                 };
 
                 let mut location = None;
+                let physical_address = *addr - library.address_begin;
 
                 if let Some(dwarf) = dwarf {
-                    let adjusted_addr = (*addr - 1) as u64;
+                    let adjusted_addr = (physical_address - 1) as u64;
+
+                    let mut frames = dwarf.find_frames(adjusted_addr);
+
+                    if !frames.is_empty() {
+                        let last = frames.pop();
+
+                        for frame in frames.into_iter() {
+                            let mut symbol = String::from("<unknown>");
+
+                            if let Some(function) = frame.function {
+                                if let Ok(name) = function.demangle() {
+                                    symbol = name.to_string();
+                                }
+                            }
+
+                            f(ResolvedStackFrame {
+                                symbol,
+                                physical_address,
+                                inlined: true,
+                                virtual_address: *addr,
+                                location: unsafe { std::mem::transmute(frame.location) },
+                            });
+                        }
+
+                        if let Some(last) = last {
+                            let mut symbol = String::from("<unknown>");
+
+                            if let Some(function) = last.function {
+                                if let Ok(name) = function.demangle() {
+                                    symbol = name.to_string();
+                                }
+                            }
+
+                            f(ResolvedStackFrame {
+                                symbol,
+                                physical_address,
+                                inlined: false,
+                                virtual_address: *addr,
+                                location: unsafe { std::mem::transmute(last.location) },
+                            });
+                        }
+
+                        continue;
+                    }
+
                     location = dwarf.find_location(adjusted_addr);
-                    let inlined_frames = dwarf.find_inlined_frames(adjusted_addr);
                 }
 
                 if let Some(symbol) = self.find_symbol(*addr) {
-                    res.push(ResolvedStackFrame {
+                    f(ResolvedStackFrame {
+                        physical_address,
+                        inlined: false,
                         virtual_address: *addr,
-                        physical_address: *addr - library.address_begin,
-                        library: String::new(),
+                        location: unsafe { std::mem::transmute(location) },
                         symbol: format!(
                             "{}",
                             rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
                         ),
-                    });
+                    })?;
+
+                    continue;
                 }
+
+                f(ResolvedStackFrame {
+                    physical_address,
+                    virtual_address: *addr,
+                    location: None,
+                    inlined: false,
+                    symbol: String::from("<unknown>"),
+                })?;
             }
         }
 
-        res
+        Ok(())
     }
 
     // #[cfg(target_os = "linux")]
@@ -335,15 +405,14 @@ unsafe extern "C" fn callback(
 
     if let Some((ptr, len)) = mmap_library(library_path.clone()) {
         let mut library = Library {
-            name: format!("{library_path}"),
+            name: format!("{}", library_path.display()),
             address_begin: info.dlpi_addr as usize,
             address_end: info.dlpi_addr as usize + len,
             library_data: (ptr, len),
             elf: None,
         };
 
-        let library_data =
-            std::slice::from_raw_parts(library.library_data.0, library.library_data.1);
+        let library_data = std::slice::from_raw_parts(ptr, len);
         symbols_from_elf(&mut library, library_data, &mut data.symbols);
         data.libraries.push(library);
     }

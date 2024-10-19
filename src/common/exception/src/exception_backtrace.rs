@@ -22,6 +22,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use addr2line::Location;
 use object::read::elf::FileHeader;
 use object::read::elf::SectionHeader;
 use object::read::elf::Sym;
@@ -100,12 +101,30 @@ pub fn capture() -> Option<ErrorCodeBacktrace> {
     }
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct ResolvedStackFrame {
     pub virtual_address: usize,
     pub physical_address: usize,
-    pub library: String,
     pub symbol: String,
+    pub inlined: bool,
+    pub location: Option<Location<'static>>,
+}
+
+impl Debug for ResolvedStackFrame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResolvedStackFrame")
+            .field("virtual_address", &self.virtual_address)
+            .field("physical_address", &self.physical_address)
+            .field("symbol", &self.symbol)
+            .field(
+                "location",
+                &self
+                    .location
+                    .as_ref()
+                    .map(|l| (&l.file, &l.line, &l.column)),
+            )
+            .finish()
+    }
 }
 
 pub enum StackFrame {
@@ -140,13 +159,35 @@ impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let library_manager = LibraryManager::instance();
         eprintln!("libraries: {:?}", library_manager);
-        let frames = library_manager.resolve_frames(&self.frames);
+        let mut idx = 0;
 
-        for (idx, frame) in frames.into_iter().enumerate() {
-            writeln!(f, "{} {:?}", idx, frame)?;
-            // backtrace::Backtrace::new()
-        }
+        library_manager.resolve_frames(&self.frames, |frame| {
+            write!(f, "{:4}: {}", idx, frame.symbol)?;
 
-        Ok(())
+            if frame.inlined {
+                write!(f, "[inlined]")?;
+            } else if frame.physical_address != frame.virtual_address {
+                write!(f, "@{:x}", frame.physical_address)?;
+            }
+
+            writeln!(f, "")?;
+            if let Some(location) = frame.location {
+                match (location.file, location.line, location.column) {
+                    (Some(file), Some(line), Some(column)) => {
+                        writeln!(f, "             at {}:{}:{}", file, line, column)?;
+                    }
+                    (Some(file), Some(line), None) => {
+                        writeln!(f, "             at {}:{}", file, line)?;
+                    }
+                    (Some(file), None, None) => {
+                        writeln!(f, "             at {}", file)?;
+                    }
+                    _ => {}
+                };
+            }
+
+            idx += 1;
+            Ok(())
+        })
     }
 }
