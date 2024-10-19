@@ -14,30 +14,30 @@ test = true
 databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 
+addr2line = "0.24.2"
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true }
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
+gimli = "0.31.0"
 http = { workspace = true }
+libc = { workspace = true }
+object = "0.36.5"
+once_cell = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 paste = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
+rustc-demangle = "0.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = "0.8"
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-libc = { workspace = true}
-gimli = "0.31.0"
-object = "0.36.5"
-rustc-demangle = "0.1"
-once_cell = { workspace = true }
-addr2line = "0.24.2"
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]
