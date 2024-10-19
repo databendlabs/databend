@@ -64,6 +64,12 @@ fn test_variant() {
     test_delete_by_name_op(file);
     test_delete_by_index_op(file);
     test_delete_by_keypath_op(file);
+    test_json_array_insert(file);
+    test_json_array_distinct(file);
+    test_json_array_intersection(file);
+    test_json_array_except(file);
+    test_json_array_overlap(file);
+    test_json_object_insert(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1601,4 +1607,446 @@ fn test_delete_by_keypath_op(file: &mut impl Write) {
             ]),
         ),
     ]);
+}
+
+fn test_json_array_insert(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_array_insert('[0,1,2,3]'::variant, 2, '"hello"'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_insert('[0,1,2,3]'::variant, 10, '100'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_insert('[0,1,2,3]'::variant, 0, 'true'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_insert('[0,1,2,3]'::variant, -1, '{"k":"v"}'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_insert('1'::variant, 1, '{"k":"v"}'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_insert('{"k":"v"}'::variant, 2, 'true'::variant)"#,
+        &[],
+    );
+
+    run_ast(
+        file,
+        "json_array_insert(parse_json(v), 2, parse_json(n))",
+        &[
+            (
+                "v",
+                StringType::from_data_with_validity(
+                    vec!["[1,2,3,null]", r#"["A","B"]"#, "", r#"{"a":"b"}"#],
+                    vec![true, true, false, true],
+                ),
+            ),
+            (
+                "n",
+                StringType::from_data_with_validity(vec![r#""hi""#, "", "true", "[1,2,3]"], vec![
+                    true, false, true, true,
+                ]),
+            ),
+        ],
+    );
+}
+
+fn test_json_array_distinct(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_array_distinct('[0,1,1,2,2,2,3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_distinct('["A","A","B","C","A","C"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_distinct('["A","A",10,false,null,false,null,10]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_distinct('[[1,2,2],3,4,[1,2,2]]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_distinct('[{"k":"v"},"A","A","B",{"k":"v"}]'::variant)"#,
+        &[],
+    );
+    run_ast(file, r#"json_array_distinct('1'::variant)"#, &[]);
+    run_ast(file, r#"json_array_distinct('{"k":"v"}'::variant)"#, &[]);
+
+    run_ast(file, "json_array_distinct(parse_json(v))", &[(
+        "v",
+        StringType::from_data_with_validity(
+            vec![
+                "[1,1,2,3,3,null,2,1,null]",
+                r#"["A","B","A","B","C"]"#,
+                "",
+                r#"{"a":"b"}"#,
+            ],
+            vec![true, true, false, true],
+        ),
+    )]);
+}
+
+fn test_json_array_intersection(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_array_intersection('["A","B","C"]'::variant, '["B","C"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('[1,2]'::variant, '[3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('[null,102,null]'::variant, '[null,null,103]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":2,"c":3},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('1'::variant, '1'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('1'::variant, '2'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_intersection('{"k":"v"}'::variant, '{"k":"v"}'::variant)"#,
+        &[],
+    );
+
+    run_ast(
+        file,
+        "json_array_intersection(parse_json(v1), parse_json(v2))",
+        &[
+            (
+                "v1",
+                StringType::from_data_with_validity(
+                    vec![
+                        "[1,2,3,3,null,null]",
+                        r#"["A","B","A","B","C"]"#,
+                        "",
+                        r#"{"a":"b"}"#,
+                    ],
+                    vec![true, true, false, true],
+                ),
+            ),
+            (
+                "v2",
+                StringType::from_data_with_validity(
+                    vec!["[1,1,2,3,4,5,null]", r#"["X","Y","Z"]"#, "", r#"{"a":"b"}"#],
+                    vec![true, true, false, true],
+                ),
+            ),
+        ],
+    );
+}
+
+fn test_json_array_except(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_array_except('["A","B","C"]'::variant, '["B","C"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_except('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_except('[1,2]'::variant, '[3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_except('[null,102,null]'::variant, '[null,null,103]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_except('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_except('[{"a":1,"b":2},1,2]'::variant, '[{"a":2,"c":3},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_except('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(file, r#"json_array_except('1'::variant, '1'::variant)"#, &[
+    ]);
+    run_ast(file, r#"json_array_except('1'::variant, '2'::variant)"#, &[
+    ]);
+    run_ast(
+        file,
+        r#"json_array_except('{"k":"v"}'::variant, '{"k":"v"}'::variant)"#,
+        &[],
+    );
+
+    run_ast(
+        file,
+        "json_array_except(parse_json(v1), parse_json(v2))",
+        &[
+            (
+                "v1",
+                StringType::from_data_with_validity(
+                    vec![
+                        "[1,2,3,3,null,null]",
+                        r#"["A","B","A","B","C"]"#,
+                        "",
+                        r#"{"a":"b"}"#,
+                    ],
+                    vec![true, true, false, true],
+                ),
+            ),
+            (
+                "v2",
+                StringType::from_data_with_validity(
+                    vec!["[1,1,2,3,4,5,null]", r#"["X","Y","Z"]"#, "", r#"{"a":"b"}"#],
+                    vec![true, true, false, true],
+                ),
+            ),
+        ],
+    );
+}
+
+fn test_json_array_overlap(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_array_overlap('["A","B","C"]'::variant, '["B","C"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('[1,2]'::variant, '[3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('[null,102,null]'::variant, '[null,null,103]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":2,"c":3},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1},3,4]'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('1'::variant, '1'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('1'::variant, '2'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_array_overlap('{"k":"v"}'::variant, '{"k":"v"}'::variant)"#,
+        &[],
+    );
+
+    run_ast(
+        file,
+        "json_array_overlap(parse_json(v1), parse_json(v2))",
+        &[
+            (
+                "v1",
+                StringType::from_data_with_validity(
+                    vec![
+                        "[1,2,3,3,null,null]",
+                        r#"["A","B","A","B","C"]"#,
+                        "",
+                        r#"{"a":"b"}"#,
+                    ],
+                    vec![true, true, false, true],
+                ),
+            ),
+            (
+                "v2",
+                StringType::from_data_with_validity(
+                    vec!["[1,1,2,3,4,5,null]", r#"["X","Y","Z"]"#, "", r#"{"a":"b"}"#],
+                    vec![true, true, false, true],
+                ),
+            ),
+        ],
+    );
+}
+
+fn test_json_object_insert(file: &mut impl Write) {
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'hello')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'n', 100)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', [10,20])"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'x', '{"a":"b"}'::variant)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'v', null)"#,
+        &[],
+    );
+    run_ast(file, r#"json_object_insert('{}'::variant, 'v', 'vv')"#, &[]);
+    run_ast(file, r#"json_object_insert('123'::variant, 'v', 'vv')"#, &[
+    ]);
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'hello', true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'n', 100, true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', [10,20], true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'x', '{"a":"b"}'::variant, true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'v', null, true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('{}'::variant, 'v', 'vv', true)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_object_insert('123'::variant, 'v', 'vv', true)"#,
+        &[],
+    );
+
+    run_ast(
+        file,
+        "json_object_insert(parse_json(v), 'x', parse_json(n))",
+        &[
+            (
+                "v",
+                StringType::from_data_with_validity(
+                    vec![
+                        r#"{"k":"v"}"#,
+                        r#"{"m":"n"}"#,
+                        "",
+                        r#"{"a":"b","c":"d","y":"z"}"#,
+                    ],
+                    vec![true, true, false, true],
+                ),
+            ),
+            (
+                "n",
+                StringType::from_data_with_validity(vec![r#""hi""#, "", "true", "[1,2,3]"], vec![
+                    true, false, true, true,
+                ]),
+            ),
+        ],
+    );
+    run_ast(
+        file,
+        "json_object_insert(parse_json(v), 'c', parse_json(n), true)",
+        &[
+            (
+                "v",
+                StringType::from_data_with_validity(
+                    vec![
+                        r#"{"k":"v"}"#,
+                        r#"{"m":"n"}"#,
+                        "",
+                        r#"{"a":"b","c":"d","y":"z"}"#,
+                    ],
+                    vec![true, true, false, true],
+                ),
+            ),
+            (
+                "n",
+                StringType::from_data_with_validity(vec![r#""hi""#, "", "true", "[1,2,3]"], vec![
+                    true, false, true, true,
+                ]),
+            ),
+        ],
+    );
 }

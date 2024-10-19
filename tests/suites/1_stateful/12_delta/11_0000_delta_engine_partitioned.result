@@ -33,6 +33,9 @@
 34
 44
 <<<<
+>>>> select count() from test_delta where p0 = 10 and p2 = 12;
+2
+<<<<
 >>>> select c5, p4 from test_delta where c1 - p0 = 11 order by c5;
 25	24
 <<<<

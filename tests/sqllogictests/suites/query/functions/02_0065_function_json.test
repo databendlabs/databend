@@ -1109,3 +1109,330 @@ ORDER BY jq:key;
 
 statement ok
 DROP TABLE test_data;
+
+statement ok
+CREATE OR REPLACE TABLE t4(id Int, v1 Variant, v2 Variant);
+
+statement ok
+INSERT INTO t4(id, v1, v2) VALUES
+    (1, '[1,2,2,3,3,null]', '[2,3,3]'),
+    (2, '["A","B","B","B","C"]', '["B","B","D"]'),
+    (3, '[[1,2],{"k":[3,4]}]', '[[1,3],{"k":[3]}]'),
+    (4, '[[1,2],{"k":[3,4]},[5]]', '[[1,2],{"k":[3,4]},[5,6]]'),
+    (5, '1', '1'),
+    (6, '1', 'true'),
+    (7, '{"k":[1,2]}', '{"k":[1,2]}'),
+    (8, '{"k":[1,2]}', '{"k":[3]}')
+
+
+query T
+SELECT json_array_insert('[0,1,2,3]'::variant, 2, '"hello"'::variant)
+----
+[0,1,"hello",2,3]
+
+query T
+SELECT json_array_insert('[0,1,2,3]'::variant, 7, '"hello"'::variant)
+----
+[0,1,2,3,"hello"]
+
+query T
+SELECT json_array_insert('[0,1,2,3]'::variant, -1, '"hello"'::variant)
+----
+[0,1,2,"hello",3]
+
+query T
+SELECT json_array_insert('["A","A","B",null,null]'::variant, 0, '[1,2,3]'::variant)
+----
+[[1,2,3],"A","A","B",null,null]
+
+query T
+SELECT json_array_insert('"A"'::variant, 0, '[1,2,3]'::variant)
+----
+[[1,2,3],"A"]
+
+query ITT
+SELECT id, json_array_insert(v1, 0, '100'::variant), json_array_insert(v2, 2, '[10,11]'::variant) from t4
+----
+1 [100,1,2,2,3,3,null] [2,3,[10,11],3]
+2 [100,"A","B","B","B","C"] ["B","B",[10,11],"D"]
+3 [100,[1,2],{"k":[3,4]}] [[1,3],{"k":[3]},[10,11]]
+4 [100,[1,2],{"k":[3,4]},[5]] [[1,2],{"k":[3,4]},[10,11],[5,6]]
+5 [100,1] [1,[10,11]]
+6 [100,1] [true,[10,11]]
+7 [100,{"k":[1,2]}] [{"k":[1,2]},[10,11]]
+8 [100,{"k":[1,2]}] [{"k":[3]},[10,11]]
+
+query T
+SELECT json_array_distinct('["A","A","B",null,null]'::variant)
+----
+["A","B",null]
+
+query T
+SELECT json_array_distinct('[1,1,2,3,3,1,2,null,null]'::variant)
+----
+[1,2,3,null]
+
+query T
+SELECT json_array_distinct('[[1,2],[1,2],[3,4,3,3],{"k":"v"},{"k":"v"}]'::variant)
+----
+[[1,2],[3,4,3,3],{"k":"v"}]
+
+query T
+SELECT json_array_distinct('true'::variant)
+----
+[true]
+
+query T
+SELECT json_array_distinct('{"kk":[1,2]}'::variant)
+----
+[{"kk":[1,2]}]
+
+query ITT
+SELECT id, json_array_distinct(v1), json_array_distinct(v2) from t4
+----
+1 [1,2,3,null] [2,3]
+2 ["A","B","C"] ["B","D"]
+3 [[1,2],{"k":[3,4]}] [[1,3],{"k":[3]}]
+4 [[1,2],{"k":[3,4]},[5]] [[1,2],{"k":[3,4]},[5,6]]
+5 [1] [1]
+6 [1] [true]
+7 [{"k":[1,2]}] [{"k":[1,2]}]
+8 [{"k":[1,2]}] [{"k":[3]}]
+
+query T
+SELECT json_array_intersection('["A","B"]'::variant, '["B","C"]'::variant)
+----
+["B"]
+
+query T
+SELECT json_array_intersection('["A","B","C"]'::variant, '["B","C"]'::variant)
+----
+["B","C"]
+
+query T
+SELECT json_array_intersection('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
+----
+["B","B"]
+
+query T
+SELECT json_array_intersection('[1,2]'::variant, '[3,4]'::variant)
+----
+[]
+
+query T
+SELECT json_array_intersection('[null,102,null]'::variant, '[null,null,103]'::variant)
+----
+[null,null]
+
+query T
+SELECT json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
+----
+[{"a":1,"b":2}]
+
+query T
+SELECT json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant)
+----
+[]
+
+query T
+SELECT json_array_intersection('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1}]'::variant);
+----
+[{"a":1,"b":2,"c":3}]
+
+query T
+SELECT json_array_intersection('true'::variant, '[true,false]'::variant)
+----
+[true]
+
+query T
+SELECT json_array_intersection('true'::variant, 'false'::variant)
+----
+[]
+
+query T
+SELECT json_array_intersection('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
+----
+[{"k":"v"}]
+
+query IT
+SELECT id, json_array_intersection(v1, v2) from t4
+----
+1 [2,3,3]
+2 ["B","B"]
+3 []
+4 [[1,2],{"k":[3,4]}]
+5 [1]
+6 []
+7 [{"k":[1,2]}]
+8 []
+
+query T
+SELECT json_array_except('["A","B"]'::variant, '["B","C"]'::variant);
+----
+["A"]
+
+query T
+SELECT json_array_except('["A","B","C"]'::variant, '["B","C"]'::variant);
+----
+["A"]
+
+query T
+SELECT json_array_except('["A","B","B","B","C"]'::variant, '["B"]'::variant);
+----
+["A","B","B","C"]
+
+query T
+SELECT json_array_except('["A",null,null]'::variant, '["B",null]'::variant);
+----
+["A",null]
+
+query T
+SELECT json_array_except('[{"a":1,"b":2},1]'::variant, '[{"a":1,"b":2},3]'::variant);
+----
+[1]
+
+query T
+SELECT json_array_except('true'::variant, '[true,false]'::variant)
+----
+[]
+
+query T
+SELECT json_array_except('true'::variant, 'false'::variant)
+----
+[true]
+
+query T
+SELECT json_array_except('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
+----
+[1]
+
+query IT
+SELECT id, json_array_except(v1, v2) from t4
+----
+1 [1,2,null]
+2 ["A","B","C"]
+3 [[1,2],{"k":[3,4]}]
+4 [[5]]
+5 []
+6 [1]
+7 []
+8 [{"k":[1,2]}]
+
+query B
+SELECT json_array_overlap('["hello","aloha"]'::variant, '["hello","hi","hey"]'::variant);
+----
+1
+
+query B
+SELECT json_array_overlap('["hello","aloha"]'::variant, '["hola","bonjour","ciao"]'::variant);
+----
+0
+
+query B
+SELECT json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant);
+----
+0
+
+query B
+SELECT json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant);
+----
+1
+
+query B
+SELECT json_array_overlap('[1,2,null]'::variant, '[3,null,5]'::variant);
+----
+1
+
+query B
+SELECT json_array_overlap('true'::variant, '[true,false]'::variant)
+----
+1
+
+query B
+SELECT json_array_overlap('true'::variant, 'false'::variant)
+----
+0
+
+query B
+SELECT json_array_overlap('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
+----
+1
+
+query IB
+SELECT id, json_array_overlap(v1, v2) from t4
+----
+1 1
+2 1
+3 0
+4 1
+5 1
+6 0
+7 1
+8 0
+
+statement ok
+DROP TABLE IF EXISTS t4
+
+
+statement ok
+CREATE OR REPLACE TABLE t5(id Int, v1 Variant)
+
+statement ok
+INSERT INTO t5(id, v1) VALUES
+    (1, '{"k1":"v1","k2":"v2"}'),
+    (2, '{"a":[1,2,3],"c":{"c1":"v1","c2":"v2"},"m":true}'),
+    (3, '{"a":1,"h":2,"m":3,"n":4}')
+
+query T
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'c', 3)
+----
+{"a":1,"b":2,"c":3,"d":4}
+
+query T
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'x', 10)
+----
+{"a":1,"b":2,"d":4,"x":10}
+
+query T
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'A', 10)
+----
+{"A":10,"a":1,"b":2,"d":4}
+
+statement error 1006
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'a', 10)
+
+statement error 1006
+SELECT json_object_insert('1234'::variant, 'a', 10)
+
+statement error 1006
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', false)
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', true)
+----
+{"city":"San Jose","state":"CA"}
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 94402::DOUBLE, false)
+----
+{"city":"San Mateo","state":"CA","zip_code":94402.0}
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', null)
+----
+{"city":"San Mateo","state":"CA"}
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 'null'::variant)
+----
+{"city":"San Mateo","state":"CA","zip_code":null}
+
+query IT
+SELECT id, json_object_insert(v1, 'b', '100'::variant) from t5
+----
+1 {"b":100,"k1":"v1","k2":"v2"}
+2 {"a":[1,2,3],"b":100,"c":{"c1":"v1","c2":"v2"},"m":true}
+3 {"a":1,"b":100,"h":2,"m":3,"n":4}
+
+statement ok
+DROP TABLE IF EXISTS t5

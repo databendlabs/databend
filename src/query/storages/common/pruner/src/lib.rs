@@ -18,6 +18,7 @@ mod block_meta;
 mod internal_column_pruner;
 mod limiter_pruner;
 mod page_pruner;
+pub mod partition_prunner;
 mod range_pruner;
 mod topn_pruner;
 

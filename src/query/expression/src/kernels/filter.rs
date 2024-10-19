@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
+use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_arrow::arrow::bitmap::TrueIdxIter;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
-use crate::copy_continuous_bits;
-use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
@@ -51,7 +50,6 @@ impl DataBlock {
                 }
 
                 let mut filter_visitor = FilterVisitor::new(bitmap);
-
                 let after_columns = self
                     .columns()
                     .iter()
@@ -67,7 +65,7 @@ impl DataBlock {
 
                 Ok(DataBlock::new_with_meta(
                     after_columns,
-                    self.num_rows() - count_zeros,
+                    filter_visitor.filter_rows,
                     self.get_meta().cloned(),
                 ))
             }
@@ -108,22 +106,64 @@ impl Column {
     }
 }
 
-struct FilterVisitor<'a> {
+/// The iteration strategy used to evaluate [`FilterVisitor`]
+#[derive(Debug)]
+pub enum IterationStrategy {
+    None,
+    All,
+    /// Range iterator
+    SlicesIterator,
+    /// True index iterator
+    IndexIterator,
+}
+
+/// based on <https://dl.acm.org/doi/abs/10.1145/3465998.3466009>
+const SELECTIVITY_THRESHOLD: f64 = 0.8;
+
+impl IterationStrategy {
+    fn default_strategy(length: usize, true_count: usize) -> Self {
+        if length == 0 || true_count == 0 {
+            return IterationStrategy::None;
+        }
+        if length == true_count {
+            return IterationStrategy::All;
+        }
+        let selectivity_frac = true_count as f64 / length as f64;
+        if selectivity_frac > SELECTIVITY_THRESHOLD {
+            return IterationStrategy::SlicesIterator;
+        }
+        IterationStrategy::IndexIterator
+    }
+}
+
+pub struct FilterVisitor<'a> {
     filter: &'a Bitmap,
     result: Option<Value<AnyType>>,
-    num_rows: usize,
+    filter_rows: usize,
     original_rows: usize,
+    strategy: IterationStrategy,
 }
 
 impl<'a> FilterVisitor<'a> {
     pub fn new(filter: &'a Bitmap) -> Self {
-        let num_rows = filter.len() - filter.unset_bits();
+        let filter_rows = filter.len() - filter.unset_bits();
+        let strategy = IterationStrategy::default_strategy(filter.len(), filter_rows);
         Self {
             filter,
             result: None,
-            num_rows,
+            filter_rows,
             original_rows: filter.len(),
+            strategy,
         }
+    }
+
+    pub fn with_strategy(mut self, strategy: IterationStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+
+    pub fn take_result(&mut self) -> Option<Value<AnyType>> {
+        self.result.take()
     }
 }
 
@@ -133,13 +173,12 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
             Value::Scalar(c) => self.visit_scalar(c),
             Value::Column(c) => {
                 assert!(c.len() == self.original_rows);
-
-                if c.len() == self.num_rows || c.len() == 0 {
-                    self.result = Some(Value::Column(c));
-                } else if self.num_rows == 0 {
-                    self.result = Some(Value::Column(c.slice(0..0)));
-                } else {
-                    self.visit_column(c)?;
+                match self.strategy {
+                    IterationStrategy::None => self.result = Some(Value::Column(c.slice(0..0))),
+                    IterationStrategy::All => self.result = Some(Value::Column(c)),
+                    IterationStrategy::SlicesIterator | IterationStrategy::IndexIterator => {
+                        self.visit_column(c)?
+                    }
                 }
                 Ok(())
             }
@@ -171,54 +210,22 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
         let c = T::upcast_column(column.clone());
         let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();
-
-        const CHUNK_SIZE: usize = 64;
-        let (mut slice, offset, mut length) = self.filter.as_slice();
-        let mut start_index: usize = 0;
-        if offset > 0 {
-            // If `offset` > 0, the valid bits of this byte start at `offset`, and the
-            // max num of valid bits is `8 - offset`, but we also need to ensure that
-            // we cannot iterate more than `length` bits.
-            let n = std::cmp::min(8 - offset, length);
-            start_index += n;
-            self.filter
-                .iter()
-                .enumerate()
-                .take(n)
-                .for_each(|(index, is_selected)| {
-                    if is_selected {
-                        T::push_item(&mut builder, T::index_column(&column, index).unwrap());
-                    }
+        match self.strategy {
+            IterationStrategy::IndexIterator => {
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+                iter.for_each(|index| {
+                    T::push_item(&mut builder, unsafe {
+                        T::index_column_unchecked(&column, index)
+                    })
                 });
-            slice = &slice[1..];
-            length = if length >= n { length - n } else { 0 };
+            }
+            _ => {
+                let iter = SlicesIterator::new(self.filter);
+                iter.for_each(|(start, len)| {
+                    T::append_column(&mut builder, &T::slice_column(&column, start..start + len))
+                });
+            }
         }
-
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
-        mask_chunks
-            .by_ref()
-            .enumerate()
-            .for_each(|(mask_index, mut mask)| {
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    let index = mask_index * CHUNK_SIZE + n + start_index;
-                    T::push_item(&mut builder, T::index_column(&column, index).unwrap());
-                    mask = mask & (mask - 1);
-                }
-            });
-
-        let remainder_start = length - length % CHUNK_SIZE;
-        mask_chunks
-            .remainder_iter()
-            .enumerate()
-            .for_each(|(mask_index, is_selected)| {
-                if is_selected {
-                    let index = mask_index + remainder_start + start_index;
-                    T::push_item(&mut builder, T::index_column(&column, index).unwrap());
-                }
-            });
-
         self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
         Ok(())
     }
@@ -262,169 +269,29 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
     fn visit_boolean(&mut self, mut bitmap: Bitmap) -> Result<()> {
         // faster path for all bits set
         if bitmap.unset_bits() == 0 {
-            bitmap.slice(0, self.num_rows);
+            bitmap.slice(0, self.filter_rows);
             self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
             return Ok(());
         }
 
-        let capacity = self.num_rows.saturating_add(7) / 8;
-        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_ptr = builder.as_mut_ptr();
-        let mut builder_idx = 0;
-        let mut unset_bits = 0;
-        let mut buf = 0;
-
-        let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
-        let mut bitmap_idx = 0;
-
-        let (mut filter_slice, filter_offset, mut filter_length) = self.filter.as_slice();
-        unsafe {
-            if filter_offset > 0 {
-                let mut mask = filter_slice[0];
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    // If `filter_length` > 0, the valid bits of this byte start at `filter_offset`, we also
-                    // need to ensure that we cannot iterate more than `filter_length` bits.
-                    if n >= filter_offset && n < filter_offset + filter_length {
-                        if bitmap.get_bit_unchecked(n - filter_offset) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        builder_idx += 1;
-                    }
-                    mask = mask & (mask - 1);
-                }
-                let bits_to_align = 8 - filter_offset;
-                filter_length = if filter_length >= bits_to_align {
-                    filter_length - bits_to_align
-                } else {
-                    0
-                };
-                filter_slice = &filter_slice[1..];
-                bitmap_idx += bits_to_align;
+        let bitmap = match self.strategy {
+            IterationStrategy::IndexIterator => {
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+                MutableBitmap::from_trusted_len_iter(iter.map(|index| bitmap.get_bit(index))).into()
             }
+            _ => {
+                let src = bitmap.values();
+                let offset = bitmap.offset();
 
-            const CHUNK_SIZE: usize = 64;
-            let mut mask_chunks = BitChunksExact::<u64>::new(filter_slice, filter_length);
-            let mut continuous_selected = 0;
-            for mut mask in mask_chunks.by_ref() {
-                if mask == u64::MAX {
-                    continuous_selected += CHUNK_SIZE;
-                } else {
-                    if continuous_selected > 0 {
-                        if builder_idx % 8 != 0 {
-                            while continuous_selected > 0 {
-                                if bitmap.get_bit_unchecked(bitmap_idx) {
-                                    buf |= BIT_MASK[builder_idx % 8];
-                                } else {
-                                    unset_bits += 1;
-                                }
-                                bitmap_idx += 1;
-                                builder_idx += 1;
-                                continuous_selected -= 1;
-                                if builder_idx % 8 == 0 {
-                                    store_advance_aligned(buf, &mut builder_ptr);
-                                    buf = 0;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if continuous_selected > 0 {
-                            let (cur_buf, cur_unset_bits) = copy_continuous_bits(
-                                &mut builder_ptr,
-                                bitmap_slice,
-                                builder_idx,
-                                bitmap_idx + bitmap_offset,
-                                continuous_selected,
-                            );
-                            builder_idx += continuous_selected;
-                            bitmap_idx += continuous_selected;
-                            unset_bits += cur_unset_bits;
-                            buf = cur_buf;
-                            continuous_selected = 0;
-                        }
-                    }
-
-                    while mask != 0 {
-                        let n = mask.trailing_zeros() as usize;
-                        if bitmap.get_bit_unchecked(bitmap_idx + n) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        builder_idx += 1;
-                        if builder_idx % 8 == 0 {
-                            store_advance_aligned(buf, &mut builder_ptr);
-                            buf = 0;
-                        }
-                        mask = mask & (mask - 1);
-                    }
-                    bitmap_idx += CHUNK_SIZE;
-                }
+                let mut builder = MutableBitmap::with_capacity(self.filter_rows);
+                let iter = SlicesIterator::new(self.filter);
+                iter.for_each(|(start, len)| {
+                    builder.append_packed_range(start + offset..start + len + offset, src)
+                });
+                builder.into()
             }
-
-            if continuous_selected > 0 {
-                if builder_idx % 8 != 0 {
-                    while continuous_selected > 0 {
-                        if bitmap.get_bit_unchecked(bitmap_idx) {
-                            buf |= BIT_MASK[builder_idx % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        bitmap_idx += 1;
-                        builder_idx += 1;
-                        continuous_selected -= 1;
-                        if builder_idx % 8 == 0 {
-                            store_advance_aligned(buf, &mut builder_ptr);
-                            buf = 0;
-                            break;
-                        }
-                    }
-                }
-
-                if continuous_selected > 0 {
-                    let (cur_buf, cur_unset_bits) = copy_continuous_bits(
-                        &mut builder_ptr,
-                        bitmap_slice,
-                        builder_idx,
-                        bitmap_idx + bitmap_offset,
-                        continuous_selected,
-                    );
-                    builder_idx += continuous_selected;
-                    bitmap_idx += continuous_selected;
-                    unset_bits += cur_unset_bits;
-                    buf = cur_buf;
-                }
-            }
-
-            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
-                if is_selected {
-                    if bitmap.get_bit_unchecked(bitmap_idx + i) {
-                        buf |= BIT_MASK[builder_idx % 8];
-                    } else {
-                        unset_bits += 1;
-                    }
-                    builder_idx += 1;
-                    if builder_idx % 8 == 0 {
-                        store_advance_aligned(buf, &mut builder_ptr);
-                        buf = 0;
-                    }
-                }
-            }
-
-            if builder_idx % 8 != 0 {
-                store_advance_aligned(buf, &mut builder_ptr);
-            }
-        }
-
-        let bitmap = unsafe {
-            set_vec_len_by_ptr(&mut builder, builder_ptr);
-            Bitmap::from_inner(Arc::new(builder.into()), 0, self.num_rows, unset_bits)
-                .ok()
-                .unwrap()
         };
+
         self.result = Some(Value::Column(BooleanType::upcast_column(bitmap)));
         Ok(())
     }
@@ -454,78 +321,31 @@ impl<'a> ValueVisitor for FilterVisitor<'a> {
 
 impl<'a> FilterVisitor<'a> {
     fn filter_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
-        let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
-        let mut ptr = builder.as_mut_ptr();
-        let mut values_ptr = buffer.as_slice().as_ptr();
-        let (mut slice, offset, mut length) = self.filter.as_slice();
-
-        unsafe {
-            if offset > 0 {
-                let mut mask = slice[0];
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    // If `offset` > 0, the valid bits of this byte start at `offset`, we also
-                    // need to ensure that we cannot iterate more than `length` bits.
-                    if n >= offset && n < offset + length {
-                        copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
-                    }
-                    mask = mask & (mask - 1);
-                }
-                let bits_to_align = 8 - offset;
-                length = if length >= bits_to_align {
-                    length - bits_to_align
-                } else {
-                    0
-                };
-                slice = &slice[1..];
-                values_ptr = values_ptr.add(bits_to_align);
+        match self.strategy {
+            IterationStrategy::IndexIterator => {
+                let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+                Vec::from_iter(iter.map(|index| buffer[index])).into()
             }
-
-            const CHUNK_SIZE: usize = 64;
-            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-            let mut continuous_selected = 0;
-            for mut mask in mask_chunks.by_ref() {
-                if mask == u64::MAX {
-                    continuous_selected += CHUNK_SIZE;
-                } else {
-                    if continuous_selected > 0 {
-                        copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
-                        values_ptr = values_ptr.add(continuous_selected);
-                        continuous_selected = 0;
-                    }
-                    while mask != 0 {
-                        let n = mask.trailing_zeros() as usize;
-                        copy_advance_aligned(values_ptr.add(n), &mut ptr, 1);
-                        mask = mask & (mask - 1);
-                    }
-                    values_ptr = values_ptr.add(CHUNK_SIZE);
-                }
+            _ => {
+                let mut builder = Vec::with_capacity(self.filter_rows);
+                let iter = SlicesIterator::new(self.filter);
+                iter.for_each(|(start, len)| {
+                    builder.extend_from_slice(&buffer[start..start + len]);
+                });
+                builder.into()
             }
-            if continuous_selected > 0 {
-                copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
-                values_ptr = values_ptr.add(continuous_selected);
-            }
-
-            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
-                if is_selected {
-                    copy_advance_aligned(values_ptr.add(i), &mut ptr, 1);
-                }
-            }
-
-            set_vec_len_by_ptr(&mut builder, ptr);
         }
-
-        builder.into()
     }
 
+    // TODO: optimize this after BinaryView is introduced by @andy
     fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
         // Each element of `items` is (string pointer(u64), string length).
-        let mut items: Vec<(u64, usize)> = Vec::with_capacity(self.num_rows);
+        let mut items: Vec<(u64, usize)> = Vec::with_capacity(self.filter_rows);
         // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
         // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let values_offset = values.offsets().as_slice();
         let values_data_ptr = values.data().as_slice().as_ptr();
-        let mut offsets: Vec<u64> = Vec::with_capacity(self.num_rows + 1);
+        let mut offsets: Vec<u64> = Vec::with_capacity(self.filter_rows + 1);
         let mut offsets_ptr = offsets.as_mut_ptr();
         let mut items_ptr = items.as_mut_ptr();
         let mut data_size = 0;

@@ -21,6 +21,7 @@ use std::time::Instant;
 use chrono_tz::Tz;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -288,7 +289,7 @@ impl<'a> Binder {
             Statement::CreateDictionary(stmt) => self.bind_create_dictionary(stmt).await?,
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
-            Statement::ShowDictionaries { show_options: _ } => todo!(),
+            Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -470,13 +471,15 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetStmt {set_type, identifiers, values } => {
+            Statement::SetStmt { settings } => {
+                let Settings { set_type, identifiers, values } = settings;
                 self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetStmt{unset_type, identifiers } => {
-                self.bind_unset(bind_context, *unset_type, identifiers)
+            Statement::UnSetStmt{settings } => {
+                let Settings { set_type, identifiers, .. } = settings;
+                self.bind_unset(bind_context, *set_type, identifiers)
                     .await?
             }
 

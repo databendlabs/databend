@@ -707,7 +707,7 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
-    let _e13 = PushDownInfo {
+    let e13 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
@@ -720,7 +720,7 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
-    let _e14 = PushDownInfo {
+    let e14 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
@@ -733,7 +733,7 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
-    let _e15 = PushDownInfo {
+    let e15 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_version: index_version.clone(),
@@ -759,9 +759,9 @@ async fn test_block_pruner() -> Result<()> {
         (Some(e10), 2, 2),
         (Some(e11), 9, 15),
         (Some(e12), 2, 2),
-        //(Some(e13), 3, 3),
-        //(Some(e14), 2, 2),
-        //(Some(e15), 2, 5),
+        (Some(e13), 3, 3),
+        (Some(e14), 2, 2),
+        (Some(e15), 2, 5),
     ];
 
     for (extra, expected_blocks, expected_rows) in extras {
