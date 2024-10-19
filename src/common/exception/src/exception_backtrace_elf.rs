@@ -68,7 +68,6 @@ struct Symbol {
 
 impl Debug for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // object::files
         f.debug_struct("Symbol")
             .field(
                 "name",

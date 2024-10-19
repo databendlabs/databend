@@ -12,24 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::slice;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::fmt::Write;
-use std::path::PathBuf;
-// use std::backtrace::Backtrace;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use addr2line::Location;
-use object::read::elf::FileHeader;
-use object::read::elf::SectionHeader;
-use object::read::elf::Sym;
-use tantivy::HasLen;
-
 use crate::exception::ErrorCodeBacktrace;
-use crate::LibraryManager;
 
 // 0: not specified 1: disable 2: enable
 pub static USER_SET_ENABLE_BACKTRACE: AtomicUsize = AtomicUsize::new(0);
@@ -101,35 +90,20 @@ pub fn capture() -> Option<ErrorCodeBacktrace> {
     }
 }
 
-// #[derive(Debug)]
+#[cfg(target_os = "linux")]
 pub struct ResolvedStackFrame {
     pub virtual_address: usize,
     pub physical_address: usize,
     pub symbol: String,
     pub inlined: bool,
-    pub location: Option<Location<'static>>,
-}
-
-impl Debug for ResolvedStackFrame {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ResolvedStackFrame")
-            .field("virtual_address", &self.virtual_address)
-            .field("physical_address", &self.physical_address)
-            .field("symbol", &self.symbol)
-            .field(
-                "location",
-                &self
-                    .location
-                    .as_ref()
-                    .map(|l| (&l.file, &l.line, &l.column)),
-            )
-            .finish()
-    }
+    pub location: Option<addr2line::Location<'static>>,
 }
 
 pub enum StackFrame {
-    Unresolved(usize),
-    Resolved(usize),
+    #[cfg(target_os = "linux")]
+    Ip(usize),
+    #[cfg(not(target_os = "linux"))]
+    Backtrace(backtrace::BacktraceFrame),
 }
 
 //
@@ -144,50 +118,80 @@ impl StackTrace {
         StackTrace { frames }
     }
 
+    #[cfg(not(target_os = "linux"))]
+    fn capture_frames(frames: &mut Vec<StackFrame>) {
+        unsafe {
+            backtrace::trace_unsynchronized(|frame| {
+                frames.push(StackFrame::Backtrace(backtrace::BacktraceFrame::from(frame.clone())));
+                frames.len() != frames.capacity()
+            });
+        }
+    }
+
+    #[cfg(target_os = "linux")]
     fn capture_frames(frames: &mut Vec<StackFrame>) {
         // Safety:
         unsafe {
             backtrace::trace_unsynchronized(|frame| {
-                frames.push(StackFrame::Unresolved(frame.ip() as usize));
+                frames.push(StackFrame::Ip(frame.ip() as usize));
                 frames.len() != frames.capacity()
             });
         }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn fmt_frames(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut frames = std::vec::Vec::with_capacity(self.frames.len());
+        for frame in &self.frames {
+            let StackFrame::Backtrace(frame) = frame;
+            frames.push(frame.clone());
+        }
+
+        let mut backtrace = backtrace::Backtrace::from(frames);
+        backtrace.resolve();
+
+        writeln!(f, "{:?}", backtrace)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn fmt_frames(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut idx = 0;
+        crate::exception_backtrace_elf::LibraryManager::instance().resolve_frames(
+            &self.frames,
+            |frame| {
+                write!(f, "{:4}: {}", idx, frame.symbol)?;
+
+                if frame.inlined {
+                    write!(f, "[inlined]")?;
+                } else if frame.physical_address != frame.virtual_address {
+                    write!(f, "@{:x}", frame.physical_address)?;
+                }
+
+                writeln!(f, "")?;
+                if let Some(location) = frame.location {
+                    match (location.file, location.line, location.column) {
+                        (Some(file), Some(line), Some(column)) => {
+                            writeln!(f, "             at {}:{}:{}", file, line, column)?;
+                        }
+                        (Some(file), Some(line), None) => {
+                            writeln!(f, "             at {}:{}", file, line)?;
+                        }
+                        (Some(file), None, None) => {
+                            writeln!(f, "             at {}", file)?;
+                        }
+                        _ => {}
+                    };
+                }
+
+                idx += 1;
+                Ok(())
+            },
+        )
     }
 }
 
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let library_manager = LibraryManager::instance();
-        eprintln!("libraries: {:?}", library_manager);
-        let mut idx = 0;
-
-        library_manager.resolve_frames(&self.frames, |frame| {
-            write!(f, "{:4}: {}", idx, frame.symbol)?;
-
-            if frame.inlined {
-                write!(f, "[inlined]")?;
-            } else if frame.physical_address != frame.virtual_address {
-                write!(f, "@{:x}", frame.physical_address)?;
-            }
-
-            writeln!(f, "")?;
-            if let Some(location) = frame.location {
-                match (location.file, location.line, location.column) {
-                    (Some(file), Some(line), Some(column)) => {
-                        writeln!(f, "             at {}:{}:{}", file, line, column)?;
-                    }
-                    (Some(file), Some(line), None) => {
-                        writeln!(f, "             at {}:{}", file, line)?;
-                    }
-                    (Some(file), None, None) => {
-                        writeln!(f, "             at {}", file)?;
-                    }
-                    _ => {}
-                };
-            }
-
-            idx += 1;
-            Ok(())
-        })
+        self.fmt_frames(f)
     }
 }
