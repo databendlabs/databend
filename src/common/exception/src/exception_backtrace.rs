@@ -122,7 +122,9 @@ impl StackTrace {
     fn capture_frames(frames: &mut Vec<StackFrame>) {
         unsafe {
             backtrace::trace_unsynchronized(|frame| {
-                frames.push(StackFrame::Backtrace(backtrace::BacktraceFrame::from(frame.clone())));
+                frames.push(StackFrame::Backtrace(backtrace::BacktraceFrame::from(
+                    frame.clone(),
+                )));
                 frames.len() != frames.capacity()
             });
         }
