@@ -17,9 +17,7 @@ mod bind_limit;
 mod bind_select;
 mod bind_set_expr;
 mod bind_value;
-mod subquery_executor;
 
 pub use bind_select::MaxColumnPosition;
 pub use bind_value::bind_values;
 pub use bind_value::ExpressionScanContext;
-pub use subquery_executor::SubqueryExecutor;

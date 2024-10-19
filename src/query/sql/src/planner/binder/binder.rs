@@ -51,9 +51,9 @@ use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
-use crate::binder::SubqueryExecutor;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
@@ -111,7 +111,7 @@ pub struct Binder {
 
     pub enable_result_cache: bool,
 
-    pub subquery_executor: Option<Arc<dyn SubqueryExecutor>>,
+    pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl<'a> Binder {
@@ -145,7 +145,7 @@ impl<'a> Binder {
 
     pub fn with_subquery_executor(
         mut self,
-        subquery_executor: Option<Arc<dyn SubqueryExecutor>>,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
     ) -> Self {
         self.subquery_executor = subquery_executor;
         self

@@ -42,10 +42,10 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
 
-use crate::binder::SubqueryExecutor;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::query_executor::QueryExecutor;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 use crate::VirtualColumnRewriter;
@@ -261,7 +261,7 @@ struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
     is_unquoted_ident_case_sensitive: bool,
-    subquery_executor: Option<Arc<dyn SubqueryExecutor>>,
+    subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 // helper functions to SelectRewriter
@@ -375,7 +375,7 @@ impl<'a> SelectRewriter<'a> {
 
     pub fn with_subquery_executor(
         mut self,
-        subquery_executor: Option<Arc<dyn SubqueryExecutor>>,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
     ) -> Self {
         self.subquery_executor = subquery_executor;
         self
@@ -457,7 +457,9 @@ impl<'a> SelectRewriter<'a> {
                 let query_sql = subquery.to_string();
                 if let Some(subquery_executor) = &self.subquery_executor {
                     let data_blocks = databend_common_base::runtime::block_on(async move {
-                        subquery_executor.execute_query(&query_sql).await
+                        subquery_executor
+                            .execute_query_with_sql_string(&query_sql)
+                            .await
                     })?;
                     let values =
                         self.extract_column_values_from_data_blocks(&data_blocks, subquery.span)?;
@@ -523,13 +525,13 @@ impl<'a> SelectRewriter<'a> {
     ) -> Result<Vec<Expr>> {
         let mut values: Vec<Expr> = vec![];
         for block in data_blocks {
-            let columns = block.columns();
-            if columns.len() != 1 {
+            if block.num_columns() != 1 {
                 return Err(ErrorCode::SemanticError(
                     "The subquery of `pivot in` must return one column",
                 )
                 .set_span(span));
             }
+            let columns = block.columns();
             for row in 0..block.num_rows() {
                 match columns[0].value.index(row).unwrap() {
                     ScalarRef::String(s) => {

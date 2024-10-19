@@ -37,10 +37,9 @@ use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
-use crate::binder::SubqueryExecutor;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::QuerySampleExecutor;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -55,8 +54,7 @@ const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
-    pub(crate) sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
-    pub(crate) subquery_executor: Option<Arc<dyn SubqueryExecutor>>,
+    pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 #[derive(Debug, Clone)]
@@ -69,20 +67,17 @@ impl Planner {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
         Planner {
             ctx,
-            sample_executor: None,
-            subquery_executor: None,
+            query_executor: None,
         }
     }
 
-    pub fn new_with_sample_and_subquery_executors(
+    pub fn new_with_query_executor(
         ctx: Arc<dyn TableContext>,
-        sample_executor: Arc<dyn QuerySampleExecutor>,
-        subquery_executor: Arc<dyn SubqueryExecutor>,
+        query_executor: Arc<dyn QueryExecutor>,
     ) -> Self {
         Planner {
             ctx,
-            sample_executor: Some(sample_executor),
-            subquery_executor: Some(subquery_executor),
+            query_executor: Some(query_executor),
         }
     }
 
@@ -203,7 +198,7 @@ impl Planner {
                     name_resolution_ctx,
                     metadata.clone(),
                 )
-                .with_subquery_executor(self.subquery_executor.clone());
+                .with_subquery_executor(self.query_executor.clone());
 
                 // Indicate binder there is no need to collect column statistics for the binding table.
                 self.ctx
@@ -218,7 +213,7 @@ impl Planner {
                     .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
                     .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
                     .with_enable_dphyp(settings.get_enable_dphyp()?)
-                    .with_sample_executor(self.sample_executor.clone());
+                    .with_sample_executor(self.query_executor.clone());
 
                 let optimized_plan = optimize(opt_ctx, plan).await?;
                 let result = (optimized_plan, PlanExtras {

@@ -203,9 +203,8 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
 ///
 /// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
 pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
-    let mut planner = Planner::new_with_sample_and_subquery_executors(
+    let mut planner = Planner::new_with_query_executor(
         ctx.clone(),
-        Arc::new(ServiceQueryExecutor::new(ctx.clone())),
         Arc::new(ServiceQueryExecutor::new(ctx.clone())),
     );
     let result = planner.plan_sql(sql).await;
