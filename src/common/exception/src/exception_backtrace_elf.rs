@@ -156,7 +156,10 @@ impl<'a> Dwarf<'a> {
         self.dwarf.find_location(probe).ok().flatten()
     }
 
-    pub fn find_frames(&self, probe: u64) -> Vec<(Frame<'_, EndianSlice<NativeEndian>>)> {
+    pub fn find_frames(
+        &self,
+        probe: u64,
+    ) -> Vec<Frame<'static, EndianSlice<'static, NativeEndian>>> {
         let mut frames = match self.dwarf.find_frames(probe) {
             // TODO(winter):Unsupported split DWARF
             LookupResult::Load { .. } => None,
@@ -166,7 +169,7 @@ impl<'a> Dwarf<'a> {
         let mut res_frames = Vec::with_capacity(8);
         if let Some(mut frames) = frames {
             while let Ok(Some(frame)) = frames.next() {
-                res_frames.push(frame);
+                res_frames.push(unsafe { std::mem::transmute(frame) });
             }
         }
 
@@ -245,7 +248,7 @@ impl LibraryManager {
                                 inlined: true,
                                 virtual_address: *addr,
                                 location: unsafe { std::mem::transmute(frame.location) },
-                            });
+                            })?;
                         }
 
                         if let Some(last) = last {
@@ -263,7 +266,7 @@ impl LibraryManager {
                                 inlined: false,
                                 virtual_address: *addr,
                                 location: unsafe { std::mem::transmute(last.location) },
-                            });
+                            })?;
                         }
 
                         continue;
