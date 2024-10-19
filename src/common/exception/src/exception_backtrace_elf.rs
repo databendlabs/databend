@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::slice;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::ffi::OsStr;
@@ -21,29 +19,18 @@ use std::ffi::OsString;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Write;
-use std::fs::File;
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::Arc;
 
-use addr2line::fallible_iterator::FallibleIterator;
 use addr2line::Frame;
-use addr2line::FrameIter;
 use addr2line::Location;
-use addr2line::LookupContinuation;
 use addr2line::LookupResult;
-use databend_common_arrow::arrow::array::ViewType;
 use gimli::EndianSlice;
 use gimli::NativeEndian;
-use libc::iovec;
 use libc::size_t;
-use object::read::elf::FileHeader;
-use object::read::elf::SectionHeader;
-use object::read::elf::SectionTable;
-use object::read::elf::Sym;
-use object::CompressedFileRange;
 use object::CompressionFormat;
 use object::Object;
 use object::ObjectSection;
@@ -79,11 +66,11 @@ impl Debug for Symbol {
     }
 }
 
-// #[derive(Debug)]
 struct Library {
     name: String,
     address_begin: usize,
     address_end: usize,
+    #[allow(unused)]
     library_data: (*const u8, usize),
     elf: Option<ElfFile>,
 }
@@ -159,7 +146,7 @@ impl<'a> Dwarf<'a> {
         &self,
         probe: u64,
     ) -> Vec<Frame<'static, EndianSlice<'static, NativeEndian>>> {
-        let mut frames = match self.dwarf.find_frames(probe) {
+        let frames = match self.dwarf.find_frames(probe) {
             // TODO(winter):Unsupported split DWARF
             LookupResult::Load { .. } => None,
             LookupResult::Output(res) => res.ok(),
@@ -168,6 +155,7 @@ impl<'a> Dwarf<'a> {
         let mut res_frames = Vec::with_capacity(8);
         if let Some(mut frames) = frames {
             while let Ok(Some(frame)) = frames.next() {
+                #[allow(clippy::missing_transmute_annotations)]
                 res_frames.push(unsafe { std::mem::transmute(frame) });
             }
         }
@@ -197,112 +185,113 @@ impl LibraryManager {
         let mut dwarf_cache = HashMap::with_capacity(self.libraries.len());
 
         for frame in frames {
-            if let StackFrame::Unresolved(addr) = frame {
-                let Some(library) = self.find_library(*addr) else {
-                    f(ResolvedStackFrame {
-                        virtual_address: *addr,
-                        physical_address: *addr,
-                        symbol: String::from("<unknown>"),
-                        inlined: false,
-                        location: None,
-                    })?;
+            let StackFrame::Ip(addr) = frame;
+            let Some(library) = self.find_library(*addr) else {
+                f(ResolvedStackFrame {
+                    virtual_address: *addr,
+                    physical_address: *addr,
+                    symbol: String::from("<unknown>"),
+                    inlined: false,
+                    location: None,
+                })?;
 
-                    continue;
-                };
+                continue;
+            };
 
-                let dwarf = match library.elf.as_ref() {
-                    None => &None,
-                    Some(elf) => match dwarf_cache.get(&library.name) {
-                        Some(v) => v,
-                        None => {
-                            dwarf_cache.insert(library.name.clone(), Dwarf::create(elf));
-                            dwarf_cache.get(&library.name).unwrap()
-                        }
-                    },
-                };
+            let dwarf = match library.elf.as_ref() {
+                None => &None,
+                Some(elf) => match dwarf_cache.get(&library.name) {
+                    Some(v) => v,
+                    None => {
+                        dwarf_cache.insert(library.name.clone(), Dwarf::create(elf));
+                        dwarf_cache.get(&library.name).unwrap()
+                    }
+                },
+            };
 
-                let mut location = None;
-                let physical_address = *addr - library.address_begin;
+            let mut location = None;
+            let physical_address = *addr - library.address_begin;
 
-                if let Some(dwarf) = dwarf {
-                    let adjusted_addr = (physical_address - 1) as u64;
+            if let Some(dwarf) = dwarf {
+                let adjusted_addr = (physical_address - 1) as u64;
 
-                    let mut frames = dwarf.find_frames(adjusted_addr);
+                let mut frames = dwarf.find_frames(adjusted_addr);
 
-                    if !frames.is_empty() {
-                        let last = frames.pop();
+                if !frames.is_empty() {
+                    let last = frames.pop();
 
-                        for frame in frames.into_iter() {
-                            let mut symbol = String::from("<unknown>");
+                    for frame in frames.into_iter() {
+                        let mut symbol = String::from("<unknown>");
 
-                            if let Some(function) = frame.function {
-                                if let Ok(name) = function.demangle() {
-                                    symbol = name.to_string();
-                                }
+                        if let Some(function) = frame.function {
+                            if let Ok(name) = function.demangle() {
+                                symbol = name.to_string();
                             }
-
-                            f(ResolvedStackFrame {
-                                symbol,
-                                physical_address,
-                                inlined: true,
-                                virtual_address: *addr,
-                                location: unsafe { std::mem::transmute(frame.location) },
-                            })?;
                         }
 
-                        if let Some(last) = last {
-                            let mut symbol = String::from("<unknown>");
-
-                            if let Some(function) = last.function {
-                                if let Ok(name) = function.demangle() {
-                                    symbol = name.to_string();
-                                }
-                            }
-
-                            f(ResolvedStackFrame {
-                                symbol,
-                                physical_address,
-                                inlined: false,
-                                virtual_address: *addr,
-                                location: unsafe { std::mem::transmute(last.location) },
-                            })?;
-                        }
-
-                        continue;
+                        f(ResolvedStackFrame {
+                            symbol,
+                            physical_address,
+                            inlined: true,
+                            virtual_address: *addr,
+                            #[allow(clippy::missing_transmute_annotations)]
+                            location: unsafe { std::mem::transmute(frame.location) },
+                        })?;
                     }
 
-                    location = dwarf.find_location(adjusted_addr);
-                }
+                    if let Some(last) = last {
+                        let mut symbol = String::from("<unknown>");
 
-                if let Some(symbol) = self.find_symbol(*addr) {
-                    f(ResolvedStackFrame {
-                        physical_address,
-                        inlined: false,
-                        virtual_address: *addr,
-                        location: unsafe { std::mem::transmute(location) },
-                        symbol: format!(
-                            "{}",
-                            rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
-                        ),
-                    })?;
+                        if let Some(function) = last.function {
+                            if let Ok(name) = function.demangle() {
+                                symbol = name.to_string();
+                            }
+                        }
+
+                        f(ResolvedStackFrame {
+                            symbol,
+                            physical_address,
+                            inlined: false,
+                            virtual_address: *addr,
+                            #[allow(clippy::missing_transmute_annotations)]
+                            location: unsafe { std::mem::transmute(last.location) },
+                        })?;
+                    }
 
                     continue;
                 }
 
+                location = dwarf.find_location(adjusted_addr);
+            }
+
+            if let Some(symbol) = self.find_symbol(*addr) {
                 f(ResolvedStackFrame {
                     physical_address,
-                    virtual_address: *addr,
-                    location: None,
                     inlined: false,
-                    symbol: String::from("<unknown>"),
+                    virtual_address: *addr,
+                    #[allow(clippy::missing_transmute_annotations)]
+                    location: unsafe { std::mem::transmute(location) },
+                    symbol: format!(
+                        "{}",
+                        rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
+                    ),
                 })?;
+
+                continue;
             }
+
+            f(ResolvedStackFrame {
+                physical_address,
+                virtual_address: *addr,
+                location: None,
+                inlined: false,
+                symbol: String::from("<unknown>"),
+            })?;
         }
 
         Ok(())
     }
 
-    // #[cfg(target_os = "linux")]
     pub fn create() -> LibraryManager {
         unsafe {
             let mut data = Data {
@@ -316,7 +305,7 @@ impl LibraryManager {
             data.libraries
                 .sort_by(|a, b| a.address_begin.cmp(&b.address_begin));
             data.symbols.dedup_by(|a, b| {
-                a.address_begin == b.address_begin && b.address_end == b.address_end
+                a.address_begin == b.address_begin && a.address_end == b.address_end
             });
 
             LibraryManager {
@@ -339,7 +328,7 @@ struct Data {
 }
 
 pub fn library_debug_path(library_name: OsString, build_id: &[u8]) -> std::io::Result<PathBuf> {
-    let mut binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
+    let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
 
     let mut binary_debug_path = binary_path.clone();
     binary_debug_path.set_extension("debug");
@@ -381,7 +370,6 @@ pub fn library_debug_path(library_name: OsString, build_id: &[u8]) -> std::io::R
     Ok(binary_path)
 }
 
-// #[cfg(target_os = "linux")]
 unsafe extern "C" fn callback(
     info: *mut libc::dl_phdr_info,
     _size: libc::size_t,
@@ -401,7 +389,7 @@ unsafe extern "C" fn callback(
         }
     };
 
-    let Ok(library_path) = library_debug_path(library_name, &vec![]) else {
+    let Ok(library_path) = library_debug_path(library_name, &[]) else {
         return 0;
     };
 
@@ -422,7 +410,6 @@ unsafe extern "C" fn callback(
     0
 }
 
-// #[cfg(target_os = "linux")]
 unsafe fn mmap_library(library_path: PathBuf) -> Option<(*const u8, size_t)> {
     let file = std::fs::File::open(library_path).ok()?;
     let len = file.metadata().ok()?.len().try_into().ok()?;
@@ -441,11 +428,7 @@ unsafe fn mmap_library(library_path: PathBuf) -> Option<(*const u8, size_t)> {
     }
 }
 
-pub fn symbols_from_elf(
-    library: &mut Library,
-    data: &'static [u8],
-    symbols: &mut Vec<Symbol>,
-) -> bool {
+fn symbols_from_elf(library: &mut Library, data: &'static [u8], symbols: &mut Vec<Symbol>) -> bool {
     let Ok(elf) = ElfFile::parse(data) else {
         return false;
     };
@@ -470,6 +453,7 @@ pub fn symbols_from_elf(
         }
 
         symbols.push(Symbol {
+            #[allow(clippy::missing_transmute_annotations)]
             name: unsafe { std::mem::transmute(sym_name) },
             address_begin: library.address_begin as u64 + symbol.address(),
             address_end: library.address_begin as u64 + symbol.address() + symbol.size(),

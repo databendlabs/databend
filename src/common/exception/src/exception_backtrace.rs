@@ -169,6 +169,7 @@ impl StackTrace {
                     write!(f, "@{:x}", frame.physical_address)?;
                 }
 
+                #[allow(clippy::writeln_empty_string)]
                 writeln!(f, "")?;
                 if let Some(location) = frame.location {
                     match (location.file, location.line, location.column) {
