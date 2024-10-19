@@ -139,10 +139,12 @@ impl StackTrace {
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let library_manager = LibraryManager::instance();
+        eprintln!("libraries: {:?}", library_manager);
         let frames = library_manager.resolve_frames(&self.frames);
 
         for (idx, frame) in frames.into_iter().enumerate() {
             writeln!(f, "{} {:?}", idx, frame)?;
+            // backtrace::Backtrace::new()
         }
 
         Ok(())

@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use core::slice;
-use std::cell::OnceCell;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -27,19 +28,36 @@ use std::path::PathBuf;
 use std::ptr;
 use std::sync::Arc;
 
+use addr2line::fallible_iterator::FallibleIterator;
+use addr2line::FrameIter;
+use addr2line::Location;
+use addr2line::LookupContinuation;
+use addr2line::LookupResult;
+use databend_common_arrow::arrow::array::ViewType;
+use gimli::EndianSlice;
+use gimli::NativeEndian;
 use libc::iovec;
 use libc::size_t;
 use object::read::elf::FileHeader;
 use object::read::elf::SectionHeader;
+use object::read::elf::SectionTable;
 use object::read::elf::Sym;
+use object::CompressedFileRange;
+use object::CompressionFormat;
+use object::Object;
+use object::ObjectSection;
+use object::ObjectSymbol;
+use object::ObjectSymbolTable;
+use once_cell::sync::OnceCell;
 
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
 
 #[cfg(target_pointer_width = "32")]
-type Elf = object::elf::FileHeader32<object::NativeEndian>;
+type ElfFile = object::read::elf::ElfFile32<'static, object::NativeEndian, &'static [u8]>;
+
 #[cfg(target_pointer_width = "64")]
-type Elf = object::elf::FileHeader64<object::NativeEndian>;
+type ElfFile = object::read::elf::ElfFile64<'static, object::NativeEndian, &'static [u8]>;
 
 struct Symbol {
     name: &'static [u8],
@@ -49,6 +67,7 @@ struct Symbol {
 
 impl Debug for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // object::files
         f.debug_struct("Symbol")
             .field(
                 "name",
@@ -62,13 +81,16 @@ impl Debug for Symbol {
 
 #[derive(Debug)]
 struct Library {
-    name: PathBuf,
+    name: String,
     address_begin: usize,
     address_end: usize,
-    // library_data: Vec<u8>,
     library_data: (*const u8, usize),
-    // std::shared_ptr<Elf> elf;
+    elf: Option<ElfFile>,
 }
+
+unsafe impl Send for Library {}
+
+unsafe impl Sync for Library {}
 
 static INSTANCE: OnceCell<Arc<LibraryManager>> = OnceCell::new();
 
@@ -87,36 +109,77 @@ impl Debug for LibraryManager {
     }
 }
 
-impl LibraryManager {
-    fn find_library(&self, addr: usize) -> Option<&Library> {
-        match self
-            .libraries
-            .iter()
-            .find(|library| library.address_begin <= addr)
-        {
+struct Dwarf<'a> {
+    dwarf: addr2line::Context<EndianSlice<'a, NativeEndian>>,
+}
+
+impl<'a> Dwarf<'a> {
+    pub fn create(elf: &'a ElfFile) -> Option<Dwarf> {
+        let dwarf = gimli::read::Dwarf::load(|index| {
+            let section_data = match elf.section_by_name(index.name()) {
+                // Unsupported --compress-debug-sections
+                Some(section) => match section
+                    .compressed_file_range()
+                    .map(|x| x.format == CompressionFormat::None)
+                {
+                    Ok(false) | Err(_) => &[],
+                    Ok(true) => match section.data() {
+                        Ok(debug_sections_data) => debug_sections_data,
+                        Err(_) => &[],
+                    },
+                },
+                None => &[],
+            };
+
+            Ok(section_data)
+        });
+
+        match dwarf {
             None => None,
-            Some(v) => match v.address_end >= addr {
-                true => Some(v),
-                false => None,
+            Some(dwarf) => match addr2line::Context::from_dwarf(dwarf) {
+                Err(_) => None,
+                Ok(ctx) => Some(Dwarf { dwarf: ctx }),
             },
         }
+    }
+
+    pub fn find_location(&self, probe: u64) -> Option<Location<'_>> {
+        self.dwarf.find_location(probe).ok().flatten()
+    }
+
+    pub fn find_inlined_frames(&self, probe: u64) -> Vec<u64> {
+        let frames = match self.dwarf.find_frames(probe) {
+            LookupResult::Load { .. } => None,
+            LookupResult::Output(res) => res.ok(),
+        };
+
+        if let Some(frames) = frames {
+            while let Ok(Some(frame)) = frames.next() {
+                eprintln!("inlined frame {:?}", frame.function.map(|x| x.demangle()));
+                eprintln!("inlined frame {:?}", &frame.location);
+            }
+        }
+
+        vec![]
+    }
+}
+
+impl LibraryManager {
+    fn find_library(&self, addr: usize) -> Option<&Library> {
+        self.libraries
+            .iter()
+            .find(|library| library.address_begin <= addr && addr <= library.address_end)
     }
 
     fn find_symbol(&self, addr: usize) -> Option<&Symbol> {
-        match self
-            .symbols
-            .iter()
-            .find(|symbol| symbol.address_begin as usize <= addr)
-        {
-            None => None,
-            Some(v) => match v.address_end as usize >= addr {
-                true => Some(v),
-                false => None,
-            },
-        }
+        self.symbols.iter().find(|symbol| {
+            symbol.address_begin as usize <= addr && addr <= symbol.address_end as usize
+        })
     }
 
     pub fn resolve_frames(&self, frames: &[StackFrame]) -> Vec<ResolvedStackFrame> {
+        let mut dwarf_cache = HashMap::with_capacity(self.libraries.len());
+
         let mut res = Vec::with_capacity(frames.len());
         for frame in frames {
             if let StackFrame::Unresolved(addr) = frame {
@@ -130,6 +193,25 @@ impl LibraryManager {
 
                     continue;
                 };
+
+                let dwarf = match library.elf.as_ref() {
+                    None => &None,
+                    Some(elf) => match dwarf_cache.get(&library.name) {
+                        Some(v) => v,
+                        None => {
+                            dwarf_cache.insert(library.name, Dwarf::create(elf));
+                            dwarf_cache.get(&library.name).unwrap()
+                        }
+                    },
+                };
+
+                let mut location = None;
+
+                if let Some(dwarf) = dwarf {
+                    let adjusted_addr = (*addr - 1) as u64;
+                    location = dwarf.find_location(adjusted_addr);
+                    let inlined_frames = dwarf.find_inlined_frames(adjusted_addr);
+                }
 
                 if let Some(symbol) = self.find_symbol(*addr) {
                     res.push(ResolvedStackFrame {
@@ -203,7 +285,7 @@ pub fn library_debug_path(library_name: OsString, build_id: &[u8]) -> std::io::R
     }
 
     if build_id.len() >= 2 {
-        let mut system_dir = std::path::Path::new("/uar/lib/debug").to_path_buf();
+        let system_dir = std::path::Path::new("/uar/lib/debug").to_path_buf();
 
         fn encode_hex(bytes: &[u8]) -> String {
             let mut encoded_hex = String::with_capacity(bytes.len() * 2);
@@ -252,20 +334,17 @@ unsafe extern "C" fn callback(
     };
 
     if let Some((ptr, len)) = mmap_library(library_path.clone()) {
-        let library = Library {
-            name: library_path,
+        let mut library = Library {
+            name: format!("{library_path}"),
             address_begin: info.dlpi_addr as usize,
             address_end: info.dlpi_addr as usize + len,
             library_data: (ptr, len),
+            elf: None,
         };
 
         let library_data =
             std::slice::from_raw_parts(library.library_data.0, library.library_data.1);
-        symbols_from_elf(
-            library.address_begin as u64,
-            library_data,
-            &mut data.symbols,
-        );
+        symbols_from_elf(&mut library, library_data, &mut data.symbols);
         data.libraries.push(library);
     }
 
@@ -291,32 +370,27 @@ unsafe fn mmap_library(library_path: PathBuf) -> Option<(*const u8, size_t)> {
     }
 }
 
-pub fn symbols_from_elf(base: u64, data: &[u8], symbols: &mut Vec<Symbol>) -> bool {
-    let Ok(elf) = Elf::parse(data) else {
+pub fn symbols_from_elf(
+    library: &mut Library,
+    data: &'static [u8],
+    symbols: &mut Vec<Symbol>,
+) -> bool {
+    let Ok(elf) = ElfFile::parse(data) else {
         return false;
     };
 
-    let Ok(endian) = elf.endian() else {
-        return false;
-    };
-
-    let Ok(sections) = elf.sections(endian, data) else {
-        return false;
-    };
-
-    let symbol_table = match sections.symbols(endian, data, object::elf::SHT_SYMTAB) {
-        Ok(st) => st,
-        Err(_) => match sections.symbols(endian, data, object::elf::SHT_DYNSYM) {
-            Ok(st) => st,
-            Err(_) => {
+    let symbol_table = match elf.symbol_table() {
+        Some(symbol_table) => symbol_table,
+        None => match elf.dynamic_symbol_table() {
+            Some(dynamic_symbol_table) => dynamic_symbol_table,
+            None => {
                 return false;
             }
         },
     };
 
-    let string_table = symbol_table.strings();
-    for (_idx, symbol) in symbol_table.enumerate() {
-        let Ok(sym_name) = symbol.name(endian, string_table) else {
+    for symbol in symbol_table.symbols() {
+        let Ok(sym_name) = symbol.name() else {
             continue;
         };
 
@@ -326,10 +400,11 @@ pub fn symbols_from_elf(base: u64, data: &[u8], symbols: &mut Vec<Symbol>) -> bo
 
         symbols.push(Symbol {
             name: unsafe { std::mem::transmute(sym_name) },
-            address_begin: base + symbol.st_value(endian),
-            address_end: base + symbol.st_value(endian) + symbol.st_size(endian),
+            address_begin: library.address_begin as u64 + symbol.address(),
+            address_end: library.address_begin as u64 + symbol.address() + symbol.size(),
         })
     }
 
+    library.elf = Some(elf);
     true
 }

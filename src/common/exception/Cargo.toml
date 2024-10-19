@@ -36,6 +36,8 @@ libc = { workspace = true}
 gimli = "0.31.0"
 object = "0.36.5"
 rustc-demangle = "0.1"
+once_cell = { workspace = true }
+addr2line = "0.24.2"
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]
