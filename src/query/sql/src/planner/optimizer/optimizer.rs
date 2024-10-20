@@ -41,11 +41,11 @@ use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -72,7 +72,7 @@ pub struct OptimizerContext {
     enable_dphyp: bool,
     planning_agg_index: bool,
     #[educe(Debug(ignore))]
-    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    sample_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl OptimizerContext {
@@ -104,10 +104,7 @@ impl OptimizerContext {
         self
     }
 
-    pub fn with_sample_executor(
-        mut self,
-        sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
-    ) -> Self {
+    pub fn with_sample_executor(mut self, sample_executor: Option<Arc<dyn QueryExecutor>>) -> Self {
         self.sample_executor = sample_executor;
         self
     }

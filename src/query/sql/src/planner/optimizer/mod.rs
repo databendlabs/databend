@@ -38,7 +38,6 @@ mod dynamic_sample;
 pub use cascades::CascadesOptimizer;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryRewriter;
-pub use dynamic_sample::QuerySampleExecutor;
 pub use extract::PatternExtractor;
 pub use hyper_dp::DPhpy;
 pub use m_expr::MExpr;

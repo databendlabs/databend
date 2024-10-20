@@ -21,10 +21,10 @@ use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::filter_selectivity_sample::filter_selectivity_sample;
 use crate::optimizer::dynamic_sample::join_selectivity_sample::join_selectivity_sample;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::MetadataRef;
@@ -34,7 +34,7 @@ pub async fn dynamic_sample(
     ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     s_expr: &SExpr,
-    sample_executor: Arc<dyn QuerySampleExecutor>,
+    sample_executor: Arc<dyn QueryExecutor>,
 ) -> Result<Arc<StatInfo>> {
     let time_budget =
         Duration::from_millis(ctx.get_settings().get_dynamic_sample_time_budget_ms()?);
