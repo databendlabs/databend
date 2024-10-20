@@ -32,6 +32,7 @@ use crate::optimizer::OptimizerContext;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;

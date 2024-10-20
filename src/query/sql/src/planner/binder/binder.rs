@@ -52,6 +52,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
@@ -107,6 +108,8 @@ pub struct Binder {
     pub bind_recursive_cte: bool,
 
     pub enable_result_cache: bool,
+
+    pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl<'a> Binder {
@@ -134,7 +137,16 @@ impl<'a> Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
             enable_result_cache,
+            subquery_executor: None,
         }
+    }
+
+    pub fn with_subquery_executor(
+        mut self,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    ) -> Self {
+        self.subquery_executor = subquery_executor;
+        self
     }
 
     #[async_backtrace::framed]
