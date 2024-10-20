@@ -461,7 +461,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     .map_err(HttpErrorCode::server_error)?
                 {
                     log::info!(
-                        "forwarding {} from {local_id} to {sticky_node_id}",
+                        "forwarding /v1{} from {local_id} to {sticky_node_id}",
                         req.uri()
                     );
                     forward_request(req, node).await
