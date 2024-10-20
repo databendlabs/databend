@@ -38,7 +38,6 @@ use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeS
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::CommonRows;
 use databend_common_pipeline_transforms::processors::sort::Merger;
-use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
 use databend_common_pipeline_transforms::processors::sort::SimpleRowsDesc;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
@@ -104,8 +103,8 @@ fn need_spill(block: &DataBlock) -> bool {
 #[async_trait::async_trait]
 impl<A> Processor for TransformSortSpill<A>
 where
-    A: SortAlgorithm + Send + 'static,
-    A::Rows: Rows + Send + Sync + 'static,
+    A: SortAlgorithm + 'static,
+    A::Rows: 'static,
 {
     fn name(&self) -> String {
         String::from("TransformSortSpill")
@@ -232,8 +231,8 @@ where
 
 impl<A> TransformSortSpill<A>
 where
-    A: SortAlgorithm + Send + 'static,
-    A::Rows: Rows + Sync + Send + 'static,
+    A: SortAlgorithm + 'static,
+    A::Rows: 'static,
 {
     pub fn create(
         input: Arc<InputPort>,
@@ -414,7 +413,7 @@ pub fn create_transform_sort_spill(
                 output_order_col,
             ))
         };
-        ($algo: ident, $asc: ident,$data_type: ty) => {
+        ($algo: ident, $asc: ident, $data_type: ty) => {
             Box::new(TransformSortSpill::<$algo<$asc<$data_type>>>::create(
                 input,
                 output,
@@ -468,35 +467,34 @@ mod tests {
 
     use databend_common_base::base::tokio;
     use databend_common_catalog::table_context::TableContext;
-    use databend_common_exception::Result;
     use databend_common_expression::block_debug::pretty_format_blocks;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::DataBlock;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
-    use databend_common_expression::SortColumnDescription;
-    use databend_common_pipeline_core::processors::InputPort;
-    use databend_common_pipeline_core::processors::OutputPort;
-    use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
     use databend_common_storage::DataOperator;
     use itertools::Itertools;
     use rand::rngs::ThreadRng;
     use rand::Rng;
 
     use super::TransformSortSpill;
+    use super::*;
     use crate::sessions::QueryContext;
     use crate::spillers::Spiller;
     use crate::spillers::SpillerConfig;
     use crate::spillers::SpillerType;
     use crate::test_kits::*;
 
-    async fn create_test_transform(
+    async fn create_test_transform<A>(
         ctx: Arc<QueryContext>,
         limit: Option<usize>,
-    ) -> Result<TransformSortSpill<SimpleRowsAsc<Int32Type>>> {
+    ) -> Result<TransformSortSpill<A>>
+    where
+        A: SortAlgorithm + 'static,
+        A::Rows: 'static,
+    {
         let op = DataOperator::instance().operator();
         let spill_config = SpillerConfig {
             spiller_type: SpillerType::OrderBy,
@@ -514,7 +512,7 @@ mod tests {
             is_nullable: false,
         }]);
 
-        let transform = TransformSortSpill::<SimpleRowsAsc<Int32Type>>::create(
+        let transform = TransformSortSpill::<A>::create(
             InputPort::create(),
             OutputPort::create(),
             DataSchemaRefExt::create(vec![DataField::new(
@@ -604,7 +602,8 @@ mod tests {
         has_memory_block: bool,
         limit: Option<usize>,
     ) -> Result<()> {
-        let mut transform = create_test_transform(ctx, limit).await?;
+        let mut transform =
+            create_test_transform::<LoserTreeSort<SimpleRowsAsc<Int32Type>>>(ctx, limit).await?;
 
         transform.num_merge = num_merge;
         transform.batch_rows = batch_rows;
