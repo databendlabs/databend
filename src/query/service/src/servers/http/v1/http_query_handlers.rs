@@ -450,17 +450,17 @@ pub fn query_route() -> Route {
         (
             "/upload_to_stage",
             put(upload_to_stage),
-            EndpointKind::StartQuery,
+            EndpointKind::UploadToStage,
         ),
         (
             "/suggested_background_tasks",
             get(list_suggestions),
-            EndpointKind::StartQuery,
+            EndpointKind::SystemInfo,
         ),
         (
             "/discovery_nodes",
             get(discovery_nodes),
-            EndpointKind::StartQuery,
+            EndpointKind::SystemInfo,
         ),
     ];
 
