@@ -239,7 +239,7 @@ where A: SortAlgorithm
 }
 
 impl<A> Processor for MultiSortMergeProcessor<A>
-where A: SortAlgorithm + Send + 'static
+where A: SortAlgorithm + 'static
 {
     fn name(&self) -> String {
         "MultiSortMerge".to_string()

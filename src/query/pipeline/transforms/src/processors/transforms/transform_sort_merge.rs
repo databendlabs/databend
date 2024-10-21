@@ -78,7 +78,7 @@ impl<R: Rows> TransformSortMerge<R> {
     }
 }
 
-impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
+impl<R: Rows + Send> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
     fn add_block(&mut self, block: DataBlock, init_rows: R, _input_index: usize) -> Result<()> {
@@ -133,7 +133,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     }
 }
 
-impl<R: Rows> TransformSortMerge<R> {
+impl<R: Rows + Send> TransformSortMerge<R> {
     fn merge_sort(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
         if self.buffer.is_empty() {
             return Ok(vec![]);

@@ -139,7 +139,7 @@ where A: SortAlgorithm
 impl<A> Builder<A>
 where
     A: SortAlgorithm + Send + 'static,
-    <A as SortAlgorithm>::Rows: Send + 'static,
+    A::Rows: 'static,
 {
     fn create_partitioner(&self, input: usize) -> Pipe {
         create_partitioner_pipe::<A::Rows>(
@@ -469,7 +469,7 @@ where A: SortAlgorithm
 }
 
 impl<A> Processor for KWayMergeWorkerProcessor<A>
-where A: SortAlgorithm + Send + 'static
+where A: SortAlgorithm + 'static
 {
     fn name(&self) -> String {
         "KWayMergeWorker".to_string()
