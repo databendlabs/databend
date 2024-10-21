@@ -40,6 +40,8 @@ use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
+use databend_common_sql::plans::ModifyColumnAction;
+use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use log::info;
@@ -414,6 +416,12 @@ impl QueryEntry {
                 return true;
             }
             Plan::DropTable(v) if v.all => {
+                return true;
+            }
+            Plan::ModifyTableColumn(box ModifyTableColumnPlan {
+                action: ModifyColumnAction::SetDataType(_),
+                ..
+            }) => {
                 return true;
             }
 
