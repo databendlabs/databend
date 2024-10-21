@@ -176,6 +176,7 @@ pub enum Plan {
     },
     ExplainAnalyze {
         partial: bool,
+        graphical: bool,
         plan: Box<Plan>,
     },
 
@@ -390,6 +391,7 @@ pub enum RewriteKind {
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,
+    ShowDictionaries(String),
 
     ShowStreams(String),
 

@@ -80,7 +80,7 @@ impl SyncSystemTable for CachesTable {
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
-        let file_meta_data_cache = cache_manager.get_file_meta_data_cache();
+        let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
         let table_data_cache = cache_manager.get_table_data_cache();
         let table_column_array_cache = cache_manager.get_table_data_array_cache();
 
@@ -121,8 +121,8 @@ impl SyncSystemTable for CachesTable {
             Self::append_row(&prune_partitions_cache, &local_node, &mut columns);
         }
 
-        if let Some(file_meta_data_cache) = file_meta_data_cache {
-            Self::append_row(&file_meta_data_cache, &local_node, &mut columns);
+        if let Some(parquet_meta_data_cache) = parquet_meta_data_cache {
+            Self::append_row(&parquet_meta_data_cache, &local_node, &mut columns);
         }
 
         if let Some(cache) = table_data_cache {

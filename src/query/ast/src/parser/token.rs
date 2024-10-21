@@ -65,6 +65,16 @@ impl<'a> Tokenizer<'a> {
             prev_token: None,
         }
     }
+
+    pub fn contains_token(query: &str, target_kind: TokenKind) -> bool {
+        let mut tokenizer = Tokenizer::new(query);
+        while let Some(Ok(token)) = tokenizer.next() {
+            if token.kind == target_kind {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
@@ -145,6 +155,9 @@ pub enum TokenKind {
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
+
+    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    IdentVariable,
 
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
@@ -478,6 +491,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_DIFF", ignore(ascii_case))]
+    DATE_DIFF,
     #[token("DATE_PART", ignore(ascii_case))]
     DATE_PART,
     #[token("DATE_SUB", ignore(ascii_case))]
@@ -678,6 +693,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
+    INCLUDE_QUERY_ID,
     #[token("INCREMENTAL", ignore(ascii_case))]
     INCREMENTAL,
     #[token("INDEX", ignore(ascii_case))]
@@ -1059,6 +1076,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("USE_RAW_PATH", ignore(ascii_case))]
+    USE_RAW_PATH,
     #[token("UPDATE", ignore(ascii_case))]
     UPDATE,
     #[token("UPLOAD", ignore(ascii_case))]
@@ -1195,6 +1214,8 @@ pub enum TokenKind {
     VARIABLE,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
+    #[token("GRAPHICAL", ignore(ascii_case))]
+    GRAPHICAL,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
     #[token("VIEWS", ignore(ascii_case))]
@@ -1567,6 +1588,7 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATE_ADD
+            | TokenKind::DATE_DIFF
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
             | TokenKind::IGNORE_RESULT

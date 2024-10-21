@@ -17,22 +17,20 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HivePartInfo {
     // file location, like /usr/hive/warehouse/ssb.db/customer.table/c_region=ASIA/c_nation=CHINA/f00.parquet
     pub filename: String,
     // partition values, like 'c_region=ASIA/c_nation=CHINA'
-    pub partitions: Option<String>,
-    // only the data in ranges belong to this partition
-    pub range: Range<u64>,
+    pub partitions: Vec<Scalar>,
     // file size
     pub filesize: u64,
 }
@@ -57,24 +55,16 @@ impl PartInfo for HivePartInfo {
 }
 
 impl HivePartInfo {
-    pub fn create(
-        filename: String,
-        partitions: Option<String>,
-        range: Range<u64>,
-        filesize: u64,
-    ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(HivePartInfo {
+    pub fn create(filename: String, partitions: Vec<Scalar>, filesize: u64) -> Self {
+        HivePartInfo {
             filename,
             partitions,
-            range,
             filesize,
-        }))
+        }
     }
 
-    pub fn get_partition_map(&self) -> HashMap<String, String> {
-        self.partitions
-            .as_ref()
-            .map_or_else(HashMap::new, |s| parse_hive_partitions(s))
+    pub fn into_part_ptr(self) -> PartInfoPtr {
+        Arc::new(Box::new(self))
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&HivePartInfo> {
@@ -90,7 +80,9 @@ pub fn parse_hive_partitions(partitions: &str) -> HashMap<String, String> {
     let parts = partitions.split('/').collect::<Vec<_>>();
     for part in parts {
         let kv = part.split('=').collect::<Vec<_>>();
-        partition_map.insert(kv[0].to_string(), kv[1].to_string());
+        if kv.len() == 2 {
+            partition_map.insert(kv[0].to_string(), kv[1].to_string());
+        }
     }
     partition_map
 }
