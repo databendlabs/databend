@@ -47,3 +47,10 @@ message DictionaryMeta {
  // The time dictionary updated.
  optional string updated_on = 8;
 }
+
+// Save dictionary name id list history.
+message DictionaryIdList {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+    repeated uint64 ids = 1;
+}

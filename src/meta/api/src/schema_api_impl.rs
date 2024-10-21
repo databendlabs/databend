@@ -34,7 +34,6 @@ use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
-use databend_common_meta_app::app_error::DictionaryAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
@@ -51,7 +50,6 @@ use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
-use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
@@ -64,7 +62,6 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
@@ -100,7 +97,6 @@ use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdHistoryIdent;
-use databend_common_meta_app::schema::DictionaryIdList;
 use databend_common_meta_app::schema::DictionaryIdToName;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -3051,7 +3047,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let dict_ident = &req.name_ident;
         let get_db_req = GetDatabaseReq::new(req.tenant(), req.new_db_name.clone());
-        let new_db_id = self.get_database(get_db_req).await?.database_id.db_id;
+        let new_db_id = self
+            .get_database(get_db_req.clone())
+            .await?
+            .database_id
+            .db_id;
         let new_dict_ident = DictionaryNameIdent::new(
             req.name_ident.tenant(),
             DictionaryIdentity::new(new_db_id, req.new_dictionary_name.clone()),
@@ -3085,31 +3085,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 self.get_pb(&dbid_dictname_idlist).await?;
             let dict_id_list_seq = seq_dict_history.seq();
 
-            let mut dict_id_list = seq_dict_history
-                .into_value()
-                .unwrap_or_else(|| DictionaryIdList::new_with_ids([dict_id]));
-
-            {
-                let last = dict_id_list.last().copied();
-                if Some(dict_id) != last {
-                    let err_message = format!(
-                        "rename_dictionary {:?} but last dictionary id conflict, id list last: {:?}, current: {}",
-                        req.name_ident, last, dict_id
-                    );
-                    error!("{}", err_message);
-
-                    return Err(KVAppError::AppError(AppError::UnknownDictionary(
-                        UnknownError::new(
-                            DictionaryNameRsc(),
-                            DictionaryIdentity::new(
-                                dict_ident.db_id(),
-                                dict_ident.dict_name().clone(),
-                            ),
-                        ),
-                    )));
-                }
-            }
-
             // Get the renaming target db to ensure presence.
             let tenant_new_dbname = DatabaseNameIdent::new(req.tenant().clone(), &req.new_db_name);
             let (new_seq_db_id, new_db_meta) =
@@ -3127,34 +3102,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let seq_list = self.get_pb(&new_dbid_dictname_idlist).await?;
             let new_dict_id_list_seq = seq_list.seq();
-            let mut new_dict_id_list = if let Some(seq_list) = seq_list {
-                seq_list.data
-            } else {
-                DictionaryIdList::new()
-            };
 
             // get dictionary id name
             let dict_id_to_name_key = DictionaryIdToName { dict_id };
             let dict_id_to_name_seq = self.get_seq(&dict_id_to_name_key).await?;
-            let db_id_dict_name = DictionaryNameIdent::new(
+            let _db_id_dict_name = DictionaryNameIdent::new(
                 req.tenant(),
                 DictionaryIdentity::new(*new_seq_db_id.data, req.new_dictionary_name.clone()),
             );
 
             {
-                // move dictionary id from old dictionary id list to new dictionary id list
-                dict_id_list.pop();
-                new_dict_id_list.append(dict_id);
-
                 let mut txn = TxnRequest {
                     condition: vec![
                         // db has not to change, i.e., no new dictionary is created.
                         // Renaming db is OK and does not affect the seq of db_meta.
                         txn_cond_seq(&seq_db_id.data, Eq, db_meta.seq),
                         txn_cond_seq(&new_seq_db_id.data, Eq, new_db_meta.seq),
-                        // dictionary_name->dictionary_id does not change.
-                        // Updating the dictionary meta is ok.
-                        txn_cond_seq(&dict_ident, Eq, dict_id_seq),
                         txn_cond_seq(&new_dict_ident, Eq, 0),
                         // no other dictionary id with the same name is append.
                         txn_cond_seq(&dbid_dictname_idlist, Eq, dict_id_list_seq),
@@ -3163,15 +3126,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         txn_cond_seq(&dict_id_to_name_key, Eq, dict_id_to_name_seq),
                     ],
                     if_then: vec![
-                        txn_op_del(&dict_ident),
-                        txn_op_put(&new_dict_ident, serialize_u64(dict_id)?),
                         txn_op_put(&seq_db_id.data, serialize_struct(&*db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_dictname_idlist, serialize_struct(&dict_id_list)?), /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
-                        txn_op_put(
-                            &new_dbid_dictname_idlist,
-                            serialize_struct(&new_dict_id_list)?,
-                        ), /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
-                        txn_op_put(&dict_id_to_name_key, serialize_struct(&db_id_dict_name)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ],
                     else_then: vec![],
                 };
@@ -3633,19 +3588,13 @@ fn table_has_to_not_exist(
 fn dict_has_to_not_exist(
     seq: u64,
     name_ident: &DictionaryNameIdent,
-    ctx: impl Display,
+    _ctx: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
         Ok(())
     } else {
         debug!(seq = seq, name_ident :? =(name_ident); "exist");
-
-        Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
-            DictionaryAlreadyExists::new(
-                &name_ident.dict_name(),
-                format!("{}: {}", ctx, name_ident),
-            ),
-        )))
+        Err(AppError::from(name_ident.exist_error(func_name!())).into())
     }
 }
 

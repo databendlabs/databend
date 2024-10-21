@@ -24,7 +24,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
-use super::dictionary_id_ident::DictionaryId;
 use super::dictionary_name_ident::DictionaryNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -293,7 +292,6 @@ mod kvapi_key_impl {
     use super::DictionaryIdHistoryIdent;
     use super::DictionaryIdList;
     use super::DictionaryIdToName;
-    use crate::schema::dictionary_id_ident::DictionaryId;
     use crate::schema::dictionary_name_ident::DictionaryNameIdent;
     use crate::schema::DatabaseId;
 

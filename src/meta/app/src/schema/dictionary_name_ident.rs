@@ -48,6 +48,7 @@ mod kvapi_impl {
     use super::DictionaryNameIdent;
     use crate::schema::dictionary_id_ident::DictionaryId;
     use crate::schema::DictionaryIdToName;
+    use crate::schema::DictionaryIdentity;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DictionaryNameRsc;

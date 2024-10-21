@@ -72,6 +72,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReply;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -376,7 +377,7 @@ pub trait SchemaApi: Send + Sync {
     async fn rename_dictionary(
         &self,
         req: RenameDictionaryReq,
-    ) -> Result<RenameDatabaseReply, KVAppError>;
+    ) -> Result<RenameDictionaryReply, KVAppError>;
 
     /// Generic get() implementation for any kvapi::Key.
     ///

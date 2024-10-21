@@ -54,7 +54,7 @@ impl Interpreter for RenameDictionaryInterpreter {
                 if_exists: self.plan.if_exists,
                 name_ident: DictionaryNameIdent::new(
                     self.plan.tenant.clone(),
-                    DictionaryIdentity::new(self.plan.database, self.plan.dictionary),
+                    DictionaryIdentity::new(self.plan.database, self.plan.dictionary.clone()),
                 ),
                 new_db_name: self.plan.new_database.clone(),
                 new_dictionary_name: self.plan.new_dictionary.clone(),

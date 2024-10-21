@@ -20,7 +20,6 @@ use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
-use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -28,6 +27,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
@@ -414,9 +414,7 @@ pub fn assert_dictionary_exist(
     }
 
     debug!(seq = seq, name_ident :? =(name_ident); "does not exist");
+    // Err(AppError::from(name_ident.exist_error(func_name!())).into())
 
-    Err(UnknownDictionary::new(
-        &name_ident.dict_name(),
-        format!("{}.{}", ctx, name_ident),
-    ))?
+    Err(AppError::from(name_ident.exist_error(func_name!())).into())
 }

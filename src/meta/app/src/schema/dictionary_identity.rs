@@ -41,6 +41,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::DictionaryIdentity;
+    use crate::schema::dictionary_name_ident::DictionaryNameIdent;
 
     impl kvapi::KeyCodec for DictionaryIdentity {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
