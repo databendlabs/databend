@@ -730,6 +730,7 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             format: self.file_format,
             limit: self.file_limit,
             prefix_filter: self.file_prefix_filter,
+            include_node_id: false,
         }
     }
 }

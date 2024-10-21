@@ -2094,6 +2094,16 @@ pub struct FileLogConfig {
     )]
     #[serde(rename = "prefix_filter")]
     pub file_prefix_filter: String,
+
+    /// Whether to include node id in the log file name
+    /// If true, the log file name will be like `databend-query-<cluster_id>@<node_id>-<time>.log`
+    #[clap(
+        long = "log-file-include-node-id",
+        value_name = "VALUE",
+        default_value = "false"
+    )]
+    #[serde(rename = "include_node_id")]
+    pub include_node_id: bool,
 }
 
 impl Default for FileLogConfig {
@@ -2113,6 +2123,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             format: self.file_format,
             limit: self.file_limit,
             prefix_filter: self.file_prefix_filter,
+            include_node_id: self.include_node_id,
         })
     }
 }
@@ -2126,6 +2137,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_format: inner.format,
             file_limit: inner.limit,
             file_prefix_filter: inner.prefix_filter,
+            include_node_id: inner.include_node_id,
         }
     }
 }

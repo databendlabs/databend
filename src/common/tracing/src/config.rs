@@ -39,6 +39,7 @@ impl Config {
                 format: "text".to_string(),
                 limit: 48,
                 prefix_filter: "databend_,openraft".to_string(),
+                include_node_id: false,
             },
             stderr: StderrConfig {
                 on: true,
@@ -58,6 +59,7 @@ pub struct FileConfig {
     pub format: String,
     pub limit: usize,
     pub prefix_filter: String,
+    pub include_node_id: bool,
 }
 
 impl Display for FileConfig {
@@ -79,6 +81,7 @@ impl Default for FileConfig {
             format: "json".to_string(),
             limit: 48,
             prefix_filter: "databend_,openraft".to_string(),
+            include_node_id: false,
         }
     }
 }
