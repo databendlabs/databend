@@ -20,7 +20,9 @@ use std::hash::RandomState;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
 use databend_common_catalog::catalog::StorageDescription;
@@ -132,7 +134,11 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only returns the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+
+    pub(crate) meta_receiver: Arc<Mutex<MetaReceiver>>,
 }
+
+type MetaReceiver = Option<Vec<Receiver<Partitions>>>;
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
@@ -235,6 +241,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            meta_receiver: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -1038,5 +1045,15 @@ impl Table for FuseTable {
 
     fn use_own_sample_block(&self) -> bool {
         true
+    }
+
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<Pipeline> {
+        let (pipeline, receiver) = self.do_build_prune_pipeline(table_ctx, plan)?;
+        self.meta_receiver.lock().unwrap().replace(receiver);
+        Ok(pipeline)
     }
 }

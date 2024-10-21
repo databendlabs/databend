@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use async_channel::Receiver;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
@@ -23,17 +25,29 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_storages_common_index::BloomIndex;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
+use crate::io::BloomIndexBuilder;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
+use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
+use crate::pruning_pipeline::AsyncBlockPruningTransform;
+use crate::pruning_pipeline::BlockPruningTransform;
+use crate::pruning_pipeline::CompactReadTransform;
+use crate::pruning_pipeline::ExtractSegmentTransform;
+use crate::pruning_pipeline::ReadSegmentSource;
+use crate::pruning_pipeline::SendPartitionSink;
 use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -151,7 +165,8 @@ impl FuseTable {
                 });
             }
         }
-        if !lazy_init_segments.is_empty() {
+        let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
+        if !enable_prune_pipeline && !lazy_init_segments.is_empty() {
             let table = self.clone();
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
@@ -251,8 +266,10 @@ impl FuseTable {
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let setting = ctx.get_settings();
+        let max_threads = setting.get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
+        let receiver = self.meta_receiver.lock().unwrap().clone();
         match storage_format {
             FuseStorageFormat::Native => build_fuse_native_source_pipeline(
                 ctx,
@@ -265,6 +282,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -276,7 +294,128 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
         }
+    }
+
+    pub fn do_build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<(Pipeline, Vec<Receiver<Partitions>>)> {
+        let mut pipeline = Pipeline::create();
+        let table_schema = self.schema_with_stream();
+        let dal = self.operator.clone();
+        let push_downs = plan.push_downs.clone();
+        let snapshot_loc = plan.statistics.snapshot.clone();
+        let settings = table_ctx.get_settings();
+        let bloom_index_builder = if settings.get_enable_auto_fix_missing_bloom_index()? {
+            let storage_format = self.storage_format;
+
+            let bloom_columns_map = self
+                .bloom_index_cols()
+                .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
+
+            Some(BloomIndexBuilder {
+                table_ctx: table_ctx.clone(),
+                table_schema: table_schema.clone(),
+                table_dal: dal.clone(),
+                storage_format,
+                bloom_columns_map,
+            })
+        } else {
+            None
+        };
+
+        let pruner_context = if !self.is_native() || self.cluster_key_meta.is_none() {
+            PruningContext::try_create(
+                &table_ctx,
+                dal.clone(),
+                table_schema.clone(),
+                &push_downs,
+                None,
+                vec![],
+                self.bloom_index_cols.clone(),
+                8, // TODO
+                bloom_index_builder,
+            )
+        } else {
+            let cluster_keys = self.cluster_keys(table_ctx.clone());
+
+            PruningContext::try_create(
+                &table_ctx,
+                dal.clone(),
+                table_schema.clone(),
+                &push_downs,
+                self.cluster_key_meta.clone(),
+                cluster_keys,
+                self.bloom_index_cols.clone(),
+                8, // TODO
+                bloom_index_builder,
+            )
+        }?;
+
+        pipeline.add_source(
+            |output| {
+                ReadSegmentSource::create(
+                    table_ctx.clone(),
+                    pruner_context.internal_column_pruner.clone(),
+                    snapshot_loc.clone(),
+                    output,
+                )
+            },
+            8,
+        )?;
+
+        pipeline.add_transform(|input, output| {
+            CompactReadTransform::create(
+                dal.clone(),
+                table_schema.clone(),
+                pruner_context.range_pruner.clone(),
+                input,
+                output,
+            )
+        })?;
+
+        pipeline.add_transform(ExtractSegmentTransform::create)?;
+
+        if pruner_context.bloom_pruner.is_some() || pruner_context.inverted_index_pruner.is_some() {
+            // Async block pruning
+            pipeline.add_transform(|input, output| {
+                AsyncBlockPruningTransform::create(pruner_context.clone(), input, output)
+            })?;
+        } else {
+            // Sync block pruning
+            pipeline.add_transform(|input, output| {
+                BlockPruningTransform::create(pruner_context.clone(), input, output)
+            })?;
+        }
+
+        let max_threads = settings.get_max_threads()? as usize;
+        let mut receivers = Vec::with_capacity(max_threads);
+        let mut items = Vec::with_capacity(max_threads);
+        for i in 0..max_threads {
+            let (sender, receiver) = async_channel::bounded(1);
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                SendPartitionSink::create(
+                    table_ctx.clone(),
+                    table_schema.clone(),
+                    push_downs.clone(),
+                    self.is_native(),
+                    sender.clone(),
+                    i,
+                    input.clone(),
+                )?,
+                vec![input],
+                vec![],
+            ));
+
+            receivers.push(receiver);
+        }
+        pipeline.add_pipe(Pipe::create(max_threads, 0, items));
+
+        Ok((pipeline, receivers))
     }
 }

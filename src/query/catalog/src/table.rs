@@ -441,6 +441,20 @@ pub trait Table: Sync + Send {
     fn use_own_sample_block(&self) -> bool {
         false
     }
+
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<Pipeline> {
+        let (_, _) = (table_ctx, plan);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "The 'build prune pipeline' operation is not supported for the table '{}'. Table engine: '{}'.",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
 }
 
 #[async_trait::async_trait]

@@ -15,9 +15,11 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use async_channel::Receiver;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
@@ -32,10 +34,13 @@ use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
+use crate::operations::read::native_data_transform_reader::ReadNativeDataTransform;
+use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
 use crate::operations::read::ReadNativeDataSource;
 use crate::operations::read::ReadParquetDataSource;
+use crate::pruning_pipeline::AsyncMetaReceiverSource;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -49,6 +54,7 @@ pub fn build_fuse_native_source_pipeline(
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    meta_receiver: Option<Vec<Receiver<Partitions>>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
@@ -57,63 +63,107 @@ pub fn build_fuse_native_source_pipeline(
         max_threads = max_threads.min(16);
         max_io_requests = max_io_requests.min(16);
     }
-
     let mut source_builder = SourcePipeBuilder::create();
 
     match block_reader.support_blocking_api() {
         true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            if topk.is_some() {
-                partitions.disable_steal();
-            }
-
-            for i in 0..max_threads {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadNativeDataSource::<true>::create(
-                        i,
-                        plan.table_index,
+            if let Some(mut receivers) = meta_receiver {
+                while let Some(receiver) = receivers.pop() {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver, output)?,
+                    );
+                }
+                pipeline.add_pipe(source_builder.finalize());
+                pipeline.add_transform(|input, output| {
+                    ReadNativeDataTransform::<true>::create(
                         ctx.clone(),
-                        table_schema.clone(),
+                        input,
                         output,
                         block_reader.clone(),
-                        partitions.clone(),
                         index_reader.clone(),
                         virtual_reader.clone(),
-                    )?,
-                );
+                    )
+                })?;
+            } else {
+                let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
+                let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+                if topk.is_some() {
+                    partitions.disable_steal();
+                }
+
+                for i in 0..max_threads {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        ReadNativeDataSource::<true>::create(
+                            i,
+                            plan.table_index,
+                            ctx.clone(),
+                            table_schema.clone(),
+                            output,
+                            block_reader.clone(),
+                            partitions.clone(),
+                            index_reader.clone(),
+                            virtual_reader.clone(),
+                        )?,
+                    );
+                }
+
+                pipeline.add_pipe(source_builder.finalize());
             }
-            pipeline.add_pipe(source_builder.finalize());
         }
         false => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            if topk.is_some() {
-                partitions.disable_steal();
-            }
-
-            for i in 0..max_io_requests {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadNativeDataSource::<false>::create(
-                        i,
-                        plan.table_index,
+            if let Some(mut receivers) = meta_receiver {
+                while let Some(receiver) = receivers.pop() {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver, output)?,
+                    );
+                }
+                pipeline.add_pipe(source_builder.finalize());
+                pipeline.add_transform(|input, output| {
+                    ReadNativeDataTransform::<false>::create(
                         ctx.clone(),
-                        table_schema.clone(),
+                        input,
                         output,
                         block_reader.clone(),
-                        partitions.clone(),
                         index_reader.clone(),
                         virtual_reader.clone(),
-                    )?,
-                );
+                    )
+                })?;
+            } else {
+                let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+                let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+                if topk.is_some() {
+                    partitions.disable_steal();
+                }
+
+                for i in 0..max_threads {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        ReadNativeDataSource::<false>::create(
+                            i,
+                            plan.table_index,
+                            ctx.clone(),
+                            table_schema.clone(),
+                            output,
+                            block_reader.clone(),
+                            partitions.clone(),
+                            index_reader.clone(),
+                            virtual_reader.clone(),
+                        )?,
+                    );
+                }
+
+                pipeline.add_pipe(source_builder.finalize());
             }
-            pipeline.add_pipe(source_builder.finalize());
+
             pipeline.try_resize(max_threads)?;
         }
     };
@@ -145,6 +195,7 @@ pub fn build_fuse_parquet_source_pipeline(
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    meta_receiver: Option<Vec<Receiver<Partitions>>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
@@ -153,59 +204,104 @@ pub fn build_fuse_parquet_source_pipeline(
 
     match block_reader.support_blocking_api() {
         true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            for i in 0..max_threads {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadParquetDataSource::<true>::create(
-                        i,
-                        plan.table_index,
+            if let Some(mut receivers) = meta_receiver {
+                while let Some(receiver) = receivers.pop() {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver, output)?,
+                    );
+                }
+                pipeline.add_pipe(source_builder.finalize());
+                pipeline.add_transform(|input, output| {
+                    ReadParquetDataTransform::<true>::create(
                         ctx.clone(),
-                        table_schema.clone(),
+                        input,
                         output,
                         block_reader.clone(),
-                        partitions.clone(),
                         index_reader.clone(),
                         virtual_reader.clone(),
-                    )?,
-                );
+                    )
+                })?;
+            } else {
+                let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
+                let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+                for i in 0..max_threads {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        ReadParquetDataSource::<true>::create(
+                            i,
+                            plan.table_index,
+                            ctx.clone(),
+                            table_schema.clone(),
+                            output,
+                            block_reader.clone(),
+                            partitions.clone(),
+                            index_reader.clone(),
+                            virtual_reader.clone(),
+                        )?,
+                    );
+                }
+                pipeline.add_pipe(source_builder.finalize());
             }
-            pipeline.add_pipe(source_builder.finalize());
         }
         false => {
-            info!("read block data adjust max io requests:{}", max_io_requests);
-
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            for i in 0..max_io_requests {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadParquetDataSource::<false>::create(
-                        i,
-                        plan.table_index,
+            if let Some(mut receivers) = meta_receiver {
+                while let Some(receiver) = receivers.pop() {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver, output)?,
+                    );
+                }
+                pipeline.add_pipe(source_builder.finalize());
+                pipeline.add_transform(|input, output| {
+                    ReadParquetDataTransform::<false>::create(
                         ctx.clone(),
-                        table_schema.clone(),
+                        input,
                         output,
                         block_reader.clone(),
-                        partitions.clone(),
                         index_reader.clone(),
                         virtual_reader.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
-            pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+                    )
+                })?;
+            } else {
+                info!("read block data adjust max io requests:{}", max_io_requests);
 
-            info!(
-                "read block pipeline resize from:{} to:{}",
-                max_io_requests,
-                pipeline.output_len()
-            );
+                let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+                let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+                for i in 0..max_io_requests {
+                    let output = OutputPort::create();
+                    source_builder.add_source(
+                        output.clone(),
+                        ReadParquetDataSource::<false>::create(
+                            i,
+                            plan.table_index,
+                            ctx.clone(),
+                            table_schema.clone(),
+                            output,
+                            block_reader.clone(),
+                            partitions.clone(),
+                            index_reader.clone(),
+                            virtual_reader.clone(),
+                        )?,
+                    );
+                }
+                pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+
+                info!(
+                    "read block pipeline resize from:{} to:{}",
+                    max_io_requests,
+                    pipeline.output_len()
+                );
+
+                pipeline.add_pipe(source_builder.finalize());
+            }
+
+            pipeline.try_resize(max_threads)?;
         }
     };
 
