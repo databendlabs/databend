@@ -204,6 +204,8 @@ impl MergeSource {
                 lateral: false,
                 subquery: query.clone(),
                 alias: Some(source_alias.clone()),
+                pivot: None,
+                unpivot: None,
             },
             Self::Table {
                 catalog,
