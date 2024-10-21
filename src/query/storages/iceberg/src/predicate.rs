@@ -34,7 +34,7 @@ impl PredicateBuilder {
                 data_type,
             } if data_type.remove_nullable() == DataType::Boolean => {
                 let value = scalar.as_boolean();
-                let is_true = value.map(|v| *v).unwrap_or(false);
+                let is_true = value.copied().unwrap_or(false);
                 if is_true {
                     Predicate::AlwaysTrue
                 } else {
