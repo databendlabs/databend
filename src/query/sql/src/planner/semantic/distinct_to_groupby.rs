@@ -132,6 +132,8 @@ impl DistinctToGroupBy {
                                 name: Identifier::from_name(None, sub_query_name),
                                 columns: vec![Identifier::from_name(None, "_1")],
                             }),
+                            pivot: None,
+                            unpivot: None,
                         }],
                         selection: None,
                         group_by: None,

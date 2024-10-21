@@ -415,7 +415,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "c7525d9" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "672e423" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 orc-rust = { git = "https://github.com/datafuse-extras/datafusion-orc", rev = "03372b97" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }

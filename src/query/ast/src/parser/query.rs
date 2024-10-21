@@ -719,6 +719,8 @@ pub enum TableReferenceElement {
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // [NATURAL] [INNER|OUTER|CROSS|...] JOIN
     Join {
@@ -736,28 +738,6 @@ pub enum TableReferenceElement {
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
-    // PIVOT(expr FOR col IN (ident, ...))
-    let pivot = map(
-        rule! {
-           PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
-        },
-        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
-            aggregate,
-            value_column,
-            values,
-        },
-    );
-    // UNPIVOT(ident for ident IN (ident, ...))
-    let unpivot = map(
-        rule! {
-            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
-        },
-        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
-            value_column,
-            column_name,
-            names,
-        },
-    );
     let aliased_table = map(
         rule! {
             #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
@@ -825,12 +805,14 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias?
+            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |(lateral, _, subquery, _, alias)| TableReferenceElement::Subquery {
+        |(lateral, _, subquery, _, alias, pivot, unpivot)| TableReferenceElement::Subquery {
             lateral: lateral.is_some(),
             subquery: Box::new(subquery),
             alias,
+            pivot: pivot.map(Box::new),
+            unpivot: unpivot.map(Box::new),
         },
     );
 
@@ -867,6 +849,41 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         | #join_condition_using
     })(i)?;
     Ok((rest, WithSpan { span, elem }))
+}
+
+// PIVOT(expr FOR col IN (ident, ... | subquery))
+fn pivot(i: Input) -> IResult<Pivot> {
+    map(
+        rule! {
+            PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #pivot_values ~ ")" ~ ")"
+        },
+        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
+            aggregate,
+            value_column,
+            values,
+        },
+    )(i)
+}
+
+// UNPIVOT(ident for ident IN (ident, ...))
+fn unpivot(i: Input) -> IResult<Unpivot> {
+    map(
+        rule! {
+            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+        },
+        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
+            value_column,
+            column_name,
+            names,
+        },
+    )(i)
+}
+
+fn pivot_values(i: Input) -> IResult<PivotValues> {
+    alt((
+        map(comma_separated_list1(expr), PivotValues::ColumnValues),
+        map(query, |q| PivotValues::Subquery(Box::new(q))),
+    ))(i)
 }
 
 fn get_table_sample(
@@ -966,11 +983,15 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 lateral,
                 subquery,
                 alias,
+                pivot,
+                unpivot,
             } => TableReference::Subquery {
                 span: transform_span(input.span.tokens),
                 lateral,
                 subquery,
                 alias,
+                pivot,
+                unpivot,
             },
             TableReferenceElement::Stage {
                 location,
