@@ -222,7 +222,7 @@ fn scalar_to_datatum(scalar: &Scalar) -> Option<Datum> {
             NumberScalar::UInt8(i) => Datum::int(*i as i32),
             NumberScalar::UInt16(i) => Datum::int(*i as i32),
             NumberScalar::UInt32(i) if *i <= i32::MAX as u32 => Datum::int(*i as i32),
-            NumberScalar::UInt64(i) if *i <= i32::MAX as u64 => Datum::long(*i as i64), /* Potential loss of precision */
+            NumberScalar::UInt64(i) if *i <= i64::MAX as u64 => Datum::long(*i as i64), /* Potential loss of precision */
             NumberScalar::Float32(f) => Datum::float(*f),
             NumberScalar::Float64(f) => Datum::double(*f),
             _ => return None,
