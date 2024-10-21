@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use backtrace::Backtrace;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_exception::exception::ErrorCodeBacktrace;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::StackTrace;
 
 #[test]
 fn test_serialize() -> Result<()> {
@@ -28,7 +28,7 @@ fn test_serialize() -> Result<()> {
         String::from("test_message"),
         String::new(),
         None,
-        Some(ErrorCodeBacktrace::Symbols(Arc::new(Backtrace::new()))),
+        Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture()))),
     )
     .set_span(Some((0..1).into()));
     let backtrace_str = error_code.backtrace_str();
