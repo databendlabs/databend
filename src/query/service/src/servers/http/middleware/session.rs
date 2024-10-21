@@ -79,6 +79,8 @@ pub enum EndpointKind {
     Clickhouse,
     NoAuth,
     Verify,
+    UploadToStage,
+    SystemInfo,
 }
 
 impl EndpointKind {
@@ -94,18 +96,22 @@ impl EndpointKind {
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
         match self {
-            EndpointKind::Verify => Ok(None),
+            EndpointKind::Verify | EndpointKind::NoAuth => Ok(None),
             EndpointKind::Refresh => Ok(Some(TokenType::Refresh)),
-            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout => {
+            EndpointKind::StartQuery
+            | EndpointKind::PollQuery
+            | EndpointKind::Logout
+            | EndpointKind::SystemInfo
+            | EndpointKind::UploadToStage => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)
                 } else {
                     Ok(Some(TokenType::Session))
                 }
             }
-            _ => Err(ErrorCode::AuthenticateFailure(format!(
-                "should not use databend token for {self:?}",
-            ))),
+            EndpointKind::Login | EndpointKind::Clickhouse => Err(ErrorCode::AuthenticateFailure(
+                format!("should not use databend token for {self:?}",),
+            )),
         }
     }
 }
@@ -455,7 +461,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     .map_err(HttpErrorCode::server_error)?
                 {
                     log::info!(
-                        "forwarding {} from {local_id} to {sticky_node_id}",
+                        "forwarding /v1{} from {local_id} to {sticky_node_id}",
                         req.uri()
                     );
                     forward_request(req, node).await
