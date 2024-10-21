@@ -748,7 +748,7 @@ impl CompactSegmentTestFixture {
                         })
                     };
 
-                    let (location, _) = location_gen.gen_block_location();
+                    let (location, _) = location_gen.gen_block_location(Default::default());
                     let row_count = block.num_rows() as u64;
                     let block_size = block.memory_size() as u64;
 
@@ -783,7 +783,7 @@ impl CompactSegmentTestFixture {
                 }
                 let summary = stats_acc.summary(thresholds, cluster_key_id);
                 let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
-                let path = location_gen.gen_segment_info_location();
+                let path = location_gen.gen_segment_info_location(Default::default());
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
             });

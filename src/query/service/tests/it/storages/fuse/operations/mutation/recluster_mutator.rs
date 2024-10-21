@@ -87,7 +87,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        let segment_location = location_generator.gen_segment_info_location();
+        let segment_location = location_generator.gen_segment_info_location(Default::default());
         segment
             .write_meta(&data_accessor, &segment_location)
             .await?;
@@ -245,18 +245,16 @@ async fn test_safety_for_recluster() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, Some(cluster_key_id));
         }
 
-        let id = Uuid::new_v4();
-        let snapshot = Arc::new(TableSnapshot::new(
-            id,
+        let snapshot = Arc::new(TableSnapshot::try_new(
             None,
-            &None,
             None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
             None,
-        ));
+            Default::default(),
+        )?);
 
         let mut block_ids = HashSet::new();
         for seg in &segment_infos {
