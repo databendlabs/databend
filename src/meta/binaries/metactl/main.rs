@@ -356,6 +356,7 @@ async fn main() -> anyhow::Result<()> {
             format: "text".to_string(),
             limit: 48,
             prefix_filter: "databend_".to_string(),
+            include_node_id: false,
         },
         ..Default::default()
     };
