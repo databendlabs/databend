@@ -131,6 +131,11 @@ impl<Data: QueueData> QueueManager<Data> {
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
         if data.need_acquire_to_queue() {
+            info!(
+                "preparing to acquire from query queue, length: {}",
+                self.length()
+            );
+
             let timeout = data.timeout();
             let future = AcquireQueueFuture::create(
                 Arc::new(data),
@@ -141,6 +146,8 @@ impl<Data: QueueData> QueueManager<Data> {
 
             return match future.await {
                 Ok(v) => {
+                    info!("finished acquiring from queue, length: {}", self.length());
+
                     inc_session_running_acquired_queries();
                     record_session_queue_acquire_duration_ms(
                         start_time.elapsed().unwrap_or_default(),
