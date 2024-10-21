@@ -4371,6 +4371,7 @@ dependencies = [
  "siphasher",
  "sys-info",
  "tantivy",
+ "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
  "thrift",
@@ -9222,7 +9223,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.3"
-source = "git+https://github.com/databendlabs/jsonb?rev=c7525d9#c7525d93ad7b1e800df982e49a6e0e6454bd308e"
+source = "git+https://github.com/databendlabs/jsonb?rev=672e423#672e4234758889b8fcb79ba43ac00af8c0aef120"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -15234,9 +15235,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.12"
+version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61e7c3654c13bcd040d4a03abee2c75b1d14a37b423cf5a813ceae1cc903ec6a"
+checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
 dependencies = [
  "bytes",
  "futures-core",

@@ -26,6 +26,8 @@ mod take_ranges;
 mod topk;
 mod utils;
 
+pub use filter::FilterVisitor;
+pub use filter::IterationStrategy;
 pub use group_by_hash::*;
 pub use sort::*;
 pub use sort_compare::*;
