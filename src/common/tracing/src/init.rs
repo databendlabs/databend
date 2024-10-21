@@ -135,7 +135,7 @@ pub fn init_logging(
                 .build_span_exporter()
                 .expect("initialize oltp http exporter"),
         };
-        let (reporter_rt, otlp_reporter) = Thread::spawn(move || {
+        let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
             // init runtime with 2 threads
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
