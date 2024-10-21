@@ -52,7 +52,7 @@ impl BlockPruningTransform {
 }
 
 impl BlockMetaAccumulatingTransform<ExtractSegmentResult> for BlockPruningTransform {
-    const NAME: &'static str = "BlockPruningTransform";
+    const NAME: &'static str = "SyncBlockPruningTransform";
 
     fn transform(
         &mut self,

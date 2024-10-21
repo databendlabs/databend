@@ -53,7 +53,7 @@ pub fn build_fuse_native_source_pipeline(
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
-    meta_receiver: Option<Receiver<Partitions>>,
+    meta_receiver: Option<Vec<Receiver<Partitions>>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
@@ -66,12 +66,12 @@ pub fn build_fuse_native_source_pipeline(
 
     match block_reader.support_blocking_api() {
         true => {
-            if let Some(receiver) = meta_receiver {
-                for _i in 0..max_threads {
+            if let Some(mut receivers) = meta_receiver {
+                while let Some(receiver) = receivers.pop() {
                     let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
-                        AsyncMetaReceiverSource::create(ctx.clone(), receiver.clone(), output)?,
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver, output)?,
                     );
                 }
                 pipeline.add_pipe(source_builder.finalize());
@@ -122,12 +122,12 @@ pub fn build_fuse_native_source_pipeline(
                 partitions.disable_steal();
             }
 
-            if let Some(receiver) = meta_receiver.clone() {
-                for _i in 0..max_threads {
+            if let Some(mut receivers) = meta_receiver {
+                while let Some(receiver) = receivers.pop() {
                     let output = OutputPort::create();
                     source_builder.add_source(
                         output.clone(),
-                        AsyncMetaReceiverSource::create(ctx.clone(), receiver.clone(), output)?,
+                        AsyncMetaReceiverSource::create(ctx.clone(), receiver, output)?,
                     );
                 }
                 pipeline.add_pipe(source_builder.finalize());

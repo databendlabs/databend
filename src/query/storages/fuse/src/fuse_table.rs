@@ -138,7 +138,7 @@ pub struct FuseTable {
     pub(crate) meta_receiver: Arc<Mutex<MetaReceiver>>,
 }
 
-type MetaReceiver = Option<Receiver<Partitions>>;
+type MetaReceiver = Option<Vec<Receiver<Partitions>>>;
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {

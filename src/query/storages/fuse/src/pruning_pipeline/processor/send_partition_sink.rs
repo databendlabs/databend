@@ -28,6 +28,7 @@ use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
+use log::info;
 
 use crate::pruning_pipeline::meta_info::BlockPruningResult;
 use crate::FuseTable;
@@ -38,6 +39,7 @@ pub struct SendPartitionSink {
     push_downs: Option<PushDownInfo>,
     is_native: bool,
     sender: Sender<Partitions>,
+    index: usize,
 }
 
 impl SendPartitionSink {
@@ -47,6 +49,7 @@ impl SendPartitionSink {
         push_downs: Option<PushDownInfo>,
         is_native: bool,
         sender: Sender<Partitions>,
+        index: usize,
         input: Arc<InputPort>,
     ) -> databend_common_exception::Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
@@ -57,6 +60,7 @@ impl SendPartitionSink {
                 push_downs,
                 is_native,
                 sender,
+                index,
             },
         )))
     }
@@ -68,6 +72,7 @@ impl AsyncSink for SendPartitionSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> databend_common_exception::Result<()> {
+        info!("close SendPartitionSink {:?}", self.index);
         self.sender.close();
         Ok(())
     }
@@ -94,15 +99,17 @@ impl AsyncSink for SendPartitionSink {
                     top_k,
                     self.push_downs.clone(),
                 );
-                self.sender
-                    .send(parts)
-                    .await
-                    .map_err(|_| ErrorCode::Internal("AssemblePartitionSink send data failed"))?;
+                self.sender.send(parts).await.map_err(|_err| {
+                    ErrorCode::Internal(format!(
+                        "SendPartitionSink send data failed: index {:?}",
+                        self.index
+                    ))
+                })?;
                 return Ok(false);
             }
         }
         Err(ErrorCode::Internal(
-            "AssemblePartitionSink get wrong data block",
+            "SendPartitionSink get wrong data block",
         ))
     }
 }

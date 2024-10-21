@@ -25,6 +25,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
@@ -299,16 +302,14 @@ impl FuseTable {
         &self,
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-    ) -> Result<(Pipeline, Receiver<Partitions>)> {
+    ) -> Result<(Pipeline, Vec<Receiver<Partitions>>)> {
         let mut pipeline = Pipeline::create();
         let table_schema = self.schema_with_stream();
         let dal = self.operator.clone();
         let push_downs = plan.push_downs.clone();
         let snapshot_loc = plan.statistics.snapshot.clone();
-        let bloom_index_builder = if table_ctx
-            .get_settings()
-            .get_enable_auto_fix_missing_bloom_index()?
-        {
+        let settings = table_ctx.get_settings();
+        let bloom_index_builder = if settings.get_enable_auto_fix_missing_bloom_index()? {
             let storage_format = self.storage_format;
 
             let bloom_columns_map = self
@@ -363,7 +364,7 @@ impl FuseTable {
                     output,
                 )
             },
-            1,
+            8,
         )?;
 
         pipeline.add_transform(|input, output| {
@@ -390,19 +391,30 @@ impl FuseTable {
             })?;
         }
 
-        let (sender, receiver) = async_channel::bounded(1);
+        let max_threads = settings.get_max_threads()? as usize;
+        let mut receivers = Vec::with_capacity(max_threads);
+        let mut items = Vec::with_capacity(max_threads);
+        for i in 0..max_threads {
+            let (sender, receiver) = async_channel::bounded(1);
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                SendPartitionSink::create(
+                    table_ctx.clone(),
+                    table_schema.clone(),
+                    push_downs.clone(),
+                    self.is_native(),
+                    sender.clone(),
+                    i,
+                    input.clone(),
+                )?,
+                vec![input],
+                vec![],
+            ));
 
-        pipeline.add_sink(|input| {
-            SendPartitionSink::create(
-                table_ctx.clone(),
-                table_schema.clone(),
-                push_downs.clone(),
-                self.is_native(),
-                sender.clone(),
-                input,
-            )
-        })?;
+            receivers.push(receiver);
+        }
+        pipeline.add_pipe(Pipe::create(max_threads, 0, items));
 
-        Ok((pipeline, receiver))
+        Ok((pipeline, receivers))
     }
 }
