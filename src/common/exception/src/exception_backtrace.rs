@@ -50,43 +50,10 @@ fn enable_rust_backtrace() -> bool {
     enabled
 }
 
-enum BacktraceStyle {
-    Symbols,
-    Address,
-}
-
-fn backtrace_style() -> BacktraceStyle {
-    static ENABLED: AtomicUsize = AtomicUsize::new(0);
-    match ENABLED.load(Ordering::Relaxed) {
-        1 => return BacktraceStyle::Address,
-        2 => return BacktraceStyle::Symbols,
-        _ => {}
-    }
-
-    let backtrace_style = match std::env::var("BACKTRACE_STYLE") {
-        Ok(style) if style.eq_ignore_ascii_case("ADDRESS") => 1,
-        _ => 2,
-    };
-
-    ENABLED.store(backtrace_style, Ordering::Relaxed);
-    match backtrace_style {
-        1 => BacktraceStyle::Address,
-        _ => BacktraceStyle::Symbols,
-    }
-}
-
 pub fn capture() -> Option<ErrorCodeBacktrace> {
     match enable_rust_backtrace() {
         false => None,
-        true => match backtrace_style() {
-            BacktraceStyle::Symbols => Some(ErrorCodeBacktrace::Symbols(Arc::new(
-                backtrace::Backtrace::new(),
-            ))),
-            // TODO: get offset address(https://github.com/rust-lang/backtrace-rs/issues/434)
-            BacktraceStyle::Address => Some(ErrorCodeBacktrace::Address(Arc::new(
-                backtrace::Backtrace::new_unresolved(),
-            ))),
-        },
+        true => Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture()))),
     }
 }
 

@@ -20,19 +20,18 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use backtrace::Backtrace;
 use databend_common_ast::span::pretty_print_error;
 use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
 use crate::ErrorFrame;
+use crate::StackTrace;
 
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
-    Symbols(Arc<Backtrace>),
-    Address(Arc<Backtrace>),
+    Symbols(Arc<StackTrace>),
 }
 
 impl Display for ErrorCodeBacktrace {
@@ -40,14 +39,6 @@ impl Display for ErrorCodeBacktrace {
         match self {
             ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "{}", backtrace),
             ErrorCodeBacktrace::Symbols(backtrace) => write!(f, "{:?}", backtrace),
-            ErrorCodeBacktrace::Address(backtrace) => {
-                let frames_address = backtrace
-                    .frames()
-                    .iter()
-                    .map(|f| (f.ip() as usize, f.symbol_address() as usize))
-                    .collect::<Vec<_>>();
-                write!(f, "{:?}", frames_address)
-            }
         }
     }
 }
@@ -70,21 +61,21 @@ impl From<Arc<String>> for ErrorCodeBacktrace {
     }
 }
 
-impl From<Backtrace> for ErrorCodeBacktrace {
-    fn from(bt: Backtrace) -> Self {
-        Self::Symbols(Arc::new(bt))
+impl From<StackTrace> for ErrorCodeBacktrace {
+    fn from(st: StackTrace) -> Self {
+        Self::Symbols(Arc::new(st))
     }
 }
 
-impl From<&Backtrace> for ErrorCodeBacktrace {
-    fn from(bt: &Backtrace) -> Self {
-        Self::Serialized(Arc::new(format!("{:?}", bt)))
+impl From<&StackTrace> for ErrorCodeBacktrace {
+    fn from(st: &StackTrace) -> Self {
+        Self::Serialized(Arc::new(format!("{:?}", st)))
     }
 }
 
-impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
-    fn from(bt: Arc<Backtrace>) -> Self {
-        Self::Symbols(bt)
+impl From<Arc<StackTrace>> for ErrorCodeBacktrace {
+    fn from(st: Arc<StackTrace>) -> Self {
+        Self::Symbols(st)
     }
 }
 
@@ -249,16 +240,8 @@ impl<C> Debug for ErrorCode<C> {
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
                 match backtrace {
-                    ErrorCodeBacktrace::Symbols(backtrace) => write!(f, "\n\n{:?}", backtrace),
-                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
-                    ErrorCodeBacktrace::Address(backtrace) => {
-                        let frames_address = backtrace
-                            .frames()
-                            .iter()
-                            .map(|f| (f.ip() as usize, f.symbol_address() as usize))
-                            .collect::<Vec<_>>();
-                        write!(f, "\n\n{:?}", frames_address)
-                    }
+                    ErrorCodeBacktrace::Symbols(stacktrace) => write!(f, "\n\n{:?}", stacktrace),
+                    ErrorCodeBacktrace::Serialized(stacktrace) => write!(f, "\n\n{}", stacktrace),
                 }
             }
         }
