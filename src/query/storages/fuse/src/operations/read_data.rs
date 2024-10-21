@@ -294,6 +294,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
         }
     }

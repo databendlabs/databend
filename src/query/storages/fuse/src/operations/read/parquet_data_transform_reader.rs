@@ -26,27 +26,29 @@ use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
+use databend_storages_common_io::ReadSettings;
 use log::debug;
 
-use super::native_data_source::NativeDataSource;
+use super::parquet_data_source::ParquetDataSource;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning_pipeline::PartitionsMeta;
-use crate::FuseBlockPartInfo;
 
-pub struct ReadNativeDataTransform<const BLOCKING_IO: bool> {
+pub struct ReadParquetDataTransform<const BLOCKING_IO: bool> {
     index_reader: Arc<Option<AggIndexReader>>,
 
     block_reader: Arc<BlockReader>,
+
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     ctx: Arc<dyn TableContext>,
 }
 
-impl ReadNativeDataTransform<true> {
+impl ReadParquetDataTransform<true> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
@@ -58,7 +60,7 @@ impl ReadNativeDataTransform<true> {
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
-            ReadNativeDataTransform::<true> {
+            ReadParquetDataTransform::<true> {
                 block_reader,
                 index_reader,
                 virtual_reader,
@@ -68,7 +70,7 @@ impl ReadNativeDataTransform<true> {
     }
 }
 
-impl ReadNativeDataTransform<false> {
+impl ReadParquetDataTransform<false> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
@@ -80,7 +82,7 @@ impl ReadNativeDataTransform<false> {
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
-            ReadNativeDataTransform::<false> {
+            ReadParquetDataTransform::<false> {
                 block_reader,
                 index_reader,
                 virtual_reader,
@@ -89,18 +91,18 @@ impl ReadNativeDataTransform<false> {
         )))
     }
 }
-impl Transform for ReadNativeDataTransform<true> {
-    const NAME: &'static str = "SyncReadNativeDataTransform";
-    const SKIP_EMPTY_DATA_BLOCK: bool = false;
+
+impl Transform for ReadParquetDataTransform<true> {
+    const NAME: &'static str = "SyncReadParquetDataTransform";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         if let Some(info_ptr) = data.get_meta() {
             if let Some(partition_meta) = PartitionsMeta::downcast_from(info_ptr.clone()) {
                 let partitions = partition_meta.partitions.partitions;
-                let mut native_data_source = Vec::with_capacity(partitions.len());
-                let mut native_part_infos = Vec::with_capacity(partitions.len());
+                let mut parquet_data_source = Vec::with_capacity(partitions.len());
+                let mut parquet_part_infos = Vec::with_capacity(partitions.len());
                 for info_ptr in partitions {
-                    native_part_infos.push(info_ptr.clone());
+                    parquet_part_infos.push(info_ptr.clone());
                     let fuse_part = FuseBlockPartInfo::from_part(&info_ptr)?;
 
                     if let Some(index_reader) = self.index_reader.as_ref() {
@@ -109,53 +111,61 @@ impl Transform for ReadNativeDataTransform<true> {
                                 &fuse_part.location,
                                 index_reader.index_id(),
                             );
-
-                        if let Some(data) = index_reader.sync_read_native_data(&loc) {
-                            native_data_source.push(NativeDataSource::AggIndex(data));
+                        if let Some(data) = index_reader.sync_read_parquet_data_by_merge_io(
+                            &ReadSettings::from_ctx(&self.ctx)?,
+                            &loc,
+                        ) {
+                            // Read from aggregating index.
+                            parquet_data_source.push(ParquetDataSource::AggIndex(data));
                             continue;
                         }
                     }
 
-                    if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                    // If virtual column file exists, read the data from the virtual columns directly.
+                    let virtual_source = if let Some(virtual_reader) = self.virtual_reader.as_ref()
+                    {
                         let loc = TableMetaLocationGenerator::gen_virtual_block_location(
                             &fuse_part.location,
                         );
 
-                        if let Some((mut virtual_source_data, ignore_column_ids)) =
-                            virtual_reader.sync_read_native_data(&loc)
-                        {
-                            let mut source_data = self
-                                .block_reader
-                                .sync_read_native_columns_data(&info_ptr, &ignore_column_ids)?;
-                            source_data.append(&mut virtual_source_data);
-                            native_data_source.push(NativeDataSource::Normal(source_data));
-                            continue;
-                        }
-                    }
+                        virtual_reader.sync_read_parquet_data_by_merge_io(
+                            &ReadSettings::from_ctx(&self.ctx)?,
+                            &loc,
+                        )
+                    } else {
+                        None
+                    };
+                    let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
+                        &virtual_source.ignore_column_ids
+                    } else {
+                        &None
+                    };
 
-                    let source_data = self
-                        .block_reader
-                        .sync_read_native_columns_data(&info_ptr, &None)?;
-                    native_data_source.push(NativeDataSource::Normal(source_data));
+                    let source = self.block_reader.sync_read_columns_data_by_merge_io(
+                        &ReadSettings::from_ctx(&self.ctx)?,
+                        &info_ptr,
+                        ignore_column_ids,
+                    )?;
+                    parquet_data_source.push(ParquetDataSource::Normal((source, virtual_source)));
                 }
 
                 return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                    native_part_infos,
-                    native_data_source,
+                    parquet_part_infos,
+                    parquet_data_source,
                 )));
             }
         }
-
         Err(ErrorCode::Internal(
-            "SyncReadNativeDataTransform cannot downcast meta to PartitionsMeta",
+            "SyncReadParquetDataTransform cannot downcast meta to PartitionsMeta",
         ))
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncTransform for ReadNativeDataTransform<false> {
-    const NAME: &'static str = "AsyncReadNativeDataTransform";
+impl AsyncTransform for ReadParquetDataTransform<false> {
+    const NAME: &'static str = "AsyncReadParquetDataTransform";
 
+    #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         if let Some(info_ptr) = data.get_meta() {
             if let Some(partition_meta) = PartitionsMeta::downcast_from(info_ptr.clone()) {
@@ -163,65 +173,80 @@ impl AsyncTransform for ReadNativeDataTransform<false> {
                 if !partitions.is_empty() {
                     let mut chunks = Vec::with_capacity(partitions.len());
 
-                    let mut native_part_infos = Vec::with_capacity(partitions.len());
+                    let mut parquet_part_infos = Vec::with_capacity(partitions.len());
                     for part in partitions.into_iter() {
-                        native_part_infos.push(part.clone());
+                        parquet_part_infos.push(part.clone());
                         let block_reader = self.block_reader.clone();
+                        let settings = ReadSettings::from_ctx(&self.ctx)?;
                         let index_reader = self.index_reader.clone();
                         let virtual_reader = self.virtual_reader.clone();
-                        let ctx = self.ctx.clone();
+
                         chunks.push(async move {
-                            let handler = databend_common_base::runtime::spawn(async move {
-                                let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+                            databend_common_base::runtime::spawn(async move {
+                                let part = FuseBlockPartInfo::from_part(&part)?;
+
                                 if let Some(index_reader) = index_reader.as_ref() {
                                     let loc =
                                         TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                                            &fuse_part.location,
+                                            &part.location,
                                             index_reader.index_id(),
                                         );
-                                    if let Some(data) = index_reader.read_native_data(&loc).await {
+                                    if let Some(data) = index_reader
+                                        .read_parquet_data_by_merge_io(&settings, &loc)
+                                        .await
+                                    {
                                         // Read from aggregating index.
-                                        return Ok::<_, ErrorCode>(NativeDataSource::AggIndex(data));
+                                        return Ok::<_, ErrorCode>(ParquetDataSource::AggIndex(data));
                                     }
                                 }
 
-                                if let Some(virtual_reader) = virtual_reader.as_ref() {
+                                // If virtual column file exists, read the data from the virtual columns directly.
+                                let virtual_source = if let Some(virtual_reader) = virtual_reader.as_ref() {
                                     let loc = TableMetaLocationGenerator::gen_virtual_block_location(
-                                        &fuse_part.location,
+                                        &part.location,
                                     );
 
-                                    // If virtual column file exists, read the data from the virtual columns directly.
-                                    if let Some((mut virtual_source_data, ignore_column_ids)) =
-                                        virtual_reader.read_native_data(&loc).await
-                                    {
-                                        let mut source_data = block_reader
-                                            .async_read_native_columns_data(&part, &ctx, &ignore_column_ids)
-                                            .await?;
-                                        source_data.append(&mut virtual_source_data);
-                                        return Ok(NativeDataSource::Normal(source_data));
-                                    }
-                                }
+                                    virtual_reader
+                                        .read_parquet_data_by_merge_io(&settings, &loc)
+                                        .await
+                                } else {
+                                    None
+                                };
 
-                                Ok(NativeDataSource::Normal(
-                                    block_reader
-                                        .async_read_native_columns_data(&part, &ctx, &None)
-                                        .await?,
-                                ))
-                            });
-                            handler.await.unwrap()
+                                let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
+                                    &virtual_source.ignore_column_ids
+                                } else {
+                                    &None
+                                };
+
+                                let source = block_reader
+                                    .read_columns_data_by_merge_io(
+                                        &settings,
+                                        &part.location,
+                                        &part.columns_meta,
+                                        ignore_column_ids,
+                                    )
+                                    .await?;
+
+                                Ok(ParquetDataSource::Normal((source, virtual_source)))
+                            })
+                                .await
+                                .unwrap()
                         });
                     }
 
-                    debug!("AsyncReadNativeDataTransform parts: {}", chunks.len());
+                    debug!("AsyncReadParquetDataTransform parts: {}", chunks.len());
+
                     return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                        native_part_infos,
+                        parquet_part_infos,
                         futures::future::try_join_all(chunks).await?,
                     )));
                 }
             }
         }
+
         Err(ErrorCode::Internal(
-            "AsyncReadNativeDataTransform cannot downcast meta to PartitionsMeta",
+            "AsyncReadParquetDataTransform cannot downcast meta to PartitionsMeta",
         ))
     }
 }
