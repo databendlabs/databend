@@ -32,7 +32,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::info;
@@ -124,11 +124,11 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
     let segments = segments_io
-        .read_segments::<SegmentInfo>(&gc_root.segments, false)
+        .read_segments::<Arc<CompactSegmentInfo>>(&gc_root.segments, false)
         .await?;
     let mut gc_root_blocks = HashSet::new();
     for segment in segments {
-        gc_root_blocks.extend(segment?.blocks.iter().map(|b| b.location.0.clone()));
+        gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
     }
     ctx.set_status_info(&format!(
         "read segments for table {} takes {:?}",
