@@ -56,9 +56,7 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
-use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
-use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
@@ -377,10 +375,7 @@ impl InteractiveWorkerBase {
                 context.set_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
-
-                let entry = QueryEntry::create(&context, &plan, &extras)?;
-                let _guard = QueriesQueueManager::instance().acquire(entry).await?;
+                let (plan, _, _guard) = interpreter_plan_sql(context.clone(), query, true).await?;
 
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
                 let has_result_set = plan.has_result_set();
