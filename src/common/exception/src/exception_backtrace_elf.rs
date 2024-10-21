@@ -180,6 +180,7 @@ impl LibraryManager {
     pub fn resolve_frames<E, F: FnMut(ResolvedStackFrame) -> std::result::Result<(), E>>(
         &self,
         frames: &[StackFrame],
+        only_address: bool,
         mut f: F,
     ) -> std::result::Result<(), E> {
         let mut dwarf_cache = HashMap::with_capacity(self.libraries.len());
@@ -198,86 +199,89 @@ impl LibraryManager {
                 continue;
             };
 
-            let dwarf = match library.elf.as_ref() {
-                None => &None,
-                Some(elf) => match dwarf_cache.get(&library.name) {
-                    Some(v) => v,
-                    None => {
-                        dwarf_cache.insert(library.name.clone(), Dwarf::create(elf));
-                        dwarf_cache.get(&library.name).unwrap()
-                    }
-                },
-            };
-
-            let mut location = None;
             let physical_address = *addr - library.address_begin;
 
-            if let Some(dwarf) = dwarf {
-                let adjusted_addr = (physical_address - 1) as u64;
+            if !only_address {
+                let dwarf = match library.elf.as_ref() {
+                    None => &None,
+                    Some(elf) => match dwarf_cache.get(&library.name) {
+                        Some(v) => v,
+                        None => {
+                            dwarf_cache.insert(library.name.clone(), Dwarf::create(elf));
+                            dwarf_cache.get(&library.name).unwrap()
+                        }
+                    },
+                };
 
-                let mut frames = dwarf.find_frames(adjusted_addr);
+                let mut location = None;
 
-                if !frames.is_empty() {
-                    let last = frames.pop();
+                if let Some(dwarf) = dwarf {
+                    let adjusted_addr = (physical_address - 1) as u64;
 
-                    for frame in frames.into_iter() {
-                        let mut symbol = String::from("<unknown>");
+                    let mut frames = dwarf.find_frames(adjusted_addr);
 
-                        if let Some(function) = frame.function {
-                            if let Ok(name) = function.demangle() {
-                                symbol = name.to_string();
+                    if !frames.is_empty() {
+                        let last = frames.pop();
+
+                        for frame in frames.into_iter() {
+                            let mut symbol = String::from("<unknown>");
+
+                            if let Some(function) = frame.function {
+                                if let Ok(name) = function.demangle() {
+                                    symbol = name.to_string();
+                                }
                             }
+
+                            f(ResolvedStackFrame {
+                                symbol,
+                                physical_address,
+                                inlined: true,
+                                virtual_address: *addr,
+                                #[allow(clippy::missing_transmute_annotations)]
+                                location: unsafe { std::mem::transmute(frame.location) },
+                            })?;
                         }
 
-                        f(ResolvedStackFrame {
-                            symbol,
-                            physical_address,
-                            inlined: true,
-                            virtual_address: *addr,
-                            #[allow(clippy::missing_transmute_annotations)]
-                            location: unsafe { std::mem::transmute(frame.location) },
-                        })?;
-                    }
+                        if let Some(last) = last {
+                            let mut symbol = String::from("<unknown>");
 
-                    if let Some(last) = last {
-                        let mut symbol = String::from("<unknown>");
-
-                        if let Some(function) = last.function {
-                            if let Ok(name) = function.demangle() {
-                                symbol = name.to_string();
+                            if let Some(function) = last.function {
+                                if let Ok(name) = function.demangle() {
+                                    symbol = name.to_string();
+                                }
                             }
+
+                            f(ResolvedStackFrame {
+                                symbol,
+                                physical_address,
+                                inlined: false,
+                                virtual_address: *addr,
+                                #[allow(clippy::missing_transmute_annotations)]
+                                location: unsafe { std::mem::transmute(last.location) },
+                            })?;
                         }
 
-                        f(ResolvedStackFrame {
-                            symbol,
-                            physical_address,
-                            inlined: false,
-                            virtual_address: *addr,
-                            #[allow(clippy::missing_transmute_annotations)]
-                            location: unsafe { std::mem::transmute(last.location) },
-                        })?;
+                        continue;
                     }
+
+                    location = dwarf.find_location(adjusted_addr);
+                }
+
+                if let Some(symbol) = self.find_symbol(*addr) {
+                    f(ResolvedStackFrame {
+                        physical_address,
+                        inlined: false,
+                        virtual_address: *addr,
+                        #[allow(clippy::missing_transmute_annotations)]
+                        location: unsafe { std::mem::transmute(location) },
+                        symbol: format!(
+                            "{}",
+                            rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
+                        ),
+                    })?;
 
                     continue;
                 }
-
-                location = dwarf.find_location(adjusted_addr);
-            }
-
-            if let Some(symbol) = self.find_symbol(*addr) {
-                f(ResolvedStackFrame {
-                    physical_address,
-                    inlined: false,
-                    virtual_address: *addr,
-                    #[allow(clippy::missing_transmute_annotations)]
-                    location: unsafe { std::mem::transmute(location) },
-                    symbol: format!(
-                        "{}",
-                        rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
-                    ),
-                })?;
-
-                continue;
             }
 
             f(ResolvedStackFrame {
@@ -448,7 +452,7 @@ fn symbols_from_elf(library: &mut Library, data: &'static [u8], symbols: &mut Ve
             continue;
         };
 
-        if sym_name.is_empty() {
+        if sym_name.is_empty() || symbol.size() == 0 {
             continue;
         }
 
@@ -457,7 +461,7 @@ fn symbols_from_elf(library: &mut Library, data: &'static [u8], symbols: &mut Ve
             name: unsafe { std::mem::transmute(sym_name) },
             address_begin: library.address_begin as u64 + symbol.address(),
             address_end: library.address_begin as u64 + symbol.address() + symbol.size(),
-        })
+        });
     }
 
     library.elf = Some(elf);

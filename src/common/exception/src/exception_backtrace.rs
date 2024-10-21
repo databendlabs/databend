@@ -14,9 +14,12 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::fmt::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::PoisonError;
 
 use crate::exception::ErrorCodeBacktrace;
 
@@ -51,10 +54,7 @@ fn enable_rust_backtrace() -> bool {
 }
 
 pub fn capture() -> Option<ErrorCodeBacktrace> {
-    match enable_rust_backtrace() {
-        false => None,
-        true => Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture()))),
-    }
+    Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture())))
 }
 
 #[cfg(target_os = "linux")]
@@ -76,13 +76,17 @@ pub enum StackFrame {
 //
 pub struct StackTrace {
     frames: Vec<StackFrame>,
+    display: Mutex<Option<String>>,
 }
 
 impl StackTrace {
     pub fn capture() -> StackTrace {
         let mut frames = Vec::with_capacity(50);
         Self::capture_frames(&mut frames);
-        StackTrace { frames }
+        StackTrace {
+            frames,
+            display: Mutex::new(None),
+        }
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -109,7 +113,7 @@ impl StackTrace {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn fmt_frames(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt_frames(&self, display_text: &mut String, address: bool) -> std::fmt::Result {
         let mut frames = std::vec::Vec::with_capacity(self.frames.len());
         for frame in &self.frames {
             let StackFrame::Backtrace(frame) = frame;
@@ -117,16 +121,20 @@ impl StackTrace {
         }
 
         let mut backtrace = backtrace::Backtrace::from(frames);
-        backtrace.resolve();
 
-        writeln!(f, "{:?}", backtrace)
+        if !address {
+            backtrace.resolve();
+        }
+
+        writeln!(display_text, "{:?}", backtrace)
     }
 
     #[cfg(target_os = "linux")]
-    fn fmt_frames(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt_frames(&self, f: &mut String, address: bool) -> std::fmt::Result {
         let mut idx = 0;
         crate::exception_backtrace_elf::LibraryManager::instance().resolve_frames(
             &self.frames,
+            address,
             |frame| {
                 write!(f, "{:4}: {}", idx, frame.symbol)?;
 
@@ -162,6 +170,15 @@ impl StackTrace {
 
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.fmt_frames(f)
+        let mut guard = self.display.lock().unwrap_or_else(PoisonError::into_inner);
+
+        if guard.is_none() {
+            let mut display_text = String::new();
+
+            self.fmt_frames(&mut display_text, !enable_rust_backtrace())?;
+            *guard = Some(display_text);
+        }
+
+        writeln!(f, "{}", guard.as_ref().unwrap())
     }
 }
