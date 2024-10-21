@@ -39,6 +39,7 @@ use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
+use crate::pruning_pipeline::AsyncBlockPruningTransform;
 use crate::pruning_pipeline::BlockPruningTransform;
 use crate::pruning_pipeline::CompactReadTransform;
 use crate::pruning_pipeline::ExtractSegmentTransform;
@@ -377,9 +378,18 @@ impl FuseTable {
 
         pipeline.add_transform(ExtractSegmentTransform::create)?;
 
-        pipeline.add_transform(|input, output| {
-            BlockPruningTransform::create(pruner_context.clone(), input, output)
-        })?;
+        if pruner_context.bloom_pruner.is_some() || pruner_context.inverted_index_pruner.is_some() {
+            // Async block pruning
+            pipeline.add_transform(|input, output| {
+                AsyncBlockPruningTransform::create(pruner_context.clone(), input, output)
+            })?;
+        } else {
+            // Sync block pruning
+            pipeline.add_transform(|input, output| {
+                BlockPruningTransform::create(pruner_context.clone(), input, output)
+            })?;
+        }
+
         let (sender, receiver) = async_channel::bounded(1);
 
         pipeline.add_sink(|input| {
