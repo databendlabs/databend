@@ -19,17 +19,38 @@ use std::ffi::OsString;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Write;
+use std::num::NonZeroU64;
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::Arc;
 
-use addr2line::Frame;
-use addr2line::Location;
-use addr2line::LookupResult;
+use gimli::constants;
+use gimli::Abbreviations;
+use gimli::AttributeValue;
+use gimli::DebugAbbrev;
+use gimli::DebugAbbrevOffset;
+use gimli::DebugAddr;
+use gimli::DebugAddrBase;
+use gimli::DebugAranges;
+use gimli::DebugInfo;
+use gimli::DebugInfoOffset;
+use gimli::DebugLine;
+use gimli::DebugLineOffset;
+use gimli::DebugLocListsBase;
+use gimli::DebugRanges;
+use gimli::DebugRngLists;
+use gimli::DebugRngListsBase;
+use gimli::DebugStrOffsetsBase;
 use gimli::EndianSlice;
+use gimli::Error;
 use gimli::NativeEndian;
+use gimli::RangeLists;
+use gimli::RangeListsOffset;
+use gimli::RawRngListEntry;
+use gimli::UnitHeader;
+use gimli::UnitType;
 use libc::size_t;
 use object::CompressionFormat;
 use object::Object;
@@ -106,61 +127,463 @@ impl Debug for LibraryManager {
     }
 }
 
+pub struct Location {
+    pub file: String,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+}
+
 struct Dwarf<'a> {
-    dwarf: addr2line::Context<EndianSlice<'a, NativeEndian>>,
+    #[allow(unused)]
+    elf: &'a ElfFile,
+    debug_info: &'a [u8],
+    debug_aranges: &'a [u8],
+    debug_ranges: &'a [u8],
+    debug_rnglists: &'a [u8],
+    debug_abbrev: &'a [u8],
+    debug_addr: &'a [u8],
+    debug_line: &'a [u8],
+}
+
+struct Unit<'a> {
+    head: UnitHeader<EndianSlice<'a, NativeEndian>>,
+
+    addr_base: DebugAddrBase,
+    abbreviations: Abbreviations,
+    loclists_base: DebugLocListsBase,
+    rnglists_base: DebugRngListsBase,
+    str_offsets_base: DebugStrOffsetsBase,
 }
 
 impl<'a> Dwarf<'a> {
     pub fn create(elf: &'a ElfFile) -> Option<Dwarf> {
-        let dwarf = gimli::read::Dwarf::load(|index| {
-            let section_data = match elf.section_by_name(index.name()) {
-                // Unsupported --compress-debug-sections
-                Some(section) => {
-                    let compressed_file_range = section.compressed_file_range()?;
-
-                    match compressed_file_range.format {
-                        CompressionFormat::None => section.data()?,
-                        _ => &[],
-                    }
-                }
-                None => &[],
+        fn get_debug_section<'a>(elf: &'a ElfFile, name: &str) -> &'a [u8] {
+            let Some(section) = elf.section_by_name(name) else {
+                return &[];
             };
 
-            Ok::<_, object::read::Error>(EndianSlice::new(section_data, NativeEndian {}))
-        });
+            // Unsupported compress debug info
+            section
+                .compressed_file_range()
+                .ok()
+                .filter(|x| x.format == CompressionFormat::None)
+                .and_then(|_| section.data().ok())
+                .unwrap_or(&[])
+        }
 
-        match dwarf {
-            Err(_) => None,
-            Ok(dwarf) => match addr2line::Context::from_dwarf(dwarf) {
-                Err(_) => None,
-                Ok(ctx) => Some(Dwarf { dwarf: ctx }),
-            },
+        let dwarf = Dwarf {
+            elf,
+            debug_info: get_debug_section(elf, ".debug_info"),
+            debug_aranges: get_debug_section(elf, ".debug_aranges"),
+            debug_ranges: get_debug_section(elf, ".debug_ranges"),
+            debug_rnglists: get_debug_section(elf, ".debug_rnglists"),
+            debug_addr: get_debug_section(elf, ".debug_addr"),
+            debug_abbrev: get_debug_section(elf, ".debug_abbrev"),
+            debug_line: get_debug_section(elf, ".debug_line"),
+        };
+
+        match dwarf.debug_info.is_empty()
+            || dwarf.debug_abbrev.is_empty()
+            || dwarf.debug_line.is_empty()
+        {
+            true => None,
+            false => Some(dwarf),
         }
     }
 
-    pub fn find_location(&self, probe: u64) -> Option<Location<'_>> {
-        self.dwarf.find_location(probe).ok().flatten()
-    }
+    fn find_debug_info_offset(&self, probe: u64) -> Option<DebugInfoOffset<usize>> {
+        if self.debug_aranges.is_empty() {
+            return None;
+        }
 
-    pub fn find_frames(
-        &self,
-        probe: u64,
-    ) -> Vec<Frame<'static, EndianSlice<'static, NativeEndian>>> {
-        let frames = match self.dwarf.find_frames(probe) {
-            // TODO(winter):Unsupported split DWARF
-            LookupResult::Load { .. } => None,
-            LookupResult::Output(res) => res.ok(),
-        };
-
-        let mut res_frames = Vec::with_capacity(8);
-        if let Some(mut frames) = frames {
-            while let Ok(Some(frame)) = frames.next() {
-                #[allow(clippy::missing_transmute_annotations)]
-                res_frames.push(unsafe { std::mem::transmute(frame) });
+        let debug_aranges = DebugAranges::new(self.debug_aranges, NativeEndian);
+        let mut arange_headers = debug_aranges.headers();
+        while let Some(header) = arange_headers.next().ok()? {
+            let mut entries = header.entries();
+            while let Some(entry) = entries.next().ok()? {
+                if probe >= entry.address() && probe <= entry.address() + entry.length() {
+                    return Some(header.debug_info_offset());
+                }
             }
         }
 
-        res_frames
+        None
+    }
+
+    fn get_abbreviations(&self, offset: DebugAbbrevOffset) -> Option<Abbreviations> {
+        DebugAbbrev::new(self.debug_abbrev, NativeEndian)
+            .abbreviations(offset)
+            .ok()
+    }
+
+    fn in_range_list(
+        &self,
+        unit: &Unit,
+        address: u64,
+        mut base_addr: Option<u64>,
+        offset: RangeListsOffset,
+    ) -> bool {
+        let range_list = RangeLists::new(
+            DebugRanges::new(self.debug_ranges, NativeEndian),
+            DebugRngLists::new(self.debug_rnglists, NativeEndian),
+        );
+
+        if let Ok(mut ranges) = range_list.raw_ranges(offset, unit.head.encoding()) {
+            let debug_addr = DebugAddr::from(EndianSlice::new(self.debug_addr, NativeEndian));
+
+            while let Ok(Some(range)) = ranges.next() {
+                match range {
+                    RawRngListEntry::BaseAddress { addr } => {
+                        base_addr = Some(addr);
+                    }
+                    RawRngListEntry::AddressOrOffsetPair { begin, end } => {
+                        if matches!(base_addr, Some(base_addr) if address >= begin + base_addr && address < end + base_addr)
+                        {
+                            return true;
+                        }
+                    }
+                    RawRngListEntry::BaseAddressx { addr } => {
+                        let Ok(addr) = debug_addr.get_address(
+                            unit.head.encoding().address_size,
+                            unit.addr_base,
+                            addr,
+                        ) else {
+                            return false;
+                        };
+
+                        base_addr = Some(addr);
+                    }
+                    RawRngListEntry::StartxEndx { begin, end } => {
+                        let Ok(begin) = debug_addr.get_address(
+                            unit.head.encoding().address_size,
+                            unit.addr_base,
+                            begin,
+                        ) else {
+                            return false;
+                        };
+
+                        let Ok(end) = debug_addr.get_address(
+                            unit.head.encoding().address_size,
+                            unit.addr_base,
+                            end,
+                        ) else {
+                            return false;
+                        };
+
+                        if address >= begin && address < end {
+                            return true;
+                        }
+                    }
+                    RawRngListEntry::StartxLength { begin, length } => {
+                        let Ok(begin) = debug_addr.get_address(
+                            unit.head.encoding().address_size,
+                            unit.addr_base,
+                            begin,
+                        ) else {
+                            return false;
+                        };
+
+                        let end = begin + length;
+                        if begin != end && address >= begin && address < end {
+                            return true;
+                        }
+                    }
+                    RawRngListEntry::OffsetPair { begin, end } => {
+                        if matches!(base_addr, Some(base_addr) if address >= (base_addr + begin) && address < (base_addr + end))
+                        {
+                            return true;
+                        }
+                    }
+                    RawRngListEntry::StartEnd { begin, end } => {
+                        if address >= begin && address < end {
+                            return true;
+                        }
+                    }
+                    RawRngListEntry::StartLength { begin, length } => {
+                        let end = begin + length;
+                        if address >= begin && address < end {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn find_line(
+        &self,
+        address: u64,
+        offset: DebugLineOffset,
+        unit: &Unit,
+        comp_dir: Option<EndianSlice<NativeEndian>>,
+        name: Option<EndianSlice<NativeEndian>>,
+    ) -> Option<Location> {
+        if self.debug_line.is_empty() {
+            return None;
+        }
+
+        let debug_line = DebugLine::new(self.debug_line, NativeEndian);
+        let program = debug_line
+            .program(offset, unit.head.address_size(), comp_dir, name)
+            .ok()?;
+
+        let mut is_candidate: bool = false;
+        let mut file_index = 0;
+        let mut line = 0;
+        let mut column = 0;
+
+        let mut rows = program.rows();
+        while let Some((_, row)) = rows.next_row().ok()? {
+            if !is_candidate && !row.end_sequence() && row.address() <= address {
+                is_candidate = true;
+            }
+
+            if is_candidate {
+                if row.address() > address {
+                    let file = rows.header().file(file_index)?;
+
+                    let mut path = PathBuf::new();
+
+                    if let Some(ref comp_dir) = comp_dir {
+                        path.push(comp_dir.to_string_lossy().into_owned());
+                    }
+
+                    if file.directory_index() != 0 {
+                        if let Some(AttributeValue::String(v)) = file.directory(rows.header()) {
+                            path.push(v.to_string_lossy().into_owned());
+                        }
+                    }
+
+                    if let AttributeValue::String(v) = file.path_name() {
+                        path.push(v.to_string_lossy().into_owned());
+                    }
+
+                    return Some(Location {
+                        file: format!("{}", path.display()),
+                        line: Some(line),
+                        column: Some(column),
+                    });
+                }
+
+                file_index = row.file_index();
+                line = row.line().map(NonZeroU64::get).unwrap_or(0) as u32;
+                column = match row.column() {
+                    gimli::ColumnType::LeftEdge => 0,
+                    gimli::ColumnType::Column(x) => x.get() as u32,
+                };
+            }
+
+            if row.end_sequence() {
+                is_candidate = false;
+            }
+        }
+
+        None
+    }
+
+    fn get_location(
+        &self,
+        address: u64,
+        unit: &Unit<'a>,
+        from_debug_aranges: bool,
+    ) -> Option<Location> {
+        let mut cursor = unit.head.entries(&unit.abbreviations);
+        cursor.next_dfs().ok()?;
+        let root = cursor.current().ok_or(Error::MissingUnitDie).ok()?;
+        let mut attrs = root.attrs();
+
+        let mut name = None;
+        let mut comp_dir = None;
+        let mut line_program_offset = None;
+        let mut low_pc_attr = None;
+        let mut high_pc_attr = None;
+        let mut base_addr_cu = None;
+        let mut range_offset = None;
+
+        while let Some(attr) = attrs.next().ok()? {
+            match attr.name() {
+                gimli::DW_AT_stmt_list => {
+                    if let AttributeValue::DebugLineRef(offset) = attr.value() {
+                        line_program_offset = Some(offset);
+                    }
+                }
+                gimli::DW_AT_comp_dir => {
+                    // TODO(winter): unsupported lookup by string table
+                    if let AttributeValue::String(value) = attr.value() {
+                        comp_dir = Some(value);
+                    }
+                }
+                gimli::DW_AT_name => {
+                    // TODO(winter): unsupported lookup by string table
+                    if let AttributeValue::String(value) = attr.value() {
+                        name = Some(value);
+                    }
+                }
+                gimli::DW_AT_entry_pc => {
+                    if let AttributeValue::Addr(addr) = attr.value() {
+                        base_addr_cu = Some(addr);
+                    }
+                }
+                gimli::DW_AT_ranges => {
+                    if let AttributeValue::RangeListsRef(v) = attr.value() {
+                        range_offset = Some(RangeListsOffset(v.0));
+                    }
+                }
+                gimli::DW_AT_low_pc => {
+                    if let AttributeValue::Addr(addr) = attr.value() {
+                        low_pc_attr = Some(addr);
+                        base_addr_cu = Some(addr);
+                    }
+                }
+                gimli::DW_AT_high_pc => {
+                    high_pc_attr = Some(attr.value());
+                }
+                _ => {}
+            }
+        }
+
+        if !from_debug_aranges && range_offset.is_some() {
+            let pc_matched = match (low_pc_attr, high_pc_attr) {
+                (Some(low), Some(high)) => {
+                    address >= low
+                        && match high {
+                            AttributeValue::Addr(high) => address < high,
+                            AttributeValue::Udata(size) => address < low + size,
+                            _ => false,
+                        }
+                }
+                _ => false,
+            };
+
+            let range_match = match range_offset {
+                None => false,
+                Some(range_offset) => self.in_range_list(unit, address, base_addr_cu, range_offset),
+            };
+
+            if !range_match && !pc_matched {
+                return None;
+            }
+        }
+
+        if let Some(offset) = line_program_offset {
+            if let Some(location) = self.find_line(address, offset, unit, comp_dir, name) {
+                return Some(location);
+            }
+        }
+
+        if let Some(name) = name {
+            let mut path = PathBuf::new();
+            if let Some(ref comp_dir) = comp_dir {
+                path.push(comp_dir.to_string_lossy().into_owned());
+            };
+
+            path.push(name.to_string_lossy().into_owned());
+
+            return Some(Location {
+                file: format!("{}", path.display()),
+                line: None,
+                column: None,
+            });
+        }
+
+        None
+    }
+
+    pub fn find_location(&self, probe: u64) -> Option<Location> {
+        if let Some(debug_info_offset) = self.find_debug_info_offset(probe) {
+            let unit = self.get_compilation_unit(debug_info_offset)?;
+
+            if !matches!(
+                unit.head.type_(),
+                UnitType::Compilation | UnitType::Skeleton(_)
+            ) {
+                return None;
+            }
+
+            if let Some(location) = self.get_location(probe, &unit, true) {
+                return Some(location);
+            }
+
+            return None;
+        }
+
+        let mut offset = DebugInfoOffset(0);
+
+        while offset.0 < self.debug_info.len() {
+            let Some(unit) = self.get_compilation_unit(offset) else {
+                break;
+            };
+
+            if !matches!(
+                unit.head.type_(),
+                UnitType::Compilation | UnitType::Skeleton(_)
+            ) {
+                continue;
+            }
+
+            offset.0 += unit.head.length_including_self();
+            if let Some(location) = self.get_location(probe, &unit, false) {
+                return Some(location);
+            }
+        }
+
+        None
+    }
+
+    fn get_compilation_unit(&self, offset: DebugInfoOffset) -> Option<Unit> {
+        let info = DebugInfo::new(self.debug_info, NativeEndian);
+
+        let Ok(header) = info.header_from_offset(offset) else {
+            return None;
+        };
+
+        let mut unit = Unit {
+            head: header,
+            addr_base: DebugAddrBase(0),
+            abbreviations: Abbreviations::default(),
+            loclists_base: DebugLocListsBase(0),
+            rnglists_base: DebugRngListsBase(0),
+            str_offsets_base: DebugStrOffsetsBase(0),
+        };
+
+        if let Some(abbreviations) = self.get_abbreviations(header.debug_abbrev_offset()) {
+            unit.abbreviations = abbreviations;
+
+            let mut cursor = header.entries(&unit.abbreviations);
+            cursor.next_dfs().ok()?;
+            let root = cursor.current().ok_or(Error::MissingUnitDie).ok()?;
+            let mut attrs = root.attrs();
+
+            while let Some(attr) = attrs.next().ok()? {
+                match attr.name() {
+                    gimli::DW_AT_addr_base | gimli::DW_AT_GNU_addr_base => {
+                        if let AttributeValue::DebugAddrBase(base) = attr.value() {
+                            unit.addr_base = base;
+                        }
+                    }
+                    gimli::DW_AT_loclists_base => {
+                        if let AttributeValue::DebugLocListsBase(base) = attr.value() {
+                            unit.loclists_base = base;
+                        }
+                    }
+                    gimli::DW_AT_rnglists_base | constants::DW_AT_GNU_ranges_base => {
+                        if let AttributeValue::DebugRngListsBase(base) = attr.value() {
+                            unit.rnglists_base = base;
+                        }
+                    }
+                    gimli::DW_AT_str_offsets_base => {
+                        if let AttributeValue::DebugStrOffsetsBase(base) = attr.value() {
+                            unit.str_offsets_base = base;
+                        }
+                    }
+                    _ => {}
+                };
+            }
+        };
+
+        Some(unit)
     }
 }
 
@@ -201,6 +624,8 @@ impl LibraryManager {
 
             let physical_address = *addr - library.address_begin;
 
+            let mut location = None;
+
             if !only_address {
                 let dwarf = match library.elf.as_ref() {
                     None => &None,
@@ -213,67 +638,18 @@ impl LibraryManager {
                     },
                 };
 
-                let mut location = None;
-
                 if let Some(dwarf) = dwarf {
                     let adjusted_addr = (physical_address - 1) as u64;
-
-                    let mut frames = dwarf.find_frames(adjusted_addr);
-
-                    if !frames.is_empty() {
-                        let last = frames.pop();
-
-                        for frame in frames.into_iter() {
-                            let mut symbol = String::from("<unknown>");
-
-                            if let Some(function) = frame.function {
-                                if let Ok(name) = function.demangle() {
-                                    symbol = name.to_string();
-                                }
-                            }
-
-                            f(ResolvedStackFrame {
-                                symbol,
-                                physical_address,
-                                inlined: true,
-                                virtual_address: *addr,
-                                #[allow(clippy::missing_transmute_annotations)]
-                                location: unsafe { std::mem::transmute(frame.location) },
-                            })?;
-                        }
-
-                        if let Some(last) = last {
-                            let mut symbol = String::from("<unknown>");
-
-                            if let Some(function) = last.function {
-                                if let Ok(name) = function.demangle() {
-                                    symbol = name.to_string();
-                                }
-                            }
-
-                            f(ResolvedStackFrame {
-                                symbol,
-                                physical_address,
-                                inlined: false,
-                                virtual_address: *addr,
-                                #[allow(clippy::missing_transmute_annotations)]
-                                location: unsafe { std::mem::transmute(last.location) },
-                            })?;
-                        }
-
-                        continue;
-                    }
 
                     location = dwarf.find_location(adjusted_addr);
                 }
 
                 if let Some(symbol) = self.find_symbol(*addr) {
                     f(ResolvedStackFrame {
+                        location,
                         physical_address,
                         inlined: false,
                         virtual_address: *addr,
-                        #[allow(clippy::missing_transmute_annotations)]
-                        location: unsafe { std::mem::transmute(location) },
                         symbol: format!(
                             "{}",
                             rustc_demangle::demangle(std::str::from_utf8(symbol.name).unwrap())
@@ -285,9 +661,9 @@ impl LibraryManager {
             }
 
             f(ResolvedStackFrame {
+                location,
                 physical_address,
                 virtual_address: *addr,
-                location: None,
                 inlined: false,
                 symbol: String::from("<unknown>"),
             })?;

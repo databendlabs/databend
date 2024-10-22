@@ -391,6 +391,8 @@ gimli = { opt-level = 3 }
 miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
+databend-common-exception = { opt-level = 3 }
+
 
 [profile.test]
 opt-level = 0

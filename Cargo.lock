@@ -21,22 +21,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "addr2line"
-version = "0.24.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfbe277e56a376000877090da837660b4427aad530e3028d44e0bffe4f89a1c1"
-dependencies = [
- "cpp_demangle",
- "fallible-iterator",
- "gimli 0.31.1",
- "memmap2 0.9.4",
- "object 0.36.5",
- "rustc-demangle",
- "smallvec",
- "typed-arena",
-]
-
-[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3431,7 +3415,6 @@ dependencies = [
 name = "databend-common-exception"
 version = "0.1.0"
 dependencies = [
- "addr2line 0.24.2",
  "anyhow",
  "arrow-schema",
  "backtrace",

@@ -14,7 +14,6 @@ test = true
 databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 
-addr2line = "0.24.2"
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true }

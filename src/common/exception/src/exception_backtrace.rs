@@ -22,6 +22,8 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 
 use crate::exception::ErrorCodeBacktrace;
+#[cfg(target_os = "linux")]
+use crate::exception_backtrace_elf::Location;
 
 // 0: not specified 1: disable 2: enable
 pub static USER_SET_ENABLE_BACKTRACE: AtomicUsize = AtomicUsize::new(0);
@@ -63,7 +65,7 @@ pub struct ResolvedStackFrame {
     pub physical_address: usize,
     pub symbol: String,
     pub inlined: bool,
-    pub location: Option<addr2line::Location<'static>>,
+    pub location: Option<Location>,
 }
 
 pub enum StackFrame {
@@ -147,18 +149,18 @@ impl StackTrace {
                 #[allow(clippy::writeln_empty_string)]
                 writeln!(f, "")?;
                 if let Some(location) = frame.location {
-                    match (location.file, location.line, location.column) {
-                        (Some(file), Some(line), Some(column)) => {
-                            writeln!(f, "             at {}:{}:{}", file, line, column)?;
+                    write!(f, "             at {}", location.file)?;
+
+                    if let Some(line) = location.line {
+                        write!(f, ":{}", line)?;
+
+                        if let Some(column) = location.column {
+                            write!(f, ":{}", column)?;
                         }
-                        (Some(file), Some(line), None) => {
-                            writeln!(f, "             at {}:{}", file, line)?;
-                        }
-                        (Some(file), None, None) => {
-                            writeln!(f, "             at {}", file)?;
-                        }
-                        _ => {}
-                    };
+                    }
+
+                    #[allow(clippy::writeln_empty_string)]
+                    writeln!(f, "")?;
                 }
 
                 idx += 1;
