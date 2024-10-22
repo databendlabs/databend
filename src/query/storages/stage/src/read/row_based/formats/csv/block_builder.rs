@@ -186,9 +186,10 @@ impl RowDecoder for CsvDecoder {
         Ok(vec![])
     }
 
-    fn flush(&self, columns: Vec<Column>, _num_rows: usize) -> Vec<Column> {
+    fn flush(&self, columns: Vec<Column>, num_rows: usize) -> Vec<Column> {
         if let Some(projection) = &self.load_context.pos_projection {
-            let empty_strings = Column::String(StringColumnBuilder::with_capacity(0, 0).build());
+            let empty_strings =
+                Column::String(StringColumnBuilder::repeat_default(num_rows).build());
             columns
                 .into_iter()
                 .enumerate()

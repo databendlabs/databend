@@ -20,10 +20,6 @@ use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
-use crate::copy_continuous_bits;
-use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;

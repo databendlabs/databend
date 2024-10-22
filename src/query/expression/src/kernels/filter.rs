@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use binary::BinaryColumnBuilder;
-use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
 use databend_common_arrow::arrow::bitmap::utils::SlicesIterator;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
@@ -24,9 +20,6 @@ use databend_common_arrow::arrow::bitmap::TrueIdxIter;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -342,7 +335,7 @@ impl<'a> FilterVisitor<'a> {
 
     // TODO: optimize this after BinaryView is introduced by @andy
     fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
+        let mut builder = BinaryColumnBuilder::with_capacity(self.filter_rows, 0);
         let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
         for i in iter {
             unsafe {
