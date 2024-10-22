@@ -18,6 +18,7 @@ use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use databend_common_arrow::arrow::bitmap::utils::BitChunksExact;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::TrueIdxIter;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 
@@ -521,12 +522,11 @@ impl<'a> FilterVisitor<'a> {
 
     fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
         let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
-        for i in 0..self.num_rows {
-            if self.filter.get_bit(i) {
-                unsafe {
-                    builder.put_slice(values.index_unchecked(i));
-                    builder.commit_row();
-                }
+        let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
+        for i in iter {
+            unsafe {
+                builder.put_slice(values.index_unchecked(i));
+                builder.commit_row();
             }
         }
         builder.build()

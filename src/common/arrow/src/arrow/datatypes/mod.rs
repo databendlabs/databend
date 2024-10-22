@@ -237,7 +237,8 @@ impl From<DataType> for arrow_schema::DataType {
             DataType::Decimal(precision, scale) => Self::Decimal128(precision as _, scale as _),
             DataType::Decimal256(precision, scale) => Self::Decimal256(precision as _, scale as _),
             DataType::Extension(_, d, _) => (*d).into(),
-            DataType::BinaryView | DataType::Utf8View => {
+            DataType::BinaryView => Self::BinaryView,
+            DataType::Utf8View  => {
                 panic!("view datatypes are not supported by arrow-rs")
             }
         }

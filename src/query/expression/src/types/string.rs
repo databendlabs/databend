@@ -358,6 +358,9 @@ impl<'a> Iterator for StringIterator<'a> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.col.len() {
+            return None;
+        }
         let value = self.col.index(self.index)?;
         self.index += 1;
         Some(value)
