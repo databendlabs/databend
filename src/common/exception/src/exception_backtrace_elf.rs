@@ -196,9 +196,9 @@ impl<'a> Dwarf<'a> {
             return None;
         }
 
-        let debug_aranges = DebugAranges::new(self.debug_aranges, NativeEndian);
-        let mut arange_headers = debug_aranges.headers();
-        while let Some(header) = arange_headers.next().ok()? {
+        let section = DebugAranges::new(self.debug_aranges, NativeEndian);
+        let mut headers = section.headers();
+        while let Some(header) = headers.next().ok()? {
             let mut entries = header.entries();
             while let Some(entry) = entries.next().ok()? {
                 if probe >= entry.address() && probe <= entry.address() + entry.length() {
