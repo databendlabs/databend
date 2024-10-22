@@ -15,13 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::flight::default_ipc_fields;
-use databend_common_arrow::arrow::io::flight::deserialize_batch;
-use databend_common_arrow::arrow::io::flight::deserialize_dictionary;
-use databend_common_arrow::arrow::io::ipc::read::Dictionaries;
-use databend_common_arrow::arrow::io::ipc::IpcSchema;
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArrayType;
@@ -46,13 +40,13 @@ use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
 pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
     schema: DataSchemaRef,
-    ipc_schema: IpcSchema,
     arrow_schema: Arc<ArrowSchema>,
     _phantom: PhantomData<(Method, V)>,
 }
@@ -64,17 +58,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
         schema: &DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = ArrowSchema::from(schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let ipc_schema = IpcSchema {
-            fields: ipc_fields,
-            is_little_endian: true,
-        };
 
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
             TransformDeserializer::<Method, V> {
-                ipc_schema,
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
                 _phantom: Default::default(),
@@ -95,42 +83,36 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
             return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
-        let fields = &self.arrow_schema.fields;
-        let schema = &self.ipc_schema;
-
         let data_block = match &meta {
             None => {
-                self.deserialize_data_block(dict, &fragment_data, fields, schema, &self.schema)?
+                deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?
             }
             Some(meta) => match AggregateSerdeMeta::downcast_ref_from(meta) {
                 None => {
-                    self.deserialize_data_block(dict, &fragment_data, fields, schema, &self.schema)?
+                    deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?
                 }
                 Some(meta) => {
                     return match meta.typ == BUCKET_TYPE {
                         true => Ok(DataBlock::empty_with_meta(
                             AggregateMeta::<Method, V>::create_serialized(
                                 meta.bucket,
-                                self.deserialize_data_block(
+                                deserialize_block(
                                     dict,
-                                    &fragment_data,
-                                    fields,
-                                    schema,
+                                    fragment_data,
                                     &self.schema,
+                                    self.arrow_schema.clone(),
                                 )?,
                                 meta.max_partition_count,
                             ),
                         )),
                         false => {
-                            let fields = exchange_defines::spilled_fields();
-                            let schema = exchange_defines::spilled_ipc_schema();
                             let data_schema = Arc::new(exchange_defines::spilled_schema());
-                            let data_block = self.deserialize_data_block(
+                            let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
+                            let data_block = deserialize_block(
                                 dict,
-                                &fragment_data,
-                                fields,
-                                schema,
+                                fragment_data,
                                 &data_schema,
+                                arrow_schema.clone(),
                             )?;
 
                             let columns = data_block
@@ -182,28 +164,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
             true => Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta)),
             false => data_block.add_meta(meta),
         }
-    }
-
-    fn deserialize_data_block(
-        &self,
-        dict: Vec<DataPacket>,
-        fragment_data: &FragmentData,
-        arrow_fields: &[Field],
-        ipc_schema: &IpcSchema,
-        data_schema: &DataSchemaRef,
-    ) -> Result<DataBlock> {
-        let mut dictionaries = Dictionaries::new();
-
-        for dict_packet in dict {
-            if let DataPacket::Dictionary(flight_data) = dict_packet {
-                deserialize_dictionary(&flight_data, arrow_fields, ipc_schema, &mut dictionaries)?;
-            }
-        }
-
-        let batch =
-            deserialize_batch(&fragment_data.data, arrow_fields, ipc_schema, &dictionaries)?;
-
-        DataBlock::from_arrow_chunk(&batch, data_schema)
     }
 }
 

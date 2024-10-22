@@ -455,6 +455,7 @@ dependencies = [
  "arrow-data",
  "arrow-schema",
  "flatbuffers",
+ "lz4_flex",
 ]
 
 [[package]]
@@ -3416,6 +3417,7 @@ name = "databend-common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-flight",
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
@@ -5122,6 +5124,7 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
