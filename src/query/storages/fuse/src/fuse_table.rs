@@ -1051,9 +1051,9 @@ impl Table for FuseTable {
         &self,
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-    ) -> Result<Pipeline> {
+    ) -> Result<Option<Pipeline>> {
         let (pipeline, receiver) = self.do_build_prune_pipeline(table_ctx, plan)?;
         self.meta_receiver.lock().unwrap().replace(receiver);
-        Ok(pipeline)
+        Ok(Some(pipeline))
     }
 }

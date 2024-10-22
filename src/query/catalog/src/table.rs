@@ -446,14 +446,10 @@ pub trait Table: Sync + Send {
         &self,
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-    ) -> Result<Pipeline> {
+    ) -> Result<Option<Pipeline>> {
         let (_, _) = (table_ctx, plan);
 
-        Err(ErrorCode::Unimplemented(format!(
-            "The 'build prune pipeline' operation is not supported for the table '{}'. Table engine: '{}'.",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
+        Ok(None)
     }
 }
 

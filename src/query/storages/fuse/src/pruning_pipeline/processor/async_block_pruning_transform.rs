@@ -137,9 +137,7 @@ impl AsyncAccumulatingTransform for AsyncBlockPruningTransform {
                                                 )
                                                 .await;
 
-                                            let keep = keep_by_bloom
-                                                && limit_pruner.within_limit(row_count);
-                                            keep
+                                            keep_by_bloom && limit_pruner.within_limit(row_count)
                                         } else {
                                             limit_pruner.within_limit(row_count)
                                         };
