@@ -149,7 +149,8 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
                     ArrowField::new(
                         name.as_str(),
                         table_type_to_arrow_type(ty),
-                        ty.is_nullable(),
+                        // null in tuple must be nullable
+                        ty.is_nullable_or_null(),
                     )
                 })
                 .collect();
