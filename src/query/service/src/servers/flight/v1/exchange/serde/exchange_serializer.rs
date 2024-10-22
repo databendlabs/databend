@@ -247,7 +247,7 @@ pub fn serialize_block(
 }
 
 /// Convert `RecordBatch`es to wire protocol `FlightData`s
-/// Returns schema, dictionaries and flight datas
+/// Returns schema, dictionaries and flight data
 pub fn batches_to_flight_data_with_options(
     schema: &ArrowSchema,
     batches: Vec<RecordBatch>,
