@@ -5243,7 +5243,6 @@ dependencies = [
  "naive-cityhash",
  "num",
  "num_cpus",
- "once_cell",
  "opendal 0.49.2",
  "opensrv-mysql",
  "opentelemetry",
