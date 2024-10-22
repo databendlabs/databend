@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::native::read::reader::infer_schema;
+use databend_common_arrow::native::read::reader::infer_schema_async;
 use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::read::NativeReadBuf;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -249,16 +249,14 @@ impl BlockReader {
         Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
     }
 
-    pub fn sync_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let meta = self.operator.blocking().stat(loc).ok()?;
-        let mut reader = self
-            .operator
-            .blocking()
-            .reader(loc)
-            .ok()?
-            .into_std_read(0..meta.content_length())
+    #[async_backtrace::framed]
+    pub async fn async_read_native_schema(&self, loc: &str) -> Option<ArrowSchema> {
+        let op = &self.operator;
+        let stat = op.stat(loc).await.ok()?;
+        let reader = op.reader(loc).await.ok()?;
+        let schema = infer_schema_async(reader, stat.content_length())
+            .await
             .ok()?;
-        let schema = infer_schema(&mut reader).ok()?;
         let schema = DataSchema::try_from(&schema).ok()?;
         Some(ArrowSchema::from(&schema))
     }
