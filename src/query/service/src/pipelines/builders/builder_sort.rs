@@ -302,6 +302,7 @@ impl SortPipelineBuilder {
                     self.limit,
                     spiller,
                     output_order_col,
+                    enable_loser_tree,
                 )))
             })?;
         }

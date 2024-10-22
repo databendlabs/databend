@@ -32,8 +32,8 @@ use databend_common_exception::Result;
 use databend_common_io::cursor_ext::unwrap_local_time;
 use num_traits::AsPrimitive;
 
-use crate::types::date::check_date;
-use crate::types::timestamp::check_timestamp;
+use crate::types::date::clamp_date;
+use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::MICROS_PER_SEC;
 
 #[derive(Debug, Clone, Copy)]
@@ -341,11 +341,11 @@ macro_rules! impl_interval_year_month {
             ) -> std::result::Result<i32, String> {
                 let date = date.to_date(tz.tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
-                check_date(
+                Ok(clamp_date(
                     new_date
                         .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
                         .num_days(),
-                )
+                ))
             }
 
             pub fn eval_timestamp(
@@ -355,11 +355,11 @@ macro_rules! impl_interval_year_month {
             ) -> std::result::Result<i64, String> {
                 let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
-                check_timestamp(
-                    NaiveDateTime::new(new_ts, ts.time())
-                        .and_utc()
-                        .timestamp_micros(),
-                )
+                let mut ts = NaiveDateTime::new(new_ts, ts.time())
+                    .and_utc()
+                    .timestamp_micros();
+                clamp_timestamp(&mut ts);
+                Ok(ts)
             }
         }
     };
@@ -485,19 +485,18 @@ impl EvalWeeksImpl {
 pub struct EvalDaysImpl;
 
 impl EvalDaysImpl {
-    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> std::result::Result<i32, String> {
-        check_date((date as i64).wrapping_add(delta.as_()))
+    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>) -> i32 {
+        clamp_date((date as i64).wrapping_add(delta.as_()))
     }
 
     pub fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
         date_end - date_start
     }
 
-    pub fn eval_timestamp(
-        date: i64,
-        delta: impl AsPrimitive<i64>,
-    ) -> std::result::Result<i64, String> {
-        check_timestamp(date.wrapping_add(delta.as_() * MICROSECS_PER_DAY))
+    pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> i64 {
+        let mut value = date.wrapping_add(delta.as_() * MICROSECS_PER_DAY);
+        clamp_timestamp(&mut value);
+        value
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64) -> i64 {
@@ -511,22 +510,16 @@ impl EvalDaysImpl {
 pub struct EvalTimesImpl;
 
 impl EvalTimesImpl {
-    pub fn eval_date(
-        date: i32,
-        delta: impl AsPrimitive<i64>,
-        factor: i64,
-    ) -> std::result::Result<i32, String> {
-        check_date(
+    pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> i32 {
+        clamp_date(
             (date as i64 * MICROSECS_PER_DAY).wrapping_add(delta.as_() * factor * MICROS_PER_SEC),
         )
     }
 
-    pub fn eval_timestamp(
-        us: i64,
-        delta: impl AsPrimitive<i64>,
-        factor: i64,
-    ) -> std::result::Result<i64, String> {
-        check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_PER_SEC))
+    pub fn eval_timestamp(us: i64, delta: impl AsPrimitive<i64>, factor: i64) -> i64 {
+        let mut ts = us.wrapping_add(delta.as_() * factor * MICROS_PER_SEC);
+        clamp_timestamp(&mut ts);
+        ts
     }
 
     pub fn eval_timestamp_diff(date_start: i64, date_end: i64, factor: i64) -> i64 {
