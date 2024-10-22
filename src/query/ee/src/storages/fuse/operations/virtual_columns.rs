@@ -348,13 +348,13 @@ impl AsyncTransform for VirtualColumnTransform {
             &mut buffer,
         )?;
 
-        let virutal_column_size = buffer.len() as u64;
+        let virtual_column_size = buffer.len() as u64;
         write_data(buffer, &self.operator, &virtual_location).await?;
 
         // Perf.
         {
             metrics_inc_block_virtual_column_write_nums(1);
-            metrics_inc_block_virtual_column_write_bytes(virutal_column_size);
+            metrics_inc_block_virtual_column_write_bytes(virtual_column_size);
             metrics_inc_block_virtual_column_write_milliseconds(start.elapsed().as_millis() as u64);
         }
 
