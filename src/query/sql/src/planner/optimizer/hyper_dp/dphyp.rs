@@ -28,10 +28,10 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
@@ -46,7 +46,7 @@ const RELATION_THRESHOLD: usize = 10;
 // See the paper for more details.
 pub struct DPhpy {
     ctx: Arc<dyn TableContext>,
-    sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+    sample_executor: Option<Arc<dyn QueryExecutor>>,
     metadata: MetadataRef,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
@@ -64,7 +64,7 @@ impl DPhpy {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         metadata: MetadataRef,
-        sample_executor: Option<Arc<dyn QuerySampleExecutor>>,
+        sample_executor: Option<Arc<dyn QueryExecutor>>,
     ) -> Self {
         Self {
             ctx,

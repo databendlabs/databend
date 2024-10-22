@@ -52,7 +52,7 @@ pub struct RowBasedFileWriter {
     data_accessor: Operator,
     prefix: Vec<u8>,
 
-    uuid: String,
+    query_id: String,
     group_id: usize,
     batch_id: usize,
 
@@ -66,19 +66,19 @@ impl RowBasedFileWriter {
         table_info: StageTableInfo,
         data_accessor: Operator,
         prefix: Vec<u8>,
-        uuid: String,
+        query_id: String,
         group_id: usize,
         compression: Option<CompressAlgorithm>,
     ) -> Result<ProcessorPtr> {
         let unload_output =
-            UnloadOutput::create(table_info.stage_info.copy_options.detailed_output);
+            UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
         Ok(ProcessorPtr::create(Box::new(RowBasedFileWriter {
             table_info,
             input,
             input_data: None,
             data_accessor,
             prefix,
-            uuid,
+            query_id,
             group_id,
             batch_id: 0,
             file_to_write: None,
@@ -172,7 +172,7 @@ impl Processor for RowBasedFileWriter {
     async fn async_process(&mut self) -> Result<()> {
         let path = unload_path(
             &self.table_info,
-            &self.uuid,
+            &self.query_id,
             self.group_id,
             self.batch_id,
             self.compression,

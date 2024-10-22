@@ -19,6 +19,7 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use ethnum::i256;
 use itertools::Itertools;
 
 use crate::copy_continuous_bits;
@@ -28,6 +29,7 @@ use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
@@ -36,20 +38,20 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
 use crate::types::AnyType;
-use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::DateType;
+use crate::types::DecimalType;
 use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
+use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
-use crate::types::F32;
-use crate::types::F64;
-use crate::with_decimal_type;
+use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -139,121 +141,23 @@ impl Column {
             Column::EmptyArray { .. } => Column::EmptyArray { len: capacity },
             Column::EmptyMap { .. } => Column::EmptyMap { len: capacity },
             Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
-                NumberColumn::UInt8(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_u_int8().unwrap()),
+                NumberColumn::NUM_TYPE(_) => {
+                    type NType = NumberType<NUM_TYPE>;
+                    let buffer = Self::concat_primitive_types(
+                        columns.map(|col| NType::try_downcast_column(&col).unwrap()),
                         capacity,
                     );
-                    <NumberType<u8>>::upcast_column(<NumberType<u8>>::column_from_vec(builder, &[]))
-                }
-                NumberColumn::UInt16(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_u_int16().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<u16>>::upcast_column(<NumberType<u16>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::UInt32(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_u_int32().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<u32>>::upcast_column(<NumberType<u32>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::UInt64(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_u_int64().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<u64>>::upcast_column(<NumberType<u64>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::Int8(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_int8().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<i8>>::upcast_column(<NumberType<i8>>::column_from_vec(builder, &[]))
-                }
-                NumberColumn::Int16(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_int16().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<i16>>::upcast_column(<NumberType<i16>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::Int32(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_int32().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::Int64(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_int64().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::Float32(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_float32().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<F32>>::upcast_column(<NumberType<F32>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
-                }
-                NumberColumn::Float64(_) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| col.into_number().unwrap().into_float64().unwrap()),
-                        capacity,
-                    );
-                    <NumberType<F64>>::upcast_column(<NumberType<F64>>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
+                    NType::upcast_column(buffer)
                 }
             }),
-            Column::Decimal(col) => with_decimal_type!(|DECIMAL_TYPE| match col {
-                DecimalColumn::Decimal128(_, size) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| match col {
-                            Column::Decimal(DecimalColumn::Decimal128(col, _)) => col,
-                            _ => unreachable!(),
-                        }),
+            Column::Decimal(col) => with_decimal_mapped_type!(|DECIMAL_TYPE| match col {
+                DecimalColumn::DECIMAL_TYPE(_, size) => {
+                    type DType = DecimalType<DECIMAL_TYPE>;
+                    let buffer = Self::concat_primitive_types(
+                        columns.map(|col| DType::try_downcast_column(&col).unwrap()),
                         capacity,
                     );
-                    Column::Decimal(DecimalColumn::Decimal128(builder.into(), size))
-                }
-                DecimalColumn::Decimal256(_, size) => {
-                    let builder = Self::concat_primitive_types(
-                        columns.map(|col| match col {
-                            Column::Decimal(DecimalColumn::Decimal256(col, _)) => col,
-                            _ => unreachable!(),
-                        }),
-                        capacity,
-                    );
-                    Column::Decimal(DecimalColumn::Decimal256(builder.into(), size))
+                    DECIMAL_TYPE::upcast_column(buffer, size)
                 }
             }),
             Column::Boolean(_) => Column::Boolean(Self::concat_boolean_types(
@@ -269,34 +173,18 @@ impl Column {
                 capacity,
             )),
             Column::Timestamp(_) => {
-                let builder = Self::concat_primitive_types(
-                    columns.map(|col| col.into_timestamp().unwrap()),
+                let buffer = Self::concat_primitive_types(
+                    columns.map(|col| TimestampType::try_downcast_column(&col).unwrap()),
                     capacity,
                 );
-                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
-                    builder,
-                    &[],
-                ))
-                .into_number()
-                .unwrap()
-                .into_int64()
-                .unwrap();
-                Column::Timestamp(ts)
+                Column::Timestamp(buffer)
             }
             Column::Date(_) => {
-                let builder = Self::concat_primitive_types(
-                    columns.map(|col| col.into_date().unwrap()),
+                let buffer = Self::concat_primitive_types(
+                    columns.map(|col| DateType::try_downcast_column(&col).unwrap()),
                     capacity,
                 );
-                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
-                    builder,
-                    &[],
-                ))
-                .into_number()
-                .unwrap()
-                .into_int32()
-                .unwrap();
-                Column::Date(d)
+                Column::Date(buffer)
             }
             Column::Array(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
@@ -372,7 +260,7 @@ impl Column {
     pub fn concat_primitive_types<T>(
         cols: impl Iterator<Item = Buffer<T>>,
         num_rows: usize,
-    ) -> Vec<T>
+    ) -> Buffer<T>
     where
         T: Copy,
     {
@@ -380,7 +268,7 @@ impl Column {
         for col in cols {
             builder.extend(col.iter());
         }
-        builder
+        builder.into()
     }
 
     pub fn concat_binary_types(

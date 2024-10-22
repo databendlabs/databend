@@ -21,6 +21,7 @@ use std::time::Instant;
 use chrono_tz::Tz;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -52,6 +53,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
@@ -108,6 +110,8 @@ pub struct Binder {
     pub bind_recursive_cte: bool,
 
     pub enable_result_cache: bool,
+
+    pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl<'a> Binder {
@@ -135,7 +139,16 @@ impl<'a> Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
             enable_result_cache,
+            subquery_executor: None,
         }
+    }
+
+    pub fn with_subquery_executor(
+        mut self,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    ) -> Self {
+        self.subquery_executor = subquery_executor;
+        self
     }
 
     #[async_backtrace::framed]
@@ -198,9 +211,9 @@ impl<'a> Binder {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze {partial, query } => {
+            Statement::ExplainAnalyze {partial, graphical, query } => {
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { partial: *partial, plan: Box::new(plan) }
+                Plan::ExplainAnalyze { partial: *partial, graphical: *graphical, plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { show_options } => {
@@ -470,13 +483,15 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetStmt {set_type, identifiers, values } => {
+            Statement::SetStmt { settings } => {
+                let Settings { set_type, identifiers, values } = settings;
                 self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetStmt{unset_type, identifiers } => {
-                self.bind_unset(bind_context, *unset_type, identifiers)
+            Statement::UnSetStmt{settings } => {
+                let Settings { set_type, identifiers, .. } = settings;
+                self.bind_unset(bind_context, *set_type, identifiers)
                     .await?
             }
 

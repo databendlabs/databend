@@ -149,14 +149,14 @@ impl InvertedIndexWriter {
         let termdict_file = segment.open_read(SegmentComponent::Terms)?;
         extract_fsts(termdict_file, &mut fields, &mut values)?;
 
+        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
+        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
+
         let posting_file = segment.open_read(SegmentComponent::Postings)?;
         extract_component_fields("idx", posting_file, &mut fields, &mut values)?;
 
         let position_file = segment.open_read(SegmentComponent::Positions)?;
         extract_component_fields("pos", position_file, &mut fields, &mut values)?;
-
-        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
-        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
 
         let inverted_index_schema = TableSchema::new(fields);
 

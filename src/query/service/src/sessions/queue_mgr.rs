@@ -40,6 +40,8 @@ use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
+use databend_common_sql::plans::ModifyColumnAction;
+use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use log::info;
@@ -131,6 +133,11 @@ impl<Data: QueueData> QueueManager<Data> {
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
         if data.need_acquire_to_queue() {
+            info!(
+                "preparing to acquire from query queue, length: {}",
+                self.length()
+            );
+
             let timeout = data.timeout();
             let future = AcquireQueueFuture::create(
                 Arc::new(data),
@@ -141,6 +148,8 @@ impl<Data: QueueData> QueueManager<Data> {
 
             return match future.await {
                 Ok(v) => {
+                    info!("finished acquiring from queue, length: {}", self.length());
+
                     inc_session_running_acquired_queries();
                     record_session_queue_acquire_duration_ms(
                         start_time.elapsed().unwrap_or_default(),
@@ -316,7 +325,7 @@ pub struct QueryEntry {
 }
 
 impl QueryEntry {
-    fn create_entry(
+    pub fn create_entry(
         ctx: &Arc<QueryContext>,
         plan_extras: &PlanExtras,
         need_acquire_to_queue: bool,
@@ -402,10 +411,17 @@ impl QueryEntry {
             | Plan::VacuumTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
+            | Plan::ReclusterTable { .. }
             | Plan::TruncateTable(_) => {
                 return true;
             }
             Plan::DropTable(v) if v.all => {
+                return true;
+            }
+            Plan::ModifyTableColumn(box ModifyTableColumnPlan {
+                action: ModifyColumnAction::SetDataType(_),
+                ..
+            }) => {
                 return true;
             }
 

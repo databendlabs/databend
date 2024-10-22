@@ -65,6 +65,7 @@ sha2 = { workspace = true }
 siphasher = "0.3.10"
 sys-info = "0.9"
 tantivy = { workspace = true }
+tantivy-common = { workspace = true }
 tantivy-fst = "0.5"
 tantivy-jieba = { workspace = true }
 thrift = "0.17.0"

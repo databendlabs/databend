@@ -21,9 +21,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
-use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::SampleLevel;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
@@ -435,7 +433,7 @@ impl Binder {
         database_name: &str,
         table_index: IndexType,
         change_type: Option<ChangeType>,
-        sample: &Option<Sample>,
+        sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
@@ -489,7 +487,7 @@ impl Binder {
                     columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Arc::new(Statistics::default()),
                     change_type,
-                    sample: table_sample(sample)?,
+                    sample: sample.clone(),
                     ..Default::default()
                 }
                 .into(),
@@ -678,17 +676,4 @@ impl Binder {
 
         Ok(index_metas)
     }
-}
-
-fn table_sample(sample: &Option<Sample>) -> Result<Option<Sample>> {
-    if let Some(sample) = sample {
-        if sample.sample_level == SampleLevel::BLOCK {
-            if let SampleConfig::RowsNum(_) = sample.sample_conf {
-                return Err(ErrorCode::SyntaxException(
-                    "BLOCK sampling doesn't support fixed rows.".to_string(),
-                ));
-            }
-        }
-    }
-    Ok(sample.clone())
 }

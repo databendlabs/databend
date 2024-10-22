@@ -26,7 +26,7 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::date::string_to_date;
 use databend_common_expression::types::date::DATE_MAX;
@@ -40,7 +40,7 @@ use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
@@ -114,13 +114,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 /// Check if timestamp is within range, and return the timestamp in micros.
 #[inline]
-fn int64_to_timestamp(n: i64) -> Result<i64, String> {
+fn int64_to_timestamp(mut n: i64) -> i64 {
     if -31536000000 < n && n < 31536000000 {
-        Ok(n * MICROS_PER_SEC)
+        n * MICROS_PER_SEC
     } else if -31536000000000 < n && n < 31536000000000 {
-        Ok(n * MICROS_PER_MILLI)
+        n * MICROS_PER_MILLI
     } else {
-        check_timestamp(n)
+        clamp_timestamp(&mut n);
+        n
     }
 }
 
@@ -128,8 +129,8 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     domain: &SimpleDomain<T>,
 ) -> Option<SimpleDomain<i64>> {
     Some(SimpleDomain {
-        min: int64_to_timestamp(domain.min.as_()).ok()?,
-        max: int64_to_timestamp(domain.max.as_()).ok()?,
+        min: int64_to_timestamp(domain.min.as_()),
+        max: int64_to_timestamp(domain.max.as_()),
     })
 }
 
@@ -510,14 +511,9 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
         val: ValueRef<Int64Type>,
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
-        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, ctx| {
-            match int64_to_timestamp(val) {
-                Ok(ts) => output.push(ts),
-                Err(e) => {
-                    ctx.set_error(output.len(), e);
-                    output.push(0);
-                }
-            }
+        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
+            let ts = int64_to_timestamp(val);
+            output.push(ts);
         })(val, ctx)
     }
 }
@@ -626,14 +622,8 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
     );
 
     fn eval_number_to_date(val: ValueRef<Int64Type>, ctx: &mut EvalContext) -> Value<DateType> {
-        vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, ctx| {
-            match check_date(val) {
-                Ok(d) => output.push(d),
-                Err(e) => {
-                    ctx.set_error(output.len(), e);
-                    output.push(0);
-                }
-            }
+        vectorize_with_builder_1_arg::<Int64Type, DateType>(|val, output, _| {
+            output.push(clamp_date(val))
         })(val, ctx)
     }
 }
@@ -896,14 +886,8 @@ macro_rules! impl_register_arith_functions {
                 concat!($op, "_days"),
 
                 |_, _, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    match EvalDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
-                        Ok(t) => builder.push(t),
-                        Err(e) => {
-                            ctx.set_error(builder.len(), e);
-                            builder.push(0);
-                        },
-                    }
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
+                    builder.push(EvalDaysImpl::eval_date(date, $signed_wrapper!{delta}))
                 }),
             );
             registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
@@ -911,14 +895,8 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
-                        match EvalDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                    |ts, delta, builder, _| {
+                        builder.push(EvalDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}))
                     },
                 ),
             );
@@ -927,15 +905,9 @@ macro_rules! impl_register_arith_functions {
                 concat!($op, "_weeks"),
 
                 |_, _, _| FunctionDomain::MayThrow,
-                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
+                vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, _| {
                     let delta = 7 * delta;
-                    match EvalDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
-                        Ok(t) => builder.push(t),
-                        Err(e) => {
-                            ctx.set_error(builder.len(), e);
-                            builder.push(0);
-                        },
-                    }
+                    builder.push(EvalDaysImpl::eval_date(date, $signed_wrapper!{delta}))
                 }),
             );
             registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
@@ -943,15 +915,9 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
+                    |ts, delta, builder, _| {
                         let delta = 7 * delta;
-                        match EvalDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        builder.push(EvalDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}))
                     },
                 ),
             );
@@ -961,19 +927,13 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
+                    |ts, delta, builder, _| {
                         let val = (ts as i64) * 24 * 3600 * MICROS_PER_SEC;
-                        match EvalTimesImpl::eval_timestamp(
+                        builder.push(EvalTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_HOUR,
-                        ) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        ));
                     },
                 ),
             );
@@ -982,18 +942,12 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
-                        match EvalTimesImpl::eval_timestamp(
+                    |ts, delta, builder, _| {
+                        builder.push(EvalTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_HOUR,
-                        ) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        ));
                     },
                 ),
             );
@@ -1003,20 +957,13 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
+                    |ts, delta, builder, _| {
                         let val = (ts as i64) * 24 * 3600 * MICROS_PER_SEC;
-
-                        match EvalTimesImpl::eval_timestamp(
+                        builder.push(EvalTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_MINUTE,
-                        ) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        ))
                     },
                 ),
             );
@@ -1025,18 +972,12 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
-                        match EvalTimesImpl::eval_timestamp(
+                    |ts, delta, builder, _| {
+                        builder.push(EvalTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_MINUTE,
-                        ) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        ));
                     },
                 ),
             );
@@ -1046,20 +987,13 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
+                    |ts, delta, builder, _| {
                         let val = (ts as i64) * 24 * 3600 * MICROS_PER_SEC;
-
-                        match EvalTimesImpl::eval_timestamp(
+                        builder.push(EvalTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
-                        ) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        ));
                     },
                 ),
             );
@@ -1068,18 +1002,12 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-                    |ts, delta, builder, ctx| {
-                        match EvalTimesImpl::eval_timestamp(
+                    |ts, delta, builder, _| {
+                        builder.push(EvalTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
-                        ) {
-                            Ok(t) => builder.push(t),
-                            Err(e) => {
-                                ctx.set_error(builder.len(), e);
-                                builder.push(0);
-                            },
-                        }
+                        ));
                     },
                 ),
             );
@@ -1667,45 +1595,38 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rn = rhs.min;
 
                 Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: check_date(ln + rn).ok()?,
-                    max: check_date(lm + rm).ok()?,
+                    min: clamp_date(ln + rn),
+                    max: clamp_date(lm + rm),
                 }))
             })()
             .unwrap_or(FunctionDomain::MayThrow)
         },
-        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, ctx| {
-            match check_date((a as i64) + b) {
-                Ok(v) => output.push(v),
-                Err(err) => {
-                    ctx.set_error(output.len(), err);
-                    output.push(0);
-                }
-            }
+        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
+            output.push(clamp_date((a as i64) + b))
         }),
     );
 
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "plus",
         |_, lhs, rhs| {
-            (|| {
+            {
                 let lm = lhs.max;
                 let ln = lhs.min;
                 let rm = rhs.max;
                 let rn = rhs.min;
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
-                    min: check_timestamp(ln + rn).ok()?,
-                    max: check_timestamp(lm + rm).ok()?,
-                }))
-            })()
+                let mut min = ln + rn;
+                clamp_timestamp(&mut min);
+                let mut max = lm + rm;
+                clamp_timestamp(&mut max);
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> { min, max }))
+            }
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-            |a, b, output, ctx| match check_timestamp(a + b) {
-                Ok(v) => output.push(v),
-                Err(err) => {
-                    ctx.set_error(output.len(), err);
-                    output.push(0);
-                }
+            |a, b, output, _| {
+                let mut sum = a + b;
+                clamp_timestamp(&mut sum);
+                output.push(sum);
             },
         ),
     );
@@ -1720,46 +1641,38 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 let rn = rhs.min;
 
                 Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: check_date(ln - rn).ok()?,
-                    max: check_date(lm - rm).ok()?,
+                    min: clamp_date(ln - rn),
+                    max: clamp_date(lm - rm),
                 }))
             })()
             .unwrap_or(FunctionDomain::MayThrow)
         },
-        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, ctx| {
-            match check_date((a as i64) - b) {
-                Ok(v) => output.push(v),
-                Err(err) => {
-                    ctx.set_error(output.len(), err);
-                    output.push(0);
-                }
-            }
+        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
+            output.push(clamp_date((a as i64) - b));
         }),
     );
 
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "minus",
         |_, lhs, rhs| {
-            (|| {
+            {
                 let lm = lhs.max;
                 let ln = lhs.min;
                 let rm = rhs.max;
                 let rn = rhs.min;
-
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
-                    min: check_timestamp(ln - rn).ok()?,
-                    max: check_timestamp(lm - rm).ok()?,
-                }))
-            })()
+                let mut min = ln - rn;
+                clamp_timestamp(&mut min);
+                let mut max = lm - rm;
+                clamp_timestamp(&mut max);
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> { min, max }))
+            }
             .unwrap_or(FunctionDomain::MayThrow)
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-            |a, b, output, ctx| match check_timestamp(a - b) {
-                Ok(v) => output.push(v),
-                Err(err) => {
-                    ctx.set_error(output.len(), err);
-                    output.push(0);
-                }
+            |a, b, output, _| {
+                let mut minus = a - b;
+                clamp_timestamp(&mut minus);
+                output.push(minus);
             },
         ),
     );
