@@ -20,6 +20,7 @@ use arrow_array::Array;
 use arrow_array::LargeListArray;
 use arrow_array::MapArray;
 use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
 use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
@@ -98,6 +99,14 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
+        if table_schema.num_fields() == 0 {
+            return Ok(RecordBatch::try_new_with_options(
+                Arc::new(ArrowSchema::empty()),
+                vec![],
+                &RecordBatchOptions::default().with_row_count(Some(self.num_rows())),
+            )?);
+        }
+
         let arrow_schema = table_schema_to_arrow_schema(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self
