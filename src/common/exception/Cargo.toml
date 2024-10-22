@@ -15,8 +15,8 @@ databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }
-arrow-schema = { workspace = true }
 arrow-flight = { workspace = true }
+arrow-schema = { workspace = true }
 backtrace = { workspace = true }
 bincode = { workspace = true }
 geos = { workspace = true }
