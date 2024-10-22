@@ -56,54 +56,58 @@ pub enum CreateDatabaseOption {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement_body
         },
-        |(_, options, opt_kind, statement)| {
-            Ok(Statement::Explain {
+        |(_, options, opt_kind, statement)| match statement {
+            Statement::Explain { .. } | Statement::ExplainAnalyze { .. } => {
+                Err(nom::Err::Failure(ErrorKind::Other("invalid statement")))
+            }
+            _ => Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
-                    Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
+                    Some(SYNTAX) | Some(AST) => {
                         let pretty_stmt =
-                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
+                            pretty_statement(statement.clone(), 10).map_err(|_| {
                                 nom::Err::Failure(ErrorKind::Other("invalid statement"))
                             })?;
                         ExplainKind::Syntax(pretty_stmt)
                     }
-                    Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
-                    Some(TokenKind::JOIN) => ExplainKind::Join,
-                    Some(TokenKind::GRAPH) => ExplainKind::Graph,
-                    Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
-                    Some(TokenKind::RAW) => ExplainKind::Raw,
-                    Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
-                    Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
-                    Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
+                    Some(PIPELINE) => ExplainKind::Pipeline,
+                    Some(JOIN) => ExplainKind::Join,
+                    Some(GRAPH) => ExplainKind::Graph,
+                    Some(FRAGMENTS) => ExplainKind::Fragments,
+                    Some(RAW) => ExplainKind::Raw,
+                    Some(OPTIMIZED) => ExplainKind::Optimized,
+                    Some(MEMO) => ExplainKind::Memo("".to_string()),
+                    Some(GRAPHICAL) => ExplainKind::Graphical,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
                 options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
-                query: Box::new(statement.stmt),
-            })
+                query: Box::new(statement),
+            }),
         },
     );
-    let explain_analyze = map(
+    let explain_analyze = map_res(
         rule! {
-            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement
+            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement_body
         },
-        |(_, _, opt_partial_or_graphical, statement)| {
-            let (partial, graphical) = match opt_partial_or_graphical {
-                Some(Token {
-                    kind: TokenKind::PARTIAL,
-                    ..
-                }) => (true, false),
-                Some(Token {
-                    kind: TokenKind::GRAPHICAL,
-                    ..
-                }) => (false, true),
-                _ => (false, false),
-            };
-            Statement::ExplainAnalyze {
-                partial,
-                graphical,
-                query: Box::new(statement.stmt),
+        |(_, _, opt_partial_or_graphical, statement)| match statement {
+            Statement::ExplainAnalyze { .. } | Statement::Explain { .. } => {
+                Err(nom::Err::Failure(ErrorKind::Other("invalid statement")))
+            }
+            _ => {
+                let (partial, graphical) = match opt_partial_or_graphical {
+                    Some(Token { kind: PARTIAL, .. }) => (true, false),
+                    Some(Token {
+                        kind: GRAPHICAL, ..
+                    }) => (false, true),
+                    _ => (false, false),
+                };
+                Ok(Statement::ExplainAnalyze {
+                    partial,
+                    graphical,
+                    query: Box::new(statement),
+                })
             }
         },
     );
