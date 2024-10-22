@@ -254,8 +254,8 @@ pub fn batches_to_flight_data_with_options(
     options: &IpcWriteOptions,
 ) -> std::result::Result<(FlightData, Vec<FlightData>, Vec<FlightData>), ArrowError> {
     let schema_flight_data: FlightData = SchemaAsIpc::new(schema, options).into();
-    let mut dictionaries = vec![];
-    let mut flight_data = vec![];
+    let mut dictionaries = Vec::with_capacity(batches.len());
+    let mut flight_data = Vec::with_capacity(batches.len());
 
     let data_gen = IpcDataGenerator::default();
     let mut dictionary_tracker =
