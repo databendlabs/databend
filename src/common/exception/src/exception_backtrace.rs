@@ -97,10 +97,16 @@ impl PartialEq for StackFrame {
     }
 }
 
+fn empty_display() -> Arc<Mutex<Option<String>>> {
+    Arc::new(Mutex::new(None))
+}
+
 //
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct StackTrace {
     pub(crate) frames: Vec<StackFrame>,
+    #[serde(skip_serializing)]
+    #[serde(default = "empty_display")]
     pub(crate) display: Arc<Mutex<Option<String>>>,
 }
 
