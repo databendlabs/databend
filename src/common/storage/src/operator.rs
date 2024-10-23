@@ -90,16 +90,35 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     Ok(op)
 }
 
+/// Please take care about the timing of calling opendal's `finish`.
+///
+/// Layers added before `finish` will use static dispatch, and layers added after `finish`
+/// will use dynamic dispatch. Adding too many layers via static dispatch will increase
+/// the compile time of rustc or even results in a compile error.
+///
+/// ```txt
+/// error[E0275]: overflow evaluating the requirement `http::response::Response<()>: std::marker::Send`
+///      |
+///      = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`databend_common_storage`)
+/// note: required because it appears within the type `h2::proto::peer::PollMessage`
+///     --> /home/xuanwo/.cargo/registry/src/index.crates.io-6f17d22bba15001f/h2-0.4.5/src/proto/peer.rs:43:10
+///      |
+/// 43   | pub enum PollMessage {
+///      |          ^^^^^^^^^^^
+/// ```
+///
+/// Please balance the performance and compile time.
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
-    let ob = Operator::new(builder)?;
-
-    let op = ob
+    let ob = Operator::new(builder)?
         // NOTE
         //
         // Magic happens here. We will add a layer upon original
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
+        .finish();
+
+    let mut op = ob
         .layer({
             let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
                 .ok()
@@ -142,11 +161,11 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
 
     if let Ok(permits) = env::var("_DATABEND_INTERNAL_MAX_CONCURRENT_IO_REQUEST") {
         if let Ok(permits) = permits.parse::<usize>() {
-            return Ok(op.layer(ConcurrentLimitLayer::new(permits)).finish());
+            op = op.layer(ConcurrentLimitLayer::new(permits));
         }
     }
 
-    Ok(op.finish())
+    Ok(op)
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
