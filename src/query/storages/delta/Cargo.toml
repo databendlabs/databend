@@ -25,6 +25,8 @@ deltalake = { workspace = true }
 fastrace = { workspace = true }
 match-template = "0.0.1"
 object_store_opendal = { workspace = true }
+# enable features to make delta happy.
+opendal = { version = "0.49.2", features = ["services-s3", "services-fs"] }
 opendal_compat = { workspace = true, features = ["v0_50_to_v0_49"] }
 parquet = { workspace = true }
 serde = { workspace = true }
@@ -37,4 +39,4 @@ url = "2.4.1"
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "opendal"]
