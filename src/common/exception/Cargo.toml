@@ -16,7 +16,7 @@ databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
-backtrace = { workspace = true }
+backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }

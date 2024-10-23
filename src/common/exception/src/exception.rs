@@ -25,59 +25,9 @@ use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
+use crate::exception_backtrace::StackFrame;
 use crate::ErrorFrame;
 use crate::StackTrace;
-
-#[derive(Clone)]
-pub enum ErrorCodeBacktrace {
-    Serialized(Arc<String>),
-    Symbols(Arc<StackTrace>),
-}
-
-impl Display for ErrorCodeBacktrace {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "{}", backtrace),
-            ErrorCodeBacktrace::Symbols(backtrace) => write!(f, "{:?}", backtrace),
-        }
-    }
-}
-
-impl From<&str> for ErrorCodeBacktrace {
-    fn from(s: &str) -> Self {
-        Self::Serialized(Arc::new(s.to_string()))
-    }
-}
-
-impl From<String> for ErrorCodeBacktrace {
-    fn from(s: String) -> Self {
-        Self::Serialized(Arc::new(s))
-    }
-}
-
-impl From<Arc<String>> for ErrorCodeBacktrace {
-    fn from(s: Arc<String>) -> Self {
-        Self::Serialized(s)
-    }
-}
-
-impl From<StackTrace> for ErrorCodeBacktrace {
-    fn from(st: StackTrace) -> Self {
-        Self::Symbols(Arc::new(st))
-    }
-}
-
-impl From<&StackTrace> for ErrorCodeBacktrace {
-    fn from(st: &StackTrace) -> Self {
-        Self::Serialized(Arc::new(format!("{:?}", st)))
-    }
-}
-
-impl From<Arc<StackTrace>> for ErrorCodeBacktrace {
-    fn from(st: Arc<StackTrace>) -> Self {
-        Self::Symbols(st)
-    }
-}
 
 #[derive(Error)]
 pub struct ErrorCode<C = ()> {
@@ -89,8 +39,8 @@ pub struct ErrorCode<C = ()> {
     // cause is only used to contain an `anyhow::Error`.
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
     pub(crate) cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-    pub(crate) backtrace: Option<ErrorCodeBacktrace>,
     pub(crate) stacks: Vec<ErrorFrame>,
+    pub(crate) backtrace: StackTrace,
     pub(crate) _phantom: PhantomData<C>,
 }
 
@@ -190,24 +140,12 @@ impl<C> ErrorCode<C> {
         self
     }
 
-    /// Set backtrace info for this error.
-    ///
-    /// Useful when trying to keep original backtrace
-    pub fn set_backtrace(mut self, bt: Option<impl Into<ErrorCodeBacktrace>>) -> Self {
-        if let Some(b) = bt {
-            self.backtrace = Some(b.into());
-        }
-        self
-    }
-
-    pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
+    pub fn backtrace(&self) -> StackTrace {
         self.backtrace.clone()
     }
 
     pub fn backtrace_str(&self) -> String {
-        self.backtrace
-            .as_ref()
-            .map_or("".to_string(), |x| x.to_string())
+        format!("{:?}", &self.backtrace)
     }
 
     pub fn stacks(&self) -> &[ErrorFrame] {
@@ -232,18 +170,12 @@ impl<C> Debug for ErrorCode<C> {
             self.message(),
         )?;
 
-        match self.backtrace.as_ref() {
-            None => write!(
+        match self.backtrace.frames.is_empty() {
+            true => write!(
                 f,
                 "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
             ),
-            Some(backtrace) => {
-                // TODO: Custom stack frame format for print
-                match backtrace {
-                    ErrorCodeBacktrace::Symbols(stacktrace) => write!(f, "\n\n{:?}", stacktrace),
-                    ErrorCodeBacktrace::Serialized(stacktrace) => write!(f, "\n\n{}", stacktrace),
-                }
-            }
+            false => write!(f, "\n\n{:?}", &self.backtrace),
         }
     }
 }
@@ -301,8 +233,8 @@ impl<C> ErrorCode<C> {
             detail: String::new(),
             span: None,
             cause: None,
-            backtrace: None,
             stacks: vec![],
+            backtrace: StackTrace::no_capture(),
             _phantom: PhantomData::<C>,
         }
     }
@@ -313,7 +245,7 @@ impl<C> ErrorCode<C> {
         display_text: String,
         detail: String,
         cause: Option<Box<dyn std::error::Error + Sync + Send>>,
-        backtrace: Option<ErrorCodeBacktrace>,
+        backtrace: StackTrace,
     ) -> Self {
         ErrorCode {
             code,

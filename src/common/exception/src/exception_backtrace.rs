@@ -21,7 +21,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 
-use crate::exception::ErrorCodeBacktrace;
 #[cfg(target_os = "linux")]
 use crate::exception_backtrace_elf::Location;
 
@@ -55,8 +54,10 @@ fn enable_rust_backtrace() -> bool {
     enabled
 }
 
-pub fn capture() -> Option<ErrorCodeBacktrace> {
-    Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture())))
+pub fn capture() -> StackTrace {
+    eprintln!("capture exception");
+    StackTrace::capture()
+    // Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture())))
 }
 
 #[cfg(target_os = "linux")]
@@ -68,6 +69,7 @@ pub struct ResolvedStackFrame {
     pub location: Option<Location>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum StackFrame {
     #[cfg(target_os = "linux")]
     Ip(usize),
@@ -75,10 +77,31 @@ pub enum StackFrame {
     Backtrace(backtrace::BacktraceFrame),
 }
 
+impl Eq for StackFrame {}
+
+impl PartialEq for StackFrame {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            let StackFrame::Ip(addr) = &self;
+            let StackFrame::Ip(other_addr) = &other;
+            addr == other_addr
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            let StackFrame::Backtrace(addr) = &self;
+            let StackFrame::Backtrace(other_addr) = &other;
+            addr.ip() == other_addr.ip()
+        }
+    }
+}
+
 //
+#[derive(Clone)]
 pub struct StackTrace {
-    frames: Vec<StackFrame>,
-    display: Mutex<Option<String>>,
+    pub(crate) frames: Vec<StackFrame>,
+    pub(crate) display: Arc<Mutex<Option<String>>>,
 }
 
 impl StackTrace {
@@ -87,7 +110,14 @@ impl StackTrace {
         Self::capture_frames(&mut frames);
         StackTrace {
             frames,
-            display: Mutex::new(None),
+            display: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn no_capture() -> StackTrace {
+        StackTrace {
+            frames: vec![],
+            display: Arc::new(Mutex::new(None)),
         }
     }
 
