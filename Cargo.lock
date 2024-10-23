@@ -17260,8 +17260,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "deltalake"
-version = "0.18.0"
-source = "git+https://github.com/delta-io/delta-rs?rev=57795da#57795da9d9cc86a460a5888713adfb3d0584b4cc"
