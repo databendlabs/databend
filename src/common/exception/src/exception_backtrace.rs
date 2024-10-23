@@ -55,9 +55,10 @@ fn enable_rust_backtrace() -> bool {
 }
 
 pub fn capture() -> StackTrace {
-    eprintln!("capture exception");
-    StackTrace::capture()
-    // Some(ErrorCodeBacktrace::Symbols(Arc::new(StackTrace::capture())))
+    let instance = std::time::Instant::now();
+    let stack_trace = StackTrace::capture();
+    log::info!("capture stack trace elapsed:{:?}, {:?}", instance.elapsed(), std::thread::current().name());
+    stack_trace
 }
 
 #[cfg(target_os = "linux")]
@@ -216,6 +217,7 @@ impl StackTrace {
 
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let instance = std::time::Instant::now();
         let mut guard = self.display.lock().unwrap_or_else(PoisonError::into_inner);
 
         if guard.is_none() {
@@ -225,6 +227,8 @@ impl Debug for StackTrace {
             *guard = Some(display_text);
         }
 
-        writeln!(f, "{}", guard.as_ref().unwrap())
+        writeln!(f, "{}", guard.as_ref().unwrap())?;
+        log::info!("format stack trace elapsed: {:?}, {:?}", instance.elapsed(), std::thread::current().name());
+        Ok(())
     }
 }
