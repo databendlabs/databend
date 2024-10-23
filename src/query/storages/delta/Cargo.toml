@@ -24,8 +24,8 @@ databend-storages-common-table-meta = { workspace = true }
 deltalake = { workspace = true }
 fastrace = { workspace = true }
 match-template = "0.0.1"
-opendal_compat = { workspace = true, features = ["v0_50_to_v0_49"] }
 object_store_opendal = { workspace = true }
+opendal_compat = { workspace = true, features = ["v0_50_to_v0_49"] }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -29,7 +29,6 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

@@ -50,6 +50,8 @@ prometheus-parse = "0.2.3"
 rand = { workspace = true, features = ["serde1"] }
 regex = { workspace = true }
 replace_with = "0.1.7"
+reqwest = { workspace = true }
+reqwest-hickory-resolver = { workspace = true }
 rustix = "0.38.37"
 semver = { workspace = true }
 serde = { workspace = true }
@@ -60,8 +62,6 @@ tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
 unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
-reqwest = { workspace = true }
-reqwest-hickory-resolver = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = { version = "^0.16" }
