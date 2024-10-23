@@ -282,8 +282,8 @@ impl AsyncSource for TempFilesTableAsyncSource {
 
         self.entries_processed += processed;
 
-        if processed <= step_limit {
-            // All the items have been listed, or we have reached the step_limit; stop processing
+        if processed < step_limit {
+            // stream is finished before the step_limit is reached
             self.finished = true;
             info!(
                 "finishing temporary file listing. limit {}, number of entries listed {} ",
