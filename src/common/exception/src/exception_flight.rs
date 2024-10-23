@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow_format::flight::data::FlightData;
+use arrow_flight::FlightData;
 
 use crate::ErrorCode;
 use crate::Result;
@@ -24,9 +24,9 @@ impl From<ErrorCode> for FlightData {
             serde_json::to_vec::<SerializedError>(&SerializedError::from(&error)).unwrap();
 
         FlightData {
-            data_body: serialized_error,
-            app_metadata: vec![0x02],
-            data_header: error.code().to_be_bytes().to_vec(),
+            data_body: serialized_error.into(),
+            app_metadata: vec![0x02].into(),
+            data_header: error.code().to_be_bytes().to_vec().into(),
             flight_descriptor: None,
         }
     }
