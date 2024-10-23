@@ -15,12 +15,14 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::ops::Deref;
 use std::vec;
 
+use arrow_flight::FlightData;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
+use bytes::Bytes;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,7 +34,7 @@ use log::error;
 use crate::servers::flight::v1::packets::ProgressInfo;
 
 pub struct FragmentData {
-    meta: Vec<u8>,
+    meta: Bytes,
     pub data: FlightData,
 }
 
@@ -41,7 +43,7 @@ impl FragmentData {
         &self.meta[0..self.meta.len() - 1]
     }
 
-    pub fn create(meta: Vec<u8>, data: FlightData) -> FragmentData {
+    pub fn create(meta: Bytes, data: FlightData) -> FragmentData {
         FragmentData { meta, data }
     }
 }
@@ -93,9 +95,9 @@ impl TryFrom<DataPacket> for FlightData {
             }
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
             DataPacket::QueryProfiles(profiles) => FlightData {
-                app_metadata: vec![0x03],
-                data_body: serde_json::to_vec(&profiles)?,
-                data_header: vec![],
+                app_metadata: vec![0x03].into(),
+                data_body: serde_json::to_vec(&profiles)?.into(),
+                data_header: Default::default(),
                 flight_descriptor: None,
             },
             DataPacket::SerializeProgress(progress) => {
@@ -108,32 +110,34 @@ impl TryFrom<DataPacket> for FlightData {
                 }
 
                 FlightData {
-                    data_body,
-                    data_header: vec![],
+                    data_body: data_body.into(),
+                    data_header: Default::default(),
                     flight_descriptor: None,
-                    app_metadata: vec![0x04],
+                    app_metadata: vec![0x04].into(),
                 }
             }
             DataPacket::Dictionary(mut flight_data) => {
-                flight_data.app_metadata.push(0x05);
+                let mut app_metadata = flight_data.app_metadata.to_vec();
+                app_metadata.push(0x05);
+                flight_data.app_metadata = app_metadata.into();
                 flight_data
             }
             DataPacket::CopyStatus(status) => FlightData {
-                app_metadata: vec![0x06],
-                data_body: serde_json::to_vec(&status)?,
-                data_header: vec![],
+                app_metadata: vec![0x06].into(),
+                data_body: serde_json::to_vec(&status)?.into(),
+                data_header: Default::default(),
                 flight_descriptor: None,
             },
             DataPacket::MutationStatus(status) => FlightData {
-                app_metadata: vec![0x07],
-                data_body: serde_json::to_vec(&status)?,
-                data_header: vec![],
+                app_metadata: vec![0x07].into(),
+                data_body: serde_json::to_vec(&status)?.into(),
+                data_header: Default::default(),
                 flight_descriptor: None,
             },
             DataPacket::DataCacheMetrics(metrics) => FlightData {
-                app_metadata: vec![0x08],
-                data_body: serde_json::to_vec(&metrics)?,
-                data_header: vec![],
+                app_metadata: vec![0x08].into(),
+                data_body: serde_json::to_vec(&metrics)?.into(),
+                data_header: Default::default(),
                 flight_descriptor: None,
             },
         })
@@ -141,10 +145,11 @@ impl TryFrom<DataPacket> for FlightData {
 }
 
 impl From<FragmentData> for FlightData {
-    fn from(mut data: FragmentData) -> Self {
-        data.meta.push(0x01);
+    fn from(data: FragmentData) -> Self {
+        let mut metadata = data.meta.to_vec();
+        metadata.push(0x01);
         FlightData {
-            app_metadata: data.meta,
+            app_metadata: metadata.into(),
             data_body: data.data.data_body,
             data_header: data.data.data_header,
             flight_descriptor: None,
@@ -171,7 +176,7 @@ impl TryFrom<FlightData> for DataPacket {
                 Ok(DataPacket::QueryProfiles(status))
             }
             0x04 => {
-                let mut bytes = flight_data.data_body.as_slice();
+                let mut bytes = flight_data.data_body.deref();
                 let progress_size = bytes.read_u64::<BigEndian>()?;
 
                 // Progress.
@@ -206,7 +211,7 @@ impl TryFrom<FlightData> for FragmentData {
 
     fn try_from(flight_data: FlightData) -> Result<Self> {
         Ok(FragmentData::create(flight_data.app_metadata, FlightData {
-            app_metadata: vec![],
+            app_metadata: Default::default(),
             flight_descriptor: None,
             data_body: flight_data.data_body,
             data_header: flight_data.data_header,

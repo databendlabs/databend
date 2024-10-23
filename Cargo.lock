@@ -455,6 +455,8 @@ dependencies = [
  "arrow-data",
  "arrow-schema",
  "flatbuffers",
+ "lz4_flex",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -3416,6 +3418,7 @@ name = "databend-common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-flight",
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
@@ -3443,6 +3446,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-flight",
+ "arrow-ipc",
  "arrow-ord",
  "arrow-schema",
  "arrow-select",
@@ -5128,6 +5132,7 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
@@ -5245,7 +5250,6 @@ dependencies = [
  "naive-cityhash",
  "num",
  "num_cpus",
- "once_cell",
  "opendal 0.49.2",
  "opensrv-mysql",
  "opentelemetry",
