@@ -47,8 +47,10 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_storage::DataOperator;
-use futures::TryStreamExt;
-use log::info;
+use futures::stream::Chunks;
+use futures::stream::Take;
+use futures::StreamExt;
+use opendal::Entry;
 use opendal::Lister;
 use opendal::Metakey;
 use opendal::Operator;
@@ -66,7 +68,7 @@ impl Table for TempFilesTable {
     }
 
     fn is_local(&self) -> bool {
-        // When querying a memory table, we send the partition to one node for execution. The other nodes send empty partitions.
+        // Follow the practice of `SyncOneBlockSystemTable::is_local`
         false
     }
 
@@ -152,7 +154,7 @@ struct TempFilesTableAsyncSource {
     location_prefix: String,
     entries_processed: usize,
     limit: usize,
-    lister: Option<Lister>,
+    lister: Option<Chunks<Take<Lister>>>,
 }
 
 impl TempFilesTableAsyncSource {
@@ -207,6 +209,36 @@ impl TempFilesTableAsyncSource {
             row_number,
         )
     }
+
+    fn block_from_entries(&self, entries: Vec<opendal::Result<Entry>>) -> Result<DataBlock> {
+        let num_items = entries.len();
+        let mut temp_files_name: Vec<String> = Vec::with_capacity(num_items);
+        let mut temp_files_content_length = Vec::with_capacity(num_items);
+        let mut temp_files_last_modified = Vec::with_capacity(num_items);
+        for entry in entries {
+            let entry = entry?;
+            let metadata = entry.metadata();
+            if metadata.is_file() {
+                temp_files_name.push(
+                    entry
+                        .path()
+                        .trim_start_matches(&self.location_prefix)
+                        .to_string(),
+                );
+
+                temp_files_last_modified
+                    .push(metadata.last_modified().map(|x| x.timestamp_micros()));
+                temp_files_content_length.push(metadata.content_length());
+            }
+        }
+
+        let data_block = Self::build_block(
+            temp_files_name,
+            temp_files_content_length,
+            temp_files_last_modified,
+        );
+        Ok(data_block)
+    }
 }
 
 const MAX_BATCH_SIZE: usize = 1000;
@@ -221,85 +253,28 @@ impl AsyncSource for TempFilesTableAsyncSource {
             return Ok(None);
         }
 
-        let step_limit = {
-            // - Initially, self.limit is larger than self.entries_processed (which is 0).
-            // - In each step, self.entries_processed will increase by at most
-            //   (self.limit - self.entries_processed).
-            // - We will stop processing before/when self.entries_processed reached the self.limit.
-            //
-            // This ensures that the subtraction will not cause underflow or runtime panic.
-            let left = self.limit - self.entries_processed;
-            std::cmp::min(left, MAX_BATCH_SIZE)
-        };
-
-        if step_limit == 0 {
-            self.finished = true;
-            info!(
-                "empty step, finishing temporary file listing. limit {}, number of entries listed {} ",
-                self.limit, self.entries_processed
-            );
-            return Ok(None);
-        }
-
-        let mut temp_files_name: Vec<String> = Vec::with_capacity(MAX_BATCH_SIZE);
-        let mut temp_files_content_length = Vec::with_capacity(MAX_BATCH_SIZE);
-        let mut temp_files_last_modified = Vec::with_capacity(MAX_BATCH_SIZE);
-
         let lister = {
             if self.lister.is_none() {
-                self.lister = Some(
-                    self.operator
-                        .lister_with(&self.location_prefix)
-                        .recursive(true)
-                        .metakey(Metakey::LastModified | Metakey::ContentLength)
-                        .await?,
-                );
+                let lister = self
+                    .operator
+                    .lister_with(&self.location_prefix)
+                    .recursive(true)
+                    .metakey(Metakey::LastModified | Metakey::ContentLength)
+                    .await?;
+                self.lister = Some(lister.take(self.limit).chunks(MAX_BATCH_SIZE));
             }
             self.lister.as_mut().unwrap()
         };
 
-        let mut processed = 0;
-        while let Some(entry) = lister.try_next().await? {
-            let metadata = entry.metadata();
-            if metadata.is_file() {
-                temp_files_name.push(
-                    entry
-                        .path()
-                        .trim_start_matches(&self.location_prefix)
-                        .to_string(),
-                );
-
-                temp_files_last_modified
-                    .push(metadata.last_modified().map(|x| x.timestamp_micros()));
-                temp_files_content_length.push(metadata.content_length());
-            }
-
-            processed += 1;
-            if processed == step_limit {
-                break;
-            }
-        }
-
-        self.entries_processed += processed;
-
-        if processed < step_limit {
-            // stream is finished before the step_limit is reached
+        if let Some(entries) = lister.next().await {
+            let data_block = self.block_from_entries(entries)?;
+            self.entries_processed += data_block.num_rows();
+            self.context
+                .set_status_info(&format!("{} entries processed", self.entries_processed));
+            Ok(Some(data_block))
+        } else {
             self.finished = true;
-            info!(
-                "finishing temporary file listing. limit {}, number of entries listed {} ",
-                self.limit, self.entries_processed
-            );
+            Ok(None)
         }
-
-        self.context
-            .set_status_info(&format!("{} entries processed", self.entries_processed));
-
-        let data_block = Self::build_block(
-            temp_files_name,
-            temp_files_content_length,
-            temp_files_last_modified,
-        );
-
-        return Ok(Some(data_block));
     }
 }
