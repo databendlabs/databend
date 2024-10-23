@@ -327,6 +327,7 @@ impl FuseTable {
         } else {
             None
         };
+        let max_threads = settings.get_max_threads()? as usize;
 
         let pruner_context = if !self.is_native() || self.cluster_key_meta.is_none() {
             PruningContext::try_create(
@@ -337,7 +338,7 @@ impl FuseTable {
                 None,
                 vec![],
                 self.bloom_index_cols.clone(),
-                8, // TODO
+                max_threads,
                 bloom_index_builder,
             )
         } else {
@@ -351,7 +352,7 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols.clone(),
-                8, // TODO
+                max_threads,
                 bloom_index_builder,
             )
         }?;
@@ -365,7 +366,7 @@ impl FuseTable {
                     output,
                 )
             },
-            8,
+            max_threads,
         )?;
 
         pipeline.add_transform(|input, output| {
