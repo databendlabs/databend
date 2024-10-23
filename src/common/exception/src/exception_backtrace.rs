@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Write;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::sync::RwLock;
 
 #[cfg(target_os = "linux")]
 use crate::exception_backtrace_elf::Location;
@@ -102,17 +108,26 @@ impl PartialEq for StackFrame {
     }
 }
 
-fn empty_display() -> Arc<Mutex<Option<String>>> {
-    Arc::new(Mutex::new(None))
+impl Hash for StackFrame {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        #[cfg(target_os = "linux")]
+        {
+            let StackFrame::Ip(addr) = &self;
+            addr.hash(state);
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            let StackFrame::Backtrace(addr) = &self;
+            addr.ip().hash(state)
+        }
+    }
 }
 
 //
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct StackTrace {
     pub(crate) frames: Vec<StackFrame>,
-    #[serde(skip_serializing)]
-    #[serde(default = "empty_display")]
-    pub(crate) display: Arc<Mutex<Option<String>>>,
 }
 
 impl Eq for StackTrace {}
@@ -127,17 +142,11 @@ impl StackTrace {
     pub fn capture() -> StackTrace {
         let mut frames = Vec::with_capacity(50);
         Self::capture_frames(&mut frames);
-        StackTrace {
-            frames,
-            display: Arc::new(Mutex::new(None)),
-        }
+        StackTrace { frames }
     }
 
     pub fn no_capture() -> StackTrace {
-        StackTrace {
-            frames: vec![],
-            display: Arc::new(Mutex::new(None)),
-        }
+        StackTrace { frames: vec![] }
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -219,19 +228,44 @@ impl StackTrace {
     }
 }
 
+#[allow(clippy::type_complexity)]
+static STACK_CACHE: LazyLock<RwLock<HashMap<Vec<StackFrame>, Arc<Mutex<Option<Arc<String>>>>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
 impl Debug for StackTrace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let instance = std::time::Instant::now();
-        let mut guard = self.display.lock().unwrap_or_else(PoisonError::into_inner);
 
-        if guard.is_none() {
+        let mut display_text = {
+            let read_guard = STACK_CACHE.read().unwrap_or_else(PoisonError::into_inner);
+            read_guard.get(&self.frames).cloned()
+        };
+
+        if display_text.is_none() {
+            let mut guard = STACK_CACHE.write().unwrap_or_else(PoisonError::into_inner);
+
+            display_text = Some(match guard.entry(self.frames.clone()) {
+                Entry::Occupied(v) => v.get().clone(),
+                Entry::Vacant(v) => v.insert(Arc::new(Mutex::new(None))).clone(),
+            });
+        }
+
+        let display_text_lock = display_text.as_ref().unwrap();
+        let mut display_guard = display_text_lock
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        if display_guard.is_none() {
             let mut display_text = String::new();
 
             self.fmt_frames(&mut display_text, !enable_rust_backtrace())?;
-            *guard = Some(display_text);
+            *display_guard = Some(Arc::new(display_text));
         }
 
-        writeln!(f, "{}", guard.as_ref().unwrap())?;
+        let display_text = display_guard.as_ref().unwrap().clone();
+        drop(display_guard);
+
+        writeln!(f, "{}", display_text)?;
         log::info!(
             "format stack trace elapsed: {:?}, {:?}",
             instance.elapsed(),
