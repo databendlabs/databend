@@ -111,7 +111,7 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
             ArrowDataType::LargeList(Box::new(ArrowField::new(
                 "_array",
                 arrow_ty,
-                ty.is_nullable(),
+                ty.is_nullable_or_null(),
             )))
         }
         TableDataType::Map(ty) => {
