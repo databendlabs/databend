@@ -52,6 +52,8 @@ impl FuseTable {
         let schema = DataSchema::from(self.schema()).into();
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        pipeline.try_resize(max_io_requests)?;
         pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
