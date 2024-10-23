@@ -18,14 +18,12 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use databend_common_ast::span::pretty_print_error;
 use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
-use crate::exception_backtrace::StackFrame;
 use crate::ErrorFrame;
 use crate::StackTrace;
 
