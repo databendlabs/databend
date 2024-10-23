@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::ast::CopyIntoLocationSource;
 use databend_common_ast::ast::CopyIntoLocationStmt;
 use databend_common_ast::ast::Statement;
@@ -63,8 +64,14 @@ impl<'a> Binder {
                     .with_options
                     .as_ref()
                     .map_or(String::new(), |with_options| format!(" {with_options}"));
+
+                let quoted_ident_case_sensitive =
+                    self.ctx.get_settings().get_quoted_ident_case_sensitive()?;
                 let subquery = format!(
-                    "SELECT * FROM \"{catalog_name}\".\"{database_name}\".\"{table_name}\"{with_options_str}"
+                    "SELECT * FROM {}.{}.{}\"{with_options_str}",
+                    display_ident(&catalog_name, quoted_ident_case_sensitive, self.dialect),
+                    display_ident(&database_name, quoted_ident_case_sensitive, self.dialect),
+                    display_ident(&table_name, quoted_ident_case_sensitive, self.dialect),
                 );
                 let tokens = tokenize_sql(&subquery)?;
                 let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;
