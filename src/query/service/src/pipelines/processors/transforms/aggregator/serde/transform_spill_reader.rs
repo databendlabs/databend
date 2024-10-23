@@ -270,10 +270,12 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         }
                     };
 
-                    info!(
-                        "Read {} aggregate spills successfully, total elapsed: {:?}",
-                        processed_count, total_elapsed
-                    );
+                    if processed_count != 0 {
+                        info!(
+                            "Read {} aggregate spills successfully, total elapsed: {:?}",
+                            processed_count, total_elapsed
+                        );
+                    }
                 }
             }
         }

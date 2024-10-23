@@ -15,6 +15,7 @@
 
 use std::hint::unreachable_unchecked;
 use std::iter::FromIterator;
+use std::ops::Range;
 use std::sync::Arc;
 
 use super::utils::count_zeros;
@@ -202,6 +203,26 @@ impl MutableBitmap {
         }
     }
 
+    /// Append `range` bits from `to_set`
+    ///
+    /// `to_set` is a slice of bits packed LSB-first into `[u8]`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `to_set` does not contain `ceil(range.end / 8)` bytes
+    pub fn append_packed_range(&mut self, range: Range<usize>, to_set: &[u8]) {
+        let offset_write = self.len();
+        let len = range.end - range.start;
+        self.advance(len);
+        arrow_data::bit_mask::set_bits(
+            self.buffer.as_mut_slice(),
+            to_set,
+            offset_write,
+            range.start,
+            len,
+        );
+    }
+
     /// Initializes a zeroed [`MutableBitmap`].
     #[inline]
     pub fn from_len_zeroed(length: usize) -> Self {
@@ -225,6 +246,12 @@ impl MutableBitmap {
     pub fn reserve(&mut self, additional: usize) {
         self.buffer
             .reserve((self.length + additional).saturating_add(7) / 8 - self.buffer.len())
+    }
+
+    /// Advances the buffer by `additional` bits
+    #[inline]
+    pub fn advance(&mut self, additional: usize) {
+        self.extend_unset(additional)
     }
 
     /// Returns the capacity of [`MutableBitmap`] in number of bits.

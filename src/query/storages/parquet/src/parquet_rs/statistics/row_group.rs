@@ -41,35 +41,41 @@ pub fn collect_row_group_stats(
     let mut stats = Vec::with_capacity(rgs.len());
     for rg in rgs {
         assert_eq!(rg.num_columns(), leaf_fields.len());
-        let mut stats_of_columns = HashMap::with_capacity(rg.columns().len());
-
-        // Each row_group_stat is a `HashMap` holding key-value pairs.
-        // The first element of the pair is the offset in the schema,
-        // and the second element is the statistics of the column (according to the offset)
-        if let Some(columns) = columns {
-            for col_idx in columns.iter() {
-                let column = rg.column(*col_idx);
-                let field = &leaf_fields[*col_idx];
-                let column_stats = column.statistics().unwrap();
-                stats_of_columns.insert(
-                    *col_idx as u32,
-                    convert_column_statistics(column_stats, &field.data_type().remove_nullable())?,
-                );
-            }
-        } else {
-            for (col_idx, (column, field)) in
-                rg.columns().iter().zip(leaf_fields.iter()).enumerate()
-            {
-                let column_stats = column.statistics().unwrap();
-                stats_of_columns.insert(
-                    col_idx as u32,
-                    convert_column_statistics(column_stats, &field.data_type().remove_nullable())?,
-                );
-            }
-        }
-
+        let stats_of_columns = collect_single_row_group_stats(rg, leaf_fields, columns)?;
         stats.push(stats_of_columns);
     }
-
     Some(stats)
+}
+
+/// Note the keys of result is not column id but column offset in schema
+pub fn collect_single_row_group_stats(
+    rg: &RowGroupMetaData,
+    leaf_fields: &[TableField],
+    columns: Option<&[usize]>,
+) -> Option<StatisticsOfColumns> {
+    let mut stats_of_columns = HashMap::with_capacity(rg.columns().len());
+    // Each row_group_stat is a `HashMap` holding key-value pairs.
+    // The first element of the pair is the offset in the schema,
+    // and the second element is the statistics of the column (according to the offset)
+    if let Some(columns) = columns {
+        for col_idx in columns.iter() {
+            let column = rg.column(*col_idx);
+            let field = &leaf_fields[*col_idx];
+            let column_stats = column.statistics().unwrap();
+            stats_of_columns.insert(
+                *col_idx as u32,
+                convert_column_statistics(column_stats, &field.data_type().remove_nullable())?,
+            );
+        }
+    } else {
+        for (idx, (column, field)) in rg.columns().iter().zip(leaf_fields.iter()).enumerate() {
+            let column_stats = column.statistics().unwrap();
+            stats_of_columns.insert(
+                idx as u32,
+                convert_column_statistics(column_stats, &field.data_type().remove_nullable())?,
+            );
+        }
+    }
+
+    Some(stats_of_columns)
 }

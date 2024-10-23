@@ -51,6 +51,7 @@ use futures::Future;
 use futures::StreamExt;
 use log::error;
 use log::warn;
+use parking_lot::RwLock;
 use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
@@ -66,6 +67,7 @@ pub struct ClusterDiscovery {
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
+    cached_cluster: RwLock<Option<Arc<Cluster>>>,
 }
 
 // avoid leak FlightClient to common-xxx
@@ -200,6 +202,7 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             flight_address: cfg.query.flight_api_address.clone(),
+            cached_cluster: Default::default(),
         }))
     }
 
@@ -261,9 +264,37 @@ impl ClusterDiscovery {
                     &self.flight_address,
                     cluster_nodes.len() as f64,
                 );
-                Ok(Cluster::create(res, self.local_id.clone()))
+                let res = Cluster::create(res, self.local_id.clone());
+                *self.cached_cluster.write() = Some(res.clone());
+                Ok(res)
             }
         }
+    }
+
+    fn cached_cluster(self: &Arc<Self>) -> Option<Arc<Cluster>> {
+        (*self.cached_cluster.read()).clone()
+    }
+
+    pub async fn find_node_by_id(
+        self: Arc<Self>,
+        id: &str,
+        config: &InnerConfig,
+    ) -> Result<Option<Arc<NodeInfo>>> {
+        let (mut cluster, mut is_cached) = if let Some(cluster) = self.cached_cluster() {
+            (cluster, true)
+        } else {
+            (self.discover(config).await?, false)
+        };
+        while is_cached {
+            for node in cluster.get_nodes() {
+                if node.id == id {
+                    return Ok(Some(node.clone()));
+                }
+            }
+            cluster = self.discover(config).await?;
+            is_cached = false;
+        }
+        Ok(None)
     }
 
     #[async_backtrace::framed]
@@ -336,6 +367,10 @@ impl ClusterDiscovery {
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
+        let mut http_address = format!(
+            "{}:{}",
+            cfg.query.http_handler_host, cfg.query.http_handler_port
+        );
         let mut discovery_address = match cfg.query.discovery_address.is_empty() {
             true => format!(
                 "{}:{}",
@@ -347,6 +382,7 @@ impl ClusterDiscovery {
         for (lookup_ip, typ) in [
             (&mut address, "flight-api-address"),
             (&mut discovery_address, "discovery-address"),
+            (&mut http_address, "http-address"),
         ] {
             if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
@@ -371,6 +407,7 @@ impl ClusterDiscovery {
             self.local_id.clone(),
             self.local_secret.clone(),
             cpus,
+            http_address,
             address,
             discovery_address,
             DATABEND_COMMIT_VERSION.to_string(),

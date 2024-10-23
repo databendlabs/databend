@@ -207,25 +207,20 @@ impl SortPipelineBuilder {
         let bytes_limit_per_proc = settings.get_sort_spilling_bytes_threshold_per_proc()?;
         if memory_ratio == 0 && bytes_limit_per_proc == 0 {
             // If these two settings are not set, do not enable sort spill.
-            // TODO(spill): enable sort spill by default like aggregate.
             return Ok((0, 0));
         }
-        let memory_ratio = (memory_ratio as f64 / 100_f64).min(1_f64);
-        let max_memory_usage = match settings.get_max_memory_usage()? {
-            0 => usize::MAX,
-            max_memory_usage => {
-                if memory_ratio == 0_f64 {
-                    usize::MAX
-                } else {
-                    (max_memory_usage as f64 * memory_ratio) as usize
-                }
-            }
+
+        let max_memory_usage = match (
+            settings.get_max_memory_usage()?,
+            (memory_ratio as f64 / 100_f64).min(1_f64),
+        ) {
+            (0, _) | (_, 0.0) => usize::MAX,
+            (memory, ratio) => (memory as f64 * ratio) as usize,
         };
-        let spill_threshold_per_core =
-            match settings.get_sort_spilling_bytes_threshold_per_proc()? {
-                0 => max_memory_usage / num_threads,
-                bytes => bytes,
-            };
+        let spill_threshold_per_core = match bytes_limit_per_proc {
+            0 => max_memory_usage / num_threads,
+            bytes => bytes,
+        };
 
         Ok((max_memory_usage, spill_threshold_per_core))
     }
@@ -283,12 +278,13 @@ impl SortPipelineBuilder {
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
             let config = SpillerConfig {
+                spiller_type: SpillerType::OrderBy,
                 location_prefix: query_spill_prefix(
                     self.ctx.get_tenant().tenant_name(),
                     &self.ctx.get_id(),
                 ),
                 disk_spill: None,
-                spiller_type: SpillerType::OrderBy,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
@@ -301,6 +297,7 @@ impl SortPipelineBuilder {
                     self.limit,
                     spiller,
                     output_order_col,
+                    enable_loser_tree,
                 )))
             })?;
         }

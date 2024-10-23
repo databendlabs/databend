@@ -30,6 +30,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
 
+use databend_common_base::base::Alignment;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_config::SpillConfig;
@@ -44,14 +45,15 @@ pub struct TempDirManager {
     global_limit: usize,
     // Reserved disk space in blocks
     reserved: u64,
+    alignment: Alignment,
 
     group: Mutex<Group>,
 }
 
 impl TempDirManager {
     pub fn init(config: &SpillConfig, tenant_id: &str) -> Result<()> {
-        let (root, reserved) = if config.path.is_empty() {
-            (None, 0)
+        let (root, reserved, alignment) = if config.path.is_empty() {
+            (None, 0, Alignment::MIN)
         } else {
             let path = PathBuf::from(&config.path)
                 .join(tenant_id)
@@ -66,13 +68,18 @@ impl TempDirManager {
             }
 
             if create_dir_all(&path).is_err() {
-                (None, 0)
+                (None, 0, Alignment::MIN)
             } else {
+                let path = path.canonicalize()?.into_boxed_path();
+
                 let stat =
                     statvfs(path.as_ref()).map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-                let reserved = (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64;
 
-                (Some(path), reserved)
+                (
+                    Some(path),
+                    (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
+                    Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
+                )
             }
         };
 
@@ -80,6 +87,7 @@ impl TempDirManager {
             root,
             global_limit: config.global_bytes_limit as usize,
             reserved,
+            alignment,
             group: Mutex::new(Group {
                 dirs: HashMap::new(),
             }),
@@ -175,10 +183,17 @@ impl TempDirManager {
         }
     }
 
+    pub fn block_alignment(&self) -> Alignment {
+        self.alignment
+    }
+
     fn insufficient_disk(&self, size: u64) -> Result<bool> {
         let stat = statvfs(self.root.as_ref().unwrap().as_ref())
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        Ok(stat.f_bavail < self.reserved + (size + stat.f_frsize - 1) / stat.f_frsize)
+
+        debug_assert_eq!(stat.f_frsize, self.alignment.as_usize() as u64);
+        let n = self.alignment.align_up_count(size as usize) as u64;
+        Ok(stat.f_bavail < self.reserved + n)
     }
 }
 
@@ -200,6 +215,8 @@ pub struct TempDir {
 }
 
 impl TempDir {
+    // It should be ensured that the actual size is less than or equal to
+    // the reserved size as much as possible, otherwise the limit may be exceeded.
     pub fn new_file_with_size(&self, size: usize) -> Result<Option<TempPath>> {
         let path = self.path.join(GlobalUniqName::unique()).into_boxed_path();
 
@@ -240,6 +257,14 @@ impl TempDir {
             }
         });
         Ok(rt?)
+    }
+
+    pub fn block_alignment(&self) -> Alignment {
+        self.manager.alignment
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 
@@ -306,6 +331,27 @@ impl TempPath {
     pub fn size(&self) -> usize {
         self.0.size
     }
+
+    pub fn set_size(&mut self, size: usize) -> std::result::Result<(), &'static str> {
+        use std::cmp::Ordering;
+
+        let Some(path) = Arc::get_mut(&mut self.0) else {
+            return Err("can't set size after share");
+        };
+        match size.cmp(&path.size) {
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                let mut dir = path.dir_info.size.lock().unwrap();
+                *dir += size - path.size;
+            }
+            Ordering::Less => {
+                let mut dir = path.dir_info.size.lock().unwrap();
+                *dir -= path.size - size;
+            }
+        }
+        path.size = size;
+        Ok(())
+    }
 }
 
 struct InnerPath {
@@ -348,11 +394,12 @@ mod tests {
 
         let mgr = TempDirManager::instance();
         let dir = mgr.get_disk_spill_dir(1 << 30, "some_query").unwrap();
-        let path = dir.new_file_with_size(100)?.unwrap();
+        let mut path = dir.new_file_with_size(110)?.unwrap();
 
         println!("{:?}", &path);
 
         fs::write(&path, vec![b'a'; 100])?;
+        path.set_size(100).unwrap();
 
         assert_eq!(1, dir.dir_info.count.load(Ordering::Relaxed));
         assert_eq!(100, *dir.dir_info.size.lock().unwrap());
@@ -395,10 +442,13 @@ mod tests {
 
         deleted.sort();
 
+        let pwd = std::env::current_dir()?.canonicalize()?;
         assert_eq!(
             vec![
-                PathBuf::from("test_data2/test_tenant/unknown_query1").into_boxed_path(),
-                PathBuf::from("test_data2/test_tenant/unknown_query2").into_boxed_path(),
+                pwd.join("test_data2/test_tenant/unknown_query1")
+                    .into_boxed_path(),
+                pwd.join("test_data2/test_tenant/unknown_query2")
+                    .into_boxed_path(),
             ],
             deleted
         );

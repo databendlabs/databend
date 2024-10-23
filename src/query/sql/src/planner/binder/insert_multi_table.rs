@@ -57,6 +57,8 @@ impl Binder {
                 span: None,
                 lateral: false,
                 alias: None,
+                pivot: None,
+                unpivot: None,
             };
 
             let (s_expr, bind_context) = self.bind_table_reference(bind_context, &table_ref)?;

@@ -455,6 +455,7 @@ dependencies = [
  "arrow-data",
  "arrow-schema",
  "flatbuffers",
+ "lz4_flex",
 ]
 
 [[package]]
@@ -1818,6 +1819,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dd6407f73a9b8b6162d8a2ef999fe6afd7cc15902ebf42c5cd296addf17e0ad"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "buf-list"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56bd1685d994a3e2a3ed802eb1ecee8cb500b0ad4df48cb4d5d1a2f04749c3a"
+dependencies = [
+ "bytes",
 ]
 
 [[package]]
@@ -3351,6 +3361,7 @@ dependencies = [
  "dyn-clone",
  "goldenfile",
  "log",
+ "maplit",
  "parking_lot 0.12.3",
  "parquet",
  "rand 0.8.5",
@@ -3442,7 +3453,7 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
- "opendal 0.50.1",
+ "opendal 0.50.1",",
  "parquet",
  "paste",
  "prost 0.12.6",
@@ -3461,6 +3472,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-flight",
+ "arrow-ipc",
  "arrow-ord",
  "arrow-schema",
  "arrow-select",
@@ -3590,7 +3602,6 @@ dependencies = [
  "libm",
  "match-template",
  "md-5",
- "multiversion",
  "naive-cityhash",
  "num-traits",
  "once_cell",
@@ -4033,7 +4044,7 @@ dependencies = [
  "flate2",
  "futures",
  "lz4",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parquet-format-safe",
  "rand 0.8.5",
  "seq-macro",
@@ -4235,7 +4246,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prqlc",
@@ -4270,7 +4281,7 @@ dependencies = [
  "flagset",
  "futures",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4290,10 +4301,12 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-functions",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "deltalake",
  "fastrace",
@@ -4381,7 +4394,7 @@ dependencies = [
  "itertools 0.10.5",
  "jsonb",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4390,6 +4403,7 @@ dependencies = [
  "siphasher",
  "sys-info",
  "tantivy",
+ "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
  "thrift",
@@ -4406,7 +4420,6 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-config",
@@ -4420,15 +4433,15 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-sql",
  "databend-common-storage",
- "databend-storages-common-cache",
- "databend-storages-common-index",
+ "databend-common-storages-parquet",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "fastrace",
  "faststr",
  "futures",
  "hive_metastore",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "recursive",
  "serde",
  "typetag",
@@ -4541,7 +4554,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4571,13 +4584,14 @@ dependencies = [
  "databend-common-settings",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-storages-common-cache",
  "databend-storages-common-pruner",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "ethnum",
  "futures",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4624,7 +4638,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parquet",
  "serde",
  "serde_json",
@@ -4665,12 +4679,11 @@ dependencies = [
  "enum-as-inner 0.6.0",
  "futures",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parquet",
  "serde",
  "serde_json",
  "typetag",
- "uuid",
 ]
 
 [[package]]
@@ -4730,7 +4743,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4984,7 +4997,7 @@ dependencies = [
  "jsonb",
  "jwt-simple 0.11.9",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "tantivy",
  "tempfile",
 ]
@@ -5155,9 +5168,11 @@ dependencies = [
  "backoff",
  "backon 0.4.4",
  "base64 0.21.7",
+ "buf-list",
  "bumpalo",
  "byte-unit",
  "byteorder",
+ "bytes",
  "chrono",
  "chrono-tz 0.8.6",
  "config",
@@ -5256,7 +5271,7 @@ dependencies = [
  "num",
  "num_cpus",
  "once_cell",
- "opendal 0.50.1",
+"opendal 0.50.1",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5409,6 +5424,7 @@ dependencies = [
  "hex",
  "log",
  "parking_lot 0.12.3",
+ "parquet",
  "rayon",
  "rustix 0.38.37",
  "siphasher",
@@ -5458,7 +5474,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opendal 0.50.1",
+"opendal 0.50.1",
 ]
 
 [[package]]
@@ -9244,7 +9260,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.3"
-source = "git+https://github.com/databendlabs/jsonb?rev=c7525d9#c7525d93ad7b1e800df982e49a6e0e6454bd308e"
+source = "git+https://github.com/databendlabs/jsonb?rev=672e423#672e4234758889b8fcb79ba43ac00af8c0aef120"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -10201,28 +10217,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "defc4c55412d89136f966bbb339008b474350e5e6e78d2714439c386b3137a03"
 
 [[package]]
-name = "multiversion"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4851161a11d3ad0bf9402d90ffc3967bf231768bfd7aeb61755ad06dbf1a142"
-dependencies = [
- "multiversion-macros",
- "target-features",
-]
-
-[[package]]
-name = "multiversion-macros"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79a74ddee9e0c27d2578323c13905793e91622148f138ba29738f9dddb835e90"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "target-features",
-]
-
-[[package]]
 name = "mur3"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10756,7 +10750,7 @@ dependencies = [
  "futures",
  "futures-util",
  "object_store",
- "opendal 0.49.0",
+ "opendal 0.49.2",
  "pin-project",
  "tokio",
 ]
@@ -10792,9 +10786,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.49.0"
+version = "0.49.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39d516adf7db912c38af382c3e92c27cd62fbbc240e630920555d784c2ab1494"
+checksum = "9b04d09b9822c2f75a1d2fc513a2c1279c70e91e7407936fffdf6a6976ec530a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14964,12 +14958,6 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
-
-[[package]]
-name = "target-features"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1bbb9f3c5c463a01705937a24fdabc5047929ac764b2d5b9cf681c1f5041ed5"
 
 [[package]]
 name = "target-lexicon"
