@@ -182,6 +182,7 @@ where
                         self.state = State::Merging;
                     }
                     self.input_data = Some(block);
+                    self.input.set_need_data();
                     Ok(Event::Async)
                 }
                 _ => unreachable!(),
