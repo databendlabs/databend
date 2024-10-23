@@ -167,8 +167,8 @@ impl TempFilesTable {
             let ctx = ctx.clone();
             let builder = ListerStreamSourceBuilder::with_lister_fut(lister);
             builder
-                .with_limit_opt(limit)
-                .with_chunk_size(MAX_BATCH_SIZE)
+                .limit_opt(limit)
+                .chunk_size(MAX_BATCH_SIZE)
                 .build(move |entries| {
                     counter += entries.len();
                     let block = Self::block_from_entries(&prefix, entries)?;
@@ -255,17 +255,17 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
         }
     }
 
-    pub fn with_limit(mut self, limit: usize) -> Self {
+    pub fn limit(mut self, limit: usize) -> Self {
         self.limit = Some(limit);
         self
     }
 
-    pub fn with_limit_opt(mut self, limit: Option<usize>) -> Self {
+    pub fn limit_opt(mut self, limit: Option<usize>) -> Self {
         self.limit = limit;
         self
     }
 
-    pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
+    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
         self.chunk_size = chunk_size;
         self
     }
