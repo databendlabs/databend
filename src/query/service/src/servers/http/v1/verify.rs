@@ -38,7 +38,7 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
     let roles = user.grants.roles();
     Ok(Json(VerifyResponse {
         tenant: tenant.tenant_name().to_string(),
-        user: user.identity().display().to_string(),
+        user: user.name.to_string(),
         roles,
     }))
 }
