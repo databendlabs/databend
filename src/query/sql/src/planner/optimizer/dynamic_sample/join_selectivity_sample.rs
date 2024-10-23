@@ -18,9 +18,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::dynamic_sample::dynamic_sample;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Join;
 use crate::MetadataRef;
 
@@ -28,7 +28,7 @@ pub async fn join_selectivity_sample(
     ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     s_expr: &SExpr,
-    sample_executor: Arc<dyn QuerySampleExecutor>,
+    sample_executor: Arc<dyn QueryExecutor>,
 ) -> Result<Arc<StatInfo>> {
     let left_stat_info = dynamic_sample(
         ctx.clone(),

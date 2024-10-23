@@ -1,3 +1,27 @@
+statement ok
+set max_block_size = 3
+
+query T
+SELECT CASE WHEN number > 3 THEN [{}, {}, {}] WHEN number > 5 THEN [{}] END FROM numbers(10) order by number;
+----
+NULL
+NULL
+NULL
+NULL
+[{},{},{}]
+[{},{},{}]
+[{},{},{}]
+[{},{},{}]
+[{},{},{}]
+[{},{},{}]
+
+query T
+select [{}] from numbers(3)
+----
+[{}]
+[{}]
+[{}]
+
 query B
 select if(number>1, true, false) from numbers(3) order by number
 ----
@@ -99,7 +123,7 @@ NULL
 1.0
 
 query T
-select if(number = 4, 3::VARIANT, number = 5, null, number = 6, '"a"'::VARIANT, null) from numbers(10)
+select if(number = 4, 3::VARIANT, number = 5, null, number = 6, '"a"'::VARIANT, null) from numbers(10) order by number
 ----
 NULL
 NULL

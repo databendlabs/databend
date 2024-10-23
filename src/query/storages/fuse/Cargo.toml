@@ -14,7 +14,7 @@ test = true
 ahash = "0.8.3"
 arrow = { workspace = true }
 arrow-array = { workspace = true }
-arrow-ipc = { workspace = true }
+arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-trait = { workspace = true }
@@ -65,6 +65,7 @@ sha2 = { workspace = true }
 siphasher = "0.3.10"
 sys-info = "0.9"
 tantivy = { workspace = true }
+tantivy-common = { workspace = true }
 tantivy-fst = "0.5"
 tantivy-jieba = { workspace = true }
 thrift = "0.17.0"

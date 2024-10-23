@@ -53,6 +53,10 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
                 )
                 .await;
 
+            if let Err(cause) = &removed_files {
+                log::warn!("Vacuum temporary files has error: {:?}", cause);
+            }
+
             if vacuum_limit != 0 && matches!(removed_files, Ok(res) if res == vacuum_limit as usize)
             {
                 // Have not been removed files

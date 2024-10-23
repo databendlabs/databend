@@ -375,12 +375,13 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(-30610224000000001 AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(-30610224000000001)` in expr `to_timestamp(- 30610224000000001)`
-
+ast            : CAST(-30610224000000001 AS TIMESTAMP)
+raw expr       : CAST(minus(30610224000000001) AS Timestamp)
+checked expr   : to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : CAST(-315360000000000 AS TIMESTAMP)
@@ -455,12 +456,13 @@ output domain  : {315360000000000..=315360000000000}
 output         : '1979-12-30 00:00:00.000000'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(253402300800000000 AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(253402300800000000)` in expr `to_timestamp(to_int64(253402300800000000))`
-
+ast            : CAST(253402300800000000 AS TIMESTAMP)
+raw expr       : CAST(253402300800000000 AS Timestamp)
+checked expr   : to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
+optimized expr : -30610224000000000
+output type    : Timestamp
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : CAST(a AS TIMESTAMP)
@@ -587,12 +589,13 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(-354286 AS DATE)
-  | ^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(-354286)` in expr `to_date(- 354286)`
-
+ast            : CAST(-354286 AS DATE)
+raw expr       : CAST(minus(354286) AS Date)
+checked expr   : to_date<Int64>(minus<UInt32>(354286_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : CAST(-354285 AS DATE)
@@ -649,12 +652,13 @@ output domain  : {2932896..=2932896}
 output         : '9999-12-31'
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(2932897 AS DATE)
-  | ^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(2932897)` in expr `to_date(to_int64(2932897))`
-
+ast            : CAST(2932897 AS DATE)
+raw expr       : CAST(2932897 AS Date)
+checked expr   : to_date<Int64>(to_int64<UInt32>(2932897_u32))
+optimized expr : -354285
+output type    : Date
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : CAST(a AS DATE)
@@ -1342,20 +1346,46 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(a AS TIMESTAMP)
-  | ^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `to_timestamp(9223372036854775807)` in expr `to_timestamp(a)`
+ast            : CAST(a AS TIMESTAMP)
+raw expr       : CAST(a::Int64 AS Timestamp)
+checked expr   : to_timestamp<Int64>(a)
+optimized expr : -30610224000000000
+evaluation:
++--------+---------------------------------------------+-------------------------------------------+
+|        | a                                           | Output                                    |
++--------+---------------------------------------------+-------------------------------------------+
+| Type   | Int64                                       | Timestamp                                 |
+| Domain | {9223372036854775807..=9223372036854775807} | {-30610224000000000..=-30610224000000000} |
+| Row 0  | 9223372036854775807                         | '1000-01-01 00:00:00.000000'              |
++--------+---------------------------------------------+-------------------------------------------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| a      | Int64([9223372036854775807]) |
+| Output | [-30610224000000000]         |
++--------+------------------------------+
 
 
-
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(a AS DATE)
-  | ^^^^^^^^^^^^^^^ date is out of range while evaluating function `to_date(9223372036854775807)` in expr `to_date(a)`
-
+ast            : CAST(a AS DATE)
+raw expr       : CAST(a::Int64 AS Date)
+checked expr   : to_date<Int64>(a)
+optimized expr : -354285
+evaluation:
++--------+---------------------------------------------+---------------------+
+|        | a                                           | Output              |
++--------+---------------------------------------------+---------------------+
+| Type   | Int64                                       | Date                |
+| Domain | {9223372036854775807..=9223372036854775807} | {-354285..=-354285} |
+| Row 0  | 9223372036854775807                         | '1000-01-01'        |
++--------+---------------------------------------------+---------------------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| a      | Int64([9223372036854775807]) |
+| Output | [-354285]                    |
++--------+------------------------------+
 
 
 error: 
@@ -2540,10 +2570,10 @@ evaluation (internal):
 ast            : TRY_CAST(-30610224000000001 AS TIMESTAMP)
 raw expr       : TRY_CAST(minus(30610224000000001) AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
-optimized expr : NULL
+optimized expr : -30610224000000000
 output type    : Timestamp NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : TRY_CAST(-315360000000000 AS TIMESTAMP)
@@ -2621,10 +2651,10 @@ output         : '1979-12-30 00:00:00.000000'
 ast            : TRY_CAST(253402300800000000 AS TIMESTAMP)
 raw expr       : TRY_CAST(253402300800000000 AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
-optimized expr : NULL
+optimized expr : -30610224000000000
 output type    : Timestamp NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {-30610224000000000..=-30610224000000000}
+output         : '1000-01-01 00:00:00.000000'
 
 
 ast            : TRY_CAST(a AS TIMESTAMP)
@@ -2754,10 +2784,10 @@ evaluation (internal):
 ast            : TRY_CAST(-354286 AS DATE)
 raw expr       : TRY_CAST(minus(354286) AS Date)
 checked expr   : try_to_date<Int64>(minus<UInt32>(354286_u32))
-optimized expr : NULL
+optimized expr : -354285
 output type    : Date NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : TRY_CAST(-354285 AS DATE)
@@ -2817,10 +2847,10 @@ output         : '9999-12-31'
 ast            : TRY_CAST(2932897 AS DATE)
 raw expr       : TRY_CAST(2932897 AS Date)
 checked expr   : try_to_date<Int64>(to_int64<UInt32>(2932897_u32))
-optimized expr : NULL
+optimized expr : -354285
 output type    : Date NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {-354285..=-354285}
+output         : '1000-01-01'
 
 
 ast            : TRY_CAST(a AS DATE)
@@ -3536,43 +3566,43 @@ evaluation (internal):
 ast            : TRY_CAST(a AS TIMESTAMP)
 raw expr       : TRY_CAST(a::Int64 AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(a)
-optimized expr : NULL
+optimized expr : -30610224000000000
 evaluation:
-+--------+---------------------------------------------+----------------+
-|        | a                                           | Output         |
-+--------+---------------------------------------------+----------------+
-| Type   | Int64                                       | Timestamp NULL |
-| Domain | {9223372036854775807..=9223372036854775807} | {NULL}         |
-| Row 0  | 9223372036854775807                         | NULL           |
-+--------+---------------------------------------------+----------------+
++--------+---------------------------------------------+-------------------------------------------+
+|        | a                                           | Output                                    |
++--------+---------------------------------------------+-------------------------------------------+
+| Type   | Int64                                       | Timestamp NULL                            |
+| Domain | {9223372036854775807..=9223372036854775807} | {-30610224000000000..=-30610224000000000} |
+| Row 0  | 9223372036854775807                         | '1000-01-01 00:00:00.000000'              |
++--------+---------------------------------------------+-------------------------------------------+
 evaluation (internal):
-+--------+--------------------------------------------------------+
-| Column | Data                                                   |
-+--------+--------------------------------------------------------+
-| a      | Int64([9223372036854775807])                           |
-| Output | NullableColumn { column: [0], validity: [0b_______0] } |
-+--------+--------------------------------------------------------+
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | Int64([9223372036854775807])                                            |
+| Output | NullableColumn { column: [-30610224000000000], validity: [0b_______1] } |
++--------+-------------------------------------------------------------------------+
 
 
 ast            : TRY_CAST(a AS DATE)
 raw expr       : TRY_CAST(a::Int64 AS Date)
 checked expr   : try_to_date<Int64>(a)
-optimized expr : NULL
+optimized expr : -354285
 evaluation:
-+--------+---------------------------------------------+-----------+
-|        | a                                           | Output    |
-+--------+---------------------------------------------+-----------+
-| Type   | Int64                                       | Date NULL |
-| Domain | {9223372036854775807..=9223372036854775807} | {NULL}    |
-| Row 0  | 9223372036854775807                         | NULL      |
-+--------+---------------------------------------------+-----------+
++--------+---------------------------------------------+---------------------+
+|        | a                                           | Output              |
++--------+---------------------------------------------+---------------------+
+| Type   | Int64                                       | Date NULL           |
+| Domain | {9223372036854775807..=9223372036854775807} | {-354285..=-354285} |
+| Row 0  | 9223372036854775807                         | '1000-01-01'        |
++--------+---------------------------------------------+---------------------+
 evaluation (internal):
-+--------+--------------------------------------------------------+
-| Column | Data                                                   |
-+--------+--------------------------------------------------------+
-| a      | Int64([9223372036854775807])                           |
-| Output | NullableColumn { column: [0], validity: [0b_______0] } |
-+--------+--------------------------------------------------------+
++--------+--------------------------------------------------------------+
+| Column | Data                                                         |
++--------+--------------------------------------------------------------+
+| a      | Int64([9223372036854775807])                                 |
+| Output | NullableColumn { column: [-354285], validity: [0b_______1] } |
++--------+--------------------------------------------------------------+
 
 
 ast            : TRY_TO_TIMESTAMP('2022')

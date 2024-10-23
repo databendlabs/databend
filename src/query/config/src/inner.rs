@@ -723,7 +723,7 @@ pub struct SpillConfig {
 impl Default for SpillConfig {
     fn default() -> Self {
         Self {
-            path: OsString::from("./.databend/temp/_query_spill"),
+            path: OsString::from(""),
             reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,
         }

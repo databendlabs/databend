@@ -1372,3 +1372,67 @@ SELECT id, json_array_overlap(v1, v2) from t4
 
 statement ok
 DROP TABLE IF EXISTS t4
+
+
+statement ok
+CREATE OR REPLACE TABLE t5(id Int, v1 Variant)
+
+statement ok
+INSERT INTO t5(id, v1) VALUES
+    (1, '{"k1":"v1","k2":"v2"}'),
+    (2, '{"a":[1,2,3],"c":{"c1":"v1","c2":"v2"},"m":true}'),
+    (3, '{"a":1,"h":2,"m":3,"n":4}')
+
+query T
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'c', 3)
+----
+{"a":1,"b":2,"c":3,"d":4}
+
+query T
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'x', 10)
+----
+{"a":1,"b":2,"d":4,"x":10}
+
+query T
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'A', 10)
+----
+{"A":10,"a":1,"b":2,"d":4}
+
+statement error 1006
+SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'a', 10)
+
+statement error 1006
+SELECT json_object_insert('1234'::variant, 'a', 10)
+
+statement error 1006
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', false)
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', true)
+----
+{"city":"San Jose","state":"CA"}
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 94402::DOUBLE, false)
+----
+{"city":"San Mateo","state":"CA","zip_code":94402.0}
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', null)
+----
+{"city":"San Mateo","state":"CA"}
+
+query T
+SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 'null'::variant)
+----
+{"city":"San Mateo","state":"CA","zip_code":null}
+
+query IT
+SELECT id, json_object_insert(v1, 'b', '100'::variant) from t5
+----
+1 {"b":100,"k1":"v1","k2":"v2"}
+2 {"a":[1,2,3],"b":100,"c":{"c1":"v1","c2":"v2"},"m":true}
+3 {"a":1,"b":100,"h":2,"m":3,"n":4}
+
+statement ok
+DROP TABLE IF EXISTS t5

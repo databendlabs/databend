@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 
 use arrow_array::Array;
@@ -36,6 +37,7 @@ use chrono::Duration;
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
 use tempfile::NamedTempFile;
+use tokio::fs::create_dir_all;
 
 // Test cases from apache/arrow-datafusion
 
@@ -336,10 +338,13 @@ fn create_data_batch(scenario: Scenario) -> Vec<RecordBatch> {
 
 /// Create a test parquet file with various data types
 pub async fn make_test_file_rg(scenario: Scenario) -> (NamedTempFile, SchemaRef) {
+    let dir = std::env::temp_dir().join("parquets_rg");
+    create_dir_all(&dir).await.unwrap();
     let mut output_file = tempfile::Builder::new()
         .prefix("parquet_pruning")
         .suffix(".parquet")
-        .tempfile()
+        .permissions(std::fs::Permissions::from_mode(0o666))
+        .tempfile_in(dir)
         .expect("tempfile creation");
 
     let props = WriterProperties::builder()
@@ -362,10 +367,13 @@ pub async fn make_test_file_rg(scenario: Scenario) -> (NamedTempFile, SchemaRef)
 }
 
 pub async fn make_test_file_page(scenario: Scenario) -> (NamedTempFile, SchemaRef) {
+    let dir = std::env::temp_dir().join("parquets_page");
+    create_dir_all(&dir).await.unwrap();
     let mut output_file = tempfile::Builder::new()
         .prefix("parquet_page_pruning")
         .suffix(".parquet")
-        .tempfile()
+        .permissions(std::fs::Permissions::from_mode(0o666))
+        .tempfile_in(dir)
         .expect("tempfile creation");
 
     // set row count to 5, should get same result as rowGroup

@@ -288,6 +288,15 @@ static AGG_INDEX_WRITE_BYTES: LazyLock<Counter> =
 static AGG_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_aggregate_index_write_milliseconds"));
 
+// Virtual column metrics.
+static BLOCK_VIRTUAL_COLUMN_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_virtual_column_write_nums"));
+static BLOCK_VIRTUAL_COLUMN_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_virtual_column_write_bytes"));
+static BLOCK_VIRTUAL_COLUMN_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_virtual_column_write_milliseconds")
+});
+
 /// Common metrics.
 pub fn metrics_inc_omit_filter_rowgroups(c: u64) {
     OMIT_FILTER_ROWGROUPS.inc_by(c);
@@ -789,4 +798,17 @@ pub fn metrics_inc_agg_index_write_bytes(c: u64) {
 
 pub fn metrics_inc_agg_index_write_milliseconds(c: u64) {
     AGG_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+/// Virtual column metrics.
+pub fn metrics_inc_block_virtual_column_write_nums(c: u64) {
+    BLOCK_VIRTUAL_COLUMN_WRITE_NUMS.inc_by(c);
+}
+
+pub fn metrics_inc_block_virtual_column_write_bytes(c: u64) {
+    BLOCK_VIRTUAL_COLUMN_WRITE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_block_virtual_column_write_milliseconds(c: u64) {
+    BLOCK_VIRTUAL_COLUMN_WRITE_MILLISECONDS.observe(c as f64);
 }

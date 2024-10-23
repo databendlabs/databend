@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::flight::default_ipc_fields;
-use databend_common_arrow::arrow::io::flight::deserialize_batch;
-use databend_common_arrow::arrow::io::flight::deserialize_dictionary;
-use databend_common_arrow::arrow::io::ipc::read::Dictionaries;
-use databend_common_arrow::arrow::io::ipc::IpcSchema;
+use arrow_buffer::Buffer;
+use arrow_flight::utils::flight_data_to_arrow_batch;
+use arrow_ipc::root_as_message;
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::BinaryRead;
@@ -44,7 +44,6 @@ use crate::servers::flight::v1::packets::FragmentData;
 
 pub struct TransformExchangeDeserializer {
     schema: DataSchemaRef,
-    ipc_schema: IpcSchema,
     arrow_schema: Arc<ArrowSchema>,
 }
 
@@ -55,17 +54,11 @@ impl TransformExchangeDeserializer {
         schema: &DataSchemaRef,
     ) -> ProcessorPtr {
         let arrow_schema = ArrowSchema::from(schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let ipc_schema = IpcSchema {
-            fields: ipc_fields,
-            is_little_endian: true,
-        };
 
         ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
             TransformExchangeDeserializer {
-                ipc_schema,
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
             },
@@ -84,34 +77,43 @@ impl TransformExchangeDeserializer {
             return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
-        let mut dictionaries = Dictionaries::new();
-
-        for dict_packet in dict {
-            if let DataPacket::Dictionary(ff) = dict_packet {
-                deserialize_dictionary(
-                    &ff,
-                    &self.arrow_schema.fields,
-                    &self.ipc_schema,
-                    &mut dictionaries,
-                )?;
-            }
-        }
-
-        let batch = deserialize_batch(
-            &fragment_data.data,
-            &self.arrow_schema.fields,
-            &self.ipc_schema,
-            &dictionaries,
-        )?;
-
-        let data_block = DataBlock::from_arrow_chunk(&batch, &self.schema)?;
-
+        let data_block =
+            deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?;
         if data_block.num_columns() == 0 {
             return Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta));
         }
-
         data_block.add_meta(meta)
     }
+}
+
+pub fn deserialize_block(
+    dict: Vec<DataPacket>,
+    fragment_data: FragmentData,
+    schema: &DataSchema,
+    arrow_schema: Arc<ArrowSchema>,
+) -> Result<DataBlock> {
+    let mut dictionaries_by_id = HashMap::new();
+    for dict_packet in dict {
+        if let DataPacket::Dictionary(data) = dict_packet {
+            let message =
+                root_as_message(&data.data_header[..]).expect("Error parsing first message");
+            let buffer = Buffer::from_bytes(data.data_body.into());
+            arrow_ipc::reader::read_dictionary(
+                &buffer,
+                message
+                    .header_as_dictionary_batch()
+                    .expect("Error parsing dictionary"),
+                &arrow_schema,
+                &mut dictionaries_by_id,
+                &message.version(),
+            )
+            .expect("Error reading dictionary");
+        }
+    }
+
+    let batch = flight_data_to_arrow_batch(&fragment_data.data, arrow_schema, &dictionaries_by_id)?;
+    let (data_block, _) = DataBlock::from_record_batch(schema, &batch)?;
+    Ok(data_block)
 }
 
 impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializer {
