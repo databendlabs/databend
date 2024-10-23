@@ -71,7 +71,7 @@ pub async fn do_vacuum_temporary_files(
             match meta.mode() {
                 EntryMode::DIR => {
                     let life_mills =
-                        match operator.is_exist(&format!("{}finished", de.path())).await? {
+                        match operator.exists(&format!("{}finished", de.path())).await? {
                             true => 0,
                             false => expire_time,
                         };
