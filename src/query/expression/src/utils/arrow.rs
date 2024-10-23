@@ -19,7 +19,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_ipc::reader::FileReader;
+use arrow_ipc::reader::FileReaderBuilder;
 use arrow_ipc::writer::FileWriter;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::CompressionType;
@@ -28,7 +28,6 @@ use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::io::ipc::read::read_file_metadata;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -100,17 +99,16 @@ pub fn deserialize_column(bytes: &[u8]) -> Result<Column> {
 }
 
 pub fn read_column<R: Read + Seek>(r: &mut R) -> Result<Column> {
-    let metadata = read_file_metadata(r)?;
-    let f = metadata.schema.fields[0].clone();
-    let data_field = DataField::try_from(&f)?;
+    let mut reader = FileReaderBuilder::new().build(r)?;
+    let schema = reader.schema();
+    let f = DataField::try_from(schema.field(0))?;
 
-    let mut reader = FileReader::try_new(r, None)?;
     let col = reader
         .next()
         .ok_or_else(|| ErrorCode::Internal("expected one arrow array"))??
         .remove_column(0);
 
-    Column::from_arrow_rs(col, data_field.data_type())
+    Column::from_arrow_rs(col, f.data_type())
 }
 
 /// Convert a column to a arrow array.

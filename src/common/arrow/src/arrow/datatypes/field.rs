@@ -71,11 +71,29 @@ impl Field {
     }
 }
 
+// For databend's extension key
+pub const EXTENSION_KEY: &str = "Extension";
+
 #[cfg(feature = "arrow")]
 impl From<Field> for arrow_schema::Field {
     fn from(value: Field) -> Self {
-        Self::new(value.name, value.data_type.into(), value.is_nullable)
-            .with_metadata(value.metadata.into_iter().collect())
+        (&value).into()
+    }
+}
+
+#[cfg(feature = "arrow")]
+impl From<&Field> for arrow_schema::Field {
+    fn from(value: &Field) -> Self {
+        let mut metadata = value.metadata.clone();
+        let ty = if let DataType::Extension(extension_type, ty, _) = &value.data_type {
+            metadata.insert(EXTENSION_KEY.to_string(), extension_type.clone());
+            ty.as_ref().clone()
+        } else {
+            value.data_type.clone()
+        };
+
+        Self::new(value.name.clone(), ty.into(), value.is_nullable)
+            .with_metadata(metadata.into_iter().collect())
     }
 }
 
@@ -89,12 +107,15 @@ impl From<arrow_schema::Field> for Field {
 #[cfg(feature = "arrow")]
 impl From<&arrow_schema::Field> for Field {
     fn from(value: &arrow_schema::Field) -> Self {
-        let data_type = value.data_type().clone().into();
-        let metadata = value
+        let mut data_type = value.data_type().clone().into();
+        let mut metadata: Metadata = value
             .metadata()
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        if let Some(v) = metadata.remove(EXTENSION_KEY) {
+            data_type = DataType::Extension(v, Box::new(data_type), None);
+        }
         Self::new(value.name(), data_type, value.is_nullable()).with_metadata(metadata)
     }
 }
