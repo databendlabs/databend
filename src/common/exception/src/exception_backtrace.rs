@@ -110,6 +110,14 @@ pub struct StackTrace {
     pub(crate) display: Arc<Mutex<Option<String>>>,
 }
 
+impl Eq for StackTrace {}
+
+impl PartialEq for StackTrace {
+    fn eq(&self, other: &Self) -> bool {
+        self.frames == other.frames
+    }
+}
+
 impl StackTrace {
     pub fn capture() -> StackTrace {
         let mut frames = Vec::with_capacity(50);

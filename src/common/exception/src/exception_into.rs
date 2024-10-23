@@ -16,14 +16,11 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use databend_common_ast::Span;
 use geozero::error::GeozeroError;
 
 use crate::exception_backtrace::capture;
-use crate::exception_backtrace::StackFrame;
 use crate::ErrorCode;
 use crate::ErrorFrame;
 use crate::StackTrace;
@@ -281,7 +278,7 @@ pub struct SerializedError {
     pub name: String,
     pub message: String,
     pub span: Span,
-    pub backtrace: Vec<StackFrame>,
+    pub backtrace: StackTrace,
     pub stacks: Vec<SerializedErrorFrame>,
 }
 
@@ -298,7 +295,7 @@ impl From<&ErrorCode> for SerializedError {
             name: e.name(),
             message: e.message(),
             span: e.span(),
-            backtrace: e.backtrace.frames.clone(),
+            backtrace: e.backtrace.clone(),
             stacks: e.stacks().iter().map(|f| f.into()).collect(),
         }
     }
@@ -306,18 +303,13 @@ impl From<&ErrorCode> for SerializedError {
 
 impl From<&SerializedError> for ErrorCode {
     fn from(se: &SerializedError) -> Self {
-        let stack_trace = StackTrace {
-            frames: se.backtrace.clone(),
-            display: Arc::new(Mutex::new(None)),
-        };
-
         ErrorCode::create(
             se.code,
             se.name.clone(),
             se.message.clone(),
             String::new(),
             None,
-            stack_trace,
+            se.backtrace.clone(),
         )
         .set_span(se.span)
         .set_stacks(se.stacks.iter().map(|f| f.into()).collect())
@@ -384,22 +376,15 @@ impl From<tonic::Status> for ErrorCode {
                 }
                 match serde_json::from_slice::<SerializedError>(details) {
                     Err(error) => ErrorCode::from(error),
-                    Ok(serialized_error) => {
-                        let stack_trace = StackTrace {
-                            frames: serialized_error.backtrace,
-                            display: Arc::new(Mutex::new(None)),
-                        };
-
-                        ErrorCode::create(
-                            serialized_error.code,
-                            serialized_error.name,
-                            serialized_error.message,
-                            String::new(),
-                            None,
-                            stack_trace,
-                        )
-                        .set_span(serialized_error.span)
-                    }
+                    Ok(serialized_error) => ErrorCode::create(
+                        serialized_error.code,
+                        serialized_error.name,
+                        serialized_error.message,
+                        String::new(),
+                        None,
+                        serialized_error.backtrace,
+                    )
+                    .set_span(serialized_error.span),
                 }
             }
             _ => ErrorCode::Unimplemented(status.to_string()),
@@ -409,14 +394,16 @@ impl From<tonic::Status> for ErrorCode {
 
 impl From<ErrorCode> for tonic::Status {
     fn from(err: ErrorCode) -> Self {
-        let error_json = serde_json::to_vec::<SerializedError>(&SerializedError {
+        let serialized_error = SerializedError {
             code: err.code(),
             name: err.name(),
             message: err.message(),
             span: err.span(),
             stacks: err.stacks().iter().map(|f| f.into()).collect(),
-            backtrace: err.backtrace.frames.clone(),
-        });
+            backtrace: err.backtrace,
+        };
+
+        let error_json = serde_json::to_vec::<SerializedError>(&serialized_error);
 
         match error_json {
             Ok(serialized_error_json) => {
@@ -424,7 +411,7 @@ impl From<ErrorCode> for tonic::Status {
                 // To distinguish from that, we use Code::Unknown here
                 tonic::Status::with_details(
                     tonic::Code::Unknown,
-                    err.message(),
+                    serialized_error.message.clone(),
                     serialized_error_json.into(),
                 )
             }
