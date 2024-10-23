@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::future::Future;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -32,6 +33,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
+use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -43,17 +45,17 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::StreamSource;
 use databend_common_storage::DataOperator;
+use futures::stream;
 use futures::stream::Chunks;
 use futures::stream::Take;
 use futures::StreamExt;
+use opendal::operator_futures::FutureLister;
 use opendal::Entry;
 use opendal::Lister;
 use opendal::Metakey;
-use opendal::Operator;
 
 use crate::table::SystemTablePart;
 
@@ -63,13 +65,13 @@ pub struct TempFilesTable {
 
 #[async_trait::async_trait]
 impl Table for TempFilesTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn is_local(&self) -> bool {
         // Follow the practice of `SyncOneBlockSystemTable::is_local`
         false
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -105,9 +107,7 @@ impl Table for TempFilesTable {
         }
 
         pipeline.add_source(
-            |output| {
-                TempFilesTableAsyncSource::create(ctx.clone(), output, plan.push_downs.clone())
-            },
+            |output| TempFilesTable::create_source(ctx.clone(), output, plan.push_downs.clone()),
             1,
         )?;
 
@@ -145,40 +145,39 @@ impl TempFilesTable {
 
         Arc::new(Self { table_info })
     }
-}
 
-struct TempFilesTableAsyncSource {
-    finished: bool,
-    context: Arc<dyn TableContext>,
-    operator: Operator,
-    location_prefix: String,
-    entries_processed: usize,
-    limit: usize,
-    lister: Option<Chunks<Take<Lister>>>,
-}
-
-impl TempFilesTableAsyncSource {
-    pub fn create(
+    pub fn create_source(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         let tenant = ctx.get_tenant();
         let location_prefix = format!("{}/", query_spill_prefix(tenant.tenant_name(), ""));
-        let limit = push_downs
-            .as_ref()
-            .and_then(|x| x.limit)
-            .unwrap_or(usize::MAX);
+        let limit = push_downs.as_ref().and_then(|x| x.limit);
 
-        AsyncSourcer::create(ctx.clone(), output, TempFilesTableAsyncSource {
-            finished: false,
-            context: ctx,
-            operator: DataOperator::instance().operator(),
-            location_prefix,
-            entries_processed: 0,
-            limit,
-            lister: None,
-        })
+        let operator = DataOperator::instance().operator();
+        let lister = operator
+            .lister_with(&location_prefix)
+            .recursive(true)
+            .metakey(Metakey::LastModified | Metakey::ContentLength);
+
+        let stream = {
+            let prefix = location_prefix.clone();
+            let mut counter = 0;
+            let ctx = ctx.clone();
+            let builder = ListerStreamSourceBuilder::with_lister_fut(lister);
+            builder
+                .with_limit_opt(limit)
+                .with_chunk_size(MAX_BATCH_SIZE)
+                .build(move |entries| {
+                    counter += entries.len();
+                    let block = Self::block_from_entries(&prefix, entries)?;
+                    ctx.set_status_info(format!("{} entries processed", counter).as_str());
+                    Ok(block)
+                })?
+        };
+
+        StreamSource::create(ctx, Some(stream), output)
     }
 
     fn build_block(
@@ -210,21 +209,15 @@ impl TempFilesTableAsyncSource {
         )
     }
 
-    fn block_from_entries(&self, entries: Vec<opendal::Result<Entry>>) -> Result<DataBlock> {
+    fn block_from_entries(location_prefix: &str, entries: Vec<Entry>) -> Result<DataBlock> {
         let num_items = entries.len();
         let mut temp_files_name: Vec<String> = Vec::with_capacity(num_items);
         let mut temp_files_content_length = Vec::with_capacity(num_items);
         let mut temp_files_last_modified = Vec::with_capacity(num_items);
         for entry in entries {
-            let entry = entry?;
             let metadata = entry.metadata();
             if metadata.is_file() {
-                temp_files_name.push(
-                    entry
-                        .path()
-                        .trim_start_matches(&self.location_prefix)
-                        .to_string(),
-                );
+                temp_files_name.push(entry.path().trim_start_matches(location_prefix).to_string());
 
                 temp_files_last_modified
                     .push(metadata.last_modified().map(|x| x.timestamp_micros()));
@@ -232,7 +225,7 @@ impl TempFilesTableAsyncSource {
             }
         }
 
-        let data_block = Self::build_block(
+        let data_block = TempFilesTable::build_block(
             temp_files_name,
             temp_files_content_length,
             temp_files_last_modified,
@@ -243,38 +236,91 @@ impl TempFilesTableAsyncSource {
 
 const MAX_BATCH_SIZE: usize = 1000;
 
-#[async_trait::async_trait]
-impl AsyncSource for TempFilesTableAsyncSource {
-    const NAME: &'static str = "system.temp_files";
+pub struct ListerStreamSourceBuilder<T>
+where T: Future<Output = opendal::Result<Lister>> + Send + 'static
+{
+    lister_fut: FutureLister<T>,
+    limit: Option<usize>,
+    chunk_size: usize,
+}
 
-    #[async_backtrace::framed]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.finished || self.limit == 0 {
-            return Ok(None);
-        }
-
-        let lister = {
-            if self.lister.is_none() {
-                let lister = self
-                    .operator
-                    .lister_with(&self.location_prefix)
-                    .recursive(true)
-                    .metakey(Metakey::LastModified | Metakey::ContentLength)
-                    .await?;
-                self.lister = Some(lister.take(self.limit).chunks(MAX_BATCH_SIZE));
-            }
-            self.lister.as_mut().unwrap()
-        };
-
-        if let Some(entries) = lister.next().await {
-            let data_block = self.block_from_entries(entries)?;
-            self.entries_processed += data_block.num_rows();
-            self.context
-                .set_status_info(&format!("{} entries processed", self.entries_processed));
-            Ok(Some(data_block))
-        } else {
-            self.finished = true;
-            Ok(None)
+impl<T> ListerStreamSourceBuilder<T>
+where T: Future<Output = opendal::Result<Lister>> + Send + 'static
+{
+    pub fn with_lister_fut(lister_fut: FutureLister<T>) -> Self {
+        Self {
+            lister_fut,
+            limit: None,
+            chunk_size: MAX_BATCH_SIZE,
         }
     }
+
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    pub fn with_limit_opt(mut self, limit: Option<usize>) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
+        self.chunk_size = chunk_size;
+        self
+    }
+
+    pub fn build(
+        self,
+        block_builder: (impl FnMut(Vec<Entry>) -> Result<DataBlock> + Sync + Send + 'static),
+    ) -> Result<SendableDataBlockStream> {
+        stream_source_from_entry_lister_with_chunk_size(
+            self.lister_fut,
+            self.limit,
+            self.chunk_size,
+            block_builder,
+        )
+    }
+}
+
+fn stream_source_from_entry_lister_with_chunk_size<T>(
+    lister_fut: FutureLister<T>,
+    limit: Option<usize>,
+    chunk_size: usize,
+    block_builder: (impl FnMut(Vec<Entry>) -> Result<DataBlock> + Sync + Send + 'static),
+) -> Result<SendableDataBlockStream>
+where
+    T: Future<Output = opendal::Result<Lister>> + Send + 'static,
+{
+    enum ListerState<U: Future<Output = opendal::Result<Lister>> + Send + 'static> {
+        Uninitialized(FutureLister<U>),
+        Initialized(Chunks<Take<Lister>>),
+    }
+
+    let state = ListerState::<T>::Uninitialized(lister_fut);
+
+    let stream = stream::try_unfold(
+        (state, block_builder),
+        move |(mut state, mut builder)| async move {
+            let mut lister = {
+                match state {
+                    ListerState::Uninitialized(fut) => {
+                        let lister = fut.await?;
+                        lister.take(limit.unwrap_or(usize::MAX)).chunks(chunk_size)
+                    }
+                    ListerState::Initialized(l) => l,
+                }
+            };
+            if let Some(entries) = lister.next().await {
+                let entries = entries.into_iter().collect::<opendal::Result<Vec<_>>>()?;
+                let data_block = builder(entries)?;
+                state = ListerState::Initialized(lister);
+                Ok(Some((data_block, (state, builder))))
+            } else {
+                Ok(None)
+            }
+        },
+    );
+
+    Ok(stream.boxed())
 }
