@@ -57,7 +57,11 @@ fn enable_rust_backtrace() -> bool {
 pub fn capture() -> StackTrace {
     let instance = std::time::Instant::now();
     let stack_trace = StackTrace::capture();
-    log::info!("capture stack trace elapsed:{:?}, {:?}", instance.elapsed(), std::thread::current().name());
+    log::info!(
+        "capture stack trace elapsed:{:?}, {:?}",
+        instance.elapsed(),
+        std::thread::current().name()
+    );
     stack_trace
 }
 
@@ -228,7 +232,11 @@ impl Debug for StackTrace {
         }
 
         writeln!(f, "{}", guard.as_ref().unwrap())?;
-        log::info!("format stack trace elapsed: {:?}, {:?}", instance.elapsed(), std::thread::current().name());
+        log::info!(
+            "format stack trace elapsed: {:?}, {:?}",
+            instance.elapsed(),
+            std::thread::current().name()
+        );
         Ok(())
     }
 }
