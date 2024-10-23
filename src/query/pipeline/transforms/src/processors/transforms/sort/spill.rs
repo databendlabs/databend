@@ -14,21 +14,20 @@
 
 use databend_common_expression::BlockMetaInfo;
 
+use super::super::SortSpillParams;
+
 /// Mark a partially sorted [`DataBlock`] as a block needs to be spilled.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct SortSpillMetaWithParams {
-    pub batch_rows: usize,
-    pub num_merge: usize,
-}
+pub struct SortSpillMetaWithParams(pub SortSpillParams);
 
 #[typetag::serde(name = "sort_spill")]
 impl BlockMetaInfo for SortSpillMetaWithParams {
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals SortSpillMeta")
+        unimplemented!("Unimplemented equals SortSpillMetaWithParams")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone SortSpillMeta")
+        unimplemented!("Unimplemented clone SortSpillMetaWithParams")
     }
 }
 
