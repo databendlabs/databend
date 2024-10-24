@@ -277,6 +277,8 @@ impl Planner {
         if enable_planner_cache {
             self.set_cache(planner_cache_key.clone().unwrap(), optimized_plan.clone());
         }
+
+        info!("logical plan built, time used: {:?}", start.elapsed());
         Ok(optimized_plan)
     }
 
