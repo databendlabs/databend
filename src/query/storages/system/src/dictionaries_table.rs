@@ -70,8 +70,8 @@ impl AsyncSystemTable for DictionariesTable {
 
         let mut sources = vec![];
         let mut comments = vec![];
-        let mut created_ons = vec![];
-        let mut updated_ons = vec![];
+        let mut created_on_values = vec![];
+        let mut updated_on_values = vec![];
 
         let catalog = ctx.get_default_catalog().unwrap();
         let databases = catalog.list_databases(&tenant).await?;
@@ -91,12 +91,12 @@ impl AsyncSystemTable for DictionariesTable {
                 comments.push(comment);
 
                 let created_on = dict_meta.created_on.timestamp_micros();
-                created_ons.push(created_on);
+                created_on_values.push(created_on);
                 let updated_on = match dict_meta.updated_on {
                     Some(updated_on) => updated_on.timestamp_micros(),
                     None => created_on,
                 };
-                updated_ons.push(updated_on);
+                updated_on_values.push(updated_on);
 
                 let schema = dict_meta.schema;
                 let fields = &schema.fields;
@@ -150,8 +150,8 @@ impl AsyncSystemTable for DictionariesTable {
             attribute_types_builder.build(),
             StringType::from_data(sources),
             StringType::from_data(comments),
-            TimestampType::from_data(created_ons),
-            TimestampType::from_data(updated_ons),
+            TimestampType::from_data(created_on_values),
+            TimestampType::from_data(updated_on_values),
         ]));
     }
 }

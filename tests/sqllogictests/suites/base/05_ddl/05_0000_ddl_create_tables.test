@@ -19,6 +19,12 @@ CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null
 statement error 2302
 CREATE TABLE t(c1 int) ENGINE = Null
 
+statement error 1074
+CREATE TABLE IF NOT EXISTS members (name VARCHAR, age INT) STORAGE_FORMAT = 'abc'
+
+statement error 1074
+CREATE TABLE members (name VARCHAR, age INT) STORAGE_FORMAT = 'abc'
+
 statement ok
 create table t2(a int,b int) Engine = Fuse
 
