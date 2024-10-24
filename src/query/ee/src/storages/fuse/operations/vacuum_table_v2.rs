@@ -34,6 +34,7 @@ use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use futures_util::TryStreamExt;
 use log::info;
 use uuid::Version;
@@ -286,10 +287,12 @@ async fn list_until_prefix(
     until: &str,
     need_one_more: bool,
 ) -> Result<Vec<String>> {
+    info!("list until prefix: {}", until);
     let mut lister = fuse_table.get_operator().lister(path).await?;
     let mut paths = vec![];
     while let Some(entry) = lister.try_next().await? {
         if entry.path() >= until {
+            info!("entry path: {} >= until: {}", entry.path(), until);
             if need_one_more {
                 paths.push(entry.path().to_string());
             }
@@ -311,7 +314,10 @@ async fn list_until_timestamp(
 
     // extract the most significant 48 bits, which is 12 characters
     let timestamp_component = &uuid_str[..12];
-    let until = format!("{}g{}", path, timestamp_component);
+    let until = format!(
+        "{}{}{}",
+        path, VACUUM2_OBJECT_KEY_PREFIX, timestamp_component
+    );
     list_until_prefix(fuse_table, path, &until, need_one_more).await
 }
 
