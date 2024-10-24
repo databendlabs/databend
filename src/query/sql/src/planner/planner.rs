@@ -152,7 +152,7 @@ impl Planner {
         };
 
         loop {
-            let res = {
+            let res = try {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = if is_insert_stmt {
                     (parse_raw_insert_stmt(&tokens, sql_dialect)?, None)
@@ -170,32 +170,32 @@ impl Planner {
 
                 self.replace_stmt(&mut stmt)?;
 
-                Ok(PlanExtras {
+                PlanExtras {
                     format,
                     statement: stmt,
-                })
+                }
             };
 
-            let mut maybe_partial_insert = false;
+            let mut insert_values_stmt = false;
             if is_insert_or_replace_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
                 if let Ok(PlanExtras {
                     statement:
                         Statement::Insert(InsertStmt {
-                            source: InsertSource::Select { .. },
+                            source: InsertSource::RawValues { .. },
                             ..
                         }),
                     ..
                 }) = &res
                 {
-                    maybe_partial_insert = true;
+                    insert_values_stmt = true;
                 }
             }
 
-            if maybe_partial_insert || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
+            if insert_values_stmt || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
                 // Remove the EOI.
                 tokens.pop();
                 // Tokenize more and try again.
-                if tokens.len() < PROBE_INSERT_MAX_TOKENS {
+                if !insert_values_stmt && tokens.len() < PROBE_INSERT_MAX_TOKENS {
                     let iter = (&mut tokenizer)
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
@@ -204,6 +204,7 @@ impl Planner {
                         .chain(std::iter::once(Token::new_eoi(&final_sql)));
                     tokens.extend(iter);
                 } else {
+                    // Take the whole tokenizer
                     let iter = (&mut tokenizer)
                         .take_while(|token| token.is_ok())
                         .map(|token| token.unwrap())
