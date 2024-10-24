@@ -1877,7 +1877,6 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
         let box (mut arg, arg_type) = self.resolve(args[0])?;
-        log::info!("{} -- arg_type: {}", func_name, arg_type);
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
@@ -1895,26 +1894,17 @@ impl<'a> TypeChecker<'a> {
         let inner_tys = if func_name == "array_reduce" {
             let max_ty = self.transform_to_max_type(&inner_ty)?;
             vec![max_ty.clone(), max_ty.clone()]
-        } else if func_name == "map_transform_keys" || func_name == "map_transform_values" {
+        } else if func_name == "map_filter"
+            || func_name == "map_transform_keys"
+            || func_name == "map_transform_values"
+        {
             match &inner_ty {
                 DataType::Tuple(t) => t.clone(),
-                _ => {
-                    return Err(ErrorCode::Internal(
-                        "map_transform_keys/map_transform_values inner_ty should be DataType::Tuple",
-                    ));
-                }
+                _ => unreachable!(),
             }
         } else {
             vec![inner_ty.clone()]
         };
-        log::info!(
-            "{} -- inner_ty: {} -- inner_tys[0]: {} -- {}",
-            func_name,
-            inner_ty,
-            inner_tys[0],
-            inner_tys.len()
-        );
-        let tmp_ty = inner_tys[0].clone();
 
         let columns = params
             .iter()
@@ -1928,7 +1918,6 @@ impl<'a> TypeChecker<'a> {
             &columns,
             &lambda.expr,
         )?;
-        log::info!("{} -- lambda_type: {}", func_name, lambda_type);
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -1961,6 +1950,15 @@ impl<'a> TypeChecker<'a> {
                 });
             }
             max_ty.wrap_nullable()
+        } else if func_name == "map_filter" {
+            if lambda_type.remove_nullable() == DataType::Boolean {
+                arg_type.clone()
+            } else {
+                return Err(ErrorCode::SemanticError(
+                    "invalid lambda function for `map_filter`, the result data type of lambda function must be boolean".to_string()
+                )
+                .set_span(span));
+            }
         } else if func_name == "map_transform_keys" {
             DataType::Map(Box::new(DataType::Tuple(vec![
                 lambda_type.clone(),
@@ -1976,7 +1974,6 @@ impl<'a> TypeChecker<'a> {
         } else {
             DataType::Array(Box::new(lambda_type.clone()))
         };
-        log::info!("{} -- return_type: {}", func_name, return_type);
 
         let (lambda_func, data_type) = match arg_type.remove_nullable() {
             // Null and Empty array can convert to ConstantExpr
@@ -2066,9 +2063,8 @@ impl<'a> TypeChecker<'a> {
                 )
             }
         };
-        log::info!("{} -- data_type: {}", func_name, data_type);
 
-        Ok(Box::new((lambda_func, tmp_ty)))
+        Ok(Box::new((lambda_func, data_type)))
     }
 
     fn check_lambda_param_count(
@@ -2109,11 +2105,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ok(())
             }
-            None => Err(ErrorCode::Internal(format!(
-                "not found lambda function '{}' in HashMap 'func_to_param_count'",
-                func_name
-            ))
-            .set_span(span)),
+            None => unreachable!(),
         }
     }
 
