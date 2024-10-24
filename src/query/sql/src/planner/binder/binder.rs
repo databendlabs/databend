@@ -305,6 +305,7 @@ impl<'a> Binder {
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
             Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
