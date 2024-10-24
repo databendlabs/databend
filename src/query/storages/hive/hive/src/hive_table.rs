@@ -614,6 +614,10 @@ async fn do_list_files_from_dir(
         if path[file_offset..].starts_with('.') || path[file_offset..].starts_with('_') {
             continue;
         }
+        // Ignore the location itself
+        if path.trim_end_matches('/') == location.trim_end_matches('/') {
+            continue;
+        }
 
         match meta.mode() {
             EntryMode::FILE => {
@@ -622,9 +626,6 @@ async fn do_list_files_from_dir(
                 all_files.push(HivePartInfo::create(location, vec![], length));
             }
             EntryMode::DIR => {
-                if path == location {
-                    continue;
-                }
                 all_dirs.push(path.to_string());
             }
             _ => {
