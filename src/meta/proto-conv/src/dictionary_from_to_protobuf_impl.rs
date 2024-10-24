@@ -71,24 +71,27 @@ impl FromToProto for mt::DictionaryMeta {
         Ok(p)
     }
 }
+impl FromToProto for mt::DictionaryIdToName {
+    type PB = pb::DictionaryIdToName;
 
-impl FromToProto for mt::DictionaryIdList {
-    type PB = pb::DictionaryIdList;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+
+    fn from_pb(p: pb::DictionaryIdToName) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let v = Self { id_list: p.ids };
+        let v = Self {
+            dict_id: p.dict_id
+        };
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::DictionaryIdList {
+    fn to_pb(&self) -> Result<pb::DictionaryIdToName, Incompatible> {
+        let p = pb::DictionaryIdToName {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            ids: self.id_list.clone(),
+            dict_id: self.dict_id,
         };
         Ok(p)
     }

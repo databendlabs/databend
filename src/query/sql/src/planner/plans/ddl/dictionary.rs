@@ -59,7 +59,7 @@ pub struct RenameDictionaryPlan {
     pub tenant: Tenant,
     pub if_exists: bool,
     pub catalog: String,
-    pub database: u64,
+    pub database: String,
     pub dictionary: String,
     pub new_database: String,
     pub new_dictionary: String,

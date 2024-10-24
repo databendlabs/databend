@@ -407,7 +407,7 @@ pub fn assert_table_exist(
 pub fn assert_dictionary_exist(
     seq: u64,
     name_ident: &DictionaryNameIdent,
-    ctx: impl Display,
+    _ctx: impl Display,
 ) -> Result<(), AppError> {
     if seq > 0 {
         return Ok(());

@@ -214,54 +214,6 @@ pub struct RenameDictionaryReply {
     pub dictionary_id: u64,
 }
 
-/// Save table name id list history.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct DictionaryIdList {
-    pub id_list: Vec<u64>,
-}
-
-impl DictionaryIdList {
-    pub fn new() -> DictionaryIdList {
-        DictionaryIdList::default()
-    }
-
-    pub fn new_with_ids(ids: impl IntoIterator<Item = u64>) -> DictionaryIdList {
-        DictionaryIdList {
-            id_list: ids.into_iter().collect(),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.id_list.len()
-    }
-
-    pub fn id_list(&self) -> &Vec<u64> {
-        &self.id_list
-    }
-
-    pub fn append(&mut self, dict_id: u64) {
-        self.id_list.push(dict_id)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.id_list.is_empty()
-    }
-
-    pub fn pop(&mut self) -> Option<u64> {
-        self.id_list.pop()
-    }
-
-    pub fn last(&self) -> Option<&u64> {
-        self.id_list.last()
-    }
-}
-
-impl Display for DictionaryIdList {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DB.Dictionary id list: {:?}", self.id_list)
-    }
-}
-
 /// The meta-service key for storing dictionary id history ever used by a dictionary name
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct DictionaryIdHistoryIdent {
@@ -290,7 +242,6 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::DictionaryIdHistoryIdent;
-    use super::DictionaryIdList;
     use super::DictionaryIdToName;
     use crate::schema::dictionary_name_ident::DictionaryNameIdent;
     use crate::schema::DatabaseId;
@@ -299,7 +250,7 @@ mod kvapi_key_impl {
     impl kvapi::Key for DictionaryIdHistoryIdent {
         const PREFIX: &'static str = "__fd_dictionary_id_list";
 
-        type ValueType = DictionaryIdList;
+        type ValueType = DictionaryIdToName;
 
         fn parent(&self) -> Option<String> {
             Some(DatabaseId::new(self.database_id).to_string_key())
@@ -322,10 +273,11 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for DictionaryIdList {
+    impl kvapi::Value for DictionaryIdToName {
         type KeyType = DictionaryIdHistoryIdent;
+    
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            self.id_list.iter().map(|id| id.to_string())
+            vec![self.dict_id.to_string()]
         }
     }
 

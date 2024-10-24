@@ -18,6 +18,7 @@ use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
+use databend_common_ast::ast::RenameDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
 use databend_common_ast::ast::ShowDictionariesStmt;
 use databend_common_ast::ast::ShowLimit;
@@ -35,6 +36,7 @@ use log::debug;
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
+use crate::plans::RenameDictionaryPlan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDictionaryPlan;
 use crate::BindContext;
@@ -434,5 +436,45 @@ impl Binder {
             RewriteKind::ShowDictionaries(database.clone()),
         )
         .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_rename_dictionary(
+        &mut self,
+        stmt: &RenameDictionaryStmt,
+    ) -> Result<Plan> {
+        let RenameDictionaryStmt {
+            if_exists,
+            catalog,
+            database,
+            dictionary,
+            new_catalog,
+            new_database,
+            new_dictionary,
+        } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+        let (catalog, db_name, dictionary) =
+            self.normalize_object_identifier_triple(catalog, database, dictionary);
+
+        let (new_catalog, new_database, new_dictionary) =
+            self.normalize_object_identifier_triple(new_catalog, new_database, new_dictionary);
+
+        if new_catalog != catalog || new_database != db_name {
+            return Err(ErrorCode::BadArguments(
+                "Rename dictionary not allow modify catalog or database",
+            )
+            .set_span(database.as_ref().and_then(|ident| ident.span)));
+        }
+
+        Ok(Plan::RenameDictionary(Box::new(RenameDictionaryPlan {
+            tenant,
+            if_exists: *if_exists,
+            catalog,
+            database: db_name,
+            dictionary,
+            new_database,
+            new_dictionary,
+        })))
     }
 }
