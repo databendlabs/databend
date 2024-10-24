@@ -426,7 +426,6 @@ tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "75
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
 
-
 # This patch makes sure opendal_compat also used the same version of opendal instead of git one.
 [patch.'https://github.com/apache/opendal']
 opendal = { version = "0.50.1" }
