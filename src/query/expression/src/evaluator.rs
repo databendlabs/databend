@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Not;
 
@@ -35,6 +36,7 @@ use crate::types::array::ArrayColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
+use crate::types::string::StringColumnBuilder;
 use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
@@ -507,7 +509,7 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Variant, DataType::Array(inner_dest_ty)) => {
                 let empty_vec = vec![];
-                let temp_array: jsonb::Value;
+                let mut temp_array: jsonb::Value;
                 match value {
                     Value::Scalar(Scalar::Variant(x)) => {
                         let array = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
@@ -520,22 +522,16 @@ impl<'a> Evaluator<'a> {
                         } else {
                             &empty_vec
                         };
-
-                        let column = VariantType::create_column_from_variants(array.as_slice());
-
-                        let validity = validity.map(|validity| {
-                            Bitmap::new_constant(
-                                validity.unset_bits() != validity.len(),
-                                column.len(),
-                            )
-                        });
-
+                        let validity = None;
+                        let column = Column::Variant(VariantType::create_column_from_variants(
+                            array.as_slice(),
+                        ));
                         let new_array = self
                             .run_cast(
                                 span,
                                 &DataType::Variant,
                                 inner_dest_ty,
-                                Value::Column(Column::Variant(column)),
+                                Value::Column(column),
                                 validity,
                                 options,
                             )?
@@ -547,7 +543,6 @@ impl<'a> Evaluator<'a> {
                         let mut array_builder =
                             ArrayType::<VariantType>::create_builder(col.len(), &[]);
 
-                        let mut temp_array: jsonb::Value;
                         for (idx, x) in col.iter().enumerate() {
                             let array = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true)
                             {
@@ -591,6 +586,113 @@ impl<'a> Evaluator<'a> {
                             .unwrap();
                         Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
                             values: new_col,
+                            offsets: col.offsets,
+                        }))))
+                    }
+                    other => unreachable!("source: {}", other),
+                }
+            }
+            (DataType::Variant, DataType::Map(box DataType::Tuple(fields_dest_ty)))
+                if fields_dest_ty.len() == 2 && fields_dest_ty[0] == DataType::String =>
+            {
+                let empty_obj = BTreeMap::new();
+                let mut temp_obj: jsonb::Value;
+                match value {
+                    Value::Scalar(Scalar::Variant(x)) => {
+                        let obj = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
+                            temp_obj = jsonb::from_slice(&x).map_err(|e| {
+                                ErrorCode::BadArguments(format!(
+                                    "Expect to be valid json, got err: {e:?}"
+                                ))
+                            })?;
+                            temp_obj.as_object().unwrap_or(&empty_obj)
+                        } else {
+                            &empty_obj
+                        };
+                        let validity = None;
+
+                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len(), 0);
+                        for k in obj.keys() {
+                            key_builder.put_str(k.as_str());
+                            key_builder.commit_row();
+                        }
+                        let key_column = Column::String(key_builder.build());
+
+                        let values: Vec<_> = obj.values().cloned().collect();
+                        let value_column = Column::Variant(
+                            VariantType::create_column_from_variants(values.as_slice()),
+                        );
+
+                        let new_value_column = self
+                            .run_cast(
+                                span,
+                                &DataType::Variant,
+                                &fields_dest_ty[1],
+                                Value::Column(value_column),
+                                validity,
+                                options,
+                            )?
+                            .into_column()
+                            .unwrap();
+                        Ok(Value::Scalar(Scalar::Map(Column::Tuple(vec![
+                            key_column,
+                            new_value_column,
+                        ]))))
+                    }
+                    Value::Column(Column::Variant(col)) => {
+                        let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+                        let mut value_builder =
+                            ArrayType::<VariantType>::create_builder(col.len(), &[]);
+
+                        for (idx, x) in col.iter().enumerate() {
+                            let obj = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true) {
+                                temp_obj = jsonb::from_slice(x).map_err(|e| {
+                                    ErrorCode::BadArguments(format!(
+                                        "Expect to be valid json, got err: {e:?}"
+                                    ))
+                                })?;
+                                temp_obj.as_object().unwrap_or(&empty_obj)
+                            } else {
+                                &empty_obj
+                            };
+
+                            for (k, v) in obj.iter() {
+                                key_builder.put_str(k.as_str());
+                                key_builder.commit_row();
+                                v.write_to_vec(&mut value_builder.builder.data);
+                                value_builder.builder.commit_row();
+                            }
+                            value_builder.commit_row();
+                        }
+                        let key_column = Column::String(key_builder.build());
+
+                        let value_column = value_builder.build();
+                        let validity = validity.map(|validity| {
+                            let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                            for (index, offsets) in value_column.offsets.windows(2).enumerate() {
+                                inner_validity.extend_constant(
+                                    (offsets[1] - offsets[0]) as usize,
+                                    validity.get_bit(index),
+                                );
+                            }
+                            inner_validity.into()
+                        });
+
+                        let new_value_column = self
+                            .run_cast(
+                                span,
+                                &DataType::Variant,
+                                &fields_dest_ty[1],
+                                Value::Column(Column::Variant(value_column.values)),
+                                validity,
+                                options,
+                            )?
+                            .into_column()
+                            .unwrap();
+
+                        let kv_column = Column::Tuple(vec![key_column, new_value_column]);
+                        Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
+                            values: kv_column,
                             offsets: col.offsets,
                         }))))
                     }

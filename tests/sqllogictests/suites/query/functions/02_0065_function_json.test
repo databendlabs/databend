@@ -1434,5 +1434,55 @@ SELECT id, json_object_insert(v1, 'b', '100'::variant) from t5
 2 {"a":[1,2,3],"b":100,"c":{"c1":"v1","c2":"v2"},"m":true}
 3 {"a":1,"b":100,"h":2,"m":3,"n":4}
 
+query T
+SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
+----
+{"b":2,"d":4}
+
+query T
+SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
+----
+{"a":1}
+
+query T
+SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
+----
+{"a":1,"b":2,"d":4}
+
+statement error 1006
+SELECT json_object_delete('1234'::variant, 'a')
+
+query IT
+SELECT id, json_object_delete(v1, 'a', 'k1') from t5
+----
+1 {"k2":"v2"}
+2 {"c":{"c1":"v1","c2":"v2"},"m":true}
+3 {"h":2,"m":3,"n":4}
+
+query T
+SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
+----
+{"a":1}
+
+query T
+SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
+----
+{"b":2,"d":4}
+
+query T
+SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
+----
+{}
+
+statement error 1006
+SELECT json_object_pick('1234'::variant, 'a')
+
+query IT
+SELECT id, json_object_pick(v1, 'a', 'k1') from t5
+----
+1 {"k1":"v1"}
+2 {"a":[1,2,3]}
+3 {"a":1}
+
 statement ok
 DROP TABLE IF EXISTS t5
