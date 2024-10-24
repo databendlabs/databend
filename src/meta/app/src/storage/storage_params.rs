@@ -18,6 +18,8 @@ use std::fmt::Formatter;
 use std::time::Duration;
 
 use databend_common_base::http_client::GLOBAL_HTTP_CLIENT;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use serde::Deserialize;
@@ -135,21 +137,28 @@ impl StorageParams {
                     format!("https://{}", endpoint)
                 };
 
-                // The response itself doesn't important.
-                let _ = GLOBAL_HTTP_CLIENT
-                    .inner()
-                    .get(&endpoint)
-                    .timeout(Duration::from_secs(10))
-                    .send()
+                let endpoint_clone = endpoint.clone();
+                // The first call to http client must be inside global io runtime.
+                GlobalIORuntime::instance()
+                    .spawn(async move {
+                        GLOBAL_HTTP_CLIENT
+                            .inner()
+                            .get(&endpoint_clone)
+                            .timeout(Duration::from_secs(10))
+                            .send()
+                            .await
+                            // The response itself doesn't important, just drop it.
+                            .map(|_| ())
+                            .map_err(|err| {
+                                ErrorCode::InvalidConfig(format!(
+                                    "s3 endpoint_url {endpoint_clone} is invalid or incomplete: {err:?}",
+                                ))
+                            })
+                    })
                     .await
-                    .map_err(|err| {
-                        ErrorCode::InvalidConfig(format!(
-                            "s3 endpoint_url {} is invalid or incomplete: {err:?}",
-                            s3.endpoint_url
-                        ))
-                    })?;
+                    .unwrap()?;
 
-                s3.region = opendal::services::S3::detect_region(&s3.endpoint_url, &s3.bucket)
+                s3.region = opendal::services::S3::detect_region(&endpoint, &s3.bucket)
                     .await
                     .unwrap_or_default();
                 StorageParams::S3(s3)
