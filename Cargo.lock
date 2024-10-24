@@ -10828,7 +10828,8 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.50.1"
-source = "git+https://github.com/apache/opendal?rev=0ef4fea#0ef4feab9355000bbf8791ab1b8da6e41053a5ac"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213222b6c86949314d8f51acb26d8241e7c8dd0879b016a79471d49f21ee592f"
 dependencies = [
  "anyhow",
  "async-backtrace",
