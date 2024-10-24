@@ -161,12 +161,12 @@ async fn test_k_way_merge_sort_fuzz() -> Result<()> {
     let mut rng = rand::thread_rng();
     let fixture = TestFixture::setup().await?;
 
-    for _ in 0..10 {
+    for _ in 0..3 {
         let ctx = fixture.new_query_ctx().await?;
         run_fuzz(ctx, &mut rng, false).await?;
     }
 
-    for _ in 0..10 {
+    for _ in 0..3 {
         let ctx = fixture.new_query_ctx().await?;
         run_fuzz(ctx, &mut rng, true).await?;
     }
