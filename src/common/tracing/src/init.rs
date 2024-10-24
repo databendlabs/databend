@@ -92,9 +92,15 @@ pub fn init_logging(
             }
         ),
     };
+    let log_file_name = if cfg.file.include_node_id {
+        &trace_name
+    } else {
+        log_name
+    };
 
     // initialize tracing reporter
     if cfg.tracing.on {
+        let name = trace_name.clone();
         let endpoint = cfg.tracing.otlp.endpoint.clone();
         let mut kvs = cfg
             .tracing
@@ -103,10 +109,7 @@ pub fn init_logging(
             .iter()
             .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string()))
             .collect::<Vec<_>>();
-        kvs.push(opentelemetry::KeyValue::new(
-            "service.name",
-            trace_name.clone(),
-        ));
+        kvs.push(opentelemetry::KeyValue::new("service.name", name.clone()));
         for (k, v) in &labels {
             kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
         }
@@ -130,7 +133,7 @@ pub fn init_logging(
                 .build_span_exporter()
                 .expect("initialize oltp http exporter"),
         };
-        let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
+        let (reporter_rt, otlp_reporter) = Thread::spawn(move || {
             // init runtime with 2 threads
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -142,7 +145,7 @@ pub fn init_logging(
                     exporter,
                     opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
-                    opentelemetry::InstrumentationLibrary::builder(trace_name).build(),
+                    opentelemetry::InstrumentationLibrary::builder(name).build(),
                 )
             });
             (rt, reporter)
@@ -175,7 +178,7 @@ pub fn init_logging(
     // file logger
     if cfg.file.on {
         let (normal_log_file, flush_guard) =
-            new_rolling_file_appender(&cfg.file.dir, log_name, cfg.file.limit);
+            new_rolling_file_appender(&cfg.file.dir, log_file_name, cfg.file.limit);
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
@@ -286,7 +289,7 @@ pub fn init_logging(
     if cfg.query.on {
         if !cfg.query.dir.is_empty() {
             let (query_log_file, flush_guard) =
-                new_rolling_file_appender(&cfg.query.dir, log_name, cfg.file.limit);
+                new_rolling_file_appender(&cfg.query.dir, log_file_name, cfg.file.limit);
             _drop_guards.push(flush_guard);
 
             let dispatch = Dispatch::new()
@@ -328,7 +331,7 @@ pub fn init_logging(
     if cfg.profile.on {
         if !cfg.profile.dir.is_empty() {
             let (profile_log_file, flush_guard) =
-                new_rolling_file_appender(&cfg.profile.dir, log_name, cfg.file.limit);
+                new_rolling_file_appender(&cfg.profile.dir, log_file_name, cfg.file.limit);
             _drop_guards.push(flush_guard);
 
             let dispatch = Dispatch::new()
@@ -369,7 +372,7 @@ pub fn init_logging(
     // structured logger
     if cfg.structlog.on && !cfg.structlog.dir.is_empty() {
         let (structlog_log_file, flush_guard) =
-            new_rolling_file_appender(&cfg.structlog.dir, log_name, cfg.file.limit);
+            new_rolling_file_appender(&cfg.structlog.dir, log_file_name, cfg.file.limit);
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
