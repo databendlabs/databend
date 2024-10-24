@@ -2312,9 +2312,11 @@ Functions overloads:
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
 0 json_object FACTORY
+0 json_object_delete FACTORY
 0 json_object_insert FACTORY
 0 json_object_keep_null FACTORY
 0 json_object_keys(Variant NULL) :: Variant NULL
+0 json_object_pick FACTORY
 0 json_path_exists FACTORY
 0 json_path_match FACTORY
 0 json_path_query FACTORY

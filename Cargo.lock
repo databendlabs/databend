@@ -9233,7 +9233,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.3"
-source = "git+https://github.com/databendlabs/jsonb?rev=672e423#672e4234758889b8fcb79ba43ac00af8c0aef120"
+source = "git+https://github.com/b41sh/jsonb?rev=1f6688aa289a09c2d7c46ac25fad070b795ef5bd#1f6688aa289a09c2d7c46ac25fad070b795ef5bd"
 dependencies = [
  "byteorder",
  "fast-float",
