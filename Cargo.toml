@@ -417,6 +417,7 @@ color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "672e423" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+opendal = { git = "https://github.com/apache/opendal", rev = "0ef4fea" }
 opendal_compat = { git = "https://github.com/apache/opendal", rev = "0ef4fea" }
 orc-rust = { git = "https://github.com/datafuse-extras/datafusion-orc", rev = "03372b97" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
