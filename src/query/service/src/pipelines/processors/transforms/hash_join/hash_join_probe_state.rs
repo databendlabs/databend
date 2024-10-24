@@ -508,7 +508,6 @@ impl HashJoinProbeState {
                     &generation_state.build_columns,
                     &generation_state.build_columns_data_type,
                     &generation_state.build_num_rows,
-                    &mut probe_state.generation_state.string_items_buf,
                 )?;
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
@@ -597,7 +596,6 @@ impl HashJoinProbeState {
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
                 &generation_state.build_num_rows,
-                &mut probe_state.generation_state.string_items_buf,
             )?);
             build_indexes_idx = 0;
         }
@@ -659,7 +657,6 @@ impl HashJoinProbeState {
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
                 &generation_state.build_num_rows,
-                &mut probe_state.generation_state.string_items_buf,
             )?);
             build_indexes_idx = 0;
         }
@@ -747,7 +744,6 @@ impl HashJoinProbeState {
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
                 &generation_state.build_num_rows,
-                &mut probe_state.generation_state.string_items_buf,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),

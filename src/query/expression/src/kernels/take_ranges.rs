@@ -14,6 +14,7 @@
 
 use core::ops::Range;
 
+use binary::BinaryColumnBuilder;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -202,31 +203,14 @@ impl<'a> TakeRangeVisitor<'a> {
     }
 
     fn take_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        let mut offsets: Vec<u64> = Vec::with_capacity(self.num_rows + 1);
-        let mut data_size = 0;
-
-        let value_data = values.data().as_slice();
-        let values_offset = values.offsets().as_slice();
-        // Build [`offset`] and calculate `data_size` required by [`data`].
-        offsets.push(0);
+        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
         for range in self.ranges {
-            let mut offset_start = values_offset[range.start as usize];
-            for offset_end in values_offset[range.start as usize + 1..range.end as usize + 1].iter()
-            {
-                data_size += offset_end - offset_start;
-                offset_start = *offset_end;
-                offsets.push(data_size);
+            for index in range.start as usize..range.end as usize {
+                let value = unsafe { values.index_unchecked(index) };
+                builder.put_slice(value);
+                builder.commit_row();
             }
         }
-
-        // Build [`data`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        for range in self.ranges {
-            let col_data = &value_data[values_offset[range.start as usize] as usize
-                ..values_offset[range.end as usize] as usize];
-            data.extend_from_slice(col_data);
-        }
-
-        BinaryColumn::new(data.into(), offsets.into())
+        builder.build()
     }
 }

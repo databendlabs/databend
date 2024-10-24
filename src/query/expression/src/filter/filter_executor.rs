@@ -125,7 +125,7 @@ impl FilterExecutor {
             if self.keep_order && self.has_or {
                 self.true_selection[0..result_count].sort();
             }
-            data_block.take(&self.true_selection[0..result_count], &mut None)
+            data_block.take(&self.true_selection[0..result_count])
         }
     }
 
