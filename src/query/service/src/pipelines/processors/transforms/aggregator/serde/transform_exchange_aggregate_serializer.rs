@@ -15,11 +15,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::flight::default_ipc_fields;
-use databend_common_arrow::arrow::io::flight::WriteOptions;
-use databend_common_arrow::arrow::io::ipc::write::Compression;
-use databend_common_arrow::arrow::io::ipc::IpcField;
+use arrow_ipc::writer::IpcWriteOptions;
+use arrow_ipc::CompressionType;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -71,8 +68,7 @@ pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
     ctx: Arc<QueryContext>,
     method: Method,
     local_pos: usize,
-    options: WriteOptions,
-    ipc_fields: Vec<IpcField>,
+    options: IpcWriteOptions,
 
     operator: Operator,
     location_prefix: String,
@@ -90,16 +86,14 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
         location_prefix: String,
         params: Arc<AggregatorParams>,
         compression: Option<FlightCompression>,
-        schema: DataSchemaRef,
+        _schema: DataSchemaRef,
         local_pos: usize,
     ) -> Box<dyn Processor> {
-        let arrow_schema = ArrowSchema::from(schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let compression = match compression {
             None => None,
             Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(Compression::LZ4),
-                FlightCompression::Zstd => Some(Compression::ZSTD),
+                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
+                FlightCompression::Zstd => Some(CompressionType::ZSTD),
             },
         };
 
@@ -112,8 +106,9 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
             operator,
             location_prefix,
             local_pos,
-            ipc_fields,
-            options: WriteOptions { compression },
+            options: IpcWriteOptions::default()
+                .try_with_compression(compression)
+                .unwrap(),
         })
     }
 }
@@ -201,7 +196,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        let c = serialize_block(bucket, c, &self.options)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -231,7 +226,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        let c = serialize_block(bucket, c, &self.options)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -358,9 +353,8 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
                 partition_count,
             )))?;
 
-            let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options);
+            return serialize_block(-1, data_block, &write_options);
         }
 
         Ok(DataBlock::empty())
@@ -481,9 +475,8 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
                 vec![],
             )))?;
 
-            let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options);
+            return serialize_block(-1, data_block, &write_options);
         }
 
         Ok(DataBlock::empty())

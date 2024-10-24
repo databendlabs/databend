@@ -176,20 +176,12 @@ impl Column {
                 (DataType::Null, ArrowDataType::Null) => Column::Null {
                     len: arrow_col.len(),
                 },
-                (DataType::EmptyArray, ArrowDataType::Extension(name, _, _))
-                    if name == ARROW_EXT_TYPE_EMPTY_ARRAY =>
-                {
-                    Column::EmptyArray {
-                        len: arrow_col.len(),
-                    }
-                }
-                (DataType::EmptyMap, ArrowDataType::Extension(name, _, _))
-                    if name == ARROW_EXT_TYPE_EMPTY_MAP =>
-                {
-                    Column::EmptyMap {
-                        len: arrow_col.len(),
-                    }
-                }
+                (DataType::EmptyArray, _) => Column::EmptyArray {
+                    len: arrow_col.len(),
+                },
+                (DataType::EmptyMap, _) => Column::EmptyMap {
+                    len: arrow_col.len(),
+                },
                 (DataType::Number(NumberDataType::UInt8), ArrowDataType::UInt8) => {
                     Column::Number(NumberColumn::UInt8(
                         arrow_col

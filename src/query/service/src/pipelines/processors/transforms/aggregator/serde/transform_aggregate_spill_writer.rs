@@ -389,8 +389,9 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
         }
 
         info!(
-            "Write aggregate spill {} successfully, elapsed: {:?}",
+            "Write aggregate spill {} successfully, size: {:?} ,elapsed: {:?}",
             location,
+            write_bytes,
             instant.elapsed()
         );
 
