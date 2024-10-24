@@ -1,4 +1,7 @@
 statement ok
+set enable_parallel_multi_merge_sort = 0;
+
+statement ok
 CREATE TABLE test_linear(a int, b int) cluster by(a,b) row_per_block = 2;
 
 statement ok
@@ -96,7 +99,7 @@ Filter
 └── TableScan
     ├── table: default.default.test_hilbert
     ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 3
+    ├── read rows: 2
     ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
