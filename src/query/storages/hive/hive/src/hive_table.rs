@@ -622,6 +622,9 @@ async fn do_list_files_from_dir(
                 all_files.push(HivePartInfo::create(location, vec![], length));
             }
             EntryMode::DIR => {
+                if path == location {
+                    continue;
+                }
                 all_dirs.push(path.to_string());
             }
             _ => {
