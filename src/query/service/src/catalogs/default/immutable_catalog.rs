@@ -152,6 +152,11 @@ impl Catalog for ImmutableCatalog {
         CatalogInfo::default().into()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        let me = self.as_ref().clone();
+        Ok(Arc::new(me))
+    }
+
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {

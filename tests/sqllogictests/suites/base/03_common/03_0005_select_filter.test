@@ -25,6 +25,19 @@ SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number+1>1
 1 2
 2 3
 
+query II
+SELECT 3 = number, number = 3 FROM numbers_mt (30) where 3 = number
+----
+1 1
+
+query II
+SELECT 3 = number, number = 3 FROM numbers_mt (4) order by number
+----
+0 0
+0 0
+0 0
+1 1
+
 query I
 SELECT count() FROM numbers_mt (10) where -1
 ----
