@@ -10867,7 +10867,7 @@ dependencies = [
 [[package]]
 name = "opendal_compat"
 version = "1.0.0"
-source = "git+https://github.com/apache/opendal?rev=4e6fddd#4e6fddd10f35560e7d5cefc29d0c099a36eaac4e"
+source = "git+https://github.com/apache/opendal?rev=f6e60f6#f6e60f621dec82765a49283caf0ddc1ff8b1d260"
 dependencies = [
  "async-trait",
  "opendal 0.49.2",
