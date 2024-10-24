@@ -117,6 +117,7 @@ impl<'a> Evaluator<'a> {
             {
                 continue;
             }
+            log::info!("check_expr: {} {}", column.data_type, data_type);
             assert_eq!(
                 &column.data_type,
                 data_type,
@@ -1315,6 +1316,46 @@ impl<'a> Evaluator<'a> {
                         Scalar::Array(filtered_col)
                     } else {
                         Scalar::Array(result_col)
+                    };
+                    builder.push(val.as_ref());
+                }
+                ScalarRef::Map(col) => {
+                    let col_len = col.len();
+                    let (key_col, value_col) = match col {
+                        Column::Tuple(t) => (t[0].clone(), t[1].clone()),
+                        _ => {
+                            return Err(ErrorCode::Internal("Map is not Column::Tuple"));
+                        }
+                    };
+                    let entry = match func_name {
+                        "map_transform_keys" => BlockEntry::new(
+                            key_col.data_type().clone(),
+                            Value::Column(key_col.clone()),
+                        ),
+                        "map_transform_values" => BlockEntry::new(
+                            value_col.data_type().clone(),
+                            Value::Column(value_col.clone()),
+                        ),
+                        _ => {
+                            return Err(ErrorCode::Internal(format!(
+                                "lambda function `{func_name}` is not found"
+                            )));
+                        }
+                    };
+                    entries.push(entry);
+                    let block = DataBlock::new(entries, col_len);
+
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    let result = evaluator.run(&expr)?;
+                    let result_col = result.convert_to_full_column(expr.data_type(), col_len);
+                    let val = match func_name {
+                        "map_transform_keys" => Scalar::Map(Column::Tuple(vec![result_col, value_col])),
+                        "map_transform_values" => Scalar::Map(Column::Tuple(vec![key_col, result_col])),
+                        _ => {
+                            return Err(ErrorCode::Internal(format!(
+                                "lambda function `{func_name}` is not found"
+                            )));
+                        }
                     };
                     builder.push(val.as_ref());
                 }

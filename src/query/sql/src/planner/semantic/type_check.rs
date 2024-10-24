@@ -1866,21 +1866,7 @@ impl<'a> TypeChecker<'a> {
             .map(|param| param.name.to_lowercase())
             .collect::<Vec<_>>();
 
-        // TODO: support multiple params
-        // ARRAY_REDUCE have two params
-        if params.len() != 1 && func_name != "array_reduce" {
-            return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
-                func_name, params.len()
-            ))
-                .set_span(span));
-        } else if func_name == "array_reduce" && params.len() != 2 {
-            return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
-                func_name, params.len()
-            ))
-                .set_span(span));
-        }
+        self.check_lambda_param_count(func_name, params.len(), span)?;
 
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
@@ -1891,9 +1877,11 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
         let box (mut arg, arg_type) = self.resolve(args[0])?;
+        log::info!("{} -- arg_type: {}", func_name, arg_type);
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
+            DataType::Map(box inner_ty) => inner_ty.clone(),
             DataType::Null | DataType::EmptyArray => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
@@ -1907,9 +1895,26 @@ impl<'a> TypeChecker<'a> {
         let inner_tys = if func_name == "array_reduce" {
             let max_ty = self.transform_to_max_type(&inner_ty)?;
             vec![max_ty.clone(), max_ty.clone()]
+        } else if func_name == "map_transform_keys" || func_name == "map_transform_values" {
+            match &inner_ty {
+                DataType::Tuple(t) => t.clone(),
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "map_transform_keys/map_transform_values inner_ty should be DataType::Tuple",
+                    ));
+                }
+            }
         } else {
             vec![inner_ty.clone()]
         };
+        log::info!(
+            "{} -- inner_ty: {} -- inner_tys[0]: {} -- {}",
+            func_name,
+            inner_ty,
+            inner_tys[0],
+            inner_tys.len()
+        );
+        let tmp_ty = inner_tys[0].clone();
 
         let columns = params
             .iter()
@@ -1923,6 +1928,7 @@ impl<'a> TypeChecker<'a> {
             &columns,
             &lambda.expr,
         )?;
+        log::info!("{} -- lambda_type: {}", func_name, lambda_type);
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -1955,11 +1961,22 @@ impl<'a> TypeChecker<'a> {
                 });
             }
             max_ty.wrap_nullable()
+        } else if func_name == "map_transform_keys" {
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                lambda_type.clone(),
+                inner_tys[1].clone(),
+            ])))
+        } else if func_name == "map_transform_values" {
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                inner_tys[0].clone(),
+                lambda_type.clone(),
+            ])))
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {
             DataType::Array(Box::new(lambda_type.clone()))
         };
+        log::info!("{} -- return_type: {}", func_name, return_type);
 
         let (lambda_func, data_type) = match arg_type.remove_nullable() {
             // Null and Empty array can convert to ConstantExpr
@@ -2049,8 +2066,55 @@ impl<'a> TypeChecker<'a> {
                 )
             }
         };
+        log::info!("{} -- data_type: {}", func_name, data_type);
 
-        Ok(Box::new((lambda_func, data_type)))
+        Ok(Box::new((lambda_func, tmp_ty)))
+    }
+
+    fn check_lambda_param_count(
+        &mut self,
+        func_name: &str,
+        param_count: usize,
+        span: Span,
+    ) -> Result<()> {
+        // Note: when a new lambda function is added, it needs to be added to the HashMap.
+        // The key of HashMap is lambda function name, and the value is param count.
+        let func_to_param_count: HashMap<&str, usize> = [
+            ("array_transform", 1),
+            ("array_apply", 1),
+            ("array_map", 1),
+            ("array_filter", 1),
+            ("array_reduce", 2),
+            ("json_array_transform", 1),
+            ("json_array_apply", 1),
+            ("json_array_map", 1),
+            ("json_array_filter", 1),
+            ("json_array_reduce", 2),
+            ("map_filter", 2),
+            ("map_transform_keys", 2),
+            ("map_transform_values", 2),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        match func_to_param_count.get(func_name) {
+            Some(&expected_count) => {
+                if param_count != expected_count {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "incorrect number of parameters in lambda function, {} expects {} parameter(s), but got {}",
+                        func_name, expected_count, param_count
+                    ))
+                    .set_span(span));
+                }
+                Ok(())
+            }
+            None => Err(ErrorCode::Internal(format!(
+                "not found lambda function '{}' in HashMap 'func_to_param_count'",
+                func_name
+            ))
+            .set_span(span)),
+        }
     }
 
     fn resolve_score_search_function(

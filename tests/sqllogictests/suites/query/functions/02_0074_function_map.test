@@ -226,3 +226,28 @@ SELECT map_contains_key({'k1': 'v1', 'k2': NULL}, 'k2')
 
 statement ok
 DROP DATABASE map_func_test
+
+query
+SELECT map_transform_keys({1:1,2:2,3:3}, (k, v) -> k + 1);
+----
+{2:1,3:2,4:3}
+
+query
+SELECT map_transform_keys({11:111,22:222,33:333}, (k, v) -> k + 1);
+----
+{12:111,23:222,34:333}
+
+query
+SELECT map_transform_keys({11:111,22:222,33:333}, (k, v) -> k * 2 + 1);
+----
+{23:111,45:222,67:333}
+
+query
+SELECT map_transform_keys({11:111,22:222,33:333}, (k, v) -> v + 1);
+----
+{112:111,223:222,334:333}
+
+query
+SELECT map_transform_keys({11:111,22:222,33:333}, (k, v) -> k + v + 1);
+----
+{123:111,245:222,367:333}
