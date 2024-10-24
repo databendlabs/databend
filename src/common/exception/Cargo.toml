@@ -17,16 +17,22 @@ databend-common-ast = { workspace = true }
 anyhow = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
-backtrace = { workspace = true }
+backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
+gimli = "0.31.0"
 http = { workspace = true }
+libc = { workspace = true }
+log = { workspace = true }
+object = "0.36.5"
+once_cell = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 paste = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
+rustc-demangle = "0.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = "0.8"

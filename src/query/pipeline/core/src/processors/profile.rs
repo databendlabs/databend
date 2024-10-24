@@ -26,6 +26,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::StackTrace;
 
 pub struct PlanScopeGuard {
     idx: usize,
@@ -54,7 +55,7 @@ impl Drop for PlanScopeGuard {
 pub struct ErrorInfoDesc {
     message: String,
     detail: String,
-    backtrace: String,
+    backtrace: StackTrace,
 }
 
 impl ErrorInfoDesc {
@@ -62,7 +63,7 @@ impl ErrorInfoDesc {
         ErrorInfoDesc {
             message: error.message(),
             detail: error.detail(),
-            backtrace: error.backtrace_str(),
+            backtrace: error.backtrace(),
         }
     }
 }
