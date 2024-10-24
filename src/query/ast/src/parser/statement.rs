@@ -2808,10 +2808,10 @@ pub fn query_statement_setting(i: Input) -> IResult<Settings> {
     );
     let more_set = map_res(
         rule! {
-            ^"(" ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
-            ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")" ~ ^")"
+            "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
+            ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")"
         },
-        |(_, _, ids, _, _, _, values, _, _)| {
+        |(_, ids, _, _, _, values, _)| {
             if ids.len() == values.len() {
                 Ok(Settings {
                     set_type: SetType::SettingsQuery,

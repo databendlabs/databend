@@ -7139,9 +7139,9 @@ Query(
 
 
 ---------- Input ----------
-SETTINGS ((max_thread, timezone)=(1, 'Aisa/Shanghai')) select 1;
+SETTINGS (max_thread, timezone)=(1, 'Aisa/Shanghai') select 1;
 ---------- Output ---------
-SETTINGS ((max_thread, timezone) = (1, 'Aisa/Shanghai')) SELECT 1
+SETTINGS (max_thread, timezone) = (1, 'Aisa/Shanghai') SELECT 1
 ---------- AST ------------
 QueryWithSetting {
     settings: Some(
@@ -7150,7 +7150,7 @@ QueryWithSetting {
             identifiers: [
                 Identifier {
                     span: Some(
-                        11..21,
+                        10..20,
                     ),
                     name: "max_thread",
                     quote: None,
@@ -7158,7 +7158,7 @@ QueryWithSetting {
                 },
                 Identifier {
                     span: Some(
-                        23..31,
+                        22..30,
                     ),
                     name: "timezone",
                     quote: None,
@@ -7169,7 +7169,7 @@ QueryWithSetting {
                 [
                     Literal {
                         span: Some(
-                            34..35,
+                            33..34,
                         ),
                         value: UInt64(
                             1,
@@ -7177,7 +7177,7 @@ QueryWithSetting {
                     },
                     Literal {
                         span: Some(
-                            37..52,
+                            36..51,
                         ),
                         value: String(
                             "Aisa/Shanghai",
@@ -7190,13 +7190,13 @@ QueryWithSetting {
     query: Query(
         Query {
             span: Some(
-                55..63,
+                53..61,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        55..63,
+                        53..61,
                     ),
                     hints: None,
                     distinct: false,
@@ -7205,7 +7205,7 @@ QueryWithSetting {
                         AliasedExpr {
                             expr: Literal {
                                 span: Some(
-                                    62..63,
+                                    60..61,
                                 ),
                                 value: UInt64(
                                     1,
