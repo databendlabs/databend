@@ -70,6 +70,7 @@ use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -88,7 +89,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::info;
 use log::warn;
 use opendal::Operator;
-use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
@@ -219,10 +219,7 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
-        let part_prefix = table_info.meta.part_prefix.clone();
-
-        let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+        let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -575,13 +572,10 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let (summary, segments) = if let Some(v) = prev {
+        let (summary, segments) = if let Some(v) = &prev {
             (v.summary.clone(), v.segments.clone())
         } else {
             (FuseStatistics::default(), vec![])
@@ -589,17 +583,16 @@ impl Table for FuseTable {
 
         let table_version = Some(self.get_table_info().ident.seq);
 
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
+        let new_snapshot = TableSnapshot::try_new(
             table_version,
-            &prev_timestamp,
-            prev_snapshot_id,
+            prev.clone(),
             schema,
             summary,
             segments,
             cluster_key_meta,
             prev_statistics_location,
-        );
+            ctx.get_table_meta_timestamps(self.get_id(), prev)?,
+        )?;
 
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
@@ -629,13 +622,10 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let (summary, segments) = if let Some(v) = prev {
+        let (summary, segments) = if let Some(v) = &prev {
             (v.summary.clone(), v.segments.clone())
         } else {
             (FuseStatistics::default(), vec![])
@@ -643,17 +633,16 @@ impl Table for FuseTable {
 
         let table_version = Some(self.get_table_info().ident.seq);
 
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
+        let new_snapshot = TableSnapshot::try_new(
             table_version,
-            &prev_timestamp,
-            prev_snapshot_id,
+            prev.clone(),
             schema,
             summary,
             segments,
             None,
             prev_statistics_location,
-        );
+            ctx.get_table_meta_timestamps(self.get_id(), prev)?,
+        )?;
 
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
@@ -692,8 +681,13 @@ impl Table for FuseTable {
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
-    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
-        self.do_append_data(ctx, pipeline)
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
+        self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
 
     fn commit_insertion(
@@ -705,6 +699,7 @@ impl Table for FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         self.do_commit(
             ctx,
@@ -714,6 +709,7 @@ impl Table for FuseTable {
             overwrite,
             prev_snapshot_id,
             deduplicated_label,
+            table_meta_timestamps,
         )
     }
 
