@@ -13,7 +13,7 @@ query_url2 = "http://localhost:8002/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
 logout_url = "http://localhost:8000/v1/session/logout"
 renew_url = "http://localhost:8000/v1/session/refresh"
-verify_url = "http://localhost:8000/v1/auth/verify"
+verify_url = "http://localhost:8000/v1/verify"
 auth = ("root", "")
 
 

@@ -18,6 +18,7 @@ mod query;
 mod session;
 mod stage;
 mod suggestions;
+mod verify;
 
 pub use discovery::discovery_nodes;
 pub use http_query_handlers::make_final_uri;
@@ -44,6 +45,7 @@ pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
 pub use suggestions::list_suggestions;
 pub use suggestions::SuggestionsResponse;
+pub use verify::verify_handler;
 
 pub use crate::servers::http::clickhouse_handler::clickhouse_router;
 pub use crate::servers::http::error::QueryError;
