@@ -955,7 +955,8 @@ impl DefaultSettings {
             None => std::cmp::min(num_cpus, 64),
             Some(conf) => match conf.storage.params.is_fs() {
                 true => 48,
-                false => std::cmp::min(num_cpus, 64),
+                // This value is chosen based on the performance test of pruning phase on cloud platform.
+                false => 64,
             },
         }
     }
