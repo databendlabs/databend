@@ -49,8 +49,8 @@ fn create_sort_spill_pipeline(
 
     let order_col_generated = false;
     let output_order_col = false;
-    let max_memory_usage = 0;
-    let spilling_bytes_threshold_per_core = 0;
+    let max_memory_usage = 100;
+    let spilling_bytes_threshold_per_core = 1;
     let spilling_batch_bytes = 1000;
     let enable_loser_tree = true;
 
@@ -119,16 +119,43 @@ fn basic_test_data(limit: Option<usize>) -> (Vec<DataBlock>, DataBlock) {
     prepare_single_input_and_result(data, limit)
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sort_spill() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
+fn random_test_data(
+    rng: &mut ThreadRng,
+    with_limit: bool,
+) -> (Vec<DataBlock>, DataBlock, Option<usize>) {
+    let num_rows = rng.gen_range(1..=100);
+    let mut data = (0..num_rows)
+        .map(|_| rng.gen_range(0..1000))
+        .collect::<Vec<_>>();
+    data.sort();
 
-    let block_size = 4;
-    let limit = None;
-    let (data, expected) = basic_test_data(None);
+    let mut data = VecDeque::from(data);
+    let mut random_data = Vec::new();
+    while !data.is_empty() {
+        let n = rng.gen_range(1..=10).min(data.len());
+        random_data.push(data.drain(..n).collect::<Vec<_>>());
+    }
+
+    let limit = if with_limit {
+        Some(rng.gen_range(1..=num_rows))
+    } else {
+        None
+    };
+    let (input, expected) = prepare_single_input_and_result(random_data, limit);
+    (input, expected, limit)
+}
+
+async fn run_fuzz(ctx: Arc<QueryContext>, rng: &mut ThreadRng, with_limit: bool) -> Result<()> {
+    let block_size = rng.gen_range(1..=20);
+    let (data, expected, limit) = random_test_data(rng, with_limit);
+
+    // println!("\nwith_limit {with_limit}");
+    // for (input, block) in data.iter().enumerate() {
+    //     println!("intput {input}");
+    //     println!("{:?}", block.columns()[0].value);
+    // }
+
     let (executor, mut rx) = create_sort_spill_pipeline(ctx, data, block_size, limit)?;
-
     executor.execute()?;
 
     let mut got: Vec<DataBlock> = Vec::new();
@@ -138,5 +165,43 @@ async fn test_sort_spill() -> Result<()> {
 
     check_result(got, expected);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sort_spill() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let block_size = 4;
+    let limit = None;
+    let (data, expected) = basic_test_data(None);
+    let (executor, mut rx) = create_sort_spill_pipeline(ctx, data, block_size, limit)?;
+    executor.execute()?;
+
+    let mut got: Vec<DataBlock> = Vec::new();
+    while !rx.is_empty() {
+        got.push(rx.recv().await.unwrap()?);
+    }
+
+    check_result(got, expected);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sort_spill_fuzz() -> Result<()> {
+    let mut rng = rand::thread_rng();
+    let fixture = TestFixture::setup().await?;
+
+    for _ in 0..3 {
+        let ctx = fixture.new_query_ctx().await?;
+        run_fuzz(ctx, &mut rng, false).await?;
+    }
+
+    for _ in 0..3 {
+        let ctx = fixture.new_query_ctx().await?;
+        run_fuzz(ctx, &mut rng, true).await?;
+    }
     Ok(())
 }
