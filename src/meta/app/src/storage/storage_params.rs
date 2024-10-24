@@ -141,7 +141,7 @@ impl StorageParams {
                 // The first call to http client must be inside global io runtime.
                 GlobalIORuntime::instance()
                     .spawn(async move {
-                        GLOBAL_HTTP_CLIENT
+                        if let Err(err) = GLOBAL_HTTP_CLIENT
                             .inner()
                             .get(&endpoint_clone)
                             .timeout(Duration::from_secs(10))
@@ -149,11 +149,14 @@ impl StorageParams {
                             .await
                             // The response itself doesn't important, just drop it.
                             .map(|_| ())
-                            .map_err(|err| {
-                                ErrorCode::InvalidConfig(format!(
+                            {
+                            if err.is_builder() {
+                                return Err(ErrorCode::InvalidConfig(format!(
                                     "s3 endpoint_url {endpoint_clone} is invalid or incomplete: {err:?}",
-                                ))
-                            })
+                                )))
+                            }
+                        }
+                        Ok(())
                     })
                     .await
                     .unwrap()?;
