@@ -212,6 +212,9 @@ impl<'a> Binder {
             }
 
             Statement::ExplainAnalyze {partial, graphical, query } => {
+                if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref() {
+                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                }
                 let plan = self.bind_statement(bind_context, query).await?;
                 Plan::ExplainAnalyze { partial: *partial, graphical: *graphical, plan: Box::new(plan) }
             }

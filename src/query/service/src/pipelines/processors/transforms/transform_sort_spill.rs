@@ -43,6 +43,7 @@ use databend_common_pipeline_transforms::processors::sort::SimpleRowsDesc;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
+use databend_common_pipeline_transforms::processors::SortSpillParams;
 
 use crate::spillers::Location;
 use crate::spillers::Spiller;
@@ -89,15 +90,17 @@ pub struct TransformSortSpill<A: SortAlgorithm> {
 }
 
 #[inline(always)]
-fn need_spill(block: &DataBlock) -> bool {
-    block
-        .get_meta()
-        .and_then(SortSpillMeta::downcast_ref_from)
-        .is_some()
-        || block
-            .get_meta()
-            .and_then(SortSpillMetaWithParams::downcast_ref_from)
-            .is_some()
+fn take_spill_meta(block: &mut DataBlock) -> Option<Option<SortSpillParams>> {
+    block.take_meta().map(|meta| {
+        if SortSpillMeta::downcast_ref_from(&meta).is_some() {
+            return None;
+        }
+        Some(
+            SortSpillMetaWithParams::downcast_from(meta)
+                .expect("unknown meta type")
+                .0,
+        )
+    })
 }
 
 #[async_trait::async_trait]
@@ -142,36 +145,38 @@ where
         }
 
         if self.input.has_data() {
-            let block = self.input.pull_data().unwrap()?;
+            let mut block = self.input.pull_data().unwrap()?;
+            let meta = take_spill_meta(&mut block);
             return match &self.state {
                 State::Init => {
-                    if need_spill(&block) {
-                        // Need to spill this block.
-                        let meta =
-                            SortSpillMetaWithParams::downcast_ref_from(block.get_meta().unwrap())
-                                .unwrap();
-                        self.batch_rows = meta.batch_rows;
-                        self.num_merge = meta.num_merge;
+                    match meta {
+                        Some(Some(params)) => {
+                            // Need to spill this block.
+                            self.batch_rows = params.batch_rows;
+                            self.num_merge = params.num_merge;
 
-                        self.input_data = Some(block);
-                        self.state = State::Spill;
-                        Ok(Event::Async)
-                    } else {
-                        // If we get a memory block at initial state, it means we will never spill data.
-                        debug_assert!(self.spiller.columns_layout.is_empty());
-                        self.output_block(block);
-                        self.state = State::NoSpill;
-                        Ok(Event::NeedConsume)
+                            self.input_data = Some(block);
+                            self.state = State::Spill;
+                            Ok(Event::Async)
+                        }
+                        Some(None) => unreachable!(),
+                        None => {
+                            // If we get a memory block at initial state, it means we will never spill data.
+                            debug_assert!(self.spiller.columns_layout.is_empty());
+                            self.output_block(block);
+                            self.state = State::NoSpill;
+                            Ok(Event::NeedConsume)
+                        }
                     }
                 }
                 State::NoSpill => {
-                    debug_assert!(!need_spill(&block));
+                    debug_assert!(meta.is_none());
                     self.output_block(block);
                     self.state = State::NoSpill;
                     Ok(Event::NeedConsume)
                 }
                 State::Spill => {
-                    if !need_spill(&block) {
+                    if meta.is_none() {
                         // It means we get the last block.
                         // We can launch external merge sort now.
                         self.state = State::Merging;
@@ -470,7 +475,6 @@ mod tests {
     use databend_common_expression::block_debug::pretty_format_blocks;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
-    use databend_common_expression::DataBlock;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
@@ -479,10 +483,8 @@ mod tests {
     use rand::rngs::ThreadRng;
     use rand::Rng;
 
-    use super::TransformSortSpill;
     use super::*;
     use crate::sessions::QueryContext;
-    use crate::spillers::Spiller;
     use crate::spillers::SpillerConfig;
     use crate::spillers::SpillerType;
     use crate::test_kits::*;

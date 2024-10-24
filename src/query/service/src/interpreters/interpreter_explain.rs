@@ -90,7 +90,9 @@ impl Interpreter for ExplainInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
-            ExplainKind::Raw | ExplainKind::Optimized => self.explain_plan(&self.plan)?,
+            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
+                self.explain_plan(&self.plan)?
+            }
             ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {

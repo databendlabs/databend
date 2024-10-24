@@ -24,7 +24,6 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use opendal::Operator;
 
 use crate::io::BlockReader;
 use crate::BlockReadResult;
@@ -115,18 +114,5 @@ impl BlockReader {
         self.report_cache_metrics(&block_read_res, ranges.iter().map(|(_, r)| r));
 
         Ok(block_read_res)
-    }
-
-    #[inline]
-    #[async_backtrace::framed]
-    async fn read_range(
-        op: Operator,
-        path: &str,
-        index: usize,
-        start: u64,
-        end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.read_with(path).range(start..end).await?;
-        Ok((index, chunk.to_vec()))
     }
 }
