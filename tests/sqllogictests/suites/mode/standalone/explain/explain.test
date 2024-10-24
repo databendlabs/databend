@@ -10,6 +10,18 @@ create table t1 as select number as a, number as b from numbers(1)
 statement ok
 create table t2 as select number as a, number as b from numbers(5)
 
+statement error 1005
+explain explain select t1.a from t1 where a > 0
+
+statement error 1005
+explain explain analyze select t1.a from t1 where a > 0
+
+statement error 1005
+explain analyze explain select t1.a from t1 where a > 0
+
+statement error 1005
+explain analyze explain analyze select t1.a from t1 where a > 0
+
 query T
 explain select t1.a from t1 where a > 0
 ----

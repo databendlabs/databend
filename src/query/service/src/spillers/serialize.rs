@@ -62,7 +62,7 @@ impl BlocksEncoder {
         }
     }
 
-    pub(super) fn add_blocks(&mut self, blocks: Vec<DataBlock>) {
+    pub(super) fn add_blocks(&mut self, mut blocks: Vec<DataBlock>) {
         let layout = if self.use_parquet {
             // Currently we splice multiple complete parquet files into one,
             // so that the file contains duplicate headers/footers and metadata,
@@ -71,7 +71,11 @@ impl BlocksEncoder {
             bare_blocks_to_parquet(blocks, &mut self.buf).unwrap();
             Layout::Parquet
         } else {
-            let block = DataBlock::concat(&blocks).unwrap();
+            let block = if blocks.len() == 1 {
+                blocks.remove(0)
+            } else {
+                DataBlock::concat(&blocks).unwrap()
+            };
             let columns_layout = std::iter::once(self.size())
                 .chain(block.columns().iter().map(|entry| {
                     let column = entry
@@ -135,7 +139,12 @@ fn bare_blocks_from_parquet<R: ChunkReader + 'static>(data: R) -> Result<DataBlo
         let (block, _) = DataBlock::from_record_batch(&schema, &record_batch)?;
         blocks.push(block);
     }
-    DataBlock::concat(&blocks)
+
+    if blocks.len() == 1 {
+        Ok(blocks.remove(0))
+    } else {
+        DataBlock::concat(&blocks)
+    }
 }
 
 /// Serialize bare data blocks to parquet format.
