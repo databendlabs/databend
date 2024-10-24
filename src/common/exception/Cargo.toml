@@ -15,6 +15,7 @@ databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }
+arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }

@@ -1014,6 +1014,8 @@ pub enum TokenKind {
     RAW,
     #[token("OPTIMIZED", ignore(ascii_case))]
     OPTIMIZED,
+    #[token("DECORRELATED", ignore(ascii_case))]
+    DECORRELATED,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
     #[token("SCHEMAS", ignore(ascii_case))]

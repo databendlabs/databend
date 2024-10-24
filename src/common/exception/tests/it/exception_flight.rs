@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow_format::flight::data::FlightData;
+use arrow_flight::FlightData;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::StackTrace;

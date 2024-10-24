@@ -455,6 +455,8 @@ dependencies = [
  "arrow-data",
  "arrow-schema",
  "flatbuffers",
+ "lz4_flex",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -3416,6 +3418,7 @@ name = "databend-common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-flight",
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
@@ -3449,6 +3452,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-flight",
+ "arrow-ipc",
  "arrow-ord",
  "arrow-schema",
  "arrow-select",
@@ -4944,6 +4948,11 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
+ "databend-common-pipeline-core",
+ "databend-common-pipeline-sinks",
+ "databend-common-pipeline-sources",
+ "databend-common-pipeline-transforms",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-fuse",
@@ -5032,6 +5041,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-common-pipeline-core",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
 ]
@@ -5128,6 +5138,7 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
@@ -5245,7 +5256,6 @@ dependencies = [
  "naive-cityhash",
  "num",
  "num_cpus",
- "once_cell",
  "opendal 0.49.2",
  "opensrv-mysql",
  "opentelemetry",
