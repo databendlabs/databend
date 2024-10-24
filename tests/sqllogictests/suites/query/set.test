@@ -115,7 +115,7 @@ select id, c from t union all select id, c from t1 order by id, c;
 NULL 2022-02-02 00:00:00.000000
 
 query TTTT
-settings ((timezone, default_order_by_null)=('Asia/Shanghai', 'nulls_first')) select id, c from t union all select id, c from t1 order by id, c;
+settings (timezone, default_order_by_null)=('Asia/Shanghai', 'nulls_first') select id, c from t union all select id, c from t1 order by id, c;
 ----
 NULL 2022-02-02 08:00:00.000000
 1 2022-02-02 00:00:00.000000
