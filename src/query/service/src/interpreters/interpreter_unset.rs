@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::SetType;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::UnsetPlan;
 use databend_common_users::UserApiProvider;
@@ -153,11 +154,15 @@ impl Interpreter for UnSetInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match self.unset.unset_type {
-            databend_common_ast::ast::SetType::SettingsSession
-            | databend_common_ast::ast::SetType::SettingsGlobal => {
+            SetType::SettingsSession | SetType::SettingsGlobal => {
                 self.execute_unset_settings().await?
             }
-            databend_common_ast::ast::SetType::Variable => self.execute_unset_variables().await?,
+            SetType::Variable => self.execute_unset_variables().await?,
+            SetType::SettingsQuery => {
+                return Err(ErrorCode::BadArguments(
+                    "Query level setting can not be unset",
+                ));
+            }
         }
         Ok(PipelineBuildResult::create())
     }

@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use dashmap::DashMap;
@@ -69,6 +71,7 @@ pub struct Settings {
     pub(crate) tenant: Tenant,
     pub(crate) changes: Arc<DashMap<String, ChangeValue>>,
     pub(crate) configs: HashMap<String, UserSettingValue>,
+    pub(crate) query_level_change: Arc<AtomicBool>,
 }
 
 impl serde::Serialize for Settings {
@@ -109,6 +112,7 @@ impl<'de> serde::Deserialize<'de> for Settings {
             configs,
             tenant: Tenant::new_literal(&deserialize_settings.tenant),
             changes: Arc::new(deserialize_settings.changes),
+            query_level_change: Arc::new(AtomicBool::new(false)),
         })
     }
 }
@@ -123,6 +127,7 @@ impl Settings {
             tenant,
             changes: Arc::new(DashMap::new()),
             configs,
+            query_level_change: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -142,18 +147,32 @@ impl Settings {
         self.changes.remove(k);
     }
 
-    pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
+    pub fn set_batch_settings(
+        &self,
+        settings: &HashMap<String, String>,
+        query_level_change: bool,
+    ) -> Result<()> {
         for (k, v) in settings.iter() {
             if self.has_setting(k.as_str())? {
                 self.set_setting(k.to_string(), v.to_string())?;
             }
         }
+        self.set_query_level_change(query_level_change);
 
         Ok(())
     }
 
     pub fn is_changed(&self) -> bool {
         !self.changes.is_empty()
+    }
+
+    pub fn set_query_level_change(&self, query_level_change: bool) {
+        self.query_level_change
+            .store(query_level_change, Ordering::Relaxed);
+    }
+
+    pub fn query_level_change(&self) -> bool {
+        self.query_level_change.load(Ordering::Relaxed)
     }
 
     pub fn changes(&self) -> &Arc<DashMap<String, ChangeValue>> {
@@ -256,6 +275,7 @@ impl<'a> IntoIterator for &'a Settings {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
 
     use dashmap::DashMap;
@@ -279,6 +299,7 @@ mod tests {
             tenant: Tenant::new_literal("test_tenant"),
             changes: Arc::new(changes),
             configs: HashMap::new(),
+            query_level_change: Arc::new(AtomicBool::new(false)),
         };
 
         let settings =
