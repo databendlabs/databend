@@ -419,7 +419,11 @@ impl Display for Statement {
             }
             Statement::QueryWithSetting { settings, query } => {
                 if let Some(setting) = settings {
-                    write!(f, "SETTINGS ({setting}) ")?;
+                    if setting.identifiers.len() > 1 {
+                        write!(f, "SETTINGS {setting} ")?;
+                    } else {
+                        write!(f, "SETTINGS ({setting}) ")?;
+                    }
                 }
                 write!(f, "{query}")?;
             }
