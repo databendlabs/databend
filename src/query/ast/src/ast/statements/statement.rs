@@ -405,6 +405,7 @@ impl Display for Statement {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Optimized => write!(f, " Optimized")?,
+                    ExplainKind::Decorrelated => write!(f, " DECORRELATED")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Join => write!(f, " JOIN")?,
