@@ -45,7 +45,6 @@ use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
-use crate::InsertInputSource;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
@@ -183,7 +182,7 @@ impl Planner {
                 if let Ok(PlanExtras {
                     statement:
                         Statement::Insert(InsertStmt {
-                            source: InsertInputSource::SelectPlan(_),
+                            source: InsertSource::Select { .. },
                             ..
                         }),
                     ..
