@@ -46,19 +46,27 @@ async fn process(stream: TcpStream) {
                 let request = String::from_utf8(buf.clone()).unwrap();
                 let cmds = parse_resp(request);
                 for cmd in cmds {
-                    if let Command::Get(key) = cmd {
-                        // Return a value if the first character of the key is ASCII alphanumeric,
-                        // otherwise treat it as the key does not exist.
-                        let ret_value = if key.starts_with(|c: char| c.is_ascii_alphanumeric()) {
-                            let v = format!("{}_value", key);
-                            format!("${}\r\n{}\r\n", v.len(), v)
-                        } else {
-                            "$-1\r\n".to_string()
-                        };
-                        ret_values.push_back(ret_value);
-                    } else {
-                        let ret_value = "+OK\r\n".to_string();
-                        ret_values.push_back(ret_value);
+                    match cmd {
+                        Command::Get(key) => {
+                            // Return a value if the first character of the key is ASCII alphanumeric,
+                            // otherwise treat it as the key does not exist.
+                            let ret_value = if key.starts_with(|c: char| c.is_ascii_alphanumeric())
+                            {
+                                let v = format!("{}_value", key);
+                                format!("${}\r\n{}\r\n", v.len(), v)
+                            } else {
+                                "$-1\r\n".to_string()
+                            };
+                            ret_values.push_back(ret_value);
+                        }
+                        Command::Ping => {
+                            let ret_value = "+PONG\r\n".to_string();
+                            ret_values.push_back(ret_value);
+                        }
+                        _ => {
+                            let ret_value = "+OK\r\n".to_string();
+                            ret_values.push_back(ret_value);
+                        }
                     }
                 }
             }
@@ -91,6 +99,7 @@ async fn process(stream: TcpStream) {
 // Redis command, only support get, other commands are ignored.
 enum Command {
     Get(String),
+    Ping,
     Invalid,
     Other,
 }
@@ -115,6 +124,8 @@ fn parse_resp(request: String) -> Vec<Command> {
         if lines[2] == "GET" {
             let cmd = Command::Get(lines[4].to_string());
             cmds.push(cmd);
+        } else if lines[2] == "PING" {
+            cmds.push(Command::Ping)
         } else {
             cmds.push(Command::Other);
         }

@@ -31,6 +31,7 @@ pub mod containers;
 pub mod display;
 pub mod future;
 pub mod headers;
+pub mod http_client;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;

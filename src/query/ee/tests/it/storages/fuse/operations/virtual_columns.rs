@@ -101,7 +101,7 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         for block_meta in block_metas {
             let virtual_loc =
                 TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
-            assert!(dal.is_exist(&virtual_loc).await?);
+            assert!(dal.exists(&virtual_loc).await?);
 
             let schema = match storage_format {
                 FuseStorageFormat::Parquet => read_parquet_schema_async_rs(dal, &virtual_loc, None)

@@ -98,7 +98,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         &self.inner
     }
 
-    #[async_backtrace::framed]
     async fn create_dir(&self, path: &str, args: OpCreateDir) -> Result<RpCreateDir> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -108,7 +107,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .expect("join must success")
     }
 
-    #[async_backtrace::framed]
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -123,7 +121,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             })
     }
 
-    #[async_backtrace::framed]
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -133,7 +130,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .expect("join must success")
     }
 
-    #[async_backtrace::framed]
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -143,7 +139,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .expect("join must success")
     }
 
-    #[async_backtrace::framed]
     async fn delete(&self, path: &str, args: OpDelete) -> Result<RpDelete> {
         let op = self.inner.clone();
         let path = path.to_string();
@@ -153,7 +148,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .expect("join must success")
     }
 
-    #[async_backtrace::framed]
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
         let op = self.inner.clone();
         let path = path.to_string();
