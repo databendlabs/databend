@@ -28,6 +28,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
@@ -588,6 +589,16 @@ impl DataBlock {
         debug_assert!(!self.columns.is_empty());
         debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
         self.columns.last().unwrap().value.as_column().unwrap()
+    }
+
+    pub fn infer_schema(&self) -> DataSchema {
+        let fields = self
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, e)| DataField::new(&format!("col_{index}"), e.data_type.clone()))
+            .collect();
+        DataSchema::new(fields)
     }
 }
 
