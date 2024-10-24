@@ -28,7 +28,6 @@ use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
-use log::info;
 
 use crate::pruning_pipeline::meta_info::BlockPruningResult;
 use crate::FuseTable;
@@ -72,7 +71,6 @@ impl AsyncSink for SendPartitionSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> databend_common_exception::Result<()> {
-        info!("close SendPartitionSink {:?}", self.index);
         self.sender.close();
         Ok(())
     }

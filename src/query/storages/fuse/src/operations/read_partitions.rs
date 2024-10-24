@@ -85,7 +85,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
                 let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
-                if (!dry_run && snapshot.segments.len() > nodes_num) || enable_prune_pipeline  {
+                if (!dry_run && snapshot.segments.len() > nodes_num) || enable_prune_pipeline {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
