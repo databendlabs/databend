@@ -78,7 +78,7 @@ pub fn try_into_table_info(
         storage
             .location
             .as_ref()
-            .map(|location| format!("{}/", location.trim_end_matches('/')))
+            .map(|location| location.to_string())
     } else {
         None
     };
