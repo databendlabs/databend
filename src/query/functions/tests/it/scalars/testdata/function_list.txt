@@ -3,6 +3,7 @@ add -> plus
 array_contains -> contains
 array_get -> get
 array_length -> length
+array_size -> length
 array_slice -> slice
 bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
