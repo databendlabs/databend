@@ -214,7 +214,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                                 &self.location_prefix,
                                 payload,
                             )?,
-                            false => agg_spilling_group_by_payload::<Method>(
+                            false => agg_spilling_group_by_payload(
                                 self.ctx.clone(),
                                 self.operator.clone(),
                                 &self.location_prefix,
@@ -292,7 +292,7 @@ fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
     data_block.columns().to_vec()
 }
 
-fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
+fn agg_spilling_group_by_payload(
     ctx: Arc<QueryContext>,
     operator: Operator,
     location_prefix: &str,
