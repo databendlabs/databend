@@ -645,8 +645,8 @@ impl<'a> Evaluator<'a> {
                         let mut value_builder =
                             ArrayType::<VariantType>::create_builder(col.len(), &[]);
 
-                        for x in col.iter() {
-                            let obj = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
+                        for (idx, x) in col.iter().enumerate() {
+                            let obj = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true) {
                                 temp_obj = jsonb::from_slice(x).map_err(|e| {
                                     ErrorCode::BadArguments(format!(
                                         "Expect to be valid json, got err: {e:?}"
