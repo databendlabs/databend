@@ -176,26 +176,27 @@ impl Planner {
                 }
             };
 
-            let mut insert_values_stmt = false;
+            let mut maybe_partial_insert = false;
+
             if is_insert_or_replace_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
                 if let Ok(PlanExtras {
                     statement:
                         Statement::Insert(InsertStmt {
-                            source: InsertSource::RawValues { .. },
+                            source: InsertSource::Select { .. },
                             ..
                         }),
                     ..
                 }) = &res
                 {
-                    insert_values_stmt = true;
+                    maybe_partial_insert = true;
                 }
             }
 
-            if insert_values_stmt || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
+            if (maybe_partial_insert || res.is_err()) && matches!(tokenizer.peek(), Some(Ok(_))) {
                 // Remove the EOI.
                 tokens.pop();
                 // Tokenize more and try again.
-                if !insert_values_stmt && tokens.len() < PROBE_INSERT_MAX_TOKENS {
+                if !maybe_partial_insert && tokens.len() < PROBE_INSERT_MAX_TOKENS {
                     let iter = (&mut tokenizer)
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
