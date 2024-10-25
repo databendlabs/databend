@@ -98,7 +98,7 @@ const ARRAY_SORT_FUNCTIONS: &[(&str, (bool, bool)); 4] = &[
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("contains", &["array_contains"]);
     registry.register_aliases("get", &["array_get"]);
-    registry.register_aliases("length", &["array_length"]);
+    registry.register_aliases("length", &["array_length", "array_size"]);
     registry.register_aliases("slice", &["array_slice"]);
 
     register_array_aggr(registry);
