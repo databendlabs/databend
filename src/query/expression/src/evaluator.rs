@@ -43,6 +43,7 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
+use crate::types::StringType;
 use crate::types::VariantType;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
@@ -640,12 +641,12 @@ impl<'a> Evaluator<'a> {
                         ]))))
                     }
                     Value::Column(Column::Variant(col)) => {
-                        let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+                        let mut key_builder = StringType::create_builder(col.len(), &[]);
                         let mut value_builder =
                             ArrayType::<VariantType>::create_builder(col.len(), &[]);
 
-                        for (idx, x) in col.iter().enumerate() {
-                            let obj = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true) {
+                        for x in col.iter() {
+                            let obj = if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
                                 temp_obj = jsonb::from_slice(x).map_err(|e| {
                                     ErrorCode::BadArguments(format!(
                                         "Expect to be valid json, got err: {e:?}"
@@ -662,38 +663,22 @@ impl<'a> Evaluator<'a> {
                                 v.write_to_vec(&mut value_builder.builder.data);
                                 value_builder.builder.commit_row();
                             }
+
                             value_builder.commit_row();
                         }
-                        let key_column = Column::String(key_builder.build());
 
-                        let value_column = value_builder.build();
-                        let validity = validity.map(|validity| {
-                            let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                            for (index, offsets) in value_column.offsets.windows(2).enumerate() {
-                                inner_validity.extend_constant(
-                                    (offsets[1] - offsets[0]) as usize,
-                                    validity.get_bit(index),
-                                );
-                            }
-                            inner_validity.into()
-                        });
+                        let offsets = value_builder.offsets.into();
+                        let key_col = key_builder.build();
+                        let value_col = value_builder.builder.build();
 
-                        let new_value_column = self
-                            .run_cast(
-                                span,
-                                &DataType::Variant,
-                                &fields_dest_ty[1],
-                                Value::Column(Column::Variant(value_column.values)),
-                                validity,
-                                options,
-                            )?
-                            .into_column()
-                            .unwrap();
+                        let kv_col = Column::Tuple(vec![
+                            Column::String(key_col),
+                            Column::Variant(value_col),
+                        ]);
 
-                        let kv_column = Column::Tuple(vec![key_column, new_value_column]);
                         Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
-                            values: kv_column,
-                            offsets: col.offsets,
+                            values: kv_col,
+                            offsets,
                         }))))
                     }
                     other => unreachable!("source: {}", other),
