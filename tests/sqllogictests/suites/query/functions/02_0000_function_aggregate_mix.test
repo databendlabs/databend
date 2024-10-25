@@ -317,6 +317,16 @@ select skewness (10) from numbers(5)
 ----
 0.0
 
+query I
+select skewness(number), kurtosis(number) from (select if(number > 5, number::double, 'NAN'::Double) as number from numbers(100));
+----
+nan nan
+
+query I
+select skewness(number), kurtosis(number) from (select if(number > 5, number::double, 'INF'::Double) as number from numbers(100));
+----
+nan nan
+
 query III
 select skewness(k), skewness(v), skewness(v2) from aggr
 ----
