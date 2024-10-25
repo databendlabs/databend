@@ -83,12 +83,12 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         TableDataType::Null => ArrowDataType::Null,
         TableDataType::EmptyArray => ArrowDataType::Extension(
             ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
-            Box::new(ArrowDataType::Null),
+            Box::new(ArrowDataType::Boolean),
             None,
         ),
         TableDataType::EmptyMap => ArrowDataType::Extension(
             ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
-            Box::new(ArrowDataType::Null),
+            Box::new(ArrowDataType::Boolean),
             None,
         ),
         TableDataType::Boolean => ArrowDataType::Boolean,
@@ -149,7 +149,8 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
                     ArrowField::new(
                         name.as_str(),
                         table_type_to_arrow_type(ty),
-                        ty.is_nullable(),
+                        // null in tuple must be nullable
+                        ty.is_nullable_or_null(),
                     )
                 })
                 .collect();
@@ -185,10 +186,20 @@ impl Column {
                 databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
             ),
             Column::EmptyArray { len } => Box::new(
-                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    Bitmap::new_constant(true, *len),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::EmptyMap { len } => Box::new(
-                databend_common_arrow::arrow::array::NullArray::new_null(arrow_type, *len),
+                databend_common_arrow::arrow::array::BooleanArray::try_new(
+                    arrow_type,
+                    Bitmap::new_constant(true, *len),
+                    None,
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::UInt8(col)) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(

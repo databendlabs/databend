@@ -32,10 +32,10 @@ use crate::aggregates::AggregateFunctionRef;
 #[derive(Default, BorshSerialize, BorshDeserialize)]
 struct KurtosisState {
     pub n: u64,
-    pub sum: f64,
-    pub sum_sqr: f64,
-    pub sum_cub: f64,
-    pub sum_four: f64,
+    pub sum: F64,
+    pub sum_sqr: F64,
+    pub sum_cub: F64,
+    pub sum_four: F64,
 }
 
 impl<T> UnaryState<T, Float64Type> for KurtosisState
@@ -78,27 +78,34 @@ where
             builder.push(F64::from(0_f64));
             return Ok(());
         }
-        let n = self.n as f64;
+
+        let (n, sum, sum_sqr, sum_cub, sum_four) = (
+            self.n as f64,
+            *self.sum,
+            *self.sum_sqr,
+            *self.sum_cub,
+            *self.sum_four,
+        );
+
         let temp = 1.0 / n;
-        if self.sum_sqr - self.sum * self.sum * temp == 0.0 {
+        if sum_sqr - sum * sum * temp == 0.0 {
             builder.push(F64::from(0_f64));
             return Ok(());
         }
         let m4 = temp
-            * (self.sum_four - 4.0 * self.sum_cub * self.sum * temp
-                + 6.0 * self.sum_sqr * self.sum * self.sum * temp * temp
-                - 3.0 * self.sum.powi(4) * temp.powi(3));
-        let m2 = temp * (self.sum_sqr - self.sum * self.sum * temp);
+            * (sum_four - 4.0 * sum_cub * sum * temp + 6.0 * sum_sqr * sum * sum * temp * temp
+                - 3.0 * sum.powi(4) * temp.powi(3));
+        let m2 = temp * (sum_sqr - sum * sum * temp);
         if m2 <= 0.0 || (n - 2.0) * (n - 3.0) == 0.0 {
             builder.push(F64::from(0_f64));
             return Ok(());
         }
         let value =
             (n - 1.0) * ((n + 1.0) * m4 / (m2 * m2) - 3.0 * (n - 1.0)) / ((n - 2.0) * (n - 3.0));
-        if value.is_infinite() || value.is_nan() {
-            return Err(ErrorCode::SemanticError("Kurtosis is out of range!"));
-        } else {
+        if value.is_finite() {
             builder.push(F64::from(value));
+        } else {
+            builder.push(F64::from(f64::NAN));
         }
         Ok(())
     }
