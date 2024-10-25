@@ -615,7 +615,7 @@ async fn do_list_files_from_dir(
             continue;
         }
         // Ignore the location itself
-        if path.trim_end_matches('/') == location.trim_end_matches('/') {
+        if path.trim_matches('/') == location.trim_matches('/') {
             continue;
         }
 
