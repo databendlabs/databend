@@ -13,6 +13,7 @@ test = true
 [features]
 tracing = ["tokio/tracing"]
 jemalloc = ["tikv-jemalloc-sys", "tikv-jemalloc-ctl"]
+mimalloc = ["libmimalloc-sys"]
 disable_initial_exec_tls = ["tikv-jemalloc-sys/disable_initial_exec_tls"]
 memory-profiling = [
     "tikv-jemalloc-sys/stats",

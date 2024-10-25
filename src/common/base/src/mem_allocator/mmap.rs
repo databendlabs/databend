@@ -22,7 +22,9 @@
 pub struct MmapAllocator {
     #[cfg(feature = "jemalloc")]
     allocator: crate::mem_allocator::JEAllocator,
-    #[cfg(not(feature = "jemalloc"))]
+    #[cfg(feature = "mimalloc")]
+    allocator: crate::mem_allocator::MIAllocator,
+    #[cfg(not(any(feature = "jemalloc", feature = "mimalloc")))]
     allocator: crate::mem_allocator::StdAllocator,
 }
 
@@ -31,7 +33,9 @@ impl MmapAllocator {
         Self {
             #[cfg(feature = "jemalloc")]
             allocator: crate::mem_allocator::JEAllocator,
-            #[cfg(not(feature = "jemalloc"))]
+            #[cfg(feature = "mimalloc")]
+            allocator: crate::mem_allocator::MIAllocator,
+            #[cfg(not(any(feature = "jemalloc", feature = "mimalloc")))]
             allocator: crate::mem_allocator::StdAllocator,
         }
     }
