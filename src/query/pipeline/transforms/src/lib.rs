@@ -20,3 +20,4 @@
 #![feature(iter_map_windows)]
 
 pub mod processors;
+pub use processors::*;
