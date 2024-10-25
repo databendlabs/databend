@@ -333,7 +333,6 @@ impl<'a> FilterVisitor<'a> {
         }
     }
 
-    // TODO: optimize this after BinaryView is introduced by @andy
     fn filter_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
         let mut builder = BinaryColumnBuilder::with_capacity(self.filter_rows, 0);
         let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));

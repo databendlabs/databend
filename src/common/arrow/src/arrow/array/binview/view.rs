@@ -36,6 +36,7 @@ pub struct View {
     pub buffer_idx: u32,
     /// The offset into the buffer.
     pub offset: u32,
+    pub _align: [u128; 0],
 }
 
 impl View {
