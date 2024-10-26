@@ -1960,15 +1960,29 @@ impl<'a> TypeChecker<'a> {
                 .set_span(span));
             }
         } else if func_name == "map_transform_keys" {
-            DataType::Map(Box::new(DataType::Tuple(vec![
-                lambda_type.clone(),
-                inner_tys[1].clone(),
-            ])))
+            if arg_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
+                    lambda_type.clone(),
+                    inner_tys[1].clone(),
+                ])))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    lambda_type.clone(),
+                    inner_tys[1].clone(),
+                ])))
+            }
         } else if func_name == "map_transform_values" {
-            DataType::Map(Box::new(DataType::Tuple(vec![
-                inner_tys[0].clone(),
-                lambda_type.clone(),
-            ])))
+            if arg_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
+                    inner_tys[0].clone(),
+                    lambda_type.clone(),
+                ])))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    inner_tys[0].clone(),
+                    lambda_type.clone(),
+                ])))
+            }
         } else if arg_type.is_nullable() {
             DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
         } else {

@@ -1227,6 +1227,12 @@ impl<'a> Evaluator<'a> {
                     array_col.offsets.clone(),
                     None,
                 ),
+                Value::Column(Column::Map(box map_col)) => (
+                    map_col.values.clone(),
+                    map_col.values.data_type(),
+                    map_col.offsets.clone(),
+                    None,
+                ),
                 Value::Column(Column::Nullable(box nullable_col)) => match &nullable_col.column {
                     Column::Array(box array_col) => (
                         array_col.values.clone(),
@@ -1234,48 +1240,120 @@ impl<'a> Evaluator<'a> {
                         array_col.offsets.clone(),
                         Some(nullable_col.validity.clone()),
                     ),
+                    Column::Map(box map_col) => (
+                        map_col.values.clone(),
+                        map_col.values.data_type(),
+                        map_col.offsets.clone(),
+                        Some(nullable_col.validity.clone()),
+                    ),
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
             };
-            let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
-            let block = DataBlock::new(vec![entry], inner_col.len());
 
-            let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-            let result = evaluator.run(&expr)?;
-            let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
+            if func_name == "map_filter"
+                || func_name == "map_transform_keys"
+                || func_name == "map_transform_values"
+            {
+                let (key_col, value_col) = match inner_col.clone() {
+                    Column::Tuple(t) => (t[0].clone(), t[1].clone()),
+                    _ => unreachable!(),
+                };
+                let key_entry =
+                    BlockEntry::new(key_col.data_type().clone(), Value::Column(key_col.clone()));
+                let value_entry = BlockEntry::new(
+                    value_col.data_type().clone(),
+                    Value::Column(value_col.clone()),
+                );
+                let block = DataBlock::new(vec![key_entry, value_entry], inner_col.len());
 
-            let array_col = if func_name == "array_filter" {
-                let result_col = result_col.remove_nullable();
-                let bitmap = result_col.as_boolean().unwrap();
-                let filtered_inner_col = inner_col.filter(bitmap);
-                // generate new offsets after filter.
-                let mut new_offset = 0;
-                let mut filtered_offsets = Vec::with_capacity(offsets.len());
-                filtered_offsets.push(0);
-                for offset in offsets.windows(2) {
-                    let off = offset[0] as usize;
-                    let len = (offset[1] - offset[0]) as usize;
-                    let unset_count = bitmap.null_count_range(off, len);
-                    new_offset += (len - unset_count) as u64;
-                    filtered_offsets.push(new_offset);
-                }
+                let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                let result = evaluator.run(&expr)?;
+                let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
 
-                Column::Array(Box::new(ArrayColumn {
-                    values: filtered_inner_col,
-                    offsets: filtered_offsets.into(),
-                }))
+                let map_col = match func_name {
+                    "map_filter" => {
+                        let result_col = result_col.remove_nullable();
+                        let bitmap = result_col.as_boolean().unwrap();
+                        let (filtered_key_col, filtered_value_col) =
+                            (key_col.filter(bitmap), value_col.filter(bitmap));
+
+                        // generate new offsets after filter.
+                        let mut new_offset = 0;
+                        let mut filtered_offsets = Vec::with_capacity(offsets.len());
+                        filtered_offsets.push(0);
+                        for offset in offsets.windows(2) {
+                            let off = offset[0] as usize;
+                            let len = (offset[1] - offset[0]) as usize;
+                            let unset_count = bitmap.null_count_range(off, len);
+                            new_offset += (len - unset_count) as u64;
+                            filtered_offsets.push(new_offset);
+                        }
+
+                        Column::Map(Box::new(ArrayColumn {
+                            values: Column::Tuple(vec![
+                                filtered_key_col.clone(),
+                                filtered_value_col.clone(),
+                            ]),
+                            offsets: filtered_offsets.into(),
+                        }))
+                    }
+                    "map_transform_keys" => Column::Map(Box::new(ArrayColumn {
+                        values: Column::Tuple(vec![result_col, value_col]),
+                        offsets,
+                    })),
+                    "map_transform_values" => Column::Map(Box::new(ArrayColumn {
+                        values: Column::Tuple(vec![key_col, result_col]),
+                        offsets,
+                    })),
+                    _ => unreachable!(),
+                };
+                let col = match validity {
+                    Some(validity) => Value::Column(NullableColumn::new_column(map_col, validity)),
+                    None => Value::Column(map_col),
+                };
+                return Ok(col);
             } else {
-                Column::Array(Box::new(ArrayColumn {
-                    values: result_col,
-                    offsets,
-                }))
-            };
-            let col = match validity {
-                Some(validity) => Value::Column(NullableColumn::new_column(array_col, validity)),
-                None => Value::Column(array_col),
-            };
-            return Ok(col);
+                let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
+                let block = DataBlock::new(vec![entry], inner_col.len());
+                let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                let result = evaluator.run(&expr)?;
+                let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
+
+                let array_col = if func_name == "array_filter" {
+                    let result_col = result_col.remove_nullable();
+                    let bitmap = result_col.as_boolean().unwrap();
+                    let filtered_inner_col = inner_col.filter(bitmap);
+                    // generate new offsets after filter.
+                    let mut new_offset = 0;
+                    let mut filtered_offsets = Vec::with_capacity(offsets.len());
+                    filtered_offsets.push(0);
+                    for offset in offsets.windows(2) {
+                        let off = offset[0] as usize;
+                        let len = (offset[1] - offset[0]) as usize;
+                        let unset_count = bitmap.null_count_range(off, len);
+                        new_offset += (len - unset_count) as u64;
+                        filtered_offsets.push(new_offset);
+                    }
+
+                    Column::Array(Box::new(ArrayColumn {
+                        values: filtered_inner_col,
+                        offsets: filtered_offsets.into(),
+                    }))
+                } else {
+                    Column::Array(Box::new(ArrayColumn {
+                        values: result_col,
+                        offsets,
+                    }))
+                };
+                let col = match validity {
+                    Some(validity) => {
+                        Value::Column(NullableColumn::new_column(array_col, validity))
+                    }
+                    None => Value::Column(array_col),
+                };
+                return Ok(col);
+            }
         }
 
         let len = args.iter().find_map(|arg| match arg {
