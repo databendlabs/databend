@@ -16,19 +16,23 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::mem_allocator::JEAllocator;
-
 /// mmap allocator.
 /// For better performance, we use jemalloc as the inner allocator.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MmapAllocator {
-    allocator: JEAllocator,
+    #[cfg(feature = "jemalloc")]
+    allocator: crate::mem_allocator::JEAllocator,
+    #[cfg(not(feature = "jemalloc"))]
+    allocator: crate::mem_allocator::StdAllocator,
 }
 
 impl MmapAllocator {
     pub fn new() -> Self {
         Self {
-            allocator: JEAllocator,
+            #[cfg(feature = "jemalloc")]
+            allocator: crate::mem_allocator::JEAllocator,
+            #[cfg(not(feature = "jemalloc"))]
+            allocator: crate::mem_allocator::StdAllocator,
         }
     }
 }
