@@ -2097,7 +2097,7 @@ impl<'a> TypeChecker<'a> {
         param_count: usize,
         span: Span,
     ) -> Result<()> {
-        // json lambda functions are casted to array or map, ingored here.
+        // json lambda functions are casted to array or map, ignored here.
         let expected_count = if func_name == "array_reduce" {
             2
         } else if func_name.starts_with("array") {
