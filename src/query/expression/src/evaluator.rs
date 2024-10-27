@@ -667,18 +667,28 @@ impl<'a> Evaluator<'a> {
                             value_builder.commit_row();
                         }
 
-                        let offsets = value_builder.offsets.into();
-                        let key_col = key_builder.build();
-                        let value_col = value_builder.builder.build();
+                        let key_col = Column::String(key_builder.build());
+                        let value_col = Column::Array(Box::new(value_builder.build().upcast()));
 
-                        let kv_col = Column::Tuple(vec![
-                            Column::String(key_col),
-                            Column::Variant(value_col),
-                        ]);
+                        let value_col = self
+                            .run_cast(
+                                span,
+                                &DataType::Array(Box::new(DataType::Variant)),
+                                &fields_dest_ty[1],
+                                Value::Column(value_col),
+                                validity,
+                                options,
+                            )?
+                            .into_column()
+                            .unwrap()
+                            .into_array()
+                            .unwrap();
+
+                        let kv_col = Column::Tuple(vec![key_col, value_col.values]);
 
                         Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
                             values: kv_col,
-                            offsets,
+                            offsets: value_col.offsets,
                         }))))
                     }
                     other => unreachable!("source: {}", other),
