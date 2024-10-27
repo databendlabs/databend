@@ -43,6 +43,7 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
+use crate::types::StringType;
 use crate::types::VariantType;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
@@ -640,7 +641,7 @@ impl<'a> Evaluator<'a> {
                         ]))))
                     }
                     Value::Column(Column::Variant(col)) => {
-                        let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+                        let mut key_builder = StringType::create_builder(col.len(), &[]);
                         let mut value_builder =
                             ArrayType::<VariantType>::create_builder(col.len(), &[]);
 
@@ -662,38 +663,32 @@ impl<'a> Evaluator<'a> {
                                 v.write_to_vec(&mut value_builder.builder.data);
                                 value_builder.builder.commit_row();
                             }
+
                             value_builder.commit_row();
                         }
-                        let key_column = Column::String(key_builder.build());
 
-                        let value_column = value_builder.build();
-                        let validity = validity.map(|validity| {
-                            let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                            for (index, offsets) in value_column.offsets.windows(2).enumerate() {
-                                inner_validity.extend_constant(
-                                    (offsets[1] - offsets[0]) as usize,
-                                    validity.get_bit(index),
-                                );
-                            }
-                            inner_validity.into()
-                        });
+                        let key_col = Column::String(key_builder.build());
+                        let value_col = Column::Array(Box::new(value_builder.build().upcast()));
 
-                        let new_value_column = self
+                        let value_col = self
                             .run_cast(
                                 span,
-                                &DataType::Variant,
+                                &DataType::Array(Box::new(DataType::Variant)),
                                 &fields_dest_ty[1],
-                                Value::Column(Column::Variant(value_column.values)),
+                                Value::Column(value_col),
                                 validity,
                                 options,
                             )?
                             .into_column()
+                            .unwrap()
+                            .into_array()
                             .unwrap();
 
-                        let kv_column = Column::Tuple(vec![key_column, new_value_column]);
+                        let kv_col = Column::Tuple(vec![key_col, value_col.values]);
+
                         Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
-                            values: kv_column,
-                            offsets: col.offsets,
+                            values: kv_col,
+                            offsets: value_col.offsets,
                         }))))
                     }
                     other => unreachable!("source: {}", other),
