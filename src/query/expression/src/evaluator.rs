@@ -121,7 +121,6 @@ impl<'a> Evaluator<'a> {
             {
                 continue;
             }
-            log::info!("check_expr: {} {}", column.data_type, data_type);
             assert_eq!(
                 &column.data_type,
                 data_type,
