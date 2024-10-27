@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Not;
 
 use databend_common_arrow::arrow::bitmap;
@@ -675,7 +676,7 @@ impl<'a> Evaluator<'a> {
                             .run_cast(
                                 span,
                                 &DataType::Array(Box::new(DataType::Variant)),
-                                &fields_dest_ty[1],
+                                &DataType::Array(Box::new(fields_dest_ty[1].clone())),
                                 Value::Column(value_col),
                                 validity,
                                 options,
@@ -1395,10 +1396,31 @@ impl<'a> Evaluator<'a> {
                             offsets: filtered_offsets.into(),
                         }))
                     }
-                    "map_transform_keys" => Column::Map(Box::new(ArrayColumn {
-                        values: Column::Tuple(vec![result_col, value_col]),
-                        offsets,
-                    })),
+                    "map_transform_keys" => {
+                        // Check whether the key is duplicate.
+                        let mut key_set = HashSet::new();
+                        for offset in offsets.windows(2) {
+                            let start = offset[0] as usize;
+                            let end = offset[1] as usize;
+                            if start == end {
+                                continue;
+                            }
+                            key_set.clear();
+                            for i in start..end {
+                                let key = unsafe { result_col.index_unchecked(i) };
+                                if key_set.contains(&key) {
+                                    return Err(ErrorCode::SemanticError(
+                                        "map keys have to be unique".to_string(),
+                                    ));
+                                }
+                                key_set.insert(key);
+                            }
+                        }
+                        Column::Map(Box::new(ArrayColumn {
+                            values: Column::Tuple(vec![result_col, value_col]),
+                            offsets,
+                        }))
+                    }
                     "map_transform_values" => Column::Map(Box::new(ArrayColumn {
                         values: Column::Tuple(vec![key_col, result_col]),
                         offsets,
@@ -1534,6 +1556,17 @@ impl<'a> Evaluator<'a> {
                             ]))
                         }
                         "map_transform_keys" => {
+                            // Check whether the key is duplicate.
+                            let mut key_set = HashSet::new();
+                            for i in 0..result_col.len() {
+                                let key = unsafe { result_col.index_unchecked(i) };
+                                if key_set.contains(&key) {
+                                    return Err(ErrorCode::SemanticError(
+                                        "map keys have to be unique".to_string(),
+                                    ));
+                                }
+                                key_set.insert(key);
+                            }
                             Scalar::Map(Column::Tuple(vec![result_col, value_col]))
                         }
                         "map_transform_values" => {

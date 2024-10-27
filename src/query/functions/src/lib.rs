@@ -71,7 +71,7 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "cume_dist",
 ];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 13] = [
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 16] = [
     "array_transform",
     "array_apply",
     "array_map",
@@ -85,6 +85,9 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 13] = [
     "map_filter",
     "map_transform_keys",
     "map_transform_values",
+    "json_map_filter",
+    "json_map_transform_keys",
+    "json_map_transform_values",
 ];
 
 pub const GENERAL_SEARCH_FUNCTIONS: [&str; 3] = ["match", "query", "score"];
