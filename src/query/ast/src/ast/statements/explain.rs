@@ -29,6 +29,8 @@ pub enum ExplainKind {
     // `EXPLAIN RAW` and `EXPLAIN OPTIMIZED` will be deprecated in the future,
     // use explain options instead
     Raw,
+    // `EXPLAIN DECORRELATED` will show the plan after subquery decorrelation
+    Decorrelated,
     Optimized,
 
     Plan,

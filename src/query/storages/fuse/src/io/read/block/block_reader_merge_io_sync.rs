@@ -14,12 +14,9 @@
 
 use std::collections::HashSet;
 
-use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_storage::parquet_rs::infer_schema_with_extension;
-use databend_common_storage::parquet_rs::read_metadata_sync;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
@@ -77,12 +74,5 @@ impl BlockReader {
         self.report_cache_metrics(&block_read_res, ranges.iter().map(|(_, r)| r));
 
         Ok(block_read_res)
-    }
-
-    pub fn sync_read_schema(&self, loc: &str) -> Option<ArrowSchema> {
-        let metadata = read_metadata_sync(loc, &self.operator, None).ok()?;
-        debug_assert_eq!(metadata.num_row_groups(), 1);
-        let schema = infer_schema_with_extension(metadata.file_metadata()).ok()?;
-        Some(schema)
     }
 }

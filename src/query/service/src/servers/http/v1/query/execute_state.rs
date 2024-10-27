@@ -45,10 +45,8 @@ use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::http_query::ResponseState;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::AcquireQueueGuard;
-use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
-use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 
@@ -346,32 +344,15 @@ impl ExecuteState {
         info!("http query prepare to plan sql");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
+        let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true)
             .await
             .map_err(|err| err.display_with_sql(&sql))
-            .with_context(make_error)?;
-
-        let query_queue_manager = QueriesQueueManager::instance();
-
-        info!(
-            "http query preparing to acquire from query queue, length: {}",
-            query_queue_manager.length()
-        );
-
-        let entry = QueryEntry::create(&ctx, &plan, &extras).with_context(make_error)?;
-        let queue_guard = query_queue_manager
-            .acquire(entry)
-            .await
             .with_context(make_error)?;
         {
             // set_var may change settings
             let mut guard = format_settings.write();
             *guard = Some(ctx.get_format_settings().with_context(make_error)?);
         }
-        info!(
-            "http query finished acquiring from queue, length: {}",
-            query_queue_manager.length()
-        );
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await

@@ -22,7 +22,9 @@ use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
 use log::Metadata;
+use logforth::filter::env::EnvFilterBuilder;
 use logforth::filter::CustomFilter;
+use logforth::filter::EnvFilter;
 use logforth::filter::FilterResult;
 use logforth::filter::TargetFilter;
 use logforth::Dispatch;
@@ -213,7 +215,9 @@ pub fn init_logging(
                 "databend::log::structlog",
                 LevelFilter::Off,
             ))
-            .filter(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
+            .filter(EnvFilter::new(
+                EnvFilterBuilder::new().parse(&cfg.stderr.level),
+            ))
             .layout(get_layout(&cfg.stderr.format))
             .append(logforth::append::Stderr);
         logger = logger.dispatch(dispatch);

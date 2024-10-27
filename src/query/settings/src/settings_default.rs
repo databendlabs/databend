@@ -900,7 +900,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_loser_tree_merge_sort", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables loser tree merge sort",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -955,7 +955,8 @@ impl DefaultSettings {
             None => std::cmp::min(num_cpus, 64),
             Some(conf) => match conf.storage.params.is_fs() {
                 true => 48,
-                false => std::cmp::min(num_cpus, 64),
+                // This value is chosen based on the performance test of pruning phase on cloud platform.
+                false => 64,
             },
         }
     }
