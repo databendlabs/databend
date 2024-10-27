@@ -67,6 +67,10 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
         self.hashtable.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn allocated_bytes(&self) -> usize {
         self.hashtable.bytes_len(false)
             + self.arena.allocated_bytes()

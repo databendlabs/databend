@@ -5573,3 +5573,137 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : json_object_delete('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'b', 'c')
+raw expr       : json_object_delete(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'a', 'b', 'c')
+checked expr   : json_object_delete<Variant, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "a", "b", "c")
+optimized expr : 0x4000000310000001100000011000000120000002500000105000000e646d785022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_delete('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'm', 'n', 'm', 'x')
+raw expr       : json_object_delete(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'm', 'n', 'm', 'x')
+checked expr   : json_object_delete<Variant, String, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "m", "n", "m", "x")
+optimized expr : 0x40000002100000011000000120000002200000026264500c5022
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34}'
+
+
+ast            : json_object_delete('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', null)
+raw expr       : json_object_delete(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'z', NULL)
+checked expr   : json_object_delete<Variant, String, NULL>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "z", NULL)
+optimized expr : 0x40000004100000011000000110000001100000012000000220000002500000105000000e62646d78500c5022800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_delete('{}'::variant, 'v', 'vv')
+raw expr       : json_object_delete(CAST('{}' AS Variant), 'v', 'vv')
+checked expr   : json_object_delete<Variant, String, String>(parse_json<String>("{}"), "v", "vv")
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : '{}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_delete('123'::variant, 'v', 'vv')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_delete('123', 'v', 'vv')` in expr `json_object_delete(parse_json('123'), 'v', 'vv')`
+
+
+
+ast            : json_object_delete(parse_json(v), 'a', 'm')
+raw expr       : json_object_delete(parse_json(v::String NULL), 'a', 'm')
+checked expr   : json_object_delete<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
+evaluation:
++--------+---------------------------------+---------------------+
+|        | v                               | Output              |
++--------+---------------------------------+---------------------+
+| Type   | String NULL                     | Variant NULL        |
+| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown             |
+| Row 0  | '{"k":"v"}'                     | '{"k":"v"}'         |
+| Row 1  | '{"m":"n"}'                     | '{}'                |
+| Row 2  | NULL                            | NULL                |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '{"c":"d","y":"z"}' |
++--------+---------------------------------+---------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                            |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x7b226b223a2276227d7b226d223a226e227d7b2261223a2262222c2263223a2264222c2279223a227a227d, offsets: [0, 9, 18, 18, 43] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: BinaryColumn { data: 0x4000000110000001100000016b764000000040000002100000011000000110000001100000016379647a, offsets: [0, 14, 18, 18, 42] }, validity: [0b____1011] }  |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object_pick('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'a', 'b', 'c')
+raw expr       : json_object_pick(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'a', 'b', 'c')
+checked expr   : json_object_pick<Variant, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "a", "b", "c")
+optimized expr : 0x40000001100000012000000262500c
+output type    : Variant
+output domain  : Undefined
+output         : '{"b":12}'
+
+
+ast            : json_object_pick('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'm', 'n', 'm', 'x')
+raw expr       : json_object_pick(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'm', 'n', 'm', 'x')
+checked expr   : json_object_pick<Variant, String, String, String, String>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "m", "n", "m", "x")
+optimized expr : 0x400000021000000110000001500000105000000e6d78800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : '{"m":[1,2],"x":{"k":"v"}}'
+
+
+ast            : json_object_pick('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}'::variant, 'z', null)
+raw expr       : json_object_pick(CAST('{"b":12,"d":34,"m":[1,2],"x":{"k":"v"}}' AS Variant), 'z', NULL)
+checked expr   : json_object_pick<Variant, String, NULL>(parse_json<String>("{\"b\":12,\"d\":34,\"m\":[1,2],\"x\":{\"k\":\"v\"}}"), "z", NULL)
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : '{}'
+
+
+ast            : json_object_pick('{}'::variant, 'v', 'vv')
+raw expr       : json_object_pick(CAST('{}' AS Variant), 'v', 'vv')
+checked expr   : json_object_pick<Variant, String, String>(parse_json<String>("{}"), "v", "vv")
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : '{}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_pick('123'::variant, 'v', 'vv')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid json object while evaluating function `json_object_pick('123', 'v', 'vv')` in expr `json_object_pick(parse_json('123'), 'v', 'vv')`
+
+
+
+ast            : json_object_pick(parse_json(v), 'a', 'm')
+raw expr       : json_object_pick(parse_json(v::String NULL), 'a', 'm')
+checked expr   : json_object_pick<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
+evaluation:
++--------+---------------------------------+--------------+
+|        | v                               | Output       |
++--------+---------------------------------+--------------+
+| Type   | String NULL                     | Variant NULL |
+| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '{"k":"v"}'                     | '{}'         |
+| Row 1  | '{"m":"n"}'                     | '{"m":"n"}'  |
+| Row 2  | NULL                            | NULL         |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '{"a":"b"}'  |
++--------+---------------------------------+--------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                            |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v      | NullableColumn { column: StringColumn { data: 0x7b226b223a2276227d7b226d223a226e227d7b2261223a2262222c2263223a2264222c2279223a227a227d, offsets: [0, 9, 18, 18, 43] }, validity: [0b____1011] } |
+| Output | NullableColumn { column: BinaryColumn { data: 0x400000004000000110000001100000016d6e4000000110000001100000016162, offsets: [0, 4, 18, 18, 32] }, validity: [0b____1011] }                       |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

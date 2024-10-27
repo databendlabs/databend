@@ -32,9 +32,9 @@ use crate::aggregates::aggregate_unary::UnaryState;
 #[derive(Default, BorshSerialize, BorshDeserialize)]
 pub struct SkewnessStateV2 {
     pub n: u64,
-    pub sum: f64,
-    pub sum_sqr: f64,
-    pub sum_cub: f64,
+    pub sum: F64,
+    pub sum_sqr: F64,
+    pub sum_cub: F64,
 }
 
 impl<T> UnaryState<T, Float64Type> for SkewnessStateV2
@@ -75,25 +75,23 @@ where
             builder.push(F64::from(0_f64));
             return Ok(());
         }
-        let n = self.n as f64;
+
+        let (n, sum, sum_sqr, sum_cub) = (self.n as f64, *self.sum, *self.sum_sqr, *self.sum_cub);
         let temp = 1.0 / n;
-        let div = (temp * (self.sum_sqr - self.sum * self.sum * temp))
-            .powi(3)
-            .sqrt();
+        let div = (temp * (sum_sqr - sum * sum * temp)).powi(3).sqrt();
         if div == 0.0 {
             builder.push(F64::from(0_f64));
             return Ok(());
         }
         let temp1 = (n * (n - 1.0)).sqrt() / (n - 2.0);
-        let value = temp1
-            * temp
-            * (self.sum_cub - 3.0 * self.sum_sqr * self.sum * temp
-                + 2.0 * self.sum.powi(3) * temp * temp)
-            / div;
-        if value.is_infinite() || value.is_nan() {
-            return Err(ErrorCode::SemanticError("Skew is out of range!"));
-        } else {
+        let value =
+            temp1 * temp * (sum_cub - 3.0 * sum_sqr * sum * temp + 2.0 * sum.powi(3) * temp * temp)
+                / div;
+
+        if value.is_finite() {
             builder.push(F64::from(value));
+        } else {
+            builder.push(F64::from(f64::NAN));
         }
         Ok(())
     }

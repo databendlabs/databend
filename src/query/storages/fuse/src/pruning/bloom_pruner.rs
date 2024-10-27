@@ -218,7 +218,7 @@ impl BloomPrunerCreator {
             return Ok(None);
         };
 
-        if self.dal.is_exist(bloom_index_location.0.as_str()).await? {
+        if self.dal.exists(bloom_index_location.0.as_str()).await? {
             info!("bloom index exists, ignore");
             return Ok(None);
         }
