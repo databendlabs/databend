@@ -30,11 +30,12 @@ use opendal::services::Fs;
 use opendal::Operator;
 
 use crate::pipelines::processors::transforms::FrameBound;
+use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
+use crate::pipelines::processors::transforms::WindowSortDesc;
 use crate::pipelines::processors::transforms::WindowSpillSettings;
-use crate::pipelines::processors::TransformWindow;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
 
@@ -56,11 +57,11 @@ impl PipelineBuilder {
             .iter()
             .map(|o| {
                 let offset = input_schema.index_of(&o.order_by.to_string())?;
-                Ok(SortColumnDescription {
+                Ok(WindowSortDesc {
                     offset,
                     asc: o.asc,
                     nulls_first: o.nulls_first,
-                    is_nullable: input_schema.field(offset).is_nullable(), // Used for check null frame.
+                    is_nullable: input_schema.field(offset).is_nullable(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -164,7 +165,6 @@ impl PipelineBuilder {
                     offset,
                     asc: desc.asc,
                     nulls_first: desc.nulls_first,
-                    is_nullable: plan_schema.field(offset).is_nullable(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;

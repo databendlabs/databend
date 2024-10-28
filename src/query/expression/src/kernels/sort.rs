@@ -36,7 +36,6 @@ pub struct SortColumnDescription {
     pub offset: usize,
     pub asc: bool,
     pub nulls_first: bool,
-    pub is_nullable: bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -140,11 +139,10 @@ pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Resul
     let descriptions = order_columns
         .iter()
         .enumerate()
-        .map(|(idx, array)| SortColumnDescription {
+        .map(|(idx, _)| SortColumnDescription {
             offset: idx,
             asc: true,
             nulls_first: false,
-            is_nullable: array.data_type().is_nullable(),
         })
         .collect::<Vec<_>>();
 

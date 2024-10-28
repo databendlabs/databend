@@ -82,19 +82,16 @@ impl IEJoinState {
                 offset: 0,
                 asc: l1_order,
                 nulls_first: false,
-                is_nullable: l1_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 1,
                 asc: l2_order,
                 nulls_first: false,
-                is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 2,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             },
         ];
 
@@ -103,20 +100,17 @@ impl IEJoinState {
                 offset: 1,
                 asc: l2_order,
                 nulls_first: false,
-                is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 0,
                 asc: l1_order,
                 nulls_first: false,
-                is_nullable: l1_data_type.is_nullable(),
             },
             // `_tuple_id` column
             SortColumnDescription {
                 offset: 2,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             },
         ];
 
