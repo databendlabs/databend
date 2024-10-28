@@ -286,7 +286,7 @@ opendal = { version = "0.50.1", features = [
     "services-huggingface",
     "services-redis",
 ] }
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
+openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
@@ -318,7 +318,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "native-tls-alpn",
 ] }
 reqwest-hickory-resolver = "0.1"
-rotbl = { git = "https://github.com/drmingdrmer/rotbl", tag = "v0.1.2-alpha.6", features = [] }
+rotbl = { version = "0.1.2", features = [] }
 rustix = "0.38.37"
 semver = "1.0.14"
 serde = { version = "1.0.164", features = ["derive", "rc"] }
@@ -533,6 +533,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "ada713c" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.6" }
 orc-rust = { git = "https://github.com/datafusion-contrib/orc-rust", rev = "dfb1ede" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

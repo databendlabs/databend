@@ -8052,14 +8052,6 @@ checksum = "1e087f84d4f86bf4b218b927129862374b72199ae7d8657835f1e89000eea4fb"
 
 [[package]]
 name = "hashlink"
-version = "0.8.3"
-source = "git+https://github.com/drmingdrmer/hashlink?branch=master#0858a0afb08e7d52545c69e857128fc9c5f85ea5"
-dependencies = [
- "hashbrown 0.14.5",
-]
-
-[[package]]
-name = "hashlink"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8094feaf31ff591f651a2664fb9cfd92bba7a60ce3197265e9482ebe753c8f7"
@@ -8216,7 +8208,7 @@ dependencies = [
  "futures-util",
  "hickory-proto",
  "ipconfig",
- "lru-cache 0.1.2",
+ "lru-cache",
  "once_cell",
  "parking_lot 0.12.3",
  "rand",
@@ -9696,12 +9688,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "lru-cache"
-version = "0.1.4-alpha.4"
-source = "git+https://github.com/drmingdrmer/lru-cache?tag=v0.1.4-alpha.4#b70290fbfbf1e89b45c1546bd0a6768109210b8c"
+name = "lru-cache-map"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "227ef6c03002a1a4e03948ed0c7ba71375962a7e6be06ea6880c5ad96b847f85"
 dependencies = [
  "hashbrown 0.14.5",
- "hashlink 0.8.3",
+ "hashlink 0.8.4",
 ]
 
 [[package]]
@@ -10679,7 +10672,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -10701,7 +10694,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
 dependencies = [
  "chrono",
  "proc-macro2",
@@ -12809,16 +12802,18 @@ dependencies = [
 [[package]]
 name = "rotbl"
 version = "0.1.2"
-source = "git+https://github.com/drmingdrmer/rotbl?tag=v0.1.2-alpha.6#69bbe6a37e1c38703df5d0476c4c23d55551617a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "751d6483053228f9e4102fb1e3054ac727b3bde446c4abf02663220cd1bab332"
 dependencies = [
  "anyhow",
  "bincode 2.0.0-rc.3",
  "byteorder",
  "bytes",
+ "clap",
  "crc32fast",
  "futures",
  "futures-async-stream",
- "lru-cache 0.1.4-alpha.4",
+ "lru-cache-map",
  "num-format",
  "serde",
  "serde_json",
