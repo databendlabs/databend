@@ -159,7 +159,6 @@ impl DeltaTable {
     #[async_backtrace::framed]
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
         let op = init_operator(sp)?;
-        let op = opendal_compat::v0_50_to_v0_49(op);
         let opendal_store = Arc::new(OpendalStore::new(op));
 
         let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())

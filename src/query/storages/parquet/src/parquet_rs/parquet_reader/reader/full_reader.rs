@@ -272,7 +272,9 @@ impl AsyncFileReader for ParquetFileReader {
     fn get_metadata(&mut self) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
         Box::pin(async move {
             let size = self.size as usize;
+            #[allow(deprecated)]
             let mut loader = MetadataLoader::load(self, size, None).await?;
+            #[allow(deprecated)]
             loader.load_page_index(false, false).await?;
             Ok(Arc::new(loader.finish()))
         })

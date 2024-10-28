@@ -31,8 +31,8 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
-futures-util = "0.3.30"
-log = "0.4.21"
+futures-util = { workspace = true }
+log = { workspace = true }
 opendal = { workspace = true }
 orc-rust = { workspace = true }
 serde = { workspace = true }
