@@ -421,15 +421,15 @@ socket2 = "0.5.3"
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 sysinfo = "0.30"
 # FIXME: better to replace by chrono
+cidr = { version = "0.2.2" }
 p256 = "0.13"
+passwords = { version = "3.1.16", features = ["common-password"] }
 temp-env = "0.3.0"
 time = "0.3.14"
 toml = { version = "0.8", default-features = false }
 url = "2.3.1"
 wiremock = "0.6"
-passwords = { version = "3.1.16", features = ["common-password"] }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
-cidr = { version = "0.2.2" }
 
 # Observability
 fastrace = { version = "0.7.4", features = ["enable"] }

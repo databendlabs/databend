@@ -184,6 +184,7 @@ arrow-cast = { workspace = true }
 criterion = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
+hyper-util = { workspace = true }
 jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
@@ -198,7 +199,6 @@ tempfile = { workspace = true }
 tower = { workspace = true }
 url = { workspace = true }
 wiremock = { workspace = true }
-hyper-util = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }
