@@ -430,6 +430,7 @@ toml = { version = "0.8", default-features = false }
 url = "2.3.1"
 wiremock = "0.6"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
+test-harness = "0.1.1"
 
 # Observability
 env_logger = "0.11"

@@ -1347,18 +1347,6 @@ dependencies = [
 
 [[package]]
 name = "backon"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d67782c3f868daa71d3533538e98a8e13713231969def7536e8039606fc46bf0"
-dependencies = [
- "fastrand 2.1.0",
- "futures-core",
- "pin-project",
- "tokio",
-]
-
-[[package]]
-name = "backon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4fa97bb310c33c811334143cf64c5bb2b7b3c06e453db6b095d7061eff8f113"
@@ -5003,7 +4991,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
- "backon 0.4.4",
+ "backon",
  "clap",
  "databend-common-arrow",
  "databend-common-base",
@@ -5021,7 +5009,7 @@ dependencies = [
  "databend-common-tracing",
  "deepsize",
  "derive_more 1.0.0",
- "env_logger 0.10.2",
+ "env_logger 0.11.5",
  "fastrace",
  "feature-set",
  "futures",
@@ -5102,7 +5090,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
- "backon 1.2.0",
+ "backon",
  "base64 0.22.1",
  "buf-list",
  "bumpalo",
@@ -10658,7 +10646,7 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "async-trait",
- "backon 1.2.0",
+ "backon",
  "base64 0.22.1",
  "bb8",
  "bytes",
