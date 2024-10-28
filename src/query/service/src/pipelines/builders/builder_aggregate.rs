@@ -141,18 +141,17 @@ impl PipelineBuilder {
         // For rank limit, we can filter data using sort with rank before partial
         if let Some(rank_limit) = &aggregate.rank_limit {
             let sort_desc = rank_limit
-            .0
-            .iter()
-            .map(|desc| {
-                let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
-                Ok(SortColumnDescription {
-                    offset,
-                    asc: desc.asc,
-                    nulls_first: desc.nulls_first,
-                    is_nullable: schema_before_group_by.field(offset).is_nullable(),  // This information is not needed here.
+                .0
+                .iter()
+                .map(|desc| {
+                    let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
+                    Ok(SortColumnDescription {
+                        offset,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
                 })
-            })
-            .collect::<Result<Vec<_>>>()?;
+                .collect::<Result<Vec<_>>>()?;
             let sort_desc = Arc::new(sort_desc);
 
             self.main_pipeline.add_transformer(|| {

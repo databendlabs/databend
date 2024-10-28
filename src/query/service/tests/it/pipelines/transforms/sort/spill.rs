@@ -44,7 +44,6 @@ fn create_sort_spill_pipeline(
         offset: 0,
         asc: true,
         nulls_first: true,
-        is_nullable: false,
     }]);
 
     let order_col_generated = false;

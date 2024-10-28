@@ -194,7 +194,6 @@ impl<T: ArgType> SimpleRowConverter<T> {
             offset: 0,
             asc,
             nulls_first: false,
-            is_nullable: false,
         }];
 
         R::from_column(&col, &desc)

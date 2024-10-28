@@ -222,7 +222,6 @@ impl PipelineBuilder {
                         offset: *index,
                         asc: true,
                         nulls_first: false,
-                        is_nullable: false, // This information is not needed here.
                     })
                     .collect();
                 let sort_desc = Arc::new(sort_desc);
