@@ -66,6 +66,7 @@ mod user_functions_table;
 mod users_table;
 mod util;
 mod virtual_columns_table;
+
 pub use background_jobs_table::BackgroundJobTable;
 pub use background_tasks_table::BackgroundTaskTable;
 pub use backtrace_table::BacktraceTable;
