@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Arguments;
+use std::path::Path;
+
+use databend_common_base::runtime::ThreadTracker;
+use log::Record;
 use logforth::append::rolling_file::NonBlockingBuilder;
 use logforth::append::rolling_file::RollingFileWriter;
 use logforth::append::rolling_file::Rotation;
 use logforth::append::RollingFile;
-use logforth::layout::JsonLayout;
-use logforth::layout::TextLayout;
+use logforth::layout::collect_kvs;
+use logforth::layout::CustomLayout;
+use logforth::layout::KvDisplay;
 use logforth::Layout;
+use serde_json::Map;
 
 /// Create a `BufWriter<NonBlocking>` for a rolling file logger.
 pub(crate) fn new_rolling_file_appender(
@@ -41,8 +48,86 @@ pub(crate) fn new_rolling_file_appender(
 
 pub fn get_layout(format: &str) -> Layout {
     match format {
-        "text" => TextLayout::default().into(),
-        "json" => JsonLayout::default().into(),
+        "text" => text_layout(),
+        "json" => json_layout(),
         _ => unimplemented!("file logging format {format} is not supported"),
     }
+}
+
+fn text_layout() -> Layout {
+    CustomLayout::new(
+        |record: &Record, f: &dyn Fn(Arguments) -> anyhow::Result<()>| {
+            match ThreadTracker::query_id() {
+                None => {
+                    f(format_args!(
+                        "{} {:>5} {}: {}:{} {}{}",
+                        chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                        record.level(),
+                        record.module_path().unwrap_or(""),
+                        Path::new(record.file().unwrap_or_default())
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_default(),
+                        record.line().unwrap_or(0),
+                        record.args(),
+                        KvDisplay::new(record.key_values()),
+                    ))?;
+                }
+                Some(query_id) => {
+                    f(format_args!(
+                        "{} {} {:>5} {}: {}:{} {}{}",
+                        query_id,
+                        chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                        record.level(),
+                        record.module_path().unwrap_or(""),
+                        Path::new(record.file().unwrap_or_default())
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_default(),
+                        record.line().unwrap_or(0),
+                        record.args(),
+                        KvDisplay::new(record.key_values()),
+                    ))?;
+                }
+            }
+
+            Ok(())
+        },
+    )
+    .into()
+}
+
+fn json_layout() -> Layout {
+    CustomLayout::new(
+        |record: &Record, f: &dyn Fn(Arguments) -> anyhow::Result<()>| {
+            let mut fields = Map::new();
+            fields.insert("message".to_string(), format!("{}", record.args()).into());
+            for (k, v) in collect_kvs(record.key_values()) {
+                fields.insert(k, v.into());
+            }
+
+            match ThreadTracker::query_id() {
+                None => {
+                    f(format_args!(
+                        r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
+                        chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                        record.level(),
+                        serde_json::to_string(&fields).unwrap_or_default(),
+                    ))?;
+                }
+                Some(query_id) => {
+                    f(format_args!(
+                        r#"{{"timestamp":"{}","level":"{}","query_id":"{}","fields":{}}}"#,
+                        chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                        record.level(),
+                        query_id,
+                        serde_json::to_string(&fields).unwrap_or_default(),
+                    ))?;
+                }
+            }
+
+            Ok(())
+        },
+    )
+    .into()
 }

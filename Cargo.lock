@@ -4745,6 +4745,7 @@ dependencies = [
 name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "backtrace",
  "chrono",
  "color-backtrace",
@@ -4761,6 +4762,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "serde",
+ "serde_json",
  "strip-ansi-escapes",
  "tonic 0.11.0",
 ]
@@ -10018,8 +10020,9 @@ dependencies = [
 
 [[package]]
 name = "logforth"
-version = "0.11.0"
-source = "git+http://github.com/andylokandy/logforth?rev=0ca61ca#0ca61ca0fa3c87b5af5a08aa0354d96604e685c0"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633080680671612565f637d1e33c5bcb7d58fb12c7d658baa166a03487265e80"
 dependencies = [
  "anyhow",
  "colored",
