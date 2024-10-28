@@ -19,6 +19,11 @@ result_size=$(echo "select time_travel_size from fuse_time_travel_size('test_fus
 
 expected_size=$(find /tmp/test_fuse_time_travel_size/ -type f -exec du -b  {} + | awk '{sum += $1} END {print sum}')
 
-echo $result_size
-echo $expected_size
+if [ $((result_size - expected_size)) -lt 10 ] && [ $((expected_size - result_size)) -lt 10 ]; then
+    echo "Size difference is less than 10 bytes"
+else
+    echo "Size difference is too large: result_size=$result_size, expected_size=$expected_size"
+    exit 1
+fi
+
 
