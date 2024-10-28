@@ -14,19 +14,24 @@
 
 use std::sync::Arc;
 
+use async_channel::Sender;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use log::info;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -151,33 +156,7 @@ impl FuseTable {
                 });
             }
         }
-        if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-
-            // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_schema = table_schema.clone();
-                let ctx = query_ctx.clone();
-                let push_downs = push_downs.clone();
-                // let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                        .await?;
-
-                    Result::<_>::Ok(partitions)
-                })?;
-
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        }
-
+        let is_lazy = !lazy_init_segments.is_empty();
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
@@ -219,8 +198,7 @@ impl FuseTable {
                 })
                 .transpose()?,
         );
-
-        self.build_fuse_source_pipeline(
+        let senders = self.build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
             self.storage_format,
@@ -230,10 +208,31 @@ impl FuseTable {
             max_io_requests,
             index_reader,
             virtual_reader,
+            is_lazy,
         )?;
 
         // replace the column which has data mask if needed
-        self.apply_data_mask_policy_if_needed(ctx, plan, pipeline)?;
+        self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
+
+        if is_lazy {
+            let table = self.clone();
+            let table_schema = self.schema_with_stream();
+            let push_downs = plan.push_downs.clone();
+
+            Runtime::with_worker_threads(2, Some("PruneWorker".to_string()))?.spawn(async move {
+                let (_statistics, partitions) = table
+                    .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
+                    .await?;
+                let sender_size = senders.len();
+                for (i, part) in partitions.partitions.into_iter().enumerate() {
+                    senders[i % sender_size]
+                        .send(part)
+                        .await
+                        .map_err(|_e| ErrorCode::Internal("partition senders send failed"))?;
+                }
+                Ok::<_, ErrorCode>(())
+            });
+        }
 
         Ok(())
     }
@@ -250,7 +249,8 @@ impl FuseTable {
         max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
-    ) -> Result<()> {
+        is_lazy: bool,
+    ) -> Result<Vec<Sender<PartInfoPtr>>> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
         match storage_format {
@@ -265,6 +265,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                is_lazy,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -276,6 +277,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                is_lazy,
             ),
         }
     }
