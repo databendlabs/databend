@@ -23,15 +23,14 @@ fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
-logforth = { version = "0.12", features = [
+logforth = { version = "0.14", features = [
     'json',
     'rolling_file',
     'opentelemetry',
     'fastrace',
-    "env-filter",
 ] }
 opentelemetry = { workspace = true }
-opentelemetry-otlp = { workspace = true }
+opentelemetry-otlp = { workspace = true, features = ["reqwest-client"] }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
