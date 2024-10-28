@@ -171,9 +171,13 @@ pub mod linux {
                 // mmap allocator for large frequent memory allocation and take jemalloc
                 // as fallback.
                 let raw = ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
-                raw.add(old_layout.size())
-                    .write_bytes(0, new_layout.size() - old_layout.size());
-                NonNull::new(raw as *mut ()).unwrap()
+                if raw.is_null() {
+                    return Err(AllocError);
+                } else {
+                    raw.add(old_layout.size())
+                        .write_bytes(0, new_layout.size() - old_layout.size());
+                    NonNull::new(raw as *mut ()).unwrap()
+                }
             };
 
             Ok(NonNull::<[u8]>::from_raw_parts(
@@ -209,9 +213,13 @@ pub mod linux {
             } else {
                 let data_address =
                     ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
-                let metadata = new_layout.size();
-                let slice = std::slice::from_raw_parts_mut(data_address, metadata);
-                NonNull::new(slice).ok_or(AllocError)?
+                if data_address.is_null() {
+                    return Err(AllocError);
+                } else {
+                    let metadata = new_layout.size();
+                    let slice = std::slice::from_raw_parts_mut(data_address, metadata);
+                    NonNull::new(slice).ok_or(AllocError)?
+                }
             };
 
             Ok(new_ptr)

@@ -129,13 +129,13 @@ where
         }
 
         if let Some(block) = self.output_data.take() {
-            debug_assert!(matches!(self.state, State::MergeFinal | State::Finish));
+            assert!(matches!(self.state, State::MergeFinal | State::Finish));
             self.output_block(block);
             return Ok(Event::NeedConsume);
         }
 
         if matches!(self.state, State::Finish) {
-            debug_assert!(self.input.is_finished());
+            assert!(self.input.is_finished());
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -179,6 +179,7 @@ where
                     if meta.is_none() {
                         // It means we get the last block.
                         // We can launch external merge sort now.
+                        self.input.finish();
                         self.state = State::Merging;
                     }
                     self.input_data = Some(block);
@@ -511,7 +512,6 @@ mod tests {
             offset: 0,
             asc: true,
             nulls_first: true,
-            is_nullable: false,
         }]);
 
         let transform = TransformSortSpill::<A>::create(

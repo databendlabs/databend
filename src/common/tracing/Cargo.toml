@@ -28,6 +28,7 @@ logforth = { version = "0.12", features = [
     'rolling_file',
     'opentelemetry',
     'fastrace',
+    "env-filter",
 ] }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }

@@ -26,6 +26,7 @@ use std::fmt::Debug;
 pub use data_version::DataVersion;
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_stoerr::MetaBytesError;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
 use log::info;
@@ -82,7 +83,18 @@ impl OnDisk {
         let tree = SledTree::open(db, &tree_name, config.is_sync())?;
         let ks = tree.key_space::<DataHeader>();
 
-        let header = ks.get(&Self::KEY_HEADER.to_string())?;
+        let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {
+            MetaStorageError::BytesError(MetaBytesError {
+                source: AnyError::error(format!(
+                    "Unable to read meta-service data version from disk; \
+                    Possible reasons: opening future version meta-service with old version binary, \
+                    or the on-disk data is damaged. \
+                    error: {}",
+                    e
+                ))
+                .add_context(|| "open on-disk data"),
+            })
+        })?;
         info!("Loaded header: {:?}", header);
 
         if let Some(v) = header {

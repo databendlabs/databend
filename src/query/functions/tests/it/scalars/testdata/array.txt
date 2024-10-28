@@ -100,6 +100,24 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : array_size(['a', 'b', 'c', 'd'])
+raw expr       : array_size(array('a', 'b', 'c', 'd'))
+checked expr   : length<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : array_length(['a', 'b', 'c', 'd'])
+raw expr       : array_length(array('a', 'b', 'c', 'd'))
+checked expr   : length<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
 ast            : range(10, 20)
 raw expr       : range(10, 20)
 checked expr   : range<UInt64, UInt64>(to_uint64<UInt8>(10_u8), to_uint64<UInt8>(20_u8))
