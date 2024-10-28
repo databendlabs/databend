@@ -15,7 +15,7 @@ anyerror = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 hickory-resolver = "0.24"
-hyper = "0.14.20"
+hyper_v0_14 = { workspace = true }
 jwt-simple = "0.11.0"
 log = { workspace = true }
 serde = { workspace = true }
