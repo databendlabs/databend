@@ -17,8 +17,10 @@ use arrow_data::ArrayDataBuilder;
 use arrow_schema::DataType;
 
 use crate::arrow::array::Arrow2Arrow;
+use crate::arrow::array::BinaryViewArray;
 use crate::arrow::array::BinaryViewArrayGeneric;
 use crate::arrow::array::MutableBinaryViewArray;
+use crate::arrow::array::Utf8ViewArray;
 use crate::arrow::array::ViewType;
 use crate::arrow::bitmap::Bitmap;
 
@@ -29,7 +31,7 @@ impl<T: ViewType + ?Sized, P: AsRef<T>> FromIterator<Option<P>> for BinaryViewAr
     }
 }
 
-impl<T: ViewType + ?Sized> Arrow2Arrow for BinaryViewArrayGeneric<T> {
+impl Arrow2Arrow for BinaryViewArray {
     fn to_data(&self) -> ArrayData {
         let builder = ArrayDataBuilder::new(DataType::BinaryView)
             .len(self.len())
@@ -48,6 +50,33 @@ impl<T: ViewType + ?Sized> Arrow2Arrow for BinaryViewArrayGeneric<T> {
         let validity = data.nulls().map(|x| Bitmap::from_null_buffer(x.clone()));
         Self::try_new(
             crate::arrow::datatypes::DataType::BinaryView,
+            views,
+            buffers,
+            validity,
+        )
+        .unwrap()
+    }
+}
+
+impl Arrow2Arrow for Utf8ViewArray {
+    fn to_data(&self) -> ArrayData {
+        let builder = ArrayDataBuilder::new(DataType::Utf8View)
+            .len(self.len())
+            .add_buffer(self.views.clone().into())
+            .add_buffers(self.buffers.iter().map(|x| x.clone().into()).collect())
+            .nulls(self.validity.clone().map(Into::into));
+        unsafe { builder.build_unchecked() }
+    }
+
+    fn from_data(data: &ArrayData) -> Self {
+        let views = crate::arrow::buffer::Buffer::from(data.buffers()[0].clone());
+        let buffers = data.buffers()[1..]
+            .iter()
+            .map(|x| crate::arrow::buffer::Buffer::from(x.clone()))
+            .collect();
+        let validity = data.nulls().map(|x| Bitmap::from_null_buffer(x.clone()));
+        Self::try_new(
+            crate::arrow::datatypes::DataType::Utf8View,
             views,
             buffers,
             validity,

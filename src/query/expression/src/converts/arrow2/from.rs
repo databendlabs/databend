@@ -536,6 +536,15 @@ impl Column {
                         );
                     Column::Variant(binary_array_to_binary_column(arrow_col))
                 }
+                (DataType::Variant, ArrowDataType::BinaryView) => {
+                    let arrow_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<databend_common_arrow::arrow::array::BinaryViewArray>()
+                        .expect(
+                            "fail to read `Variant` from arrow: array should be `BinaryViewArray`",
+                        );
+                    Column::Variant(BinaryColumn::new(arrow_col.clone()))
+                }
                 (DataType::Array(ty), ArrowDataType::List(_)) => {
                     let values_col = arrow_col
                         .as_any()
