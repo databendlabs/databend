@@ -17,10 +17,13 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use databend_common_base::base::tokio::time::timeout;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
+
+const DEFAULT_DETECT_REGION_TIMEOUT_SEC: u64 = 10;
 
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,9 +154,17 @@ impl StorageParams {
                             ))
                         })?;
                 }
-                s3.region = opendal::services::S3::detect_region(&s3.endpoint_url, &s3.bucket)
-                    .await
-                    .unwrap_or_default();
+
+                s3.region = timeout(
+                    Duration::from_secs(DEFAULT_DETECT_REGION_TIMEOUT_SEC),
+                    opendal::services::S3::detect_region(&endpoint, &s3.bucket),
+                )
+                .await
+                .map_err(|e| {
+                    ErrorCode::StorageOther(format!("detect region timeout, time used {}", e))
+                })?
+                .unwrap_or_default();
+
                 StorageParams::S3(s3)
             }
             v => v,
