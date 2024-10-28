@@ -1225,6 +1225,9 @@ fn test_expr() {
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
         r#"(current_timestamp, current_timestamp(), now())"#,
         r#"ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)"#,
+        r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
+        r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
+        r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
     ];
 
     for case in cases {
