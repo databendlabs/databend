@@ -868,7 +868,6 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     offset: 0,
                     asc: sort_desc.0,
                     nulls_first: sort_desc.1,
-                    is_nullable: false,  // This information is not needed here.
                 }];
                 let columns = vec![BlockEntry{
                     data_type: arr.data_type(),
