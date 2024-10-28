@@ -22,6 +22,7 @@ mod fuse_encoding;
 mod fuse_segment;
 mod fuse_snapshot;
 mod fuse_statistic;
+mod fuse_time_travel_size;
 mod fuse_vacuum_temporary_table;
 mod table_args;
 
