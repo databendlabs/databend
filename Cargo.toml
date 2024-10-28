@@ -450,6 +450,16 @@ prometheus-parse = "0.2.3"
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
+env_logger = "0.11"
+
+# Databend Integration Test
+databend-client = { version = "0.22" }
+databend-driver = { version = "0.22" }
+databend-driver-core = { version = "0.22" }
+msql-srv = "0.11.0"
+mysql_common = "0.32.4"
+sqllogictest = "0.21.0"
+sqlparser = "0.50.0"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
