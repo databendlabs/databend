@@ -29,7 +29,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
@@ -57,9 +56,7 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
-use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
-use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
@@ -378,10 +375,7 @@ impl InteractiveWorkerBase {
                 context.set_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
-
-                let entry = QueryEntry::create(&context, &plan, &extras)?;
-                let _guard = QueriesQueueManager::instance().acquire(entry).await?;
+                let (plan, _, _guard) = interpreter_plan_sql(context.clone(), query, true).await?;
 
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
                 let has_result_set = plan.has_result_set();
@@ -502,9 +496,7 @@ impl InteractiveWorker {
                     .client_session_api(&tenant)
                     .upsert_client_session_id(
                         &session_id,
-                        ClientSession {
-                            user_name: user_name.clone(),
-                        },
+                        &user_name,
                         Duration::from_secs(3600 + 600),
                     )
                     .await

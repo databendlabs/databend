@@ -12,26 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_SESSION_ID;
+use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
+use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
+use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_metrics::http::metrics_incr_http_request_count;
-use databend_common_metrics::http::metrics_incr_http_response_panics_count;
-use databend_common_metrics::http::metrics_incr_http_slow_request_count;
-use databend_common_metrics::http::metrics_observe_http_response_duration;
+use databend_common_meta_types::NodeInfo;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -51,23 +49,26 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::Addr;
 use poem::Endpoint;
+use poem::Error;
 use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
 use poem::Response;
 use uuid::Uuid;
 
-use super::v1::HttpQueryContext;
-use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
+use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::SessionClaim;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
-
+const USER_AGENT: &str = "User-Agent";
+const TRACE_PARENT: &str = "traceparent";
 #[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
@@ -78,28 +79,42 @@ pub enum EndpointKind {
     Clickhouse,
     NoAuth,
     Verify,
+    UploadToStage,
+    SystemInfo,
 }
 
 impl EndpointKind {
+    /// avoid the cost of get user from meta
     pub fn need_user_info(&self) -> bool {
         !matches!(self, EndpointKind::NoAuth | EndpointKind::PollQuery)
     }
+    pub fn may_need_sticky(&self) -> bool {
+        matches!(
+            self,
+            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout
+        )
+    }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
         match self {
-            EndpointKind::Verify => Ok(None),
+            EndpointKind::Verify | EndpointKind::NoAuth => Ok(None),
             EndpointKind::Refresh => Ok(Some(TokenType::Refresh)),
-            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout => {
-                Ok(Some(TokenType::Session))
+            EndpointKind::StartQuery
+            | EndpointKind::PollQuery
+            | EndpointKind::Logout
+            | EndpointKind::SystemInfo
+            | EndpointKind::UploadToStage => {
+                if GlobalConfig::instance().query.management_mode {
+                    Ok(None)
+                } else {
+                    Ok(Some(TokenType::Session))
+                }
             }
-            _ => Err(ErrorCode::AuthenticateFailure(format!(
-                "should not use databend token for {self:?}",
-            ))),
+            EndpointKind::Login | EndpointKind::Clickhouse => Err(ErrorCode::AuthenticateFailure(
+                format!("should not use databend token for {self:?}",),
+            )),
         }
     }
 }
-
-const USER_AGENT: &str = "User-Agent";
-const TRACE_PARENT: &str = "traceparent";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
@@ -165,14 +180,14 @@ fn get_credential(
     let client_ip = get_client_ip(req);
     if std_auth_headers.is_empty() {
         if matches!(kind, HttpHandlerKind::Clickhouse) {
-            auth_clickhouse_name_password(req, client_ip)
+            get_clickhouse_name_password(req, client_ip)
         } else {
             Err(ErrorCode::AuthenticateFailure(
                 "No authorization header detected",
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, client_ip, endpoint_kind)
+        get_credential_from_header(&std_auth_headers, client_ip, endpoint_kind)
     }
 }
 
@@ -180,7 +195,7 @@ fn get_credential(
 /// not found, fallback to the remote address, which might be local proxy's ip address.
 /// please note that when it comes with network policy, we need make sure the incoming
 /// traffic comes from a trustworthy proxy instance.
-pub fn get_client_ip(req: &Request) -> Option<String> {
+fn get_client_ip(req: &Request) -> Option<String> {
     let headers = ["X-Real-IP", "X-Forwarded-For", "CF-Connecting-IP"];
     for &header in headers.iter() {
         if let Some(value) = req.headers().get(header) {
@@ -203,7 +218,7 @@ pub fn get_client_ip(req: &Request) -> Option<String> {
     client_ip
 }
 
-fn auth_by_header(
+fn get_credential_from_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
     endpoint_kind: EndpointKind,
@@ -246,7 +261,7 @@ fn auth_by_header(
     }
 }
 
-fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Result<Credential> {
+fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Result<Credential> {
     let (user, key) = (
         req.headers().get("X-CLICKHOUSE-USER"),
         req.headers().get("X-CLICKHOUSE-KEY"),
@@ -373,14 +388,94 @@ impl<E> HTTPSessionEndpoint<E> {
     }
 }
 
+async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Response> {
+    let addr = node.http_address.clone();
+    let config = GlobalConfig::instance();
+    let scheme = if config.query.http_handler_tls_server_key.is_empty()
+        || config.query.http_handler_tls_server_cert.is_empty()
+    {
+        "http"
+    } else {
+        "https"
+    };
+    let url = format!("{scheme}://{addr}/v1{}", req.uri());
+
+    let client = reqwest::Client::new();
+    let reqwest_request = client
+        .request(req.method().clone(), &url)
+        .headers(req.headers().clone())
+        .body(req.take_body().into_bytes().await?)
+        .build()
+        .map_err(|e| {
+            HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                "fail to build forward request: {e}"
+            )))
+        })?;
+
+    let response = client.execute(reqwest_request).await.map_err(|e| {
+        HttpErrorCode::server_error(ErrorCode::Internal(format!(
+            "fail to send forward request: {e}",
+        )))
+    })?;
+
+    let status = StatusCode::from_u16(response.status().as_u16())
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let headers = response.headers().clone();
+    let body = response.bytes().await.map_err(|e| {
+        HttpErrorCode::server_error(ErrorCode::Internal(format!(
+            "fail to send forward request: {e}",
+        )))
+    })?;
+    let mut poem_resp = Response::builder().status(status).body(body);
+    let headers_ref = poem_resp.headers_mut();
+    for (key, value) in headers.iter() {
+        headers_ref.insert(key, value.to_owned());
+    }
+    Ok(poem_resp)
+}
+
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
     #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
+        let headers = req.headers().clone();
+
+        if self.endpoint_kind.may_need_sticky()
+            && let Some(sticky_node_id) = headers.get(HEADER_STICKY)
+        {
+            let sticky_node_id = sticky_node_id
+                .to_str()
+                .map_err(|e| {
+                    HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                        "Invalid Header ({HEADER_STICKY}: {sticky_node_id:?}): {e}"
+                    )))
+                })?
+                .to_string();
+            let local_id = GlobalConfig::instance().query.node_id.clone();
+            if local_id != sticky_node_id {
+                let config = GlobalConfig::instance();
+                return if let Some(node) = ClusterDiscovery::instance()
+                    .find_node_by_id(&sticky_node_id, &config)
+                    .await
+                    .map_err(HttpErrorCode::server_error)?
+                {
+                    log::info!(
+                        "forwarding /v1{} from {local_id} to {sticky_node_id}",
+                        req.uri()
+                    );
+                    forward_request(req, node).await
+                } else {
+                    let msg = format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
+                    warn!("{}", msg);
+                    Err(Error::from(HttpErrorCode::bad_request(
+                        ErrorCode::BadArguments(msg),
+                    )))
+                };
+            }
+        }
         let method = req.method().clone();
         let uri = req.uri().clone();
-        let headers = req.headers().clone();
 
         let query_id = req
             .headers()
@@ -436,71 +531,8 @@ pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<Stri
         .collect()
 }
 
-pub struct MetricsMiddleware {
-    api: String,
-}
-
-impl MetricsMiddleware {
-    pub fn new(api: impl Into<String>) -> Self {
-        Self { api: api.into() }
-    }
-}
-
-impl<E: Endpoint> Middleware<E> for MetricsMiddleware {
-    type Output = MetricsMiddlewareEndpoint<E>;
-
-    fn transform(&self, ep: E) -> Self::Output {
-        MetricsMiddlewareEndpoint {
-            ep,
-            api: self.api.clone(),
-        }
-    }
-}
-
-pub struct MetricsMiddlewareEndpoint<E> {
-    api: String,
-    ep: E,
-}
-
-impl<E: Endpoint> Endpoint for MetricsMiddlewareEndpoint<E> {
-    type Output = Response;
-
-    async fn call(&self, req: Request) -> poem::error::Result<Self::Output> {
-        let start_time = Instant::now();
-        let method = req.method().to_string();
-        let output = self.ep.call(req).await?;
-        let resp = output.into_response();
-        let status_code = resp.status().to_string();
-        let duration = start_time.elapsed();
-        metrics_incr_http_request_count(method.clone(), self.api.clone(), status_code.clone());
-        metrics_observe_http_response_duration(method.clone(), self.api.clone(), duration);
-        if duration.as_secs_f64() > 60.0 {
-            // TODO: replace this into histogram
-            metrics_incr_http_slow_request_count(method, self.api.clone(), status_code);
-        }
-        Ok(resp)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct PanicHandler {}
-
-impl PanicHandler {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl poem::middleware::PanicHandler for PanicHandler {
-    type Response = (StatusCode, &'static str);
-
-    fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
-        metrics_incr_http_response_panics_count();
-        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
-    }
-}
 pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
-    let resp = match next.call(req).await {
+    let mut resp = match next.call(req).await {
         Ok(resp) => resp.into_response(),
         Err(err) => (
             err.status(),
@@ -514,5 +546,21 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
         )
             .into_response(),
     };
+    resp.headers_mut()
+        .insert(HEADER_VERSION, QUERY_SEMVER.to_string().parse().unwrap());
     Ok(resp)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::servers::http::middleware::session::get_client_ip;
+
+    #[test]
+    fn test_parse_ip() {
+        let req = poem::Request::builder()
+            .header("X-Forwarded-For", "1.2.3.4")
+            .finish();
+        let ip = get_client_ip(&req);
+        assert_eq!(ip, Some("1.2.3.4".to_string()));
+    }
 }

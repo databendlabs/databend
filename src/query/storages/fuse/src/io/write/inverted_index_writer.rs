@@ -14,8 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::io::Write;
-use std::path::Path;
 use std::sync::Arc;
 
 use arrow_ipc::writer::write_message;
@@ -52,15 +50,11 @@ use tantivy::tokenizer::Stemmer;
 use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
-use tantivy::Directory;
-use tantivy::Index;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
 use tantivy::IndexWriter;
 use tantivy::SegmentComponent;
 use tantivy_jieba::JiebaTokenizer;
-
-use crate::index::build_tantivy_footer;
 
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
@@ -155,14 +149,14 @@ impl InvertedIndexWriter {
         let termdict_file = segment.open_read(SegmentComponent::Terms)?;
         extract_fsts(termdict_file, &mut fields, &mut values)?;
 
+        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
+        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
+
         let posting_file = segment.open_read(SegmentComponent::Postings)?;
         extract_component_fields("idx", posting_file, &mut fields, &mut values)?;
 
         let position_file = segment.open_read(SegmentComponent::Positions)?;
         extract_component_fields("pos", position_file, &mut fields, &mut values)?;
-
-        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
-        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
 
         let inverted_index_schema = TableSchema::new(fields);
 
@@ -174,178 +168,6 @@ impl InvertedIndexWriter {
         let inverted_index_block = DataBlock::new(index_columns, 1);
 
         Ok((inverted_index_schema, inverted_index_block))
-    }
-
-    // The tantivy index data consists of eight files.
-    // `.managed.json` file stores the name of the file that the index contains, for example:
-    // [
-    //   "94bce521d5bc4eccbf3e7a0212093622.pos",
-    //   "94bce521d5bc4eccbf3e7a0212093622.fieldnorm",
-    //   "94bce521d5bc4eccbf3e7a0212093622.fast",
-    //   "meta.json",
-    //   "94bce521d5bc4eccbf3e7a0212093622.term",
-    //   "94bce521d5bc4eccbf3e7a0212093622.store",
-    //   "94bce521d5bc4eccbf3e7a0212093622.idx"
-    // ]
-    //
-    // `meta.json` file store the meta information associated with the index, for example:
-    // {
-    //   "index_settings": {
-    //     "docstore_compression": "lz4",
-    //     "docstore_blocksize": 16384
-    //   },
-    //   "segments":[{
-    //     "segment_id": "94bce521-d5bc-4ecc-bf3e-7a0212093622",
-    //     "max_doc": 6,
-    //     "deletes": null
-    //   }],
-    //   "schema":[{
-    //     "name": "title",
-    //     "type": "text",
-    //     "options": {
-    //       "indexing": {
-    //         "record": "position",
-    //         "fieldnorms": true,
-    //         "tokenizer": "en"
-    //       },
-    //       "stored": false,
-    //       "fast": false
-    //     }
-    //   }, {
-    //     "name": "content",
-    //     "type": "text",
-    //     "options": {
-    //       "indexing": {
-    //         "record": "position",
-    //         "fieldnorms": true,
-    //         "tokenizer": "en"
-    //       },
-    //       "stored": false,
-    //       "fast": false
-    //     }
-    //   }],
-    //   "opstamp":0
-    // }
-    //
-    // `terms` file stores the term dictionary, the value is
-    // an address into the `postings` file and the `positions` file.
-    // `postings` file stores the lists of document ids and freqs.
-    // `positions` file stores the positions of terms in each document.
-    // `field norms` file stores the sum of the length of the term.
-    // `fast fields` file stores column-oriented documents.
-    // `store` file stores row-oriented documents.
-    //
-    // More details can be seen here
-    // https://github.com/quickwit-oss/tantivy/blob/main/src/index/segment_component.rs#L8
-    //
-    // We merge the data from these files into one file and
-    // record the offset to read each part of the data.
-    #[async_backtrace::framed]
-    fn write_index<W: Write>(mut writer: &mut W, index: &Index) -> Result<()> {
-        let directory = index.directory();
-
-        let managed_filepath = Path::new(".managed.json");
-        let managed_bytes = directory.atomic_read(managed_filepath)?;
-
-        let meta_filepath = Path::new("meta.json");
-        let meta_data = directory.atomic_read(meta_filepath)?;
-
-        let meta_string = std::str::from_utf8(&meta_data)?;
-        let meta_val: serde_json::Value = serde_json::from_str(meta_string)?;
-        let meta_json: String = serde_json::to_string(&meta_val)?;
-
-        let segments = index.searchable_segments()?;
-        let segment = &segments[0];
-
-        let fast_fields = segment.open_read(SegmentComponent::FastFields)?;
-        let fast_fields_bytes = fast_fields.read_bytes()?;
-
-        let store = segment.open_read(SegmentComponent::Store)?;
-        let store_bytes = store.read_bytes()?;
-
-        let field_norms = segment.open_read(SegmentComponent::FieldNorms)?;
-        let field_norms_bytes = field_norms.read_bytes()?;
-
-        let positions = segment.open_read(SegmentComponent::Positions)?;
-        let positions_bytes = positions.read_bytes()?;
-
-        let postings = segment.open_read(SegmentComponent::Postings)?;
-        let postings_bytes = postings.read_bytes()?;
-
-        let terms = segment.open_read(SegmentComponent::Terms)?;
-        let terms_bytes = terms.read_bytes()?;
-
-        // write each tantivy files as part of data
-        let mut fast_fields_length = writer.write(&fast_fields_bytes)?;
-        let footer_length = Self::build_footer(&mut writer, &fast_fields_bytes)?;
-        fast_fields_length += footer_length;
-
-        let mut store_length = writer.write(&store_bytes)?;
-        let footer_length = Self::build_footer(&mut writer, &store_bytes)?;
-        store_length += footer_length;
-
-        let mut field_norms_length = writer.write(&field_norms_bytes)?;
-        let footer_length = Self::build_footer(&mut writer, &field_norms_bytes)?;
-        field_norms_length += footer_length;
-
-        let mut positions_length = writer.write(&positions_bytes)?;
-        let footer_length = Self::build_footer(&mut writer, &positions_bytes)?;
-        positions_length += footer_length;
-
-        let mut postings_length = writer.write(&postings_bytes)?;
-        let footer_length = Self::build_footer(&mut writer, &postings_bytes)?;
-        postings_length += footer_length;
-
-        let mut terms_length = writer.write(&terms_bytes)?;
-        let footer_length = Self::build_footer(&mut writer, &terms_bytes)?;
-        terms_length += footer_length;
-
-        let meta_length = writer.write(meta_json.as_bytes())?;
-        let managed_length = writer.write(&managed_bytes)?;
-
-        // write offsets of each parts
-        let mut offset: u32 = 0;
-        let mut offsets = Vec::with_capacity(8);
-        offset += fast_fields_length as u32;
-        offsets.push(offset);
-
-        offset += store_length as u32;
-        offsets.push(offset);
-
-        offset += field_norms_length as u32;
-        offsets.push(offset);
-
-        offset += positions_length as u32;
-        offsets.push(offset);
-
-        offset += postings_length as u32;
-        offsets.push(offset);
-
-        offset += terms_length as u32;
-        offsets.push(offset);
-
-        offset += meta_length as u32;
-        offsets.push(offset);
-
-        offset += managed_length as u32;
-        offsets.push(offset);
-
-        // the number of offsets, used for multi index segments in one file
-        let nums = offsets.len() as u32;
-        for offset in offsets {
-            writer.write_all(&offset.to_le_bytes())?;
-        }
-        writer.write_all(&nums.to_le_bytes())?;
-
-        writer.flush()?;
-
-        Ok(())
-    }
-
-    fn build_footer<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<usize> {
-        let buf = build_tantivy_footer(bytes)?;
-        let len = writer.write(&buf)?;
-        Ok(len)
     }
 }
 

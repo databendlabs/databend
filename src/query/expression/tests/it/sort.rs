@@ -24,6 +24,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
 
 use crate::common::new_block;
+use crate::rand_block_for_all_types;
 
 #[test]
 fn test_block_sort() -> Result<()> {
@@ -42,7 +43,6 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
-                is_nullable: false,
             }],
             None,
             vec![
@@ -55,7 +55,6 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
-                is_nullable: false,
             }],
             Some(4),
             vec![
@@ -68,7 +67,6 @@ fn test_block_sort() -> Result<()> {
                 offset: 1,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             }],
             None,
             vec![
@@ -82,13 +80,11 @@ fn test_block_sort() -> Result<()> {
                     offset: 0,
                     asc: true,
                     nulls_first: false,
-                    is_nullable: false,
                 },
                 SortColumnDescription {
                     offset: 1,
                     asc: false,
                     nulls_first: false,
-                    is_nullable: false,
                 },
             ],
             None,
@@ -128,7 +124,6 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
-                is_nullable: false,
             }],
             None,
             vec![
@@ -141,7 +136,6 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
-                is_nullable: false,
             }],
             Some(4),
             vec![
@@ -154,7 +148,6 @@ fn test_block_sort() -> Result<()> {
                 offset: 1,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             }],
             None,
             vec![
@@ -168,13 +161,11 @@ fn test_block_sort() -> Result<()> {
                     offset: 0,
                     asc: true,
                     nulls_first: false,
-                    is_nullable: false,
                 },
                 SortColumnDescription {
                     offset: 1,
                     asc: false,
                     nulls_first: false,
-                    is_nullable: false,
                 },
             ],
             None,
@@ -200,4 +191,52 @@ fn test_block_sort() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn sort_concat() {
+    // Sort(Sort A || Sort B)  =   Sort (A || B)
+    use databend_common_expression::DataBlock;
+    use itertools::Itertools;
+    use rand::seq::SliceRandom;
+    use rand::Rng;
+
+    let mut rng = rand::thread_rng();
+    let num_blocks = 100;
+
+    for _i in 0..num_blocks {
+        let block_a = rand_block_for_all_types(rng.gen_range(0..100));
+        let block_b = rand_block_for_all_types(rng.gen_range(0..100));
+
+        let mut sort_index: Vec<usize> = (0..block_a.num_columns()).collect();
+        sort_index.shuffle(&mut rng);
+
+        let sort_desc = sort_index
+            .iter()
+            .map(|i| SortColumnDescription {
+                offset: *i,
+                asc: rng.gen_bool(0.5),
+                nulls_first: rng.gen_bool(0.5),
+            })
+            .collect_vec();
+
+        let concat_ab_0 = DataBlock::concat(&[block_a.clone(), block_b.clone()]).unwrap();
+
+        let sort_a = DataBlock::sort(&block_a, &sort_desc, None).unwrap();
+        let sort_b = DataBlock::sort(&block_b, &sort_desc, None).unwrap();
+        let concat_ab_1 = DataBlock::concat(&[sort_a, sort_b]).unwrap();
+
+        let block_1 = DataBlock::sort(&concat_ab_0, &sort_desc, None).unwrap();
+        let block_2 = DataBlock::sort(&concat_ab_1, &sort_desc, None).unwrap();
+
+        assert_eq!(block_1.num_columns(), block_2.num_columns());
+        assert_eq!(block_1.num_rows(), block_2.num_rows());
+
+        let columns_1 = block_1.columns();
+        let columns_2 = block_2.columns();
+        for idx in 0..columns_1.len() {
+            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
+            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+        }
+    }
 }

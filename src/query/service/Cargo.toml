@@ -30,8 +30,9 @@ enable_queries_executor = []
 
 [dependencies]
 arrow-array = { workspace = true }
+arrow-buffer = { workspace = true }
 arrow-flight = { workspace = true }
-arrow-ipc = { workspace = true }
+arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
 arrow-schema = { workspace = true }
 arrow-udf-js = { workspace = true }
 arrow-udf-python = { workspace = true, optional = true }
@@ -44,9 +45,11 @@ async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 backon = "0.4"
 base64 = "0.21.0"
+buf-list = "1.0.3"
 bumpalo = { workspace = true }
 byte-unit = "4.0.19"
 byteorder = { workspace = true }
+bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
@@ -137,7 +140,6 @@ match-template = { workspace = true }
 md-5 = "0.10.5"
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
-once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.7.0", features = ["tls"] }
 opentelemetry = { workspace = true }

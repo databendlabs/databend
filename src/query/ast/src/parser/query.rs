@@ -702,7 +702,7 @@ pub enum TableReferenceElement {
         with_options: Option<WithOptions>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
-        sample: Option<Sample>,
+        sample: Option<SampleConfig>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -711,7 +711,7 @@ pub enum TableReferenceElement {
         name: Identifier,
         params: Vec<TableFunctionParam>,
         alias: Option<TableAlias>,
-        sample: Option<Sample>,
+        sample: Option<SampleConfig>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
@@ -719,6 +719,8 @@ pub enum TableReferenceElement {
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // [NATURAL] [INNER|OUTER|CROSS|...] JOIN
     Join {
@@ -736,31 +738,9 @@ pub enum TableReferenceElement {
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
-    // PIVOT(expr FOR col IN (ident, ...))
-    let pivot = map(
-        rule! {
-           PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
-        },
-        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
-            aggregate,
-            value_column,
-            values,
-        },
-    );
-    // UNPIVOT(ident for ident IN (ident, ...))
-    let unpivot = map(
-        rule! {
-            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
-        },
-        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
-            value_column,
-            column_name,
-            names,
-        },
-    );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
             (catalog, database, table),
@@ -770,10 +750,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             pivot,
             unpivot,
             sample,
-            level,
-            sample_conf,
+            sample_block_level,
+            sample_row_level,
         )| {
-            let table_sample = get_table_sample(sample, level, sample_conf);
+            let table_sample = get_table_sample(sample, sample_block_level, sample_row_level);
             TableReferenceElement::Table {
                 catalog,
                 database,
@@ -810,7 +790,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let table_function = map(
         rule! {
-            LATERAL? ~ #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
+            LATERAL? ~ #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(lateral, name, _, params, _, alias, sample, level, sample_conf)| {
             let table_sample = get_table_sample(sample, level, sample_conf);
@@ -825,12 +805,14 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias?
+            LATERAL? ~ "(" ~ #query ~ ")" ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |(lateral, _, subquery, _, alias)| TableReferenceElement::Subquery {
+        |(lateral, _, subquery, _, alias, pivot, unpivot)| TableReferenceElement::Subquery {
             lateral: lateral.is_some(),
             subquery: Box::new(subquery),
             alias,
+            pivot: pivot.map(Box::new),
+            unpivot: unpivot.map(Box::new),
         },
     );
 
@@ -869,36 +851,58 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     Ok((rest, WithSpan { span, elem }))
 }
 
+// PIVOT(expr FOR col IN (ident, ... | subquery))
+fn pivot(i: Input) -> IResult<Pivot> {
+    map(
+        rule! {
+            PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #pivot_values ~ ")" ~ ")"
+        },
+        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
+            aggregate,
+            value_column,
+            values,
+        },
+    )(i)
+}
+
+// UNPIVOT(ident for ident IN (ident, ...))
+fn unpivot(i: Input) -> IResult<Unpivot> {
+    map(
+        rule! {
+            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+        },
+        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
+            value_column,
+            column_name,
+            names,
+        },
+    )(i)
+}
+
+fn pivot_values(i: Input) -> IResult<PivotValues> {
+    alt((
+        map(comma_separated_list1(expr), PivotValues::ColumnValues),
+        map(query, |q| PivotValues::Subquery(Box::new(q))),
+    ))(i)
+}
+
 fn get_table_sample(
     sample: Option<&Token>,
-    level: Option<&Token>,
-    sample_conf: Option<(&Token, Expr, Option<&Token>, &Token)>,
-) -> Option<Sample> {
-    let mut table_sample = None;
+    block_level_sample: Option<(&Token, &Token, Expr, &Token)>,
+    row_level_sample: Option<(&Token, &Token, Expr, Option<&Token>, &Token)>,
+) -> Option<SampleConfig> {
+    let mut default_sample_conf = SampleConfig::default();
     if sample.is_some() {
-        let sample_level = match level {
-            // If the sample level is not specified, it defaults to ROW
-            Some(level) => match level.kind {
-                ROW => SampleLevel::ROW,
-                BLOCK => SampleLevel::BLOCK,
-                _ => unreachable!(),
-            },
-            None => SampleLevel::ROW,
-        };
-        let mut default_sample_conf = SampleConfig::Probability(100.0);
-        if let Some((_, Expr::Literal { value, .. }, rows, _)) = sample_conf {
-            default_sample_conf = if rows.is_some() {
-                SampleConfig::RowsNum(value.as_double().unwrap_or_default())
-            } else {
-                SampleConfig::Probability(value.as_double().unwrap_or_default())
-            };
+        if let Some((_, _, Expr::Literal { value, .. }, _)) = block_level_sample {
+            default_sample_conf.set_block_level_sample(value.as_double().unwrap_or_default());
         }
-        table_sample = Some(Sample {
-            sample_level,
-            sample_conf: default_sample_conf,
-        })
-    };
-    table_sample
+        if let Some((_, _, Expr::Literal { value, .. }, rows, _)) = row_level_sample {
+            default_sample_conf
+                .set_row_level_sample(value.as_double().unwrap_or_default(), rows.is_some());
+        }
+        return Some(default_sample_conf);
+    }
+    None
 }
 
 struct TableReferenceParser;
@@ -979,11 +983,15 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 lateral,
                 subquery,
                 alias,
+                pivot,
+                unpivot,
             } => TableReference::Subquery {
                 span: transform_span(input.span.tokens),
                 lateral,
                 subquery,
                 alias,
+                pivot,
+                unpivot,
             },
             TableReferenceElement::Stage {
                 location,

@@ -13,16 +13,21 @@
 // limitations under the License.
 
 use std::io::Cursor;
+use std::io::Read;
+use std::io::Seek;
+use std::io::Write;
+use std::sync::Arc;
 
+use arrow_array::RecordBatch;
+use arrow_ipc::reader::FileReaderBuilder;
+use arrow_ipc::writer::FileWriter;
+use arrow_ipc::writer::IpcWriteOptions;
+use arrow_ipc::CompressionType;
+use arrow_schema::Schema;
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
-use databend_common_arrow::arrow::datatypes::Schema;
-use databend_common_arrow::arrow::io::ipc::read::read_file_metadata;
-use databend_common_arrow::arrow::io::ipc::read::FileReader;
-use databend_common_arrow::arrow::io::ipc::write::FileWriter;
-use databend_common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -66,36 +71,44 @@ pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
 
 pub fn serialize_column(col: &Column) -> Vec<u8> {
     let mut buffer = Vec::new();
-
-    let schema = Schema::from(vec![col.arrow_field()]);
-    let mut writer = FileWriter::new(&mut buffer, schema, None, IpcWriteOptions::default());
-    writer.start().unwrap();
-    writer
-        .write(
-            &databend_common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
-            None,
-        )
-        .unwrap();
-    writer.finish().unwrap();
-
+    write_column(col, &mut buffer).unwrap();
     buffer
+}
+
+pub fn write_column(
+    col: &Column,
+    w: &mut impl Write,
+) -> std::result::Result<(), arrow_schema::ArrowError> {
+    let field: arrow_schema::Field = col.arrow_field().into();
+    let schema = Schema::new(vec![field]);
+    let mut writer = FileWriter::try_new_with_options(
+        w,
+        &schema,
+        IpcWriteOptions::default().try_with_compression(Some(CompressionType::LZ4_FRAME))?,
+    )?;
+
+    let batch = RecordBatch::try_new(Arc::new(schema), vec![col.clone().into_arrow_rs()])?;
+
+    writer.write(&batch)?;
+    writer.finish()
 }
 
 pub fn deserialize_column(bytes: &[u8]) -> Result<Column> {
     let mut cursor = Cursor::new(bytes);
+    read_column(&mut cursor)
+}
 
-    let metadata = read_file_metadata(&mut cursor)?;
-    let f = metadata.schema.fields[0].clone();
-    let data_field = DataField::try_from(&f)?;
+pub fn read_column<R: Read + Seek>(r: &mut R) -> Result<Column> {
+    let mut reader = FileReaderBuilder::new().build(r)?;
+    let schema = reader.schema();
+    let f = DataField::try_from(schema.field(0))?;
 
-    let mut reader = FileReader::new(cursor, metadata, None, None);
     let col = reader
         .next()
         .ok_or_else(|| ErrorCode::Internal("expected one arrow array"))??
-        .into_arrays()
-        .remove(0);
+        .remove_column(0);
 
-    Column::from_arrow(col.as_ref(), data_field.data_type())
+    Column::from_arrow_rs(col, f.data_type())
 }
 
 /// Convert a column to a arrow array.

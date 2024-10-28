@@ -12,13 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
+use std::any::Any;
 
-use crate::executor::PhysicalPlan;
+use databend_common_metrics::http::metrics_incr_http_response_panics_count;
+use http::StatusCode;
 
-#[async_trait]
-pub trait QuerySampleExecutor: Send + Sync {
-    async fn execute_query(&self, plan: &PhysicalPlan) -> Result<Vec<DataBlock>>;
+#[derive(Clone, Debug)]
+pub(crate) struct PanicHandler {}
+
+impl PanicHandler {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl poem::middleware::PanicHandler for PanicHandler {
+    type Response = (StatusCode, &'static str);
+
+    fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
+        metrics_incr_http_response_panics_count();
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+    }
 }

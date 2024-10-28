@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_storages_hive::HiveFileSplitter;
+use async_trait::async_trait;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 
-#[test]
-fn test_splitter() {
-    let splitter = HiveFileSplitter::create(1024);
-    assert_eq!(splitter.split_length(1), vec![0..2]);
-    assert_eq!(splitter.split_length(1024), vec![0..1025]);
-    assert_eq!(splitter.split_length(1100), vec![0..1101]);
-    assert_eq!(splitter.split_length(1500), vec![0..1024, 1024..1501]);
-    assert_eq!(splitter.split_length(2048), vec![0..1024, 1024..2049]);
-    assert_eq!(splitter.split_length(3000), vec![
-        0..1024,
-        1024..2048,
-        2048..3001
-    ]);
+use crate::executor::PhysicalPlan;
+
+#[async_trait]
+pub trait QueryExecutor: Send + Sync {
+    async fn execute_query_with_physical_plan(&self, plan: &PhysicalPlan)
+    -> Result<Vec<DataBlock>>;
+
+    async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
 }

@@ -2,7 +2,25 @@ statement ok
 set global enable_experimental_procedure=1;
 
 statement ok
-CREATE PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+drop procedure if exists p1();
+
+statement ok
+drop procedure if exists p1(UInt8, UInt8);
+
+statement ok
+CREATE PROCEDURE if not exists p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+CREATE PROCEDURE if not exists p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
     LET x := -1;
     LET sum := 0;
@@ -20,6 +38,23 @@ call procedure p1();
 2
 
 statement ok
+CREATE or replace PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 10;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+query T
+call procedure p1();
+----
+12
+
+statement ok
 CREATE PROCEDURE p1(x UInt8, sum UInt8) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
     FOR x IN x TO x + 3 DO
@@ -32,6 +67,18 @@ $$;
 statement error 3131
 CREATE PROCEDURE p1(x UInt8, sum UInt8) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
 BEGIN
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
     FOR x IN x TO x + 3 DO
         sum := sum + x;
     END FOR;
@@ -70,6 +117,12 @@ query T
 select count(name) from system.procedures
 ----
 0
+
+statement ok
+drop procedure if exists not_exists_p();
+
+statement error 3130
+drop procedure not_exists_p();
 
 statement ok
 unset global enable_experimental_procedure;

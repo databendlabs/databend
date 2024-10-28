@@ -45,7 +45,7 @@ impl Interpreter for ShowConnectionsInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[fastrace::trace]

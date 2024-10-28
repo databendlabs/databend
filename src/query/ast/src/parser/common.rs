@@ -88,6 +88,10 @@ pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
 
+pub fn plain_ident(i: Input) -> IResult<Identifier> {
+    plain_identifier(|token| token.is_reserved_ident(false))(i)
+}
+
 pub fn ident_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(true))(i)
 }
@@ -102,7 +106,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     });
 
     rule!(
-        #ident
+        #plain_ident
         | #anonymous_stage
     )(i)
 }
@@ -240,26 +244,9 @@ pub fn set_type(i: Input) -> IResult<SetType> {
         },
         |res| match res {
             Some(token) => match token.kind {
-                TokenKind::GLOBAL => SetType::SettingsGlobal,
-                TokenKind::SESSION => SetType::SettingsSession,
-                TokenKind::VARIABLE => SetType::Variable,
-                _ => unreachable!(),
-            },
-            None => SetType::SettingsSession,
-        },
-    )(i)
-}
-
-pub fn unset_type(i: Input) -> IResult<SetType> {
-    map(
-        rule! {
-           (GLOBAL | SESSION | VARIABLE)?
-        },
-        |res| match res {
-            Some(token) => match token.kind {
-                TokenKind::GLOBAL => SetType::SettingsGlobal,
-                TokenKind::SESSION => SetType::SettingsSession,
-                TokenKind::VARIABLE => SetType::Variable,
+                GLOBAL => SetType::SettingsGlobal,
+                SESSION => SetType::SettingsSession,
+                VARIABLE => SetType::Variable,
                 _ => unreachable!(),
             },
             None => SetType::SettingsSession,
@@ -290,10 +277,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {
-    map(
-        rule! { "$" ~ ^#plain_identifier(|token| token.is_reserved_ident(false)) },
-        |(_, name)| name.name,
-    )(i)
+    map(rule! { IdentVariable }, |t| t.text()[1..].to_string())(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -586,7 +570,7 @@ where F: nom::Parser<Input<'a>, O, Error<'a>> {
 pub fn template_hole(i: Input) -> IResult<String> {
     check_template_mode(map(
         rule! {
-            ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
+            ":" ~ ^#plain_ident
         },
         |(_, name)| name.name,
     ))(i)

@@ -15,9 +15,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::SampleLevel;
+use databend_common_ast::ast::SampleRowLevel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,11 +26,11 @@ use num_traits::ToPrimitive;
 
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
-use crate::optimizer::QuerySampleExecutor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -44,7 +43,7 @@ pub async fn filter_selectivity_sample(
     ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     s_expr: &SExpr,
-    sample_executor: Arc<dyn QuerySampleExecutor>,
+    sample_executor: Arc<dyn QueryExecutor>,
 ) -> Result<Arc<StatInfo>> {
     // filter cardinality by sample will be called in `dphyp`, so we can ensure the filter is in complex query(contains not only one table)
     // Because it's meaningless for filter cardinality by sample in single table query.
@@ -57,16 +56,16 @@ pub async fn filter_selectivity_sample(
             .as_ref()
             .and_then(|s| s.num_rows)
             .unwrap_or(0);
-
         // Calculate sample size (0.2% of total data)
         let sample_size = (num_rows as f64 * 0.002).ceil();
         let mut new_s_expr = s_expr.clone();
         // If the table is too small, we don't need to sample.
         if sample_size >= 10.0 {
-            scan.sample = Some(Sample {
-                sample_level: SampleLevel::ROW,
-                sample_conf: SampleConfig::RowsNum(sample_size),
-            });
+            let sample_conf = SampleConfig {
+                row_level: Some(SampleRowLevel::RowsNum(sample_size)),
+                block_level: Some(50.0),
+            };
+            scan.sample = Some(sample_conf);
             let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
             new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
             let collect_statistics_optimizer =
@@ -88,7 +87,9 @@ pub async fn filter_selectivity_sample(
         required.insert(0);
         let plan = builder.build(&new_s_expr, required).await?;
 
-        let result = sample_executor.execute_query(&plan).await?;
+        let result = sample_executor
+            .execute_query_with_physical_plan(&plan)
+            .await?;
         if let Some(block) = result.first() {
             if let Some(count) = block.get_last_column().as_number() {
                 if let Some(number_scalar) = count.index(0) {

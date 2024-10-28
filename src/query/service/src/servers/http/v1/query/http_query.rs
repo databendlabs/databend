@@ -130,7 +130,7 @@ impl Debug for HttpQueryRequest {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
-            .field("sql", &short_sql(self.sql.clone()))
+            .field("sql", &short_sql(self.sql.clone(), 1000))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
@@ -529,7 +529,7 @@ impl HttpQuery {
         let user_name = session.get_current_user()?.name;
 
         let has_temp_table_before_run = if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &session);
+            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
             true
         } else {
             false
@@ -671,6 +671,7 @@ impl HttpQuery {
                             *guard = Some(not_empty);
                             ClientSessionManager::instance().on_query_finish(
                                 cid,
+                                &self.user_name,
                                 session_state.temp_tbl_mgr,
                                 !not_empty,
                                 not_empty != self.has_temp_table_before_run,

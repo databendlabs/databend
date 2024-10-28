@@ -17,29 +17,17 @@
 #![allow(clippy::diverging_sub_expression)]
 
 mod converters;
-mod hive_block_filter;
-mod hive_blocks;
 mod hive_catalog;
 mod hive_database;
-mod hive_file_splitter;
-mod hive_meta_data_reader;
-mod hive_parquet_block_reader;
 mod hive_partition;
 mod hive_partition_filler;
-mod hive_partition_pruner;
 mod hive_table;
 mod hive_table_options;
 mod hive_table_source;
 mod utils;
 
-pub use hive_block_filter::HiveBlockFilter;
-pub use hive_blocks::HiveBlocks;
 pub use hive_catalog::HiveCatalog;
 pub use hive_catalog::HiveCreator;
-pub use hive_file_splitter::HiveFileSplitter;
-pub use hive_meta_data_reader::MetaDataReader;
-pub use hive_parquet_block_reader::filter_hive_partition_from_partition_keys;
 pub use hive_partition::HivePartInfo;
 pub use hive_partition_filler::HivePartitionFiller;
-pub use hive_table::HiveFileInfo;
 pub use hive_table::HiveTable;

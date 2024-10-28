@@ -21,15 +21,16 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::base::tokio;
+use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
+use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::servers::http::error::QueryError;
-use databend_query::servers::http::middleware::get_client_ip;
 use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
@@ -184,6 +185,10 @@ impl TestHttpQueryRequest {
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))
             .unwrap();
+        assert_eq!(
+            resp.header(HEADER_VERSION),
+            Some(QUERY_SEMVER.to_string().as_str())
+        );
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
@@ -855,10 +860,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    Ok(Route::new().nest(
-        "/v1/query",
-        query_route(HttpHandlerKind::Query).around(json_response),
-    ))
+    Ok(Route::new().nest("/v1", query_route().around(json_response)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
@@ -1668,16 +1670,6 @@ async fn test_txn_timeout() -> Result<()> {
             last_query_id
         )
     );
-    Ok(())
-}
-
-#[test]
-fn test_parse_ip() -> Result<()> {
-    let req = poem::Request::builder()
-        .header("X-Forwarded-For", "1.2.3.4")
-        .finish();
-    let ip = get_client_ip(&req);
-    assert_eq!(ip, Some("1.2.3.4".to_string()));
     Ok(())
 }
 

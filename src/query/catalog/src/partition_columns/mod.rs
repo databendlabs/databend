@@ -12,4 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod hive_file_splitter;
+mod pushdown_transform;
+mod values_serde;
+
+pub use pushdown_transform::get_pushdown_without_partition_columns;
+pub use values_serde::str_to_scalar;

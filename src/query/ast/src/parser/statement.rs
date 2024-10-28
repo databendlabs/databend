@@ -56,7 +56,7 @@ pub enum CreateDatabaseOption {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -74,7 +74,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
                     Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
+                    Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
+                    Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -85,11 +87,25 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ PARTIAL? ~ #statement
+            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement
         },
-        |(_, _, partial, statement)| Statement::ExplainAnalyze {
-            partial: partial.is_some(),
-            query: Box::new(statement.stmt),
+        |(_, _, opt_partial_or_graphical, statement)| {
+            let (partial, graphical) = match opt_partial_or_graphical {
+                Some(Token {
+                    kind: TokenKind::PARTIAL,
+                    ..
+                }) => (true, false),
+                Some(Token {
+                    kind: TokenKind::GRAPHICAL,
+                    ..
+                }) => (false, true),
+                _ => (false, false),
+            };
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query: Box::new(statement.stmt),
+            }
         },
     );
 
@@ -351,11 +367,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let unset_stmt = map(
         rule! {
-            UNSET ~ #unset_type ~ #unset_source
+            UNSET ~ #set_type ~ #unset_source
         },
         |(_, unset_type, identifiers)| Statement::UnSetStmt {
-            unset_type,
-            identifiers,
+            settings: Settings {
+                set_type: unset_type,
+                identifiers,
+                values: SetValues::None,
+            },
         },
     );
 
@@ -389,9 +408,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 SET ~ #set_type ~ #ident ~ "=" ~ #subexpr(0)
             },
             |(_, set_type, var, _, value)| Statement::SetStmt {
-                set_type,
-                identifiers: vec![var],
-                values: SetValues::Expr(vec![Box::new(value)]),
+                settings: Settings {
+                    set_type,
+                    identifiers: vec![var],
+                    values: SetValues::Expr(vec![Box::new(value)]),
+                },
             },
         ),
         map_res(
@@ -402,9 +423,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             |(_, set_type, _, ids, _, _, _, values, _)| {
                 if ids.len() == values.len() {
                     Ok(Statement::SetStmt {
-                        set_type,
-                        identifiers: ids,
-                        values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                        settings: Settings {
+                            set_type,
+                            identifiers: ids,
+                            values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                        },
                     })
                 } else {
                     Err(nom::Err::Failure(ErrorKind::Other(
@@ -418,9 +441,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 SET ~ #set_type ~ #ident ~ "=" ~ #query
             },
             |(_, set_type, var, _, query)| Statement::SetStmt {
-                set_type,
-                identifiers: vec![var],
-                values: SetValues::Query(Box::new(query)),
+                settings: Settings {
+                    set_type,
+                    identifiers: vec![var],
+                    values: SetValues::Query(Box::new(query)),
+                },
             },
         ),
         map(
@@ -428,9 +453,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
             },
             |(_, set_type, _, vars, _, _, query)| Statement::SetStmt {
-                set_type,
-                identifiers: vars,
-                values: SetValues::Query(Box::new(query)),
+                settings: Settings {
+                    set_type,
+                    identifiers: vars,
+                    values: SetValues::Query(Box::new(query)),
+                },
             },
         ),
     ));
@@ -957,9 +984,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_dictionaries = map(
         rule! {
-            SHOW ~ DICTIONARIES ~ #show_options?
+            SHOW ~ DICTIONARIES ~ ((FROM|IN) ~ #ident)? ~ #show_limit?
         },
-        |(_, _, show_options)| Statement::ShowDictionaries { show_options },
+        |(_, _, db, limit)| {
+            let database = match db {
+                Some((_, d)) => Some(d),
+                _ => None,
+            };
+            Statement::ShowDictionaries(ShowDictionariesStmt { database, limit })
+        },
     );
     let show_create_dictionary = map(
         rule! {
@@ -1285,6 +1318,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let describe_user = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
+        },
+        |(_, _, user)| Statement::DescribeUser { user },
+    );
     let create_user = map_res(
         rule! {
             CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2067,10 +2106,25 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
     let create_procedure = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #procedure_arg ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
         },
-        |(_, opt_or_replace, _, name, args, _, return_type, _, _, opt_comment, _, script)| {
-            let create_option = parse_create_option(opt_or_replace.is_some(), false)?;
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            name,
+            args,
+            _,
+            return_type,
+            _,
+            _,
+            opt_comment,
+            _,
+            script,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
             let name = ProcedureIdentity {
                 name: name.to_string(),
@@ -2137,10 +2191,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let drop_procedure = map(
         rule! {
-            DROP ~ PROCEDURE ~ #ident ~ #procedure_type_name
+            DROP ~ PROCEDURE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #procedure_type_name
         },
-        |(_, _, name, args)| {
+        |(_, _, opt_if_exists, name, args)| {
             Statement::DropProcedure(DropProcedureStmt {
+                if_exists: opt_if_exists.is_some(),
                 name: ProcedureIdentity {
                     name: name.to_string(),
                     args_type: if args.is_empty() {
@@ -2225,6 +2280,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #abort
         ),
         rule!(
+            #show_users : "`SHOW USERS`"
+            | #describe_user: "`DESCRIBE USER <user_name>`"
+            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
+            | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
+            | #show_roles : "`SHOW ROLES`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
+            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #set_role: "`SET [DEFAULT] ROLE <role>`"
+            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
+        ),
+        rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
@@ -2274,21 +2345,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
-        ),
-        rule!(
-            #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
-            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
-            | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
-            | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
-            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
-            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
-            | #set_role: "`SET [DEFAULT] ROLE <role>`"
-            | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
-            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_stage: "`CREATE [OR REPLACE] STAGE [ IF NOT EXISTS ] <stage_name>
@@ -3445,6 +3501,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
     );
 
+    let unset_table_options = map(
+        rule! {
+            UNSET ~ OPTIONS ~ #unset_source
+        },
+        |(_, _, targets)| AlterTableAction::UnsetOptions { targets },
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -3457,6 +3520,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #recluster_table
         | #revert_table
         | #set_table_options
+        | #unset_table_options
     )(i)
 }
 

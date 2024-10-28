@@ -27,8 +27,8 @@ use super::*;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
+use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
-use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -46,6 +46,7 @@ pub enum Statement {
     ExplainAnalyze {
         // if partial is true, only scan/filter/join will be shown.
         partial: bool,
+        graphical: bool,
         query: Box<Statement>,
     },
 
@@ -86,14 +87,11 @@ pub enum Statement {
     },
 
     SetStmt {
-        set_type: SetType,
-        identifiers: Vec<Identifier>,
-        values: SetValues,
+        settings: Settings,
     },
 
     UnSetStmt {
-        unset_type: SetType,
-        identifiers: Vec<Identifier>,
+        settings: Settings,
     },
 
     ShowVariables {
@@ -158,9 +156,7 @@ pub enum Statement {
     CreateDictionary(CreateDictionaryStmt),
     DropDictionary(DropDictionaryStmt),
     ShowCreateDictionary(ShowCreateDictionaryStmt),
-    ShowDictionaries {
-        show_options: Option<ShowOptions>,
-    },
+    ShowDictionaries(ShowDictionariesStmt),
 
     // Columns
     ShowColumns(ShowColumnsStmt),
@@ -195,6 +191,9 @@ pub enum Statement {
 
     // User
     ShowUsers,
+    DescribeUser {
+        user: UserIdentity,
+    },
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
@@ -406,16 +405,24 @@ impl Display for Statement {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Optimized => write!(f, " Optimized")?,
+                    ExplainKind::Decorrelated => write!(f, " DECORRELATED")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
+                    ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
             }
-            Statement::ExplainAnalyze { partial, query } => {
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query,
+            } => {
                 if *partial {
                     write!(f, "EXPLAIN ANALYZE PARTIAL {query}")?;
+                } else if *graphical {
+                    write!(f, "EXPLAIN ANALYZE GRAPHICAL {query}")?;
                 } else {
                     write!(f, "EXPLAIN ANALYZE {query}")?;
                 }
@@ -495,71 +502,8 @@ impl Display for Statement {
                 }
                 write!(f, " '{object_id}'")?;
             }
-            Statement::SetStmt {
-                set_type,
-                identifiers,
-                values,
-            } => {
-                write!(f, "SET ")?;
-                match *set_type {
-                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
-                    SetType::SettingsSession => {}
-                    SetType::Variable => write!(f, "VARIABLE ")?,
-                }
-
-                if identifiers.len() > 1 {
-                    write!(f, "(")?;
-                }
-                for (idx, variable) in identifiers.iter().enumerate() {
-                    if idx > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{variable}")?;
-                }
-                if identifiers.len() > 1 {
-                    write!(f, ")")?;
-                }
-
-                match values {
-                    SetValues::Expr(exprs) => {
-                        write!(f, " = ")?;
-                        if exprs.len() > 1 {
-                            write!(f, "(")?;
-                        }
-
-                        for (idx, value) in exprs.iter().enumerate() {
-                            if idx > 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{value}")?;
-                        }
-                        if exprs.len() > 1 {
-                            write!(f, ")")?;
-                        }
-                    }
-                    SetValues::Query(query) => {
-                        write!(f, " = {query}")?;
-                    }
-                }
-            }
-            Statement::UnSetStmt {
-                unset_type,
-                identifiers,
-            } => {
-                write!(f, "UNSET ")?;
-                match *unset_type {
-                    SetType::SettingsSession => write!(f, "SESSION ")?,
-                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
-                    SetType::Variable => write!(f, "VARIABLE ")?,
-                }
-                if identifiers.len() == 1 {
-                    write!(f, "{}", identifiers[0])?;
-                } else {
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, identifiers)?;
-                    write!(f, ")")?;
-                }
-            }
+            Statement::SetStmt { settings } => write!(f, "SET {}", settings)?,
+            Statement::UnSetStmt { settings } => write!(f, "UNSET {}", settings)?,
             Statement::SetRole {
                 is_default,
                 role_name,
@@ -610,12 +554,7 @@ impl Display for Statement {
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::DropDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDictionary(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowDictionaries { show_options } => {
-                write!(f, "SHOW DICTIONARIES")?;
-                if let Some(show_options) = show_options {
-                    write!(f, " {show_options}")?;
-                }
-            }
+            Statement::ShowDictionaries(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
@@ -637,6 +576,7 @@ impl Display for Statement {
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
+            Statement::DescribeUser { user } => write!(f, "DESCRIBE USER {user}")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
             Statement::AlterUser(stmt) => write!(f, "{stmt}")?,

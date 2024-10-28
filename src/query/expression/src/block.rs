@@ -28,6 +28,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataField;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
@@ -117,7 +118,6 @@ impl DataBlock {
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        #[cfg(debug_assertions)]
         Self::check_columns_valid(&columns, num_rows).unwrap();
 
         Self {
@@ -130,6 +130,7 @@ impl DataBlock {
     fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
         for entry in columns.iter() {
             if let Value::Column(c) = &entry.value {
+                #[cfg(debug_assertions)]
                 c.check_valid()?;
                 if c.len() != num_rows {
                     return Err(ErrorCode::Internal(format!(
@@ -240,6 +241,18 @@ impl DataBlock {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
     }
 
+    pub fn consume_convert_to_full(self) -> Self {
+        if self
+            .columns()
+            .iter()
+            .all(|entry| entry.value.as_column().is_some())
+        {
+            return self;
+        }
+
+        self.convert_to_full()
+    }
+
     pub fn convert_to_full(&self) -> Self {
         let columns = self
             .columns()
@@ -264,6 +277,12 @@ impl DataBlock {
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
+        assert!(
+            range.end <= self.num_rows(),
+            "range {:?} out of len {}",
+            range,
+            self.num_rows()
+        );
         let columns = self
             .columns()
             .iter()
@@ -279,7 +298,11 @@ impl DataBlock {
             .collect();
         Self {
             columns,
-            num_rows: range.end - range.start,
+            num_rows: if range.is_empty() {
+                0
+            } else {
+                range.end - range.start
+            },
             meta: self.meta.clone(),
         }
     }
@@ -566,6 +589,16 @@ impl DataBlock {
         debug_assert!(!self.columns.is_empty());
         debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
         self.columns.last().unwrap().value.as_column().unwrap()
+    }
+
+    pub fn infer_schema(&self) -> DataSchema {
+        let fields = self
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, e)| DataField::new(&format!("col_{index}"), e.data_type.clone()))
+            .collect();
+        DataSchema::new(fields)
     }
 }
 

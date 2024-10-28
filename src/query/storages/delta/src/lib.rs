@@ -16,7 +16,6 @@
 #![allow(clippy::diverging_sub_expression)]
 
 mod partition;
-mod partition_columns;
 mod table;
 mod table_source;
 

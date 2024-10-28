@@ -17,6 +17,7 @@ mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
+pub mod query_executor;
 mod semantic;
 
 pub mod binder;

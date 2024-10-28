@@ -50,7 +50,7 @@ impl Interpreter for DescribeViewInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[async_backtrace::framed]

@@ -19,10 +19,13 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterVisitor;
 use databend_common_expression::FromData;
+use databend_common_expression::IterationStrategy;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use goldenfile::Mint;
@@ -271,6 +274,19 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
 
         let random_block = rand_block_for_all_types(len);
         let random_block = random_block.slice(slice_start..slice_end);
+
+        {
+            // test filter
+            let mut f1 =
+                FilterVisitor::new(&filter).with_strategy(IterationStrategy::SlicesIterator);
+            let mut f2 =
+                FilterVisitor::new(&filter).with_strategy(IterationStrategy::IndexIterator);
+            for col in random_block.columns() {
+                f1.visit_value(col.value.clone())?;
+                f2.visit_value(col.value.clone())?;
+                assert_eq!(f1.take_result(), f2.take_result());
+            }
+        }
 
         filtered_blocks.push(random_block.clone().filter_with_bitmap(&filter)?);
 

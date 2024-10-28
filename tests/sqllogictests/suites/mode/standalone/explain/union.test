@@ -240,16 +240,20 @@ query T
 ----
 explain select * from t1 where t1.a < 0 union all select * from t2 ;
 ----
-TableScan
-├── table: default.default.t2
-├── output columns: []
-├── read rows: 10000
-├── read size: 0
-├── partitions total: 1
-├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-├── push downs: [filters: [], limit: NONE]
-└── estimated rows: 10000.00
+UnionAll
+├── output columns: [t1.a (#0)]
+├── estimated rows: 10000.00
+├── EmptyResultScan
+└── TableScan
+    ├── table: default.default.t2
+    ├── output columns: [b (#1)]
+    ├── read rows: 10000
+    ├── read size: 10.59 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 10000.00
 
 
 query T

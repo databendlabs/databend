@@ -39,13 +39,11 @@ use sha2::Sha256;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::NameResolutionContext;
-use crate::PlanExtras;
 use crate::Planner;
 
 #[derive(Clone)]
 pub struct PlanCacheItem {
     pub(crate) plan: Plan,
-    pub(crate) extras: PlanExtras,
     pub(crate) setting_changes: Vec<(String, ChangeValue)>,
     pub(crate) variables: HashMap<String, Scalar>,
 }
@@ -125,7 +123,7 @@ impl Planner {
         }
     }
 
-    pub fn set_cache(&self, key: String, plan: Plan, extras: PlanExtras) {
+    pub fn set_cache(&self, key: String, plan: Plan) {
         let setting_changes = self
             .ctx
             .get_settings()
@@ -139,7 +137,6 @@ impl Planner {
 
         let plan_item = PlanCacheItem {
             plan,
-            extras,
             setting_changes,
             variables,
         };
@@ -165,7 +162,7 @@ impl TableRefVisitor {
 
         let func_name = func.name.name.to_lowercase();
         // If the function is not suitable for caching, we should not cache the plan
-        if !is_cacheable_function(&func_name) || func_name == "score" {
+        if !is_cacheable_function(&func_name) {
             self.cache_miss = true;
         }
     }

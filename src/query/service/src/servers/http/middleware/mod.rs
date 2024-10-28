@@ -12,8 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod pushdown_transform;
-mod values_serde;
+mod metrics;
+mod panic_handler;
+mod session;
 
-pub use pushdown_transform::get_pushdown_without_partition_columns;
-pub use values_serde::get_partition_values;
+pub(crate) use metrics::MetricsMiddleware;
+pub(crate) use panic_handler::PanicHandler;
+pub use session::json_response;
+pub(crate) use session::sanitize_request_headers;
+pub use session::EndpointKind;
+// for it tests only
+pub use session::HTTPSessionEndpoint;
+pub use session::HTTPSessionMiddleware;

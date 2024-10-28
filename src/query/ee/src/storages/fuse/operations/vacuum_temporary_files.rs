@@ -47,7 +47,7 @@ pub async fn do_vacuum_temporary_files(
 
     let operator = DataOperator::instance().operator();
 
-    let temporary_dir = format!("{}/", temporary_dir);
+    let temporary_dir = format!("{}/", temporary_dir.trim_end_matches('/'));
 
     let mut ds = operator
         .lister_with(&temporary_dir)
@@ -66,12 +66,16 @@ pub async fn do_vacuum_temporary_files(
         let mut batch_size = 0;
 
         while let Some(de) = ds.try_next().await? {
+            if de.path() == temporary_dir {
+                continue;
+            }
+
             let meta = de.metadata();
 
             match meta.mode() {
                 EntryMode::DIR => {
                     let life_mills =
-                        match operator.is_exist(&format!("{}finished", de.path())).await? {
+                        match operator.exists(&format!("{}finished", de.path())).await? {
                             true => 0,
                             false => expire_time,
                         };
@@ -159,7 +163,7 @@ async fn vacuum_finished_query(
     removed_temp_files: &mut usize,
     total_cleaned_size: &mut usize,
     batch_size: &mut usize,
-    de: &Entry,
+    parent: &Entry,
     limit: usize,
     timestamp: i64,
     life_mills: i64,
@@ -168,7 +172,7 @@ async fn vacuum_finished_query(
 
     let mut all_files_removed = true;
     let mut ds = operator
-        .lister_with(de.path())
+        .lister_with(parent.path())
         .metakey(Metakey::Mode | Metakey::LastModified)
         .await?;
 
@@ -180,6 +184,10 @@ async fn vacuum_finished_query(
         let mut remove_temp_files_path = Vec::with_capacity(1001);
 
         while let Some(de) = ds.try_next().await? {
+            if de.path() == parent.path() {
+                continue;
+            }
+
             let meta = de.metadata();
             if meta.is_file() {
                 if de.name() == "finished" {
@@ -218,7 +226,7 @@ async fn vacuum_finished_query(
             info!(
                 "vacuum removed {} temp files in {:?}(elapsed: {} seconds), batch size: {} bytes",
                 cur_removed,
-                de.path(),
+                parent.path(),
                 instant.elapsed().as_secs(),
                 *batch_size
             );
@@ -238,8 +246,10 @@ async fn vacuum_finished_query(
     }
 
     if all_files_removed {
-        operator.delete(&format!("{}finished", de.path())).await?;
-        operator.delete(de.path()).await?;
+        operator
+            .delete(&format!("{}finished", parent.path()))
+            .await?;
+        operator.delete(parent.path()).await?;
     }
 
     Ok(())

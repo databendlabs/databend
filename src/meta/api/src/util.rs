@@ -14,7 +14,6 @@
 
 use std::any::type_name;
 use std::fmt::Display;
-use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::display::display_slice::DisplaySliceExt;
@@ -22,21 +21,12 @@ use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownTable;
-use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::DBIdTableName;
-use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::TableId;
-use databend_common_meta_app::schema::TableIdent;
-use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
@@ -51,11 +41,9 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
-use futures::TryStreamExt;
 use log::debug;
 
 use crate::kv_app_error::KVAppError;
-use crate::kv_pb_api::KVPbApi;
 use crate::reply::txn_reply_to_api_result;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
@@ -130,21 +118,6 @@ where K: kvapi::Key {
     }
 }
 
-/// Get value that are encoded with FromToProto.
-///
-/// It returns seq number and the data.
-pub async fn get_pb_value<K>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    k: &K,
-) -> Result<(u64, Option<K::ValueType>), MetaError>
-where
-    K: kvapi::Key,
-    K::ValueType: FromToProto,
-{
-    let res = kv_api.get_pb(k).await?;
-    Ok((res.seq(), res.into_value()))
-}
-
 /// Batch get values that are encoded with FromToProto.
 pub async fn mget_pb_values<T>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
@@ -166,19 +139,6 @@ where
     }
 
     Ok(seq_values)
-}
-
-/// Return a vec of structured key(such as `DatabaseNameIdent`), such as:
-/// all the `db_name` with prefix `__fd_database/<tenant>/`.
-pub async fn list_keys<K>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &DirName<K>,
-) -> Result<Vec<K>, MetaError>
-where
-    K: kvapi::Key + 'static,
-{
-    let key_stream = kv_api.list_pb_keys(key).await?;
-    key_stream.try_collect::<Vec<_>>().await
 }
 
 /// List kvs whose value's type is `u64`.
@@ -329,6 +289,20 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
     }
 }
 
+pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
+where
+    K: kvapi::Key,
+    K::ValueType: FromToProto + 'static,
+{
+    let p = value.to_pb().map_err(|e| InvalidArgument::new(e, ""))?;
+
+    let mut buf = vec![];
+    prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
+
+    Ok(TxnOp::put(key.to_string_key(), buf))
+}
+
+/// Deprecate this. Replace it with `txn_put_pb().with_ttl()`
 pub fn txn_op_put_pb<K>(
     key: &K,
     value: &K::ValueType,
@@ -426,107 +400,4 @@ pub fn assert_table_exist(
         &name_ident.table_name,
         format!("{}: {}", ctx, name_ident),
     ))?
-}
-
-/// Return OK if a `table_id->*` exists by checking the seq.
-///
-/// Otherwise returns [`AppError::UnknownTableId`] error
-pub fn assert_table_id_exist(
-    seq: u64,
-    table_id: &TableId,
-    ctx: impl Display,
-) -> Result<(), AppError> {
-    if seq > 0 {
-        return Ok(());
-    }
-
-    debug!(seq = seq, table_id :? =(table_id); "does not exist");
-
-    Err(UnknownTableId::new(
-        table_id.table_id,
-        format!("{}: {}", ctx, table_id),
-    ))?
-}
-
-/// Get `table_meta_seq` and [`TableMeta`] by [`TableId`],
-/// or return [`AppError::UnknownTableId`] error wrapped in a [`KVAppError`] if not found.
-pub async fn get_table_by_id_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    table_id: &TableId,
-    ctx: impl Display + Copy,
-) -> Result<(u64, TableMeta), KVAppError> {
-    let (seq, table_meta): (_, Option<TableMeta>) = get_pb_value(kv_api, table_id).await?;
-    assert_table_id_exist(seq, table_id, ctx)?;
-
-    let table_meta = table_meta.unwrap();
-
-    debug!(
-        ident :% =(table_id),
-        table_meta :? =(&table_meta);
-        "{}",
-        ctx
-    );
-
-    Ok((seq, table_meta))
-}
-
-pub async fn get_tableinfos_by_ids(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ids: Vec<(DBIdTableName, u64)>,
-    tenant_dbname: &DatabaseNameIdent,
-    db_type: DatabaseType,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    let mut res = Vec::with_capacity(name_ids.len());
-    let chunk_size = DEFAULT_MGET_SIZE;
-
-    for chunk in name_ids.chunks(chunk_size) {
-        let id_idents = chunk.iter().map(|(_, id)| TableId { table_id: *id });
-        let seq_metas = kv_api.get_pb_values_vec(id_idents).await?;
-
-        for ((name_ident, id), seq_meta) in chunk.iter().zip(seq_metas) {
-            let table_name = &name_ident.table_name;
-            let Some(seq_meta) = seq_meta else {
-                continue;
-            };
-
-            let tb_info = TableInfo {
-                ident: TableIdent {
-                    table_id: *id,
-                    seq: seq_meta.seq,
-                },
-                desc: format!("'{}'.'{}'", tenant_dbname.database_name(), table_name),
-                meta: seq_meta.data,
-                name: table_name.clone(),
-                db_type: db_type.clone(),
-                catalog_info: Default::default(),
-            };
-            res.push(Arc::new(tb_info));
-        }
-    }
-
-    Ok(res)
-}
-
-pub async fn list_tables_from_unshare_db(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_id: u64,
-    tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    // List tables by tenant, db_id, table_name.
-
-    let dbid_tbname = DBIdTableName {
-        db_id,
-        // Use empty name to scan all tables
-        table_name: "".to_string(),
-    };
-
-    let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
-
-    get_tableinfos_by_ids(
-        kv_api,
-        dbid_tbnames.into_iter().zip(ids).collect(),
-        tenant_dbname,
-        DatabaseType::NormalDB,
-    )
-    .await
 }

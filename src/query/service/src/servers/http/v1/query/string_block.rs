@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -24,8 +22,6 @@ use databend_common_io::prelude::FormatSettings;
 pub struct StringBlock {
     pub(crate) data: Vec<Vec<Option<String>>>,
 }
-
-pub type StringBlockRef = Arc<StringBlock>;
 
 fn data_is_null(column: &Column, row_index: usize) -> bool {
     match column {

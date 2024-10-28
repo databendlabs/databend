@@ -19,6 +19,8 @@ use std::sync::LazyLock;
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
+use databend_common_ast::ast::ShowDictionariesStmt;
+use databend_common_ast::ast::ShowLimit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -28,12 +30,16 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::DictionaryMeta;
 use itertools::Itertools;
+use log::debug;
 
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
+use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDictionaryPlan;
+use crate::BindContext;
 use crate::Binder;
+use crate::SelectBuilder;
 
 pub const DICT_OPT_KEY_SQL_HOST: &str = "host";
 pub const DICT_OPT_KEY_SQL_PORT: &str = "port";
@@ -382,5 +388,51 @@ impl Binder {
                 schema,
             },
         )))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_dictionaries(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowDictionariesStmt,
+    ) -> Result<Plan> {
+        let ShowDictionariesStmt { database, limit } = stmt;
+
+        let mut select_builder = SelectBuilder::from("system.dictionaries");
+
+        select_builder
+            .with_column("database AS Database")
+            .with_column("name AS Dictionary")
+            .with_column("key_names AS Key_Names")
+            .with_column("key_types AS key_Types")
+            .with_column("attribute_names AS Attribute_Names")
+            .with_column("attribute_types AS Attribute_Types")
+            .with_column("source AS Source")
+            .with_column("comment AS Comment");
+
+        select_builder
+            .with_order_by("database")
+            .with_order_by("name");
+
+        let database = self.check_database_exist(&None, database).await?;
+        select_builder.with_filter(format!("database = '{}'", database.clone()));
+
+        match limit {
+            None => (),
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+            }
+        };
+        let query = select_builder.build();
+        debug!("show dictionaries rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowDictionaries(database.clone()),
+        )
+        .await
     }
 }

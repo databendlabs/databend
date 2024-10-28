@@ -62,17 +62,19 @@ impl HashJoinSpiller {
         is_build_side: bool,
     ) -> Result<Self> {
         // Create a Spiller for spilling build side data.
-        let spill_config = SpillerConfig::create(query_spill_prefix(
-            ctx.get_tenant().tenant_name(),
-            &ctx.get_id(),
-        ));
-        let operator = DataOperator::instance().operator();
         let spiller_type = if is_build_side {
             SpillerType::HashJoinBuild
         } else {
             SpillerType::HashJoinProbe
         };
-        let spiller = Spiller::create(ctx.clone(), operator, spill_config, spiller_type)?;
+        let spill_config = SpillerConfig {
+            spiller_type,
+            location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
+            disk_spill: None,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        };
+        let operator = DataOperator::instance().operator();
+        let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;
 
         let num_partitions = (1 << spill_partition_bits) as usize;
         // The memory threshold of each partition, we will spill the partition data
@@ -144,9 +146,8 @@ impl HashJoinSpiller {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &fetch_option)?
                 {
-                    let data_block = DataBlock::concat(&data_blocks)?;
                     self.spiller
-                        .spill_with_partition(partition_id, data_block)
+                        .spill_with_partition(partition_id, data_blocks)
                         .await?;
                 }
             }

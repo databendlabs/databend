@@ -317,6 +317,16 @@ select skewness (10) from numbers(5)
 ----
 0.0
 
+query I
+select skewness(number), kurtosis(number) from (select if(number > 5, number::double, 'NAN'::Double) as number from numbers(100));
+----
+NaN NaN
+
+query I
+select skewness(number), kurtosis(number) from (select if(number > 5, number::double, 'INF'::Double) as number from numbers(100));
+----
+NaN NaN
+
 query III
 select skewness(k), skewness(v), skewness(v2) from aggr
 ----
@@ -418,5 +428,37 @@ statement ok
 DROP TABLE d
 
 statement ok
-DROP DATABASE db1
+create or replace table aggr(k int, v decimal(10,2));
 
+query I
+select mode(v) from aggr;
+----
+NULL
+
+statement ok
+insert into aggr (k, v) values
+    (1, 10),
+    (1, 10),
+    (1, 10),
+    (2, 20),
+    (2, 20),
+    (2, 21),
+    (3, null);
+
+query I
+select mode(v) from aggr;
+----
+10.00
+
+query II
+select k, mode(v) from aggr group by k order by k;
+----
+1 10.00
+2 20.00
+3 NULL
+
+statement ok
+DROP TABLE aggr
+
+statement ok
+DROP DATABASE db1

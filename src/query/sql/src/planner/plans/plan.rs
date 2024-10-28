@@ -71,6 +71,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
@@ -140,6 +141,7 @@ use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
@@ -174,6 +176,7 @@ pub enum Plan {
     },
     ExplainAnalyze {
         partial: bool,
+        graphical: bool,
         plan: Box<Plan>,
     },
 
@@ -219,6 +222,7 @@ pub enum Plan {
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
+    UnsetOptions(Box<UnsetOptionsPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -269,6 +273,7 @@ pub enum Plan {
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
+    DescUser(Box<DescUserPlan>),
 
     // UDF
     CreateUDF(Box<CreateUDFPlan>),
@@ -386,6 +391,7 @@ pub enum RewriteKind {
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,
+    ShowDictionaries(String),
 
     ShowStreams(String),
 
@@ -482,6 +488,7 @@ impl Plan {
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
+            Plan::DescUser(plan) => plan.schema(),
 
             _ => Arc::new(DataSchema::empty()),
         }

@@ -222,7 +222,7 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror",
- "typed-builder",
+ "typed-builder 0.19.1",
  "uuid",
 ]
 
@@ -455,6 +455,8 @@ dependencies = [
  "arrow-data",
  "arrow-schema",
  "flatbuffers",
+ "lz4_flex",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -604,10 +606,10 @@ dependencies = [
 [[package]]
 name = "async-backtrace"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
+source = "git+https://github.com/datafuse-extras/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "async-backtrace-attributes",
- "dashmap",
+ "dashmap 5.5.3",
  "futures",
  "itertools 0.10.5",
  "loom",
@@ -620,7 +622,7 @@ dependencies = [
 [[package]]
 name = "async-backtrace-attributes"
 version = "0.2.6"
-source = "git+https://github.com/zhang2014/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
+source = "git+https://github.com/datafuse-extras/async-backtrace.git?rev=dea4553#dea4553c47ff2946684f7efb295a4105d5627fac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -757,7 +759,7 @@ dependencies = [
  "futures-lite 2.3.0",
  "parking",
  "polling 3.7.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -786,7 +788,7 @@ dependencies = [
 [[package]]
 name = "async-recursion"
 version = "1.1.1"
-source = "git+https://github.com/zhang2014/async-recursion.git?rev=a353334#a353334ceb408c80a802634ff0cfeeb7a50d0ef7"
+source = "git+https://github.com/datafuse-extras/async-recursion.git?rev=a353334#a353334ceb408c80a802634ff0cfeeb7a50d0ef7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -808,7 +810,7 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-lite 1.13.0",
- "gloo-timers",
+ "gloo-timers 0.2.6",
  "kv-log-macro",
  "log",
  "memchr",
@@ -1408,6 +1410,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4fa97bb310c33c811334143cf64c5bb2b7b3c06e453db6b095d7061eff8f113"
+dependencies = [
+ "fastrand 2.1.0",
+ "gloo-timers 0.3.0",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.73"
 source = "git+https://github.com/rust-lang/backtrace-rs.git?rev=72265be#72265bea210891ae47bbe6d4f17b493ef0606619"
@@ -1419,6 +1432,7 @@ dependencies = [
  "miniz_oxide",
  "object 0.36.3",
  "rustc-demangle",
+ "serde",
 ]
 
 [[package]]
@@ -1466,6 +1480,18 @@ name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
+
+[[package]]
+name = "bb8"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89aabfae550a5c44b43ab941844ffcd2e993cb6900b342debf59e9ea74acdb8"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "parking_lot 0.12.3",
+ "tokio",
+]
 
 [[package]]
 name = "beef"
@@ -1797,6 +1823,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "buf-list"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56bd1685d994a3e2a3ed802eb1ecee8cb500b0ad4df48cb4d5d1a2f04749c3a"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1913,12 +1948,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdd7a427adc0135366d99db65b36dae9237130997e560ed61118041fb72be6e8"
 
 [[package]]
-name = "cache-padded"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "981520c98f422fcc584dc1a95c334e6953900b9106bc47a9839b81790009eb21"
-
-[[package]]
 name = "camino"
 version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1951,7 +1980,7 @@ dependencies = [
  "io-lifetimes 2.0.3",
  "ipnet",
  "maybe-owned",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
  "winx",
 ]
@@ -1975,7 +2004,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes 2.0.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
 ]
 
 [[package]]
@@ -1988,7 +2017,7 @@ dependencies = [
  "cap-primitives",
  "iana-time-zone",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "winx",
 ]
 
@@ -2383,16 +2412,6 @@ dependencies = [
  "libc",
  "wasix",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "color-backtrace"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "150fd80a270c0671379f388c8204deb6a746bb4eac8a6c03fe2460b2c0127ea0"
-dependencies = [
- "backtrace",
- "termcolor",
 ]
 
 [[package]]
@@ -3077,6 +3096,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.10",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3101,7 +3134,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "serde",
  "serde_json",
  "serfig",
@@ -3172,7 +3205,7 @@ dependencies = [
  "lz4",
  "num",
  "num-traits",
- "opendal",
+ "opendal 0.50.1",
  "ordered-float 4.2.2",
  "proptest",
  "quanta 0.11.1",
@@ -3198,7 +3231,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum",
  "fast-float",
- "fastrace 0.7.2",
+ "fastrace",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -3247,7 +3280,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-exception",
  "enquote",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "libc",
  "log",
@@ -3265,6 +3298,9 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "replace_with",
+ "reqwest",
+ "reqwest-hickory-resolver",
+ "rustix 0.38.37",
  "semver",
  "serde",
  "serde_json",
@@ -3305,7 +3341,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -3326,6 +3362,7 @@ dependencies = [
  "dyn-clone",
  "goldenfile",
  "log",
+ "maplit",
  "parking_lot 0.12.3",
  "parquet",
  "rand 0.8.5",
@@ -3409,6 +3446,7 @@ name = "databend-common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-flight",
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
@@ -3417,7 +3455,7 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
- "opendal",
+ "opendal 0.50.1",
  "parquet",
  "paste",
  "prost 0.12.6",
@@ -3436,6 +3474,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-flight",
+ "arrow-ipc",
  "arrow-ord",
  "arrow-schema",
  "arrow-select",
@@ -3446,7 +3485,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "comfy-table 6.2.0",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -3565,7 +3604,6 @@ dependencies = [
  "libm",
  "match-template",
  "md-5",
- "multiversion",
  "naive-cityhash",
  "num-traits",
  "once_cell",
@@ -3643,6 +3681,8 @@ dependencies = [
  "chrono-tz 0.8.6",
  "databend-common-base",
  "databend-common-exception",
+ "enquote",
+ "enumflags2",
  "ethnum",
  "geo",
  "geos",
@@ -3687,7 +3727,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-storage",
  "enumflags2",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "log",
  "mockall",
@@ -3713,8 +3753,9 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
+ "itertools 0.10.5",
  "log",
  "logcall",
  "maplit",
@@ -3751,7 +3792,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal",
+ "opendal 0.50.1",
  "paste",
  "prost 0.12.6",
  "serde",
@@ -3780,7 +3821,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-tracing",
  "derive_more",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "itertools 0.10.5",
  "log",
@@ -3809,7 +3850,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-tracing",
- "fastrace 0.7.2",
+ "fastrace",
  "log",
  "tempfile",
  "test-harness",
@@ -3822,7 +3863,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "databend-common-meta-types",
- "fastrace 0.7.2",
+ "fastrace",
  "futures-util",
  "log",
  "serde",
@@ -3869,7 +3910,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "derive_more",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "futures-async-stream",
  "futures-util",
@@ -3903,7 +3944,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-tracing",
- "fastrace 0.7.2",
+ "fastrace",
  "log",
  "openraft",
  "pretty_assertions",
@@ -4004,7 +4045,7 @@ dependencies = [
  "flate2",
  "futures",
  "lz4",
- "opendal",
+ "opendal 0.50.1",
  "parquet-format-safe",
  "rand 0.8.5",
  "seq-macro",
@@ -4025,7 +4066,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "log",
  "petgraph",
@@ -4098,7 +4139,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
- "fastrace 0.7.2",
+ "fastrace",
  "maplit",
  "num",
  "pretty_assertions",
@@ -4127,7 +4168,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-exception",
  "derive-visitor",
- "fastrace 0.7.2",
+ "fastrace",
  "goldenfile",
  "tokio",
  "unindent",
@@ -4139,7 +4180,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "chrono-tz 0.8.6",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",
@@ -4172,7 +4213,7 @@ dependencies = [
  "cidr",
  "cron",
  "ctor 0.2.8",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
@@ -4198,7 +4239,7 @@ dependencies = [
  "derive-visitor",
  "educe 0.4.23",
  "enum-as-inner 0.5.1",
- "fastrace 0.7.2",
+ "fastrace",
  "globiter",
  "indexmap 2.4.0",
  "itertools 0.10.5",
@@ -4206,7 +4247,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal",
+ "opendal 0.50.1",
  "parking_lot 0.12.3",
  "percent-encoding",
  "prqlc",
@@ -4230,7 +4271,7 @@ dependencies = [
  "arrow-schema",
  "async-backtrace",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-auth",
  "databend-common-base",
@@ -4241,12 +4282,10 @@ dependencies = [
  "flagset",
  "futures",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "parquet",
  "prometheus-client",
  "regex",
- "reqwest",
- "reqwest-hickory-resolver",
  "serde",
  "thiserror",
 ]
@@ -4262,16 +4301,19 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-functions",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "deltalake",
- "fastrace 0.7.2",
- "maplit",
+ "fastrace",
  "match-template",
  "object_store_opendal",
+ "opendal 0.49.2",
+ "opendal_compat",
  "parquet",
  "serde",
  "serde_json",
@@ -4285,7 +4327,7 @@ name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
@@ -4345,14 +4387,14 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.5.1",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "futures-util",
  "indexmap 2.4.0",
  "itertools 0.10.5",
  "jsonb",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4361,6 +4403,7 @@ dependencies = [
  "siphasher",
  "sys-info",
  "tantivy",
+ "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
  "thrift",
@@ -4377,7 +4420,6 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "chrono",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-config",
@@ -4391,15 +4433,16 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-sql",
  "databend-common-storage",
- "databend-storages-common-cache",
- "databend-storages-common-index",
+ "databend-common-storages-parquet",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
- "fastrace 0.7.2",
+ "fastrace",
  "faststr",
  "futures",
  "hive_metastore",
  "log",
- "opendal",
+ "opendal 0.50.1",
+ "parquet",
  "recursive",
  "serde",
  "typetag",
@@ -4419,22 +4462,19 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-pipeline-core",
- "databend-common-storage",
  "databend-common-storages-parquet",
- "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
- "fastrace 0.7.2",
+ "fastrace",
+ "futures",
  "iceberg",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
  "ordered-float 4.2.2",
- "parquet",
  "serde",
  "tokio",
  "typetag",
@@ -4500,7 +4540,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4515,7 +4555,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4545,13 +4585,14 @@ dependencies = [
  "databend-common-settings",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-storages-common-cache",
  "databend-storages-common-pruner",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "ethnum",
  "futures",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -4598,7 +4639,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal",
+ "opendal 0.50.1",
  "parquet",
  "serde",
  "serde_json",
@@ -4639,12 +4680,11 @@ dependencies = [
  "enum-as-inner 0.6.0",
  "futures",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "parquet",
  "serde",
  "serde_json",
  "typetag",
- "uuid",
 ]
 
 [[package]]
@@ -4663,7 +4703,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "log",
 ]
@@ -4704,7 +4744,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal",
+ "opendal 0.50.1",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4731,12 +4771,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
+ "bincode 2.0.0-rc.3",
  "chrono",
- "color-backtrace",
  "databend-common-base",
  "databend-common-exception",
  "defer",
- "fastrace 0.7.2",
+ "fastrace",
  "fastrace-opentelemetry",
  "itertools 0.10.5",
  "libc",
@@ -4747,7 +4787,6 @@ dependencies = [
  "opentelemetry_sdk",
  "serde",
  "serde_json",
- "strip-ansi-escapes",
  "tonic 0.11.0",
 ]
 
@@ -4916,7 +4955,7 @@ dependencies = [
  "aws-sdk-s3",
  "chrono",
  "chrono-tz 0.8.6",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",
@@ -4931,6 +4970,11 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
+ "databend-common-pipeline-core",
+ "databend-common-pipeline-sinks",
+ "databend-common-pipeline-sources",
+ "databend-common-pipeline-transforms",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-fuse",
@@ -4950,6 +4994,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
@@ -4958,7 +5003,7 @@ dependencies = [
  "jsonb",
  "jwt-simple 0.11.9",
  "log",
- "opendal",
+ "opendal 0.50.1",
  "tantivy",
  "tempfile",
 ]
@@ -5018,6 +5063,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-common-pipeline-core",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
 ]
@@ -5029,7 +5075,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
- "backon",
+ "backon 0.4.4",
  "clap",
  "databend-common-arrow",
  "databend-common-base",
@@ -5048,7 +5094,7 @@ dependencies = [
  "deepsize",
  "derive_more",
  "env_logger",
- "fastrace 0.7.2",
+ "fastrace",
  "feature-set",
  "futures",
  "futures-async-stream",
@@ -5097,7 +5143,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "log",
  "rand 0.8.5",
@@ -5114,6 +5160,7 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-buffer",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
@@ -5127,17 +5174,19 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
- "backon",
+ "backon 0.4.4",
  "base64 0.21.7",
+ "buf-list",
  "bumpalo",
  "byte-unit",
  "byteorder",
+ "bytes",
  "chrono",
  "chrono-tz 0.8.6",
  "config",
  "criterion",
  "ctor 0.2.8",
- "dashmap",
+ "dashmap 5.5.3",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -5205,7 +5254,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "derive-visitor",
  "ethnum",
- "fastrace 0.7.2",
+ "fastrace",
  "flatbuffers",
  "futures",
  "futures-util",
@@ -5229,8 +5278,7 @@ dependencies = [
  "naive-cityhash",
  "num",
  "num_cpus",
- "once_cell",
- "opendal",
+ "opendal 0.50.1",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5383,7 +5431,9 @@ dependencies = [
  "hex",
  "log",
  "parking_lot 0.12.3",
+ "parquet",
  "rayon",
+ "rustix 0.38.37",
  "siphasher",
  "tempfile",
 ]
@@ -5394,7 +5444,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "cbordata",
- "crc32fast",
  "criterion",
  "databend-common-arrow",
  "databend-common-ast",
@@ -5402,15 +5451,15 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
- "fastrace 0.7.2",
+ "fastrace",
  "jsonb",
  "levenshtein_automata",
  "log",
  "match-template",
  "parquet",
  "rand 0.8.5",
+ "roaring",
  "serde",
- "serde_json",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
@@ -5423,12 +5472,16 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "bytes",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "fastrace 0.7.2",
+ "databend-common-expression",
+ "databend-common-metrics",
+ "fastrace",
+ "futures",
  "log",
- "opendal",
+ "opendal 0.50.1",
 ]
 
 [[package]]
@@ -5572,12 +5625,13 @@ checksum = "da692b8d1080ea3045efaab14434d40468c3d8657e42abddfffca87b428f4c1b"
 
 [[package]]
 name = "delta_kernel"
-version = "0.1.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1ddfe35af3696786ab5f23cd995df33a66f6cff272ac1f85e09c1a6316acd4c"
+checksum = "fa08a82239f51e6d3d249c38f0f5bf7c8a78b28587e1b466893c9eac84d252d8"
 dependencies = [
  "arrow-arith",
  "arrow-array",
+ "arrow-cast",
  "arrow-json",
  "arrow-ord",
  "arrow-schema",
@@ -5595,6 +5649,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_json",
+ "strum 0.26.3",
  "thiserror",
  "tracing",
  "url",
@@ -5605,9 +5660,9 @@ dependencies = [
 
 [[package]]
 name = "delta_kernel_derive"
-version = "0.1.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4d2127a34b12919a6bce08225f0ca6fde8a19342a32675370edfc8795e7c38a"
+checksum = "ec5c4fb5b59b1bd55ed8ebcf941f27a327d600c19a4a4103546846c358be93ff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5616,16 +5671,18 @@ dependencies = [
 
 [[package]]
 name = "deltalake"
-version = "0.18.0"
-source = "git+https://github.com/delta-io/delta-rs?rev=57795da#57795da9d9cc86a460a5888713adfb3d0584b4cc"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cdaf5eed6cf6be7d94ce89ee9d7325324fc7c6c0b1ca8b911b0a5d95f6b1af5"
 dependencies = [
  "deltalake-core",
 ]
 
 [[package]]
 name = "deltalake-core"
-version = "0.18.0"
-source = "git+https://github.com/delta-io/delta-rs?rev=57795da#57795da9d9cc86a460a5888713adfb3d0584b4cc"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ebab21c8c8820f9accb3ee74cc6ab7d930adf44323f39b7a764fd34e34aa7f4"
 dependencies = [
  "arrow",
  "arrow-arith",
@@ -5642,7 +5699,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "chrono",
- "dashmap",
+ "dashmap 6.1.0",
  "delta_kernel",
  "either",
  "errno",
@@ -5668,10 +5725,12 @@ dependencies = [
  "roaring",
  "serde",
  "serde_json",
+ "sqlparser 0.51.0",
  "thiserror",
  "tokio",
  "tracing",
  "url",
+ "urlencoding",
  "uuid",
  "z85",
 ]
@@ -6170,6 +6229,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_filter"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6309,44 +6378,17 @@ checksum = "a2a2b11eda1d40935b26cf18f6833c526845ae8c41e58d09af6adeb6f0269183"
 
 [[package]]
 name = "fastrace"
-version = "0.6.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfd798348670042f0628810b10bc11b767c1f42aafbd3b1ae31f282740c549fe"
-dependencies = [
- "fastrace-macro 0.6.8",
- "minstant",
- "once_cell",
- "parking_lot 0.12.3",
- "pin-project",
- "rand 0.8.5",
- "rtrb 0.2.3",
-]
-
-[[package]]
-name = "fastrace"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25767929385a5128ff5a58c77d5fef43779bb580656801f72d4d32f7a97fea28"
 dependencies = [
- "fastrace-macro 0.7.2",
+ "fastrace-macro",
  "minstant",
  "once_cell",
  "parking_lot 0.12.3",
  "pin-project",
  "rand 0.8.5",
- "rtrb 0.3.1",
-]
-
-[[package]]
-name = "fastrace-macro"
-version = "0.6.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eea27de901dc6b14aa952aeefcc41144da4dc97e4db3eb3593c19f3b80406786"
-dependencies = [
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
+ "rtrb",
 ]
 
 [[package]]
@@ -6367,7 +6409,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f33f99bae33fb7b952a933500e77cb9976b7672bb5d9def8e464663dfdfc107"
 dependencies = [
- "fastrace 0.7.2",
+ "fastrace",
  "futures",
  "log",
  "opentelemetry",
@@ -6407,7 +6449,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e5768da2206272c81ef0b5e951a41862938a6070da63bcea197899942d3b947"
 dependencies = [
  "cfg-if",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
 ]
 
@@ -6688,7 +6730,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "033b337d725b97690d86893f9de22b67b80dcc4e9ad815f348254c38119db8fb"
 dependencies = [
  "io-lifetimes 2.0.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
 ]
 
@@ -6708,7 +6750,7 @@ version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7e180ac76c23b45e767bd7ae9579bc0bb458618c4bc71835926e098e61d15f8"
 dependencies = [
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
 ]
 
@@ -7544,7 +7586,7 @@ dependencies = [
  "itoa",
  "libc",
  "memmap2 0.9.4",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "smallvec",
  "thiserror",
 ]
@@ -7706,7 +7748,7 @@ dependencies = [
  "gix-command",
  "gix-config-value",
  "parking_lot 0.12.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "thiserror",
 ]
 
@@ -7843,7 +7885,7 @@ version = "14.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "006acf5a613e0b5cf095d8e4b3f48c12a60d9062aa2b2dd105afaf8344a5600c"
 dependencies = [
- "dashmap",
+ "dashmap 5.5.3",
  "gix-fs",
  "libc",
  "once_cell",
@@ -7989,6 +8031,18 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -8668,8 +8722,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "651dfca7c429918e164607a549287cfdd1e7814d2e4cb577d0d6dc57fe19b785"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=a0e74b1412ae7ce4b857c251bcbb3179b7713fb6#a0e74b1412ae7ce4b857c251bcbb3179b7713fb6"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -8689,11 +8742,14 @@ dependencies = [
  "fnv",
  "futures",
  "itertools 0.13.0",
+ "moka",
  "murmur3",
+ "num-bigint",
  "once_cell",
- "opendal",
+ "opendal 0.50.1",
  "ordered-float 4.2.2",
  "parquet",
+ "paste",
  "reqwest",
  "rust_decimal",
  "serde",
@@ -8703,7 +8759,7 @@ dependencies = [
  "serde_repr",
  "serde_with",
  "tokio",
- "typed-builder",
+ "typed-builder 0.20.0",
  "url",
  "uuid",
 ]
@@ -8711,8 +8767,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a04f1f48f0f15e42c910fafb57edb0dd309c936cd285b1089fa3d4a07d1ef09"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=a0e74b1412ae7ce4b857c251bcbb3179b7713fb6#a0e74b1412ae7ce4b857c251bcbb3179b7713fb6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8723,7 +8778,7 @@ dependencies = [
  "pilota",
  "serde_json",
  "tokio",
- "typed-builder",
+ "typed-builder 0.20.0",
  "uuid",
  "volo-thrift",
 ]
@@ -8731,8 +8786,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f351c7b964fa6f3b4f976f8de3f16f1bf84eea8478606aaebdfd6a871d6b082c"
+source = "git+https://github.com/Xuanwo/iceberg-rust/?rev=a0e74b1412ae7ce4b857c251bcbb3179b7713fb6#a0e74b1412ae7ce4b857c251bcbb3179b7713fb6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -8745,7 +8799,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tokio",
- "typed-builder",
+ "typed-builder 0.20.0",
  "uuid",
 ]
 
@@ -9222,9 +9276,8 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f98d1dd2023aa6a1b74f23432e2db5a9122bf53ae98053efc650951d31f59ffb"
+version = "0.4.3"
+source = "git+https://github.com/databendlabs/jsonb?rev=ada713c#ada713c16369cd0c0b85f3bbae22183111325ee9"
 dependencies = [
  "byteorder",
  "fast-float",
@@ -9517,9 +9570,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.155"
+version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
+checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
 
 [[package]]
 name = "libflate"
@@ -9710,7 +9763,8 @@ dependencies = [
  "anyhow",
  "colored",
  "crossbeam-channel",
- "fastrace 0.7.2",
+ "env_filter",
+ "fastrace",
  "jiff",
  "log",
  "opentelemetry",
@@ -9932,7 +9986,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2cffa4ad52c6f791f4f8b15f0c05f9824b2ced1160e88cc393d64fff9a8ac64"
 dependencies = [
- "rustix 0.38.34",
+ "rustix 0.38.37",
 ]
 
 [[package]]
@@ -10179,28 +10233,6 @@ name = "multimap"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "defc4c55412d89136f966bbb339008b474350e5e6e78d2714439c386b3137a03"
-
-[[package]]
-name = "multiversion"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4851161a11d3ad0bf9402d90ffc3967bf231768bfd7aeb61755ad06dbf1a142"
-dependencies = [
- "multiversion-macros",
- "target-features",
-]
-
-[[package]]
-name = "multiversion-macros"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79a74ddee9e0c27d2578323c13905793e91622148f138ba29738f9dddb835e90"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "target-features",
-]
 
 [[package]]
 name = "mur3"
@@ -10726,9 +10758,9 @@ dependencies = [
 
 [[package]]
 name = "object_store_opendal"
-version = "0.46.0"
+version = "0.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7e5902fc99e9fb9e32c93f6a67dc5cc0772dc0fb348e2ef4ce258b03666d034"
+checksum = "4493c44c90a25391782b52886365d00f6be7d0f75aaecab4365279203438ebec"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10736,7 +10768,7 @@ dependencies = [
  "futures",
  "futures-util",
  "object_store",
- "opendal",
+ "opendal 0.49.2",
  "pin-project",
  "tokio",
 ]
@@ -10772,19 +10804,54 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.49.0"
+version = "0.49.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39d516adf7db912c38af382c3e92c27cd62fbbc240e630920555d784c2ab1494"
+checksum = "9b04d09b9822c2f75a1d2fc513a2c1279c70e91e7407936fffdf6a6976ec530a"
 dependencies = [
  "anyhow",
- "async-backtrace",
  "async-trait",
- "backon",
+ "backon 0.4.4",
  "base64 0.22.1",
  "bytes",
  "chrono",
  "crc32c",
- "fastrace 0.6.8",
+ "flagset",
+ "futures",
+ "getrandom 0.2.15",
+ "http 1.1.0",
+ "log",
+ "md-5",
+ "moka",
+ "once_cell",
+ "percent-encoding",
+ "prost 0.13.1",
+ "quick-xml 0.36.1",
+ "redis 0.26.1",
+ "reqsign",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "opendal"
+version = "0.50.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213222b6c86949314d8f51acb26d8241e7c8dd0879b016a79471d49f21ee592f"
+dependencies = [
+ "anyhow",
+ "async-backtrace",
+ "async-trait",
+ "backon 1.2.0",
+ "base64 0.22.1",
+ "bb8",
+ "bytes",
+ "chrono",
+ "crc32c",
+ "fastrace",
  "flagset",
  "futures",
  "getrandom 0.2.15",
@@ -10798,7 +10865,7 @@ dependencies = [
  "prometheus-client",
  "prost 0.13.1",
  "quick-xml 0.36.1",
- "redis",
+ "redis 0.27.5",
  "reqsign",
  "reqwest",
  "serde",
@@ -10806,6 +10873,16 @@ dependencies = [
  "sha2",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "opendal_compat"
+version = "1.0.0"
+source = "git+https://github.com/apache/opendal?rev=f6e60f6#f6e60f621dec82765a49283caf0ddc1ff8b1d260"
+dependencies = [
+ "async-trait",
+ "opendal 0.49.2",
+ "opendal 0.50.1",
 ]
 
 [[package]]
@@ -10957,7 +11034,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tonic 0.12.2",
+ "tonic 0.12.3",
 ]
 
 [[package]]
@@ -10971,7 +11048,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prost 0.13.1",
  "serde",
- "tonic 0.12.2",
+ "tonic 0.12.3",
 ]
 
 [[package]]
@@ -11084,7 +11161,7 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 [[package]]
 name = "ownedbytes"
 version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -11659,7 +11736,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi 0.4.0",
  "pin-project-lite",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -11910,7 +11987,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "procfs-core",
- "rustix 0.38.34",
+ "rustix 0.38.37",
 ]
 
 [[package]]
@@ -12583,7 +12660,7 @@ dependencies = [
 [[package]]
 name = "recursive"
 version = "0.1.1"
-source = "git+https://github.com/zhang2014/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+source = "git+https://github.com/datafuse-extras/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
 dependencies = [
  "recursive-proc-macro-impl",
  "stacker",
@@ -12592,7 +12669,7 @@ dependencies = [
 [[package]]
 name = "recursive-proc-macro-impl"
 version = "0.1.1"
-source = "git+https://github.com/zhang2014/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+source = "git+https://github.com/datafuse-extras/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
 dependencies = [
  "quote",
  "syn 2.0.58",
@@ -12626,6 +12703,39 @@ dependencies = [
  "socket2 0.5.7",
  "tokio",
  "tokio-retry",
+ "tokio-rustls 0.26.0",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "redis"
+version = "0.27.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81cccf17a692ce51b86564334614d72dcae1def0fd5ecebc9f02956da74352b5"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "crc16",
+ "futures",
+ "futures-util",
+ "itoa",
+ "log",
+ "num-bigint",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.8.5",
+ "rustls 0.23.12",
+ "rustls-native-certs 0.7.1",
+ "rustls-pemfile 2.1.3",
+ "rustls-pki-types",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.5.7",
+ "tokio",
+ "tokio-retry2",
  "tokio-rustls 0.26.0",
  "tokio-util",
  "url",
@@ -13111,15 +13221,6 @@ dependencies = [
 
 [[package]]
 name = "rtrb"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99e704dd104faf2326a320140f70f0b736d607c1caa1b1748a6c568a79819109"
-dependencies = [
- "cache-padded",
-]
-
-[[package]]
-name = "rtrb"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3f94e84c073f3b85d4012b44722fa8842b9986d741590d4f2636ad0a5b14143"
@@ -13231,9 +13332,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.34"
+version = "0.38.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70dc5ec042f7a43c4a73241207cecc9873a06d45debb38b329f8541d85c2730f"
+checksum = "8acb788b847c24f28525660c4d7758620a7210875711f79e7f663cc152726811"
 dependencies = [
  "bitflags 2.6.0",
  "errno",
@@ -14173,6 +14274,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlparser"
+version = "0.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fe11944a61da0da3f592e19a45ebe5ab92dc14a779907ff1f08fbb797bfefc7"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "sqlx"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14455,15 +14565,6 @@ name = "stringslice"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8dad614e9c8a0773603982e0c1d3192f2bce1c0ee193caf0526b8ae3c6c3e38c"
-
-[[package]]
-name = "strip-ansi-escapes"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55ff8ef943b384c414f54aefa961dd2bd853add74ec75e7ac74cf91dba62bcfa"
-dependencies = [
- "vte",
-]
 
 [[package]]
 name = "strsim"
@@ -14754,7 +14855,7 @@ dependencies = [
  "cap-std",
  "fd-lock",
  "io-lifetimes 2.0.3",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.52.0",
  "winx",
 ]
@@ -14768,7 +14869,7 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 [[package]]
 name = "tantivy"
 version = "0.22.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -14818,7 +14919,7 @@ dependencies = [
 [[package]]
 name = "tantivy-bitpacker"
 version = "0.6.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "bitpacking 0.9.2",
 ]
@@ -14826,7 +14927,7 @@ dependencies = [
 [[package]]
 name = "tantivy-columnar"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -14841,7 +14942,7 @@ dependencies = [
 [[package]]
 name = "tantivy-common"
 version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -14864,7 +14965,7 @@ dependencies = [
 [[package]]
 name = "tantivy-jieba"
 version = "0.11.0"
-source = "git+https://github.com/datafuse-extras/tantivy-jieba?rev=124a8fc#124a8fc8c8a9f1389af5a9bfa497fb358ecc556e"
+source = "git+https://github.com/datafuse-extras/tantivy-jieba?rev=0e300e9#0e300e9085651b7e6659dfcc7b0ea0fa9cab09c2"
 dependencies = [
  "jieba-rs",
  "lazy_static",
@@ -14874,7 +14975,7 @@ dependencies = [
 [[package]]
 name = "tantivy-query-grammar"
 version = "0.22.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "nom",
 ]
@@ -14882,7 +14983,7 @@ dependencies = [
 [[package]]
 name = "tantivy-sstable"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "tantivy-bitpacker",
  "tantivy-common",
@@ -14893,7 +14994,7 @@ dependencies = [
 [[package]]
 name = "tantivy-stacker"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "murmurhash32",
  "rand_distr",
@@ -14903,7 +15004,7 @@ dependencies = [
 [[package]]
 name = "tantivy-tokenizer-api"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/tantivy?rev=37aeac0#37aeac01096a7e480118dbc91e48c8f54d3fea4c"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=7502370#7502370b68e6822a687ee071660e350b67808533"
 dependencies = [
  "serde",
 ]
@@ -14913,12 +15014,6 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
-
-[[package]]
-name = "target-features"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1bbb9f3c5c463a01705937a24fdabc5047929ac764b2d5b9cf681c1f5041ed5"
 
 [[package]]
 name = "target-lexicon"
@@ -14944,7 +15039,7 @@ dependencies = [
  "cfg-if",
  "fastrand 2.1.0",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.59.0",
 ]
 
@@ -14973,7 +15068,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
 dependencies = [
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "windows-sys 0.48.0",
 ]
 
@@ -15136,9 +15231,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.39.2"
+version = "1.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daa4fb1bc778bd6f04cbfc4bb2d06a7396a8f299dc33ea1900cedaa316f467b1"
+checksum = "145f3413504347a2be84393cc8a7d2fb4d863b375909ea59f2158261aa258bbb"
 dependencies = [
  "backtrace",
  "bytes",
@@ -15208,6 +15303,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-retry2"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "903934dba1c4c2f2e9cb460ef10b5695e0b0ecad3bf9ee7c8675e540c5e8b2d1"
+dependencies = [
+ "pin-project",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-rustls"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15241,9 +15347,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "267ac89e0bec6e691e5813911606935d77c476ff49024f98abcea3e7b15e37af"
+checksum = "4f4e6ce100d0eb49a2734f8c0812bcd324cf357d21810932c5df6b96ef2b86f1"
 dependencies = [
  "futures-core",
  "pin-project-lite",
@@ -15376,9 +15482,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6f6ba989e4b2c58ae83d862d3a3e27690b6e3ae630d0deb59f3697f32aa88ad"
+checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -15591,7 +15697,16 @@ version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06fbd5b8de54c5f7c91f6fe4cebb949be2125d7758e630bb58b1d831dbce600"
 dependencies = [
- "typed-builder-macro",
+ "typed-builder-macro 0.19.1",
+]
+
+[[package]]
+name = "typed-builder"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e14ed59dc8b7b26cacb2a92bad2e8b1f098806063898ab42a3bd121d7d45e75"
+dependencies = [
+ "typed-builder-macro 0.20.0",
 ]
 
 [[package]]
@@ -15599,6 +15714,17 @@ name = "typed-builder-macro"
 version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9534daa9fd3ed0bd911d462a37f172228077e7abf18c18a5f67199d959205f8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
+name = "typed-builder-macro"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "560b82d656506509d43abe30e0ba64c56b1953ab3d4fe7ba5902747a7a3cedd5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -15937,7 +16063,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71bc0fbf23ebdfc8718d40ba5f31a520376767edd6ebb9fe06c27eb977379796"
 dependencies = [
  "async-broadcast",
- "dashmap",
+ "dashmap 5.5.3",
  "faststr",
  "futures",
  "lazy_static",
@@ -15995,26 +16121,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
-name = "vte"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5022b5fbf9407086c180e9557be968742d839e68346af7792b8592489732197"
-dependencies = [
- "utf8parse",
- "vte_generate_state_changes",
-]
-
-[[package]]
-name = "vte_generate_state_changes"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e369bee1b05d510a7b4ed645f5faa90619e05437111783ea5848f28d97d3c2e"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
 name = "waker-fn"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16068,7 +16174,7 @@ dependencies = [
  "io-lifetimes 2.0.3",
  "log",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "system-interface",
  "thiserror",
  "tracing",
@@ -16234,7 +16340,7 @@ dependencies = [
  "once_cell",
  "paste",
  "rayon",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "semver",
  "serde",
  "serde_derive",
@@ -16277,7 +16383,7 @@ dependencies = [
  "bincode 1.3.3",
  "directories-next",
  "log",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "serde",
  "serde_derive",
  "sha2",
@@ -16366,7 +16472,7 @@ dependencies = [
  "anyhow",
  "cc",
  "cfg-if",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "wasmtime-asm-macros",
  "wasmtime-versioned-export-macros",
  "windows-sys 0.52.0",
@@ -16380,7 +16486,7 @@ checksum = "983ca409f2cd66385ce49486c022da0128acb7910c055beb5230998b49c6084c"
 dependencies = [
  "object 0.33.0",
  "once_cell",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "wasmtime-versioned-export-macros",
 ]
 
@@ -16413,7 +16519,7 @@ dependencies = [
  "memoffset",
  "paste",
  "psm",
- "rustix 0.38.34",
+ "rustix 0.38.37",
  "sptr",
  "wasm-encoder 0.202.0",
  "wasmtime-asm-macros",

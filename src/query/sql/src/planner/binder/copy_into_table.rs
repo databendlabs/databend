@@ -26,6 +26,7 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -42,6 +43,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::shrink_scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -111,6 +113,26 @@ impl<'a> Binder {
         }
     }
 
+    pub(crate) fn resolve_copy_pattern(
+        ctx: Arc<dyn TableContext>,
+        pattern: &LiteralStringOrVariable,
+    ) -> Result<String> {
+        match pattern {
+            LiteralStringOrVariable::Literal(s) => Ok(s.clone()),
+            LiteralStringOrVariable::Variable(var_name) => {
+                let var_value = ctx.get_variable(var_name).unwrap_or(Scalar::Null);
+                let var_value = shrink_scalar(var_value);
+                if let Scalar::String(s) = var_value {
+                    Ok(s)
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "invalid pattern expr: {var_value}"
+                    )))
+                }
+            }
+        }
+    }
+
     async fn bind_copy_into_table_common(
         &mut self,
         bind_context: &mut BindContext,
@@ -136,10 +158,15 @@ impl<'a> Binder {
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
         self.apply_copy_into_table_options(stmt, &mut stage_info)
             .await?;
+        let pattern = match &stmt.pattern {
+            None => None,
+            Some(pattern) => Some(Self::resolve_copy_pattern(self.ctx.clone(), pattern)?),
+        };
+
         let files_info = StageFilesInfo {
             path,
             files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
+            pattern,
         };
         let required_values_schema: DataSchemaRef = Arc::new(
             match &stmt.dst_columns {
@@ -177,6 +204,7 @@ impl<'a> Binder {
                 duplicated_files_detected: vec![],
                 is_select: false,
                 default_values,
+                copy_into_location_options: Default::default(),
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -336,6 +364,7 @@ impl<'a> Binder {
                 duplicated_files_detected,
                 is_select: false,
                 default_values: Some(default_values),
+                copy_into_location_options: Default::default(),
             },
             write_mode,
             query: None,

@@ -16,7 +16,5 @@
 mod dynamic_sample;
 mod filter_selectivity_sample;
 mod join_selectivity_sample;
-mod query_sample_executor;
 
 pub use dynamic_sample::dynamic_sample;
-pub use query_sample_executor::QuerySampleExecutor;

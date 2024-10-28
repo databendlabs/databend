@@ -35,22 +35,19 @@ pub async fn do_vacuum_drop_table(
     dry_run_limit: Option<usize>,
 ) -> VacuumDropTablesResult {
     let mut list_files = vec![];
-    let mut failed_dbs = HashSet::new();
     let mut failed_tables = HashSet::new();
     for (table_info, operator) in tables {
         let result =
             vacuum_drop_single_table(&table_info, operator, dry_run_limit, &mut list_files).await;
         if result.is_err() {
-            let db_name = table_info.database_name()?;
             let table_id = table_info.ident.table_id;
-            failed_dbs.insert(db_name.to_string());
             failed_tables.insert(table_id);
         }
     }
     Ok(if dry_run_limit.is_some() {
-        (Some(list_files), failed_dbs, failed_tables)
+        (Some(list_files), failed_tables)
     } else {
-        (None, failed_dbs, failed_tables)
+        (None, failed_tables)
     })
 }
 
@@ -182,16 +179,14 @@ pub async fn vacuum_drop_tables_by_table_info(
                     ret_files.extend(files);
                 }
             }
-            (Some(ret_files), HashSet::new(), HashSet::new())
+            (Some(ret_files), HashSet::new())
         } else {
-            let mut failed_dbs = HashSet::new();
             let mut failed_tables = HashSet::new();
             for res in result {
-                let (_, db, tbl) = res?;
-                failed_dbs.extend(db);
+                let (_, tbl) = res?;
                 failed_tables.extend(tbl);
             }
-            (None, failed_dbs, failed_tables)
+            (None, failed_tables)
         }
     };
 

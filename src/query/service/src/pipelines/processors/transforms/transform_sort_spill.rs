@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -34,15 +33,19 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
+use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::CommonRows;
-use databend_common_pipeline_transforms::processors::sort::HeapMerger;
-use databend_common_pipeline_transforms::processors::sort::Rows;
+use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
 use databend_common_pipeline_transforms::processors::sort::SimpleRowsDesc;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMetaWithParams;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
+use databend_common_pipeline_transforms::processors::SortSpillParams;
 
+use crate::spillers::Location;
 use crate::spillers::Spiller;
 
 enum State {
@@ -60,7 +63,7 @@ enum State {
     Finish,
 }
 
-pub struct TransformSortSpill<R: Rows> {
+pub struct TransformSortSpill<A: SortAlgorithm> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
@@ -77,32 +80,34 @@ pub struct TransformSortSpill<R: Rows> {
     /// Blocks to merge one time.
     num_merge: usize,
     /// Unmerged list of blocks. Each list are sorted.
-    unmerged_blocks: VecDeque<VecDeque<String>>,
+    unmerged_blocks: VecDeque<VecDeque<Location>>,
 
     /// If `ummerged_blocks.len()` < `num_merge`,
     /// we can use a final merger to merge the last few sorted streams to reduce IO.
-    final_merger: Option<HeapMerger<R, BlockStream>>,
+    final_merger: Option<Merger<A, BlockStream>>,
 
     sort_desc: Arc<Vec<SortColumnDescription>>,
-
-    _r: PhantomData<R>,
 }
 
 #[inline(always)]
-fn need_spill(block: &DataBlock) -> bool {
-    block
-        .get_meta()
-        .and_then(SortSpillMeta::downcast_ref_from)
-        .is_some()
-        || block
-            .get_meta()
-            .and_then(SortSpillMetaWithParams::downcast_ref_from)
-            .is_some()
+fn take_spill_meta(block: &mut DataBlock) -> Option<Option<SortSpillParams>> {
+    block.take_meta().map(|meta| {
+        if SortSpillMeta::downcast_ref_from(&meta).is_some() {
+            return None;
+        }
+        Some(
+            SortSpillMetaWithParams::downcast_from(meta)
+                .expect("unknown meta type")
+                .0,
+        )
+    })
 }
 
 #[async_trait::async_trait]
-impl<R> Processor for TransformSortSpill<R>
-where R: Rows + Send + Sync + 'static
+impl<A> Processor for TransformSortSpill<A>
+where
+    A: SortAlgorithm + 'static,
+    A::Rows: 'static,
 {
     fn name(&self) -> String {
         String::from("TransformSortSpill")
@@ -124,13 +129,13 @@ where R: Rows + Send + Sync + 'static
         }
 
         if let Some(block) = self.output_data.take() {
-            debug_assert!(matches!(self.state, State::MergeFinal | State::Finish));
+            assert!(matches!(self.state, State::MergeFinal | State::Finish));
             self.output_block(block);
             return Ok(Event::NeedConsume);
         }
 
         if matches!(self.state, State::Finish) {
-            debug_assert!(self.input.is_finished());
+            assert!(self.input.is_finished());
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -140,38 +145,41 @@ where R: Rows + Send + Sync + 'static
         }
 
         if self.input.has_data() {
-            let block = self.input.pull_data().unwrap()?;
+            let mut block = self.input.pull_data().unwrap()?;
+            let meta = take_spill_meta(&mut block);
             return match &self.state {
                 State::Init => {
-                    if need_spill(&block) {
-                        // Need to spill this block.
-                        let meta =
-                            SortSpillMetaWithParams::downcast_ref_from(block.get_meta().unwrap())
-                                .unwrap();
-                        self.batch_rows = meta.batch_rows;
-                        self.num_merge = meta.num_merge;
+                    match meta {
+                        Some(Some(params)) => {
+                            // Need to spill this block.
+                            self.batch_rows = params.batch_rows;
+                            self.num_merge = params.num_merge;
 
-                        self.input_data = Some(block);
-                        self.state = State::Spill;
-                        Ok(Event::Async)
-                    } else {
-                        // If we get a memory block at initial state, it means we will never spill data.
-                        debug_assert!(self.spiller.columns_layout.is_empty());
-                        self.output_block(block);
-                        self.state = State::NoSpill;
-                        Ok(Event::NeedConsume)
+                            self.input_data = Some(block);
+                            self.state = State::Spill;
+                            Ok(Event::Async)
+                        }
+                        Some(None) => unreachable!(),
+                        None => {
+                            // If we get a memory block at initial state, it means we will never spill data.
+                            debug_assert!(self.spiller.columns_layout.is_empty());
+                            self.output_block(block);
+                            self.state = State::NoSpill;
+                            Ok(Event::NeedConsume)
+                        }
                     }
                 }
                 State::NoSpill => {
-                    debug_assert!(!need_spill(&block));
+                    debug_assert!(meta.is_none());
                     self.output_block(block);
                     self.state = State::NoSpill;
                     Ok(Event::NeedConsume)
                 }
                 State::Spill => {
-                    if !need_spill(&block) {
+                    if meta.is_none() {
                         // It means we get the last block.
                         // We can launch external merge sort now.
+                        self.input.finish();
                         self.state = State::Merging;
                     }
                     self.input_data = Some(block);
@@ -227,8 +235,10 @@ where R: Rows + Send + Sync + 'static
     }
 }
 
-impl<R> TransformSortSpill<R>
-where R: Rows + Sync + Send + 'static
+impl<A> TransformSortSpill<A>
+where
+    A: SortAlgorithm + 'static,
+    A::Rows: 'static,
 {
     pub fn create(
         input: Arc<InputPort>,
@@ -254,7 +264,6 @@ where R: Rows + Sync + Send + 'static
             final_merger: None,
             batch_rows: 0,
             sort_desc,
-            _r: PhantomData,
         }
     }
 
@@ -269,7 +278,7 @@ where R: Rows + Sync + Send + 'static
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
         debug_assert!(self.num_merge >= 2 && self.batch_rows > 0);
 
-        let location = self.spiller.spill(block).await?;
+        let location = self.spiller.spill(vec![block]).await?;
 
         self.unmerged_blocks.push_back(vec![location].into());
         Ok(())
@@ -279,7 +288,7 @@ where R: Rows + Sync + Send + 'static
         &mut self,
         memory_block: Option<DataBlock>,
         num_streams: usize,
-    ) -> HeapMerger<R, BlockStream> {
+    ) -> Merger<A, BlockStream> {
         debug_assert!(num_streams <= self.unmerged_blocks.len() + memory_block.is_some() as usize);
 
         let mut streams = Vec::with_capacity(num_streams);
@@ -297,7 +306,7 @@ where R: Rows + Sync + Send + 'static
             streams.push(stream);
         }
 
-        HeapMerger::<R, BlockStream>::create(
+        Merger::<A, BlockStream>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
@@ -346,7 +355,7 @@ where R: Rows + Sync + Send + 'static
 
         let mut spilled = VecDeque::new();
         while let Some(block) = merger.async_next_block().await? {
-            let location = self.spiller.spill(block).await?;
+            let location = self.spiller.spill(vec![block]).await?;
 
             spilled.push_back(location);
         }
@@ -359,7 +368,7 @@ where R: Rows + Sync + Send + 'static
 }
 
 enum BlockStream {
-    Spilled((VecDeque<String>, Arc<Spiller>)),
+    Spilled((VecDeque<Location>, Arc<Spiller>)),
     Block(Option<DataBlock>),
 }
 
@@ -396,33 +405,44 @@ pub fn create_transform_sort_spill(
     limit: Option<usize>,
     spiller: Spiller,
     output_order_col: bool,
+    enable_loser_tree: bool,
 ) -> Box<dyn Processor> {
+    macro_rules! create_sort {
+        ($algo: ident, $row: ty) => {
+            Box::new(TransformSortSpill::<$algo<$row>>::create(
+                input,
+                output,
+                schema,
+                sort_desc,
+                limit,
+                spiller,
+                output_order_col,
+            ))
+        };
+        ($algo: ident, $asc: ident, $data_type: ty) => {
+            Box::new(TransformSortSpill::<$algo<$asc<$data_type>>>::create(
+                input,
+                output,
+                schema,
+                sort_desc,
+                limit,
+                spiller,
+                output_order_col,
+            ))
+        };
+    }
+
     if sort_desc.len() == 1 {
         let sort_type = schema.field(sort_desc[0].offset).data_type();
         let asc = sort_desc[0].asc;
 
         macro_rules! create_simple {
             ($data_type: ty) => {
-                if asc {
-                    Box::new(TransformSortSpill::<SimpleRowsAsc<$data_type>>::create(
-                        input,
-                        output,
-                        schema,
-                        sort_desc,
-                        limit,
-                        spiller,
-                        output_order_col,
-                    ))
-                } else {
-                    Box::new(TransformSortSpill::<SimpleRowsDesc<$data_type>>::create(
-                        input,
-                        output,
-                        schema,
-                        sort_desc,
-                        limit,
-                        spiller,
-                        output_order_col,
-                    ))
+                match (enable_loser_tree, asc) {
+                    (true, true) => create_sort!(LoserTreeSort, SimpleRowsAsc, $data_type),
+                    (true, false) => create_sort!(LoserTreeSort, SimpleRowsDesc, $data_type),
+                    (false, true) => create_sort!(HeapSort, SimpleRowsAsc, $data_type),
+                    (false, false) => create_sort!(HeapSort, SimpleRowsDesc, $data_type),
                 }
             };
         }
@@ -437,17 +457,14 @@ pub fn create_transform_sort_spill(
             DataType::Timestamp => return create_simple!(TimestampType),
             DataType::String => return create_simple!(StringType),
             _ => (),
-        }
+        };
     }
-    Box::new(TransformSortSpill::<CommonRows>::create(
-        input,
-        output,
-        schema,
-        sort_desc,
-        limit,
-        spiller,
-        output_order_col,
-    ))
+
+    if enable_loser_tree {
+        create_sort!(LoserTreeSort, CommonRows)
+    } else {
+        create_sort!(HeapSort, CommonRows)
+    }
 }
 
 #[cfg(test)]
@@ -455,51 +472,49 @@ mod tests {
     use std::sync::Arc;
 
     use databend_common_base::base::tokio;
-    use databend_common_exception::Result;
+    use databend_common_catalog::table_context::TableContext;
     use databend_common_expression::block_debug::pretty_format_blocks;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::DataBlock;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
-    use databend_common_expression::SortColumnDescription;
-    use databend_common_pipeline_core::processors::InputPort;
-    use databend_common_pipeline_core::processors::OutputPort;
-    use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
     use databend_common_storage::DataOperator;
     use itertools::Itertools;
     use rand::rngs::ThreadRng;
     use rand::Rng;
 
-    use super::TransformSortSpill;
+    use super::*;
     use crate::sessions::QueryContext;
-    use crate::spillers::Spiller;
     use crate::spillers::SpillerConfig;
     use crate::spillers::SpillerType;
     use crate::test_kits::*;
 
-    async fn create_test_transform(
+    async fn create_test_transform<A>(
         ctx: Arc<QueryContext>,
         limit: Option<usize>,
-    ) -> Result<TransformSortSpill<SimpleRowsAsc<Int32Type>>> {
+    ) -> Result<TransformSortSpill<A>>
+    where
+        A: SortAlgorithm + 'static,
+        A::Rows: 'static,
+    {
         let op = DataOperator::instance().operator();
-        let spiller = Spiller::create(
-            ctx.clone(),
-            op,
-            SpillerConfig::create("_spill_test".to_string()),
-            SpillerType::OrderBy,
-        )?;
+        let spill_config = SpillerConfig {
+            spiller_type: SpillerType::OrderBy,
+            location_prefix: "_spill_test".to_string(),
+            disk_spill: None,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        };
+
+        let spiller = Spiller::create(ctx.clone(), op, spill_config)?;
 
         let sort_desc = Arc::new(vec![SortColumnDescription {
             offset: 0,
             asc: true,
             nulls_first: true,
-            is_nullable: false,
         }]);
 
-        let transform = TransformSortSpill::<SimpleRowsAsc<Int32Type>>::create(
+        let transform = TransformSortSpill::<A>::create(
             InputPort::create(),
             OutputPort::create(),
             DataSchemaRefExt::create(vec![DataField::new(
@@ -589,7 +604,8 @@ mod tests {
         has_memory_block: bool,
         limit: Option<usize>,
     ) -> Result<()> {
-        let mut transform = create_test_transform(ctx, limit).await?;
+        let mut transform =
+            create_test_transform::<LoserTreeSort<SimpleRowsAsc<Int32Type>>>(ctx, limit).await?;
 
         transform.num_merge = num_merge;
         transform.batch_rows = batch_rows;

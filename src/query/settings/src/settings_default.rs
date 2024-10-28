@@ -23,6 +23,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
 use once_cell::sync::OnceCell;
 
+use super::settings_getter_setter::SpillFileFormat;
+
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
 
 // Default value of cost factor settings
@@ -115,7 +117,7 @@ impl DefaultSettings {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
             let num_cpus = Self::num_cpus();
             let max_memory_usage = Self::max_memory_usage()?;
-            let recluster_block_size = Self::recluster_block_size()?;
+            let recluster_block_size = Self::recluster_block_size(max_memory_usage);
             let default_max_spill_io_requests = Self::spill_io_requests(num_cpus);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
             let data_retention_time_in_days_max = Self::data_retention_time_in_days_max();
@@ -273,6 +275,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_dio", DefaultSettingValue{ 
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables Direct IO.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
@@ -300,6 +308,18 @@ impl DefaultSettings {
                 ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
                     value: UserSettingValue::UInt64(512),
                     desc: "Set the spilling buffer threshold (MB) for each join processor.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("spilling_file_format", DefaultSettingValue {
+                    value: UserSettingValue::String("parquet".to_string()),
+                    desc: "Set the storage file format for spilling.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::String(SpillFileFormat::range())),
+                }),
+                ("spilling_to_disk_vacuum_unknown_temp_dirs_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "Set the maximum number of directories to clean up. If there are some temporary dirs when another query is unexpectedly interrupted, which needs to be cleaned up after this query.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
@@ -459,6 +479,12 @@ impl DefaultSettings {
                     desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("window_partition_spilling_to_disk_bytes_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of local disk in bytes that each window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_num_partitions", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
@@ -874,7 +900,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_loser_tree_merge_sort", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables loser tree merge sort",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -909,6 +935,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("short_sql_max_length", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(128),
+                    desc: "Sets the maximum length for truncating SQL queries in short_sql function.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=1024*1024)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -923,7 +955,8 @@ impl DefaultSettings {
             None => std::cmp::min(num_cpus, 64),
             Some(conf) => match conf.storage.params.is_fs() {
                 true => 48,
-                false => std::cmp::min(num_cpus, 64),
+                // This value is chosen based on the performance test of pruning phase on cloud platform.
+                false => 64,
             },
         }
     }
@@ -990,12 +1023,10 @@ impl DefaultSettings {
         })
     }
 
-    fn recluster_block_size() -> Result<u64> {
-        let max_memory_usage = Self::max_memory_usage()?;
+    fn recluster_block_size(max_memory_usage: u64) -> u64 {
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        let recluster_block_size = max_memory_usage * 32 / 100;
-        Ok(recluster_block_size)
+        std::cmp::min(max_memory_usage * 30 / 100, 80 * 1024 * 1024 * 1024)
     }
 
     /// Converts and validates a setting value based on its key.

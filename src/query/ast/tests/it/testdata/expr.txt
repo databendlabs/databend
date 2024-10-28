@@ -4639,3 +4639,398 @@ FunctionCall {
 }
 
 
+---------- Input ----------
+MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)
+---------- Output ---------
+MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..42,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..10,
+            ),
+            name: "MAP_FILTER",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Map {
+                span: Some(
+                    11..24,
+                ),
+                kvs: [
+                    (
+                        UInt64(
+                            1,
+                        ),
+                        Literal {
+                            span: Some(
+                                14..15,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    ),
+                    (
+                        UInt64(
+                            2,
+                        ),
+                        Literal {
+                            span: Some(
+                                18..19,
+                            ),
+                            value: UInt64(
+                                2,
+                            ),
+                        },
+                    ),
+                    (
+                        UInt64(
+                            3,
+                        ),
+                        Literal {
+                            span: Some(
+                                22..23,
+                            ),
+                            value: UInt64(
+                                4,
+                            ),
+                        },
+                    ),
+                ],
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            27..28,
+                        ),
+                        name: "k",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    Identifier {
+                        span: Some(
+                            30..31,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        38..39,
+                    ),
+                    op: Gt,
+                    left: ColumnRef {
+                        span: Some(
+                            36..37,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        36..37,
+                                    ),
+                                    name: "k",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: ColumnRef {
+                        span: Some(
+                            40..41,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)
+---------- Output ---------
+MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..53,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..18,
+            ),
+            name: "MAP_TRANSFORM_KEYS",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Map {
+                span: Some(
+                    19..35,
+                ),
+                kvs: [
+                    (
+                        UInt64(
+                            1,
+                        ),
+                        Literal {
+                            span: Some(
+                                22..24,
+                            ),
+                            value: UInt64(
+                                10,
+                            ),
+                        },
+                    ),
+                    (
+                        UInt64(
+                            2,
+                        ),
+                        Literal {
+                            span: Some(
+                                27..29,
+                            ),
+                            value: UInt64(
+                                20,
+                            ),
+                        },
+                    ),
+                    (
+                        UInt64(
+                            3,
+                        ),
+                        Literal {
+                            span: Some(
+                                32..34,
+                            ),
+                            value: UInt64(
+                                30,
+                            ),
+                        },
+                    ),
+                ],
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            38..39,
+                        ),
+                        name: "k",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    Identifier {
+                        span: Some(
+                            41..42,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        49..50,
+                    ),
+                    op: Plus,
+                    left: ColumnRef {
+                        span: Some(
+                            47..48,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        47..48,
+                                    ),
+                                    name: "k",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            51..52,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)
+---------- Output ---------
+MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..55,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..20,
+            ),
+            name: "MAP_TRANSFORM_VALUES",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Map {
+                span: Some(
+                    21..37,
+                ),
+                kvs: [
+                    (
+                        UInt64(
+                            1,
+                        ),
+                        Literal {
+                            span: Some(
+                                24..26,
+                            ),
+                            value: UInt64(
+                                10,
+                            ),
+                        },
+                    ),
+                    (
+                        UInt64(
+                            2,
+                        ),
+                        Literal {
+                            span: Some(
+                                29..31,
+                            ),
+                            value: UInt64(
+                                20,
+                            ),
+                        },
+                    ),
+                    (
+                        UInt64(
+                            3,
+                        ),
+                        Literal {
+                            span: Some(
+                                34..36,
+                            ),
+                            value: UInt64(
+                                30,
+                            ),
+                        },
+                    ),
+                ],
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: Some(
+            Lambda {
+                params: [
+                    Identifier {
+                        span: Some(
+                            40..41,
+                        ),
+                        name: "k",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    Identifier {
+                        span: Some(
+                            43..44,
+                        ),
+                        name: "v",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+                expr: BinaryOp {
+                    span: Some(
+                        51..52,
+                    ),
+                    op: Plus,
+                    left: ColumnRef {
+                        span: Some(
+                            49..50,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    name: "v",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    right: Literal {
+                        span: Some(
+                            53..54,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ),
+    },
+}
+
+
