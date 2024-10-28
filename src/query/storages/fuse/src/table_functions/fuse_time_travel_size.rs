@@ -29,7 +29,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_storage::DataOperator;
 use futures_util::TryStreamExt;
 use opendal::Metakey;
 use opendal::Operator;
@@ -37,6 +36,7 @@ use opendal::Operator;
 use super::parse_opt_opt_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
 pub struct FuseTimeTravelSizeArgs {
@@ -70,6 +70,8 @@ impl TryFrom<(&str, TableArgs)> for FuseTimeTravelSizeArgs {
 
 pub struct FuseTimeTravelSize;
 
+pub type FuseTimeTravelSizeFunc = SimpleArgFuncTemplate<FuseTimeTravelSize>;
+
 #[async_trait::async_trait]
 impl SimpleArgFunc for FuseTimeTravelSize {
     type Args = FuseTimeTravelSizeArgs;
@@ -91,7 +93,6 @@ impl SimpleArgFunc for FuseTimeTravelSize {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        let operator = DataOperator::instance().operator();
         let mut database_names = Vec::new();
         let mut table_names = Vec::new();
         let mut sizes = Vec::new();
@@ -103,6 +104,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                     .await?;
                 let tbl = db.get_table(table_name.as_str()).await?;
                 let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+                let operator = fuse_table.get_operator();
                 let storage_prefix = fuse_table.get_storage_prefix();
                 let size = get_time_travel_size(storage_prefix, &operator).await?;
                 database_names.push(database_name.clone());
@@ -119,6 +121,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                     let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
                         continue;
                     };
+                    let operator = fuse_table.get_operator();
                     let storage_prefix = fuse_table.get_storage_prefix();
                     let size = get_time_travel_size(storage_prefix, &operator).await?;
                     database_names.push(database_name.clone());
@@ -130,11 +133,20 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
                 let databases = catalog.list_databases(&ctx.get_tenant()).await?;
                 for db in databases {
-                    let tables = db.list_tables().await?;
+                    let tables = match db.list_tables().await {
+                        Ok(tables) => tables,
+                        Err(e) if e.code() == ErrorCode::UNIMPLEMENTED => {
+                            continue;
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    };
                     for tbl in tables {
                         let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
                             continue;
                         };
+                        let operator = fuse_table.get_operator();
                         let storage_prefix = fuse_table.get_storage_prefix();
                         let size = get_time_travel_size(storage_prefix, &operator).await?;
                         database_names.push(db.name().to_string());
