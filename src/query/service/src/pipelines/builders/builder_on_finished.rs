@@ -114,7 +114,7 @@ impl PipelineBuilder {
         match op {
             Ok(op) => {
                 let file_op = Files::create(table_ctx, op);
-                if let Err(e) = file_op.remove_file_in_batch(files).await {
+                if let Err(e) = file_op.remove_file_in_batch(files, false).await {
                     error!("Failed to delete file: {:?}, error: {}", files, e);
                 }
             }

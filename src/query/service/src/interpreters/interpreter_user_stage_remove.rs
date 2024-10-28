@@ -82,7 +82,7 @@ impl Interpreter for RemoveUserStageInterpreter {
         while let Some(chunk) = chunks.next().await {
             let chunk: Result<Vec<StageFileInfo>> = chunk.into_iter().collect();
             let chunk = chunk?.into_iter().map(|x| x.path).collect::<Vec<_>>();
-            if let Err(e) = file_op.remove_file_in_batch(&chunk).await {
+            if let Err(e) = file_op.remove_file_in_batch(&chunk, false).await {
                 error!("Failed to delete file: {:?}, error: {}", chunk, e);
             }
 

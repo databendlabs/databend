@@ -676,7 +676,9 @@ impl FuseTable {
         locations_to_be_purged: HashSet<String>,
     ) -> Result<()> {
         let fuse_file = Files::create(ctx.clone(), self.operator.clone());
-        fuse_file.remove_file_in_batch(locations_to_be_purged).await
+        fuse_file
+            .remove_file_in_batch(locations_to_be_purged, false)
+            .await
     }
 
     // Purge file by location chunks.
