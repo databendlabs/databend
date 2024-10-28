@@ -1675,7 +1675,6 @@ impl TokenKind {
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
-            | TokenKind::TRANSACTION
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
             //| TokenKind::USER
