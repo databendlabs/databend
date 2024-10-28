@@ -39,7 +39,6 @@ geo = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 hex = "0.4.3"
-hickory-resolver = "0.24"
 hyper = "0.14"
 itertools = { workspace = true }
 jsonb = { workspace = true }

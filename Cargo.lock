@@ -3503,7 +3503,6 @@ dependencies = [
  "geozero 0.13.0",
  "goldenfile",
  "hex",
- "hickory-resolver",
  "hyper 0.14.30",
  "itertools 0.10.5",
  "jsonb",
