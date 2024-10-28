@@ -83,7 +83,7 @@ impl DNSResolver {
 }
 
 #[derive(Clone)]
-struct DNSService;
+pub struct DNSService;
 
 impl Service<Name> for DNSService {
     type Response = DNSServiceAddrs;
@@ -109,11 +109,11 @@ impl Service<Name> for DNSService {
     }
 }
 
-struct DNSServiceFuture {
+pub struct DNSServiceFuture {
     inner: JoinHandle<Result<DNSServiceAddrs>>,
 }
 
-struct DNSServiceAddrs {
+pub struct DNSServiceAddrs {
     inner: std::vec::IntoIter<IpAddr>,
 }
 
