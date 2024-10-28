@@ -322,6 +322,7 @@ tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-
 tonic-build = { version = "0.11" }
 tonic-reflection = { version = "0.11.0" }
 typetag = "0.2.3"
+url = "2.3.1"
 uuid = { version = "1.10.0", features = ["serde", "v4", "v7"] }
 walkdir = "2.3.2"
 xorfilter-rs = "0.5"
