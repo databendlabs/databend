@@ -63,8 +63,8 @@ simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
 siphasher = "0.3"
 strength_reduce = "0.2.3"
 stringslice = "0.2.0"
-twox-hash = "1.6.3"
 telnet = "0.2.2"
+twox-hash = "1.6.3"
 
 [dev-dependencies]
 comfy-table = "6"
