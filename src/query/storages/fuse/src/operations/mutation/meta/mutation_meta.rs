@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -69,33 +70,13 @@ pub enum CompactSourceMeta {
     Extras(CompactExtraInfo),
 }
 
-#[typetag::serde(name = "compact_data_source")]
-impl BlockMetaInfo for CompactSourceMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals CompactSourceMeta")
-    }
+local_block_meta_serde!(CompactSourceMeta);
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone CompactSourceMeta")
-    }
-}
+#[typetag::serde(name = "compact_data_source")]
+impl BlockMetaInfo for CompactSourceMeta {}
 
 impl std::fmt::Debug for CompactSourceMeta {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("CompactSourceMeta").finish()
-    }
-}
-
-impl serde::Serialize for CompactSourceMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize DataSourceMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for CompactSourceMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize DataSourceMeta")
     }
 }

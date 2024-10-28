@@ -26,6 +26,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Int64Type;
@@ -140,30 +141,10 @@ impl Debug for FlightSerializedMeta {
     }
 }
 
-impl serde::Serialize for FlightSerializedMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unimplemented!("Unimplemented serialize FlightSerializedMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for FlightSerializedMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize FlightSerializedMeta")
-    }
-}
+local_block_meta_serde!(FlightSerializedMeta);
 
 #[typetag::serde(name = "exchange_shuffle")]
-impl BlockMetaInfo for FlightSerializedMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals FlightSerializedMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone FlightSerializedMeta")
-    }
-}
+impl BlockMetaInfo for FlightSerializedMeta {}
 
 impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     for TransformExchangeGroupBySerializer<Method>

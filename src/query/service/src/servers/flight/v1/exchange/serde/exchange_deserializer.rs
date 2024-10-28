@@ -23,6 +23,7 @@ use arrow_ipc::root_as_message;
 use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -36,8 +37,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
-use serde::Deserializer;
-use serde::Serializer;
 
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
@@ -150,27 +149,7 @@ impl Debug for ExchangeDeserializeMeta {
     }
 }
 
-impl serde::Serialize for ExchangeDeserializeMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Unimplemented serialize ExchangeSourceMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize ExchangeSourceMeta")
-    }
-}
+local_block_meta_serde!(ExchangeDeserializeMeta);
 
 #[typetag::serde(name = "exchange_source")]
-impl BlockMetaInfo for ExchangeDeserializeMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals ExchangeSourceMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone ExchangeSourceMeta")
-    }
-}
+impl BlockMetaInfo for ExchangeDeserializeMeta {}

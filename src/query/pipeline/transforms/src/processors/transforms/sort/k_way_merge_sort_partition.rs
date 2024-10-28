@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -247,12 +246,4 @@ impl SortTaskMeta {
 }
 
 #[typetag::serde(name = "sort_task")]
-impl BlockMetaInfo for SortTaskMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        SortTaskMeta::downcast_ref_from(info).map_or(false, |info| self == info)
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(*self)
-    }
-}
+impl BlockMetaInfo for SortTaskMeta {}
