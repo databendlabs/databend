@@ -14,6 +14,7 @@
 
 use std::io::Write;
 use std::net::Ipv4Addr;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -45,6 +46,7 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;
@@ -63,6 +65,7 @@ use databend_common_expression::ValueRef;
 use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
+use telnet::Telnet;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
@@ -244,6 +247,24 @@ pub fn register(registry: &mut FunctionRegistry) {
             let col = StringColumn::new(values.into(), offsets.into());
             Value::Column(col)
         },
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, Int64Type, StringType, _, _>(
+        "telnet",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_2_arg::<StringType, Int64Type, StringType>(|url, port, _ctx| {
+            match (url, port as u16)
+                .to_socket_addrs()
+                .ok()
+                .and_then(|addr| addr.into_iter().next())
+            {
+                Some(addr) => match Telnet::connect_timeout(&addr, 256, Duration::from_secs(3)) {
+                    Ok(_) => "Ok".to_string(),
+                    Err(err) => format!("Failed to connect in 3 seconds: {}", err),
+                },
+                None => format!("url or port is invalid"),
+            }
+        }),
     );
 }
 
