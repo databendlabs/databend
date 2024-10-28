@@ -25,4 +25,3 @@ pub use transforms::TransformLimit;
 pub use transforms::TransformNullIf;
 pub use transforms::TransformResortAddOn;
 pub use transforms::TransformResortAddOnWithoutSourceSchema;
-pub use transforms::TransformWindow;
