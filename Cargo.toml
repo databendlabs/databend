@@ -256,7 +256,7 @@ iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/apache/iceb
 iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "2f3554b" }
 itertools = "0.13.0"
 jsonb = "0.4.3"
-jwt-simple = "0.12.10"
+jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 libc = { version = "0.2.158" }
 match-template = "0.0.1"
