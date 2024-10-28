@@ -147,7 +147,7 @@ statement ok
 CREATE OR REPLACE FUNCTION wait_concurrent (INT) RETURNS INT LANGUAGE python HANDLER = 'wait_concurrent' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE OR REPLACE FUNCTION builtin_echo (INT) RETURNS INT LANGUAGE python HANDLER = 'builtin_echo' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION builtin_echo (string) RETURNS string LANGUAGE python HANDLER = 'builtin_echo' ADDRESS = 'http://0.0.0.0:8815';
 
 ## scalar values test
 query II

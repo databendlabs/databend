@@ -41,7 +41,7 @@ static RETRY_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
 static ERROR_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_ERROR));
 
-static RUNNING_REQUESTS_EXTERNAL_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
+static RUNNING_REQUESTS_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_RUNNING_REQUESTS));
 
 static REQUESTS_EXTERNAL_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
@@ -82,16 +82,12 @@ pub fn record_error_external(function_name: impl Into<String>, error_kind: impl 
 
 pub fn record_running_requests_external_start(function_name: impl Into<String>, cnt: u64) {
     let labels = &vec![(LABEL_FUNCTION_NAME, function_name.into())];
-    RUNNING_REQUESTS_EXTERNAL_EXTERNAL
-        .get_or_create(labels)
-        .inc_by(cnt);
+    RUNNING_REQUESTS_EXTERNAL.get_or_create(labels).inc_by(cnt);
 
     REQUESTS_EXTERNAL_EXTERNAL.get_or_create(labels).inc_by(cnt);
 }
 
 pub fn record_running_requests_external_finish(function_name: impl Into<String>, cnt: u64) {
     let labels = &vec![(LABEL_FUNCTION_NAME, function_name.into())];
-    RUNNING_REQUESTS_EXTERNAL_EXTERNAL
-        .get_or_create(labels)
-        .sub_by(cnt);
+    RUNNING_REQUESTS_EXTERNAL.get_or_create(labels).sub_by(cnt);
 }
