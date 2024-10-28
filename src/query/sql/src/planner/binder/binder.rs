@@ -21,8 +21,6 @@ use std::time::Instant;
 use chrono_tz::Tz;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::SetType;
-use databend_common_ast::ast::SetValues;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
@@ -33,7 +31,6 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::cast_scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
@@ -211,70 +208,7 @@ impl<'a> Binder {
             }
 
             Statement::QueryWithSetting { settings, query} => {
-                if let Some(settings) = settings {
-                    let Settings { set_type, identifiers, values } = settings;
-                    match set_type {
-                        SetType::SettingsQuery => {
-                            let mut type_checker = TypeChecker::try_create(
-                                bind_context,
-                                self.ctx.clone(),
-                                &self.name_resolution_ctx,
-                                self.metadata.clone(),
-                                &[],
-                                false,
-                            )?;
-
-                            let variables: Vec<String> = identifiers
-                                .iter()
-                                .map(|x| x.to_string().to_lowercase())
-                                .collect();
-
-                            let scalars = match values {
-                                SetValues::Expr(exprs) => {
-                                    let mut results = vec![];
-                                    for expr in exprs.iter() {
-                                        let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
-                                        let expr = scalar.as_expr()?;
-                                        let (new_expr, _) = ConstantFolder::fold(
-                                            &expr,
-                                            &self.ctx.get_function_context()?,
-                                            &BUILTIN_FUNCTIONS,
-                                        );
-                                        match new_expr {
-                                            Expr::Constant { scalar, .. } => {
-                                                let scalar = cast_scalar(None, scalar.clone(), DataType::String, &BUILTIN_FUNCTIONS)?;
-                                                results.push(scalar);
-                                            }
-                                            _ => return Err(ErrorCode::SemanticError("value must be constant value")),
-                                        }
-                                    }
-                                    results
-                                }
-                                SetValues::Query(_) => return Err(ErrorCode::SemanticError("query setting value must be scalar")),
-                                SetValues::None => return Err(ErrorCode::SemanticError("query setting value must be scalar")),
-                            };
-                            let mut query_settings: HashMap<String, String> = HashMap::new();
-                            for (var, scalar) in variables.iter().zip(scalars.into_iter()) {
-                                let value = scalar.into_string().unwrap();
-                                if var.to_lowercase().as_str() == "timezone" {
-                                    let tz = value.trim_matches(|c| c == '\'' || c == '\"');
-                                    tz.parse::<Tz>().map_err(|_| {
-                                        ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
-                                    })?;
-                                }
-
-                                query_settings.entry(var.to_string()).or_insert(value);
-                            }
-                            self.ctx.get_settings().set_batch_settings(&query_settings, true)?;
-
-                        }
-                        _ => {
-                            return Err(ErrorCode::BadArguments("Only support query level setting"));
-                        }
-                    }
-
-                }
-                self.bind_statement(bind_context, query).await?
+                self.bind_query_setting(bind_context, settings, query).await?
             }
 
             Statement::Explain { query, options, kind } => {

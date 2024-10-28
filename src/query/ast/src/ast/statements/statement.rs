@@ -29,6 +29,7 @@ use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -419,11 +420,18 @@ impl Display for Statement {
             }
             Statement::QueryWithSetting { settings, query } => {
                 if let Some(setting) = settings {
-                    if setting.identifiers.len() > 1 {
-                        write!(f, "SETTINGS {setting} ")?;
+                    write!(f, "SETTINGS (")?;
+                    let ids = &setting.identifiers;
+                    if let SetValues::Expr(values) = &setting.values {
+                        let mut expr = Vec::with_capacity(ids.len());
+                        for (id, value) in ids.iter().zip(values.iter()) {
+                            expr.push(format!("{} = {}", id, value));
+                        }
+                        write_comma_separated_list(f, expr)?;
                     } else {
-                        write!(f, "SETTINGS ({setting}) ")?;
+                        unreachable!();
                     }
+                    write!(f, ") ")?;
                 }
                 write!(f, "{query}")?;
             }

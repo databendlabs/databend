@@ -2795,37 +2795,45 @@ pub fn hint(i: Input) -> IResult<Hint> {
     rule!(#hint|#invalid_hint)(i)
 }
 
+pub fn query_setting(i: Input) -> IResult<(Identifier, Expr)> {
+    map(
+        rule! {
+            #ident ~ "=" ~ #subexpr(0)
+        },
+        |(id, _, value)| (id, value),
+    )(i)
+}
+
 pub fn query_statement_setting(i: Input) -> IResult<Settings> {
-    let single_set = map(
+    let query_set = map(
         rule! {
-            ^"(" ~ #ident ~ "=" ~ #subexpr(0) ~ ^")"
+            "(" ~ #comma_separated_list0(query_setting) ~ ")"
         },
-        |(_, var, _, value, _)| Settings {
-            set_type: SetType::SettingsQuery,
-            identifiers: vec![var],
-            values: SetValues::Expr(vec![Box::new(value)]),
-        },
-    );
-    let more_set = map_res(
-        rule! {
-            "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
-            ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")"
-        },
-        |(_, ids, _, _, _, values, _)| {
-            if ids.len() == values.len() {
-                Ok(Settings {
-                    set_type: SetType::SettingsQuery,
-                    identifiers: ids,
-                    values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
-                })
-            } else {
-                Err(nom::Err::Failure(ErrorKind::Other(
-                    "inconsistent number of variables and values",
-                )))
+        |(_, query_setting, _)| {
+            let mut ids = Vec::with_capacity(query_setting.len());
+            let mut values = Vec::with_capacity(query_setting.len());
+            for (id, value) in query_setting {
+                ids.push(id);
+                values.push(value);
             }
+            Settings {
+                set_type: SetType::SettingsQuery,
+                identifiers: ids,
+                values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+            }
+            // let (ids, values): (Vec<Identifier>, Vec<Expr>) = query_setting
+            // .iter()
+            // .map(|(id, value)| (id.clone(), value.clone()))
+            // .unzip();
+            //
+            // Ok(Settings {
+            // set_type: SetType::SettingsQuery,
+            // identifiers: ids,
+            // values: SetValues::Expr(values.into_iter().map(Into::into).collect()),
+            // })
         },
     );
-    rule!(#single_set|#more_set)(i)
+    rule!(#query_set: "(SETTING_NAME = VALUE, ...)")(i)
 }
 pub fn top_n(i: Input) -> IResult<u64> {
     map(

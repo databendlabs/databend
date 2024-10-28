@@ -329,6 +329,7 @@ impl Planner {
 pub fn get_query_kind(stmt: &Statement) -> QueryKind {
     match stmt {
         Statement::Query { .. } => QueryKind::Query,
+        Statement::QueryWithSetting { query, .. } => get_query_kind(query),
         Statement::CopyIntoTable(_) => QueryKind::CopyIntoTable,
         Statement::CopyIntoLocation(_) => QueryKind::CopyIntoLocation,
         Statement::Explain { .. } => QueryKind::Explain,

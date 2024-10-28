@@ -42,7 +42,7 @@ impl UnSetInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let settings = self.ctx.get_shared_settings();
+        let settings = self.ctx.get_session_settings();
         let session_level = self.unset.unset_type == SetType::SettingsSession;
         settings.load_changes().await?;
 
@@ -94,7 +94,7 @@ impl UnSetInterpreter {
                     match default_val {
                         Some(val) => {
                             let final_val = if global_settings.is_empty() {
-                                self.ctx.get_shared_settings().unset_setting(&var);
+                                self.ctx.get_session_settings().unset_setting(&var);
                                 val.to_string()
                             } else {
                                 global_settings
@@ -102,7 +102,7 @@ impl UnSetInterpreter {
                                     .find(|setting| setting.name.to_lowercase() == setting_key)
                                     .map_or(
                                         {
-                                            self.ctx.get_shared_settings().unset_setting(&var);
+                                            self.ctx.get_session_settings().unset_setting(&var);
                                             val.to_string()
                                         },
                                         |setting| setting.value.to_string(),
