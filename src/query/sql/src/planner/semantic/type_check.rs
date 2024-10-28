@@ -1823,8 +1823,6 @@ impl<'a> TypeChecker<'a> {
         lambda: &Lambda,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if func_name.starts_with("json_") && !args.is_empty() {
-            let func_name = &func_name[5..];
-            let mut new_args: Vec<Expr> = args.iter().map(|v| (*v).to_owned()).collect();
             let target_type = if func_name.starts_with("json_array") {
                 TypeName::Array(Box::new(TypeName::Variant))
             } else {
@@ -1833,6 +1831,8 @@ impl<'a> TypeChecker<'a> {
                     val_type: Box::new(TypeName::Variant),
                 }
             };
+            let func_name = &func_name[5..];
+            let mut new_args: Vec<Expr> = args.iter().map(|v| (*v).to_owned()).collect();
             new_args[0] = Expr::Cast {
                 span: new_args[0].span(),
                 expr: Box::new(new_args[0].clone()),
